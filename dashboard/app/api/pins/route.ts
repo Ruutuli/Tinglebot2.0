@@ -246,7 +246,12 @@ export async function POST(request: Request) {
           const now = new Date();
           const pinIdStr = (pin as { _id?: unknown })._id != null ? String((pin as { _id: { toString: () => string } })._id.toString()) : "";
 
-          // Prefer: mark existing discovery (with matching discoveryKey) as pinned
+          // Grotto lifecycle: "grotto", "grotto_found", "grotto_cleansed" are the same discovery (one per square+quadrant). Store as type "grotto" + grottoStatus.
+          const isGrottoOutcome =
+            outcome === "grotto" || outcome === "grotto_found" || outcome === "grotto_cleansed";
+          const grottoStatus = outcome === "grotto_cleansed" ? "cleansed" : "found";
+
+          // 1) Prefer: mark existing discovery (with matching discoveryKey) as pinned
           const markPinnedResult = await Square.updateOne(
             {
               squareId: squareIdRegex,
@@ -258,13 +263,62 @@ export async function POST(request: Request) {
                 "quadrants.$[q].discoveries.$[d].pinned": true,
                 "quadrants.$[q].discoveries.$[d].pinnedAt": now,
                 "quadrants.$[q].discoveries.$[d].pinId": pinIdStr,
+                ...(isGrottoOutcome && {
+                  "quadrants.$[q].discoveries.$[d].grottoStatus": grottoStatus,
+                  ...(name && { "quadrants.$[q].discoveries.$[d].name": name }),
+                }),
               },
             },
             { arrayFilters: [{ "q.quadrantId": quadrantId }, { "d.discoveryKey": key }] }
           );
 
-          if (markPinnedResult.modifiedCount === 0) {
-            // Fallback: push a new discovery (e.g. old data without discoveryKey, or bot hadn't written yet)
+          if (markPinnedResult.modifiedCount === 0 && isGrottoOutcome) {
+            // 2) Grotto fallback: mark any existing grotto in this square+quadrant as pinned (same grotto, different key from progress log)
+            const markExistingGrottoResult = await Square.updateOne(
+              {
+                squareId: squareIdRegex,
+                "quadrants.quadrantId": quadrantId,
+                "quadrants.discoveries.type": "grotto",
+              },
+              {
+                $set: {
+                  "quadrants.$[q].discoveries.$[d].pinned": true,
+                  "quadrants.$[q].discoveries.$[d].pinnedAt": now,
+                  "quadrants.$[q].discoveries.$[d].pinId": pinIdStr,
+                  "quadrants.$[q].discoveries.$[d].grottoStatus": grottoStatus,
+                  "quadrants.$[q].discoveries.$[d].discoveryKey": key,
+                  ...(name && { "quadrants.$[q].discoveries.$[d].name": name }),
+                },
+              },
+              { arrayFilters: [{ "q.quadrantId": quadrantId }, { "d.type": "grotto" }] }
+            );
+            if (markExistingGrottoResult.modifiedCount > 0) {
+              // Matched and updated the single grotto; do not push a duplicate
+            } else {
+              // No grotto in map yet: push a single discovery with type "grotto"
+              const discoveredAt = atStr ? new Date(atStr) : now;
+              await Square.updateOne(
+                { squareId: squareIdRegex, "quadrants.quadrantId": quadrantId },
+                {
+                  $push: {
+                    "quadrants.$[q].discoveries": {
+                      type: "grotto",
+                      grottoStatus,
+                      ...(name && { name }),
+                      discoveredBy: auth.discordId,
+                      discoveredAt,
+                      discoveryKey: key,
+                      pinned: true,
+                      pinnedAt: now,
+                      pinId: pinIdStr,
+                    },
+                  },
+                },
+                { arrayFilters: [{ "q.quadrantId": quadrantId }] }
+              );
+            }
+          } else if (markPinnedResult.modifiedCount === 0) {
+            // 3) Non-grotto fallback: push a new discovery (e.g. old data without discoveryKey, or bot hadn't written yet)
             console.warn("[api/pins] No existing discovery matched key; pushing new discovery for", squareIdRaw, quadrantId, "(key may differ in case or not yet written by bot)");
             const discoveredAt = atStr ? new Date(atStr) : now;
             await Square.updateOne(
