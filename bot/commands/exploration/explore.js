@@ -1152,6 +1152,9 @@ async function hasActiveGrottoAtLocation(party, expeditionId) {
   const squareId = (party?.square && String(party.square).trim()) || "";
   const quadrantId = (party?.quadrant && String(party.quadrant).trim()) || "";
   if (!squareId || !quadrantId) return false;
+  const leftSquare = (party?.leftGrottoSquare && String(party.leftGrottoSquare).trim()) || "";
+  const leftQuadrant = (party?.leftGrottoQuadrant && String(party.leftGrottoQuadrant).trim()) || "";
+  if (leftSquare && leftQuadrant && leftSquare === squareId && leftQuadrant === quadrantId) return false;
   const grotto = await Grotto.findOne({
     squareId,
     quadrantId,
@@ -1720,7 +1723,7 @@ async function handleGrottoCleanse(i, msg, party, expeditionId, characterIndex, 
  if (squareIdCheck && quadrantIdCheck) {
   const existingGrotto = await Grotto.findOne({ squareId: squareIdCheck, quadrantId: quadrantIdCheck });
   if (existingGrotto && String(existingGrotto.partyId || "").trim() === String(expeditionId || "").trim() && existingGrotto.status === "cleared") {
-   const cleansedBanner = await generateGrottoBannerOverlay(freshParty, GROTTO_BANNER_CLEANSED_URL, GROTTO_CLEANSED_BANNER_NAME);
+   const cleansedBanner = await generateGrottoBannerOverlay(freshParty, getRandomGrottoBanner(), GROTTO_CLEANSED_BANNER_NAME);
    const alreadyClearedEmbed = new EmbedBuilder()
     .setTitle("🗺️ **Grotto already cleared**")
     .setColor(getExploreOutcomeColor("grotto", regionColors[freshParty.region] || "#00ff99"))
@@ -1884,7 +1887,7 @@ async function handleGrottoCleanse(i, msg, party, expeditionId, characterIndex, 
   pushProgressLog(freshParty, cleanseCharacter.name, "grotto_blessing", `Blessing trial: each party member received a Spirit Orb.`, undefined, undefined, new Date());
   await freshParty.save(); // Always persist so dashboard shows current hearts/stamina/progress
   const blessingFlavor = getRandomBlessingFlavor();
-  const cleansedBannerBlessing = await generateGrottoBannerOverlay(freshParty, GROTTO_BANNER_CLEANSED_URL, GROTTO_CLEANSED_BANNER_NAME);
+  const cleansedBannerBlessing = await generateGrottoBannerOverlay(freshParty, getRandomGrottoBanner(), GROTTO_CLEANSED_BANNER_NAME);
   const explorePageUrlGrotto = getExplorePageUrl(expeditionId);
   const blessingResultEmbed = new EmbedBuilder()
    .setTitle("✅ **Grotto cleansed — Blessing!**")
@@ -1937,37 +1940,24 @@ async function handleGrottoCleanse(i, msg, party, expeditionId, characterIndex, 
    logger.warn("EXPLORE", `[explore.js]⚠️ Maze render (cleanse): ${err?.message || err}`);
   }
  }
- const cleansedBannerTrial = trialType === "maze" ? null : await generateGrottoBannerOverlay(freshParty, GROTTO_BANNER_CLEANSED_URL, GROTTO_CLEANSED_BANNER_NAME);
- const cleansedBannerForResult = trialType === "maze" ? await generateGrottoBannerOverlay(freshParty, GROTTO_BANNER_CLEANSED_URL, GROTTO_CLEANSED_BANNER_NAME) : cleansedBannerTrial;
+ const regionImageUrlTrial = getExploreMapImageUrl(freshParty, { highlight: true });
  const explorePageUrlTrial = getExplorePageUrl(expeditionId);
- const cleansedResultEmbed = new EmbedBuilder()
+ const cleansedEmbed = new EmbedBuilder()
   .setTitle("✅ **Grotto cleansed!**")
   .setColor(getExploreOutcomeColor("grotto_cleansed", regionColors[freshParty.region] || "#00ff99"))
   .setDescription(
    `**${cleanseCharacter.name}** used a Goddess Plume and 1 stamina to cleanse **${grottoName}**.\n\n` +
+   `The talismans fall away as **${cleanseCharacter.name}** holds the Goddess Plume to the roots. **${grottoName}** is **cleansed** — the way is open.\n\n` +
    `**Trial: ${trialLabel}** — Complete it to receive a **Spirit Orb**. Use the command below when ready.`
   )
-  .setImage(cleansedBannerForResult?.imageUrl ?? GROTTO_BANNER_CLEANSED_URL)
-  .setThumbnail(GROTTO_BANNER_CLEANSED_URL);
- cleansedResultEmbed.addFields(
-  { name: "📍 **__Location__**", value: location, inline: true },
-  { name: "⚔️ **__Trial__**", value: trialLabel, inline: true },
-  { name: "📋 **__Command__**", value: grottoCmdHint || "—", inline: false }
- );
- await i.followUp({ embeds: [cleansedResultEmbed], ...(cleansedBannerForResult?.attachment ? { files: [cleansedBannerForResult.attachment] } : {}) }).catch(() => {});
- const cleanseAnnounce = new EmbedBuilder()
-  .setTitle("✨ **A bright light spills from the stump!** ✨")
-  .setColor(getExploreOutcomeColor("grotto_cleansed", "#fbbf24"))
-  .setDescription(
-   "The talismans fall away as **" + cleanseCharacter.name + "** holds the Goddess Plume to the roots. **" + grottoName + "** is **cleansed** — the way is open."
-  )
-  .setImage(trialType === "maze" ? trialMazeImg : (cleansedBannerTrial?.imageUrl ?? GROTTO_BANNER_CLEANSED_URL));
- cleanseAnnounce.addFields({
+  .setImage(trialType === "maze" ? trialMazeImg : regionImageUrlTrial)
+  .setThumbnail(trialType === "maze" ? GROTTO_BANNER_CLEANSED_URL : getRandomGrottoBanner());
+ cleansedEmbed.addFields({
   name: "⚔️ **__Trial__**",
   value: `**${trialLabel}** — Complete it to clear the grotto and receive a **Spirit Orb**.`,
   inline: false,
  });
- addExplorationStandardFields(cleanseAnnounce, {
+ addExplorationStandardFields(cleansedEmbed, {
   party: freshParty,
   expeditionId,
   location,
@@ -1978,15 +1968,16 @@ async function handleGrottoCleanse(i, msg, party, expeditionId, characterIndex, 
   hasActiveGrotto: true,
   activeGrottoCommand: grottoCmdHint,
   hasUnpinnedDiscoveriesInQuadrant: false,
+  compactGrottoCommands: true,
  });
- cleanseAnnounce.addFields({
+ cleansedEmbed.addFields({
   name: "📍 **__Set pin on map__**",
   value: `You have discovery(ies) in this quadrant that aren't pinned yet. [Set a pin on the explore page](${explorePageUrlTrial}) so they stay on the map when you leave.`,
   inline: false,
  });
- if (trialType === "maze" && trialMazeFiles.length) cleanseAnnounce.setFooter({ text: GROTTO_MAZE_LEGEND });
- const announceFiles = trialType === "maze" ? (trialMazeFiles.length ? trialMazeFiles : undefined) : (cleansedBannerTrial?.attachment ? [cleansedBannerTrial.attachment] : undefined);
- await i.followUp({ embeds: [cleanseAnnounce], files: announceFiles }).catch(() => {});
+ if (trialType === "maze" && trialMazeFiles.length) cleansedEmbed.setFooter({ text: GROTTO_MAZE_LEGEND });
+ const cleansedFiles = trialType === "maze" && trialMazeFiles.length ? trialMazeFiles : undefined;
+ await i.followUp({ embeds: [cleansedEmbed], ...(cleansedFiles ? { files: cleansedFiles } : {}) }).catch(() => {});
  if (getExplorationNextTurnContent(nextCharacter)) await i.followUp({ content: getExplorationNextTurnContent(nextCharacter) }).catch(() => {});
 }
 
@@ -2364,6 +2355,14 @@ module.exports = {
       .addStringOption((o) => o.setName("charactername").setDescription("Your character name").setRequired(true).setAutocomplete(true))
       .addStringOption((o) => o.setName("location").setDescription("Square and quadrant, e.g. H8 Q3").setRequired(true))
     )
+    .addSubcommand((sub) =>
+     sub
+      .setName("leave")
+      .setDescription("Leave the grotto without completing the trial; you can roll away or come back later")
+      .addStringOption((o) => o.setName("id").setDescription("Expedition ID").setRequired(true).setAutocomplete(true))
+      .addStringOption((o) => o.setName("charactername").setDescription("Your character name").setRequired(true).setAutocomplete(true))
+      .addStringOption((o) => o.setName("grotto").setDescription("Grotto name at this location").setRequired(true).setAutocomplete(true))
+    )
   ),
 
 // ------------------- Command Execution Logic ------------------
@@ -2425,9 +2424,19 @@ module.exports = {
        "No active grotto trial at this location for this expedition. Make sure you have cleansed a grotto here and are in the same square and quadrant."
       );
      }
+     party.leftGrottoSquare = null;
+     party.leftGrottoQuadrant = null;
+     party.markModified("leftGrottoSquare");
+     party.markModified("leftGrottoQuadrant");
+     await party.save();
+     if (grotto.trialType === "puzzle" && (grotto.puzzleState?.offeringAttempts ?? 0) >= 3 && grotto.puzzleState?.offeringApproved !== true) {
+      grotto.puzzleState.offeringAttempts = 0;
+      grotto.markModified("puzzleState");
+      await grotto.save();
+     }
     if (grotto.status === "cleared" || grotto.completedAt) {
       const rollCmdId = getExploreCommandId();
-      const clearedBanner = await generateGrottoBannerOverlay(party, GROTTO_BANNER_CLEANSED_URL, GROTTO_CLEANSED_BANNER_NAME);
+      const clearedBanner = await generateGrottoBannerOverlay(party, getRandomGrottoBanner(), GROTTO_CLEANSED_BANNER_NAME);
       const clearedEmbed = new EmbedBuilder()
        .setTitle("🗺️ **Grotto already cleared**")
        .setColor(getExploreOutcomeColor("grotto_revisit", regionColors[party.region] || "#00ff99"))
@@ -2467,7 +2476,7 @@ module.exports = {
       await party.save(); // Always persist so dashboard shows current hearts/stamina/progress
       const flavor = getRandomPuzzleSuccessFlavor();
       const rollCmdId = getExploreCommandId();
-      const approvedBanner = await generateGrottoBannerOverlay(party, GROTTO_BANNER_CLEANSED_URL, GROTTO_CLEANSED_BANNER_NAME);
+      const approvedBanner = await generateGrottoBannerOverlay(party, getRandomGrottoBanner(), GROTTO_CLEANSED_BANNER_NAME);
       const approvedEmbed = new EmbedBuilder()
        .setTitle("🗺️ **Grotto: Puzzle — Approved!**")
        .setColor(getExploreOutcomeColor("grotto_puzzle_success", regionColors[party.region] || "#00ff99"))
@@ -2494,7 +2503,7 @@ module.exports = {
      }
     if (grotto.trialType === "puzzle" && grotto.completedAt) {
       const rollCmdId = getExploreCommandId();
-      const doneBanner = await generateGrottoBannerOverlay(party, GROTTO_BANNER_CLEANSED_URL, GROTTO_CLEANSED_BANNER_NAME);
+      const doneBanner = await generateGrottoBannerOverlay(party, getRandomGrottoBanner(), GROTTO_CLEANSED_BANNER_NAME);
       const doneEmbed = new EmbedBuilder()
        .setTitle("🗺️ **Grotto: Puzzle — Complete**")
        .setColor(getExploreOutcomeColor("grotto_puzzle_success", regionColors[party.region] || "#00ff99"))
@@ -2514,15 +2523,25 @@ module.exports = {
       });
       return interaction.editReply({ embeds: [doneEmbed], ...(doneBanner.attachment ? { files: [doneBanner.attachment] } : {}) });
     }
+     if (grotto.trialType === "puzzle" && (grotto.puzzleState?.offeringAttempts ?? 0) >= 3) {
+      party.leftGrottoSquare = squareId;
+      party.leftGrottoQuadrant = quadrantId;
+      party.markModified("leftGrottoSquare");
+      party.markModified("leftGrottoQuadrant");
+      await party.save();
+      const rollCmdId = getExploreCommandId();
+      const leaveCmdId = getExploreCommandId();
+      return interaction.editReply(`The party used all 3 puzzle attempts. The grotto is **not cleared** — it stays until someone submits the correct offering. Use </explore grotto leave:${leaveCmdId}> or </explore roll:${rollCmdId}> to leave. Come back later with </explore grotto continue> to get 3 more attempts.`);
+     }
      if (grotto.trialType === "puzzle" && grotto.puzzleState?.offeringSubmitted && grotto.puzzleState?.offeringApproved === false) {
-      return interaction.editReply("The puzzle offering was denied. Items offered are still consumed. The grotto trial is complete with no Spirit Orbs.");
+      return interaction.editReply("The puzzle offering was denied. Items offered are still consumed. You can try again (up to 3 attempts total) with </explore grotto puzzle> (items), or use </explore grotto leave:" + getExploreCommandId() + "> to leave and come back later (no more items consumed).");
      }
      if (grotto.trialType === "test_of_power") {
       const raidStarted = grotto.testOfPowerState?.raidStarted && grotto.testOfPowerState?.raidId;
       if (raidStarted) {
        const raidId = grotto.testOfPowerState.raidId;
        const raidCmd = "</raid:1470659276287774734>";
-       const inProgressBanner = await generateGrottoBannerOverlay(party, GROTTO_BANNER_CLEANSED_URL, GROTTO_CLEANSED_BANNER_NAME);
+       const inProgressBanner = await generateGrottoBannerOverlay(party, getRandomGrottoBanner(), GROTTO_CLEANSED_BANNER_NAME);
        const embedInProgress = new EmbedBuilder()
         .setTitle("🗺️ **Grotto: Test of Power**")
         .setColor(getExploreOutcomeColor("grotto_maze_raid", regionColors[party.region] || "#00ff99"))
@@ -2551,7 +2570,7 @@ module.exports = {
        grotto.testOfPowerState.raidId = raidResult.raidId;
        await grotto.save();
        const raidCmd = "</raid:1470659276287774734>";
-       const grottoRaidBanner = await generateGrottoBannerOverlay(party, GROTTO_BANNER_CLEANSED_URL, GROTTO_CLEANSED_BANNER_NAME);
+       const grottoRaidBanner = await generateGrottoBannerOverlay(party, getRandomGrottoBanner(), GROTTO_CLEANSED_BANNER_NAME);
        const embedStarted = new EmbedBuilder()
         .setTitle("🗺️ **Grotto: Test of Power — Raid Started**")
         .setColor(getExploreOutcomeColor("grotto_maze_raid", regionColors[party.region] || "#00ff99"))
@@ -2601,6 +2620,10 @@ module.exports = {
       } catch (err) {
        logger.warn("EXPLORE", `[explore.js]⚠️ Maze render (continue): ${err?.message || err}`);
       }
+     } else if (grotto.trialType !== "maze") {
+      const continueBanner = await generateGrottoBannerOverlay(party, getRandomGrottoBanner(), GROTTO_CLEANSED_BANNER_NAME);
+      continueMazeImg = continueBanner?.imageUrl ?? getRandomGrottoBanner();
+      if (continueBanner?.attachment) continueMazeFiles = [continueBanner.attachment];
      }
      const embed = new EmbedBuilder()
       .setTitle(`🗺️ **Grotto: ${trialLabel}**`)
@@ -2873,19 +2896,23 @@ module.exports = {
      if (grotto.status === "cleared" || grotto.completedAt) {
       return interaction.editReply("This grotto has already been cleared.");
      }
-     if (grotto.puzzleState.offeringSubmitted) {
-      const approved = grotto.puzzleState.offeringApproved === true;
-      const itemsStr = (grotto.puzzleState.offeringItems || []).join(", ");
+     const puzzleAttempts = grotto.puzzleState?.offeringAttempts ?? 0;
+     if (puzzleAttempts >= 3) {
+      party.leftGrottoSquare = (party.square && String(party.square).trim()) || "";
+      party.leftGrottoQuadrant = (party.quadrant && String(party.quadrant).trim()) || "";
+      party.markModified("leftGrottoSquare");
+      party.markModified("leftGrottoQuadrant");
+      await party.save();
       const rollCmdId = getExploreCommandId();
+      const leaveCmdId = getExploreCommandId();
+      const noMoreBanner = await generateGrottoBannerOverlay(party, getRandomGrottoBanner(), GROTTO_CLEANSED_BANNER_NAME);
       const embed = new EmbedBuilder()
-       .setTitle(approved ? "🗺️ **Grotto: Puzzle — Complete**" : "🗺️ **Grotto: Puzzle — Denied**")
-       .setColor(getExploreOutcomeColor(approved ? "grotto_puzzle_success" : "grotto_puzzle_offering", regionColors[party.region] || "#00ff99"))
+       .setTitle("🗺️ **Grotto: Puzzle — No More Attempts**")
+       .setColor(getExploreOutcomeColor("grotto_puzzle_offering", regionColors[party.region] || "#00ff99"))
        .setDescription(
-        approved
-         ? `An offering was already submitted (${itemsStr}) and approved. Everyone received a **Spirit Orb**. Use </explore roll:${rollCmdId}> to leave the grotto and continue exploring.`
-         : `An offering was already submitted (${itemsStr}) but was not correct. Items were consumed. The grotto trial is complete with no Spirit Orbs. Use </explore roll:${rollCmdId}> to leave the grotto and continue exploring.`
+        "The party used all 3 attempts. The grotto is **not cleared** — it stays until someone submits the correct offering. Use </explore grotto leave:" + leaveCmdId + "> or </explore roll:" + rollCmdId + "> to leave. Come back later with </explore grotto continue> to get 3 more attempts."
        )
-       .setImage(getExploreMapImageUrl(party, { highlight: true }));
+       .setImage(noMoreBanner?.imageUrl ?? getExploreMapImageUrl(party, { highlight: true }));
       addExplorationStandardFields(embed, {
        party,
        expeditionId,
@@ -2897,7 +2924,31 @@ module.exports = {
        hasDiscoveriesInQuadrant: await hasDiscoveriesInQuadrant(party.square, party.quadrant),
        hasUnpinnedDiscoveriesInQuadrant: await hasUnpinnedDiscoveriesInQuadrant(party),
       });
-      return interaction.editReply({ embeds: [embed] });
+      return interaction.editReply({ embeds: [embed], ...(noMoreBanner?.attachment ? { files: [noMoreBanner.attachment] } : {}) });
+     }
+     if (grotto.puzzleState.offeringSubmitted && grotto.puzzleState.offeringApproved === true) {
+      const itemsStr = (grotto.puzzleState.offeringItems || []).join(", ");
+      const rollCmdId = getExploreCommandId();
+      const puzzleCompleteBanner = await generateGrottoBannerOverlay(party, getRandomGrottoBanner(), GROTTO_CLEANSED_BANNER_NAME);
+      const embed = new EmbedBuilder()
+       .setTitle("🗺️ **Grotto: Puzzle — Complete**")
+       .setColor(getExploreOutcomeColor("grotto_puzzle_success", regionColors[party.region] || "#00ff99"))
+       .setDescription(
+        `An offering was already submitted (${itemsStr}) and approved. Everyone received a **Spirit Orb**. Use </explore roll:${rollCmdId}> to leave the grotto and continue exploring.`
+       )
+       .setImage(puzzleCompleteBanner?.imageUrl ?? getRandomGrottoBanner());
+      addExplorationStandardFields(embed, {
+       party,
+       expeditionId,
+       location,
+       nextCharacter: party.characters[party.currentTurn] ?? null,
+       showNextAndCommands: true,
+       showRestSecureMove: false,
+       hasActiveGrotto: false,
+       hasDiscoveriesInQuadrant: await hasDiscoveriesInQuadrant(party.square, party.quadrant),
+       hasUnpinnedDiscoveriesInQuadrant: await hasUnpinnedDiscoveriesInQuadrant(party),
+      });
+      return interaction.editReply({ embeds: [embed], ...(puzzleCompleteBanner?.attachment ? { files: [puzzleCompleteBanner.attachment] } : {}) });
      }
      const itemsStr = interaction.options.getString("items");
      const parsedItems = parsePuzzleItems(itemsStr);
@@ -2907,14 +2958,17 @@ module.exports = {
        await ensured.save();
        Object.assign(grotto.puzzleState || {}, ensured.puzzleState);
       }
-      const flavor = getPuzzleFlavor(grotto);
       const cmdId = getExploreCommandId();
-      const grottoDesc = flavor || `Discuss with your group. Determine what to offer and submit with </explore grotto puzzle:${cmdId}> (items). If correct, everyone gets Spirit Orbs.`;
+      const flavor = getPuzzleFlavor(grotto, cmdId);
+      const attemptsSoFar = grotto.puzzleState?.offeringAttempts ?? 0;
+      const attemptsLeft = 3 - attemptsSoFar;
+      let grottoDesc = flavor || `Discuss with your group. Determine what to offer and submit with </explore grotto puzzle:${cmdId}> (items). If correct, everyone gets Spirit Orbs.`;
+      if (attemptsSoFar > 0 && attemptsLeft > 0) grottoDesc += `\n\n↳ Wrong attempts so far: **${attemptsSoFar}**. You have **${attemptsLeft}** attempt(s) left.`;
       const embed = new EmbedBuilder()
        .setTitle("🗺️ **Grotto: Puzzle**")
        .setColor(getExploreOutcomeColor("grotto_puzzle_success", regionColors[party.region] || "#00ff99"))
        .setDescription(grottoDesc)
-       .setImage(getExploreMapImageUrl(party, { highlight: true }));
+       .setImage(getRandomGrottoBanner());
       addExplorationStandardFields(embed, {
        party,
        expeditionId,
@@ -2925,6 +2979,7 @@ module.exports = {
        hasActiveGrotto: true,
        activeGrottoCommand: `</explore grotto puzzle:${cmdId}>`,
        hasUnpinnedDiscoveriesInQuadrant: await hasUnpinnedDiscoveriesInQuadrant(party),
+       compactGrottoCommands: true,
       });
       return interaction.editReply({ embeds: [embed] });
      }
@@ -2938,7 +2993,12 @@ module.exports = {
       return interaction.editReply("Could not read party inventories. Try again or contact staff.");
      }
      const checkResult = checkPuzzleOffer(grotto, parsedItems);
-     const consumeItems = checkResult.approved ? getPuzzleConsumeItems(grotto, parsedItems) : parsedItems;
+     // When wrong: for Offering Statue only take 1 per item (clue expects one); use parsedItems otherwise.
+     const consumeItems = checkResult.approved
+      ? getPuzzleConsumeItems(grotto, parsedItems)
+      : (grotto.puzzleState?.puzzleSubType === "offering_statue"
+        ? parsedItems.map((p) => ({ itemName: (p.itemName || "").trim(), quantity: Math.min(p.quantity || 1, 1) }))
+        : parsedItems);
      for (const { itemName, quantity } of consumeItems) {
       const key = itemName.trim().toLowerCase();
       const have = partyInv.totalByItem.get(key) || 0;
@@ -2984,12 +3044,12 @@ module.exports = {
       }
      }
      const displayItems = consumeItems.map((p) => (p.quantity > 1 ? `${p.itemName} x${p.quantity}` : p.itemName));
-     grotto.puzzleState.offeringSubmitted = true;
-     grotto.puzzleState.offeringApproved = checkResult.approved;
-     grotto.puzzleState.offeringItems = displayItems;
-     grotto.puzzleState.offeringBy = character.name;
-     grotto.puzzleState.offeredAt = new Date();
      if (checkResult.approved) {
+      grotto.puzzleState.offeringSubmitted = true;
+      grotto.puzzleState.offeringApproved = true;
+      grotto.puzzleState.offeringItems = displayItems;
+      grotto.puzzleState.offeringBy = character.name;
+      grotto.puzzleState.offeredAt = new Date();
       await markGrottoCleared(grotto);
       restorePartyPoolOnGrottoExit(party);
       for (const slot of party.characters) {
@@ -3008,13 +3068,20 @@ module.exports = {
       party.markModified("gatheredItems");
       pushProgressLog(party, character.name, "grotto_puzzle_success", "Puzzle approved. Each party member received a Spirit Orb.", undefined, undefined, new Date());
      }
+     const wrongAttempts = (grotto.puzzleState?.offeringAttempts ?? 0) + (checkResult.approved ? 0 : 1);
+     if (!checkResult.approved) {
+      grotto.puzzleState.offeringAttempts = wrongAttempts;
+      grotto.puzzleState.offeringItems = displayItems;
+      grotto.puzzleState.offeringBy = character.name;
+      grotto.puzzleState.offeredAt = new Date();
+     }
      pushProgressLog(party, character.name, "grotto_puzzle_offering", `Puzzle offering submitted: ${displayItems.join(", ")}. ${checkResult.approved ? "Approved." : "Denied."}`, undefined, undefined, new Date());
      await grotto.save();
      await party.save(); // Always persist so dashboard shows current hearts/stamina/progress
      if (checkResult.approved) {
       const flavor = getRandomPuzzleSuccessFlavor();
       const rollCmdId = getExploreCommandId();
-      const puzzleSuccessBanner = await generateGrottoBannerOverlay(party, GROTTO_BANNER_CLEANSED_URL, GROTTO_CLEANSED_BANNER_NAME);
+      const puzzleSuccessBanner = await generateGrottoBannerOverlay(party, getRandomGrottoBanner(), GROTTO_CLEANSED_BANNER_NAME);
       const successEmbed = new EmbedBuilder()
        .setTitle("🗺️ **Grotto: Puzzle — Correct!**")
        .setColor(getExploreOutcomeColor("grotto_puzzle_success", regionColors[party.region] || "#00ff99"))
@@ -3041,17 +3108,51 @@ module.exports = {
       }
       return;
      }
-     const puzzleDeniedBanner = await generateGrottoBannerOverlay(party, GROTTO_BANNER_CLEANSED_URL, GROTTO_CLEANSED_BANNER_NAME);
-    return interaction.editReply({
-      embeds: [
-       new EmbedBuilder()
-        .setTitle("🗺️ **Grotto: Puzzle — Offering Submitted**")
-        .setColor(getExploreOutcomeColor("grotto_puzzle_success", regionColors[party.region] || "#00ff99"))
-        .setDescription(
-         `**${character.name}** submitted an offering: **${displayItems.join(", ")}**\n\nThe offering was not correct. Items are consumed. The grotto is **cleared** (trial complete) with no Spirit Orbs.`
-        )
-        .setImage(puzzleDeniedBanner.imageUrl),
-      ],
+     const puzzleDeniedBanner = await generateGrottoBannerOverlay(party, getRandomGrottoBanner(), GROTTO_CLEANSED_BANNER_NAME);
+     const cmdIdDenied = getExploreCommandId();
+     const attemptsLeft = 3 - wrongAttempts;
+     if (wrongAttempts >= 3) {
+      party.leftGrottoSquare = (party.square && String(party.square).trim()) || "";
+      party.leftGrottoQuadrant = (party.quadrant && String(party.quadrant).trim()) || "";
+      party.markModified("leftGrottoSquare");
+      party.markModified("leftGrottoQuadrant");
+      await party.save();
+      const leaveCmdId = getExploreCommandId();
+      return interaction.editReply({
+       embeds: [
+        new EmbedBuilder()
+         .setTitle("🗺️ **Grotto: Puzzle — No More Attempts**")
+         .setColor(getExploreOutcomeColor("grotto_puzzle_offering", regionColors[party.region] || "#00ff99"))
+         .setDescription(
+          `**${character.name}** submitted an offering: **${displayItems.join(", ")}**\n\nThe offering was not correct. Items are consumed. **No attempts remaining.** The grotto is **not cleared** — it stays until someone submits the correct offering. Use </explore grotto leave:${leaveCmdId}> or </explore roll:${cmdIdDenied}> to leave. Come back later with </explore grotto continue> to get 3 more attempts.`
+         )
+         .setImage(puzzleDeniedBanner.imageUrl),
+       ],
+       ...(puzzleDeniedBanner.attachment ? { files: [puzzleDeniedBanner.attachment] } : {}),
+      });
+     }
+     const tryAgainEmbed = new EmbedBuilder()
+      .setTitle("🗺️ **Grotto: Puzzle — Wrong Offering**")
+      .setColor(getExploreOutcomeColor("grotto_puzzle_offering", regionColors[party.region] || "#00ff99"))
+      .setDescription(
+       `**${character.name}** submitted an offering: **${displayItems.join(", ")}**\n\nThe offering was not correct. Items are consumed. You have **${attemptsLeft}** attempt(s) left. Try again with </explore grotto puzzle:${cmdIdDenied}> (items), or use </explore grotto leave:${cmdIdDenied}> to leave and come back later (no more items consumed).`
+      )
+      .setImage(puzzleDeniedBanner.imageUrl);
+     addExplorationStandardFields(tryAgainEmbed, {
+      party,
+      expeditionId,
+      location,
+      nextCharacter: party.characters[party.currentTurn] ?? null,
+      showNextAndCommands: true,
+      showRestSecureMove: false,
+      hasActiveGrotto: true,
+      activeGrottoCommand: `</explore grotto puzzle:${cmdIdDenied}>`,
+      hasDiscoveriesInQuadrant: await hasDiscoveriesInQuadrant(party.square, party.quadrant),
+      hasUnpinnedDiscoveriesInQuadrant: await hasUnpinnedDiscoveriesInQuadrant(party),
+      compactGrottoCommands: true,
+     });
+     return interaction.editReply({
+      embeds: [tryAgainEmbed],
       ...(puzzleDeniedBanner.attachment ? { files: [puzzleDeniedBanner.attachment] } : {}),
      });
     }
@@ -3157,7 +3258,7 @@ module.exports = {
          pushProgressLog(freshParty, character.name, "grotto_maze_success", "Maze bypassed with Lens of Truth. Each party member received a Spirit Orb.", undefined, undefined, new Date());
          await freshParty.save(); // Always persist so dashboard shows current hearts/stamina/progress
          const rollCmdId = getExploreCommandId();
-         const bypassClearedBanner = await generateGrottoBannerOverlay(freshParty, GROTTO_BANNER_CLEANSED_URL, GROTTO_CLEANSED_BANNER_NAME);
+         const bypassClearedBanner = await generateGrottoBannerOverlay(freshParty, getRandomGrottoBanner(), GROTTO_CLEANSED_BANNER_NAME);
          const doneEmbed = new EmbedBuilder()
           .setTitle("🗺️ **Grotto: Maze — Bypassed**")
           .setColor(getMazeEmbedColor('bypassed', regionColors[freshParty.region]))
@@ -4033,6 +4134,10 @@ module.exports = {
     
     party.square = normSquare;
      party.quadrant = normQuad;
+     party.leftGrottoSquare = null;
+     party.leftGrottoQuadrant = null;
+     party.markModified("leftGrottoSquare");
+     party.markModified("leftGrottoQuadrant");
      await party.save(); // Always persist so dashboard shows current hearts/stamina/progress
      pushProgressLog(party, character.name, "grotto_travel", `Party traveled to grotto at ${travelSquare} ${travelQuadrant} (−${totalCost} stamina).`, undefined, { staminaLost: totalCost }, new Date());
      const embed = new EmbedBuilder()
@@ -4042,6 +4147,46 @@ module.exports = {
       .setImage(GROTTO_BANNER_UNCLEANSED_URL);
      addExplorationStandardFields(embed, { party, expeditionId, location: `${party.square} ${party.quadrant}`, nextCharacter: party.characters[party.currentTurn] ?? null, showNextAndCommands: true, showRestSecureMove: false, hasDiscoveriesInQuadrant: await hasDiscoveriesInQuadrant(party.square, party.quadrant), hasUnpinnedDiscoveriesInQuadrant: await hasUnpinnedDiscoveriesInQuadrant(party), actionCost: { staminaCost: payResult.staminaPaid ?? 0, heartsCost: payResult.heartsPaid ?? 0 } });
      return interaction.editReply({ embeds: [embed] });
+    }
+
+    if (subcommand === "leave") {
+     const grottoOption = interaction.options.getString("grotto");
+     const grotto = await resolveGrottoAtLocation(squareId, quadrantId, expeditionId, grottoOption, true);
+     if (!grotto) {
+      return interaction.editReply("No active grotto trial at this location for this expedition. You can only leave a grotto that is cleansed and not yet cleared.");
+     }
+     if (grotto.status === "cleared" || grotto.completedAt) {
+      return interaction.editReply("This grotto is already cleared. Use </explore roll:" + getExploreCommandId() + "> to leave and continue exploring.");
+     }
+     party.leftGrottoSquare = squareId;
+     party.leftGrottoQuadrant = quadrantId;
+     party.markModified("leftGrottoSquare");
+     party.markModified("leftGrottoQuadrant");
+     await party.save();
+     pushProgressLog(party, character.name, "grotto_leave", `Party left the grotto at ${location} without completing the trial.`, undefined, undefined, new Date());
+     const rollCmdId = getExploreCommandId();
+     const continueCmdId = getExploreCommandId();
+     const leaveBanner = await generateGrottoBannerOverlay(party, getRandomGrottoBanner(), GROTTO_CLEANSED_BANNER_NAME);
+     const leaveEmbed = new EmbedBuilder()
+      .setTitle("🗺️ **Grotto: Left**")
+      .setColor(getExploreOutcomeColor("grotto_puzzle_success", regionColors[party.region] || "#00ff99"))
+      .setDescription(
+       `The party left **${grotto.name || "the grotto"}** without completing the trial.\n\n` +
+       `Use </explore roll:${rollCmdId}> to continue exploring from this square, or return later and use </explore grotto continue:${continueCmdId}> to re-enter and try again.`
+      )
+      .setImage(leaveBanner?.imageUrl ?? getRandomGrottoBanner());
+     addExplorationStandardFields(leaveEmbed, {
+      party,
+      expeditionId,
+      location,
+      nextCharacter: party.characters[party.currentTurn] ?? null,
+      showNextAndCommands: true,
+      showRestSecureMove: false,
+      hasActiveGrotto: false,
+      hasDiscoveriesInQuadrant: await hasDiscoveriesInQuadrant(party.square, party.quadrant),
+      hasUnpinnedDiscoveriesInQuadrant: await hasUnpinnedDiscoveriesInQuadrant(party),
+     });
+     return interaction.editReply({ embeds: [leaveEmbed], ...(leaveBanner?.attachment ? { files: [leaveBanner.attachment] } : {}) });
     }
 
     return interaction.editReply("Unknown grotto subcommand.");
@@ -4108,8 +4253,8 @@ module.exports = {
       completedAt: null,
      });
      const grottoCmd = getActiveGrottoCommand(grotto?.trialType);
-     const grottoCampBanner = grotto?.trialType === "maze" ? null : await generateGrottoBannerOverlay(party, GROTTO_BANNER_CLEANSED_URL, GROTTO_CLEANSED_BANNER_NAME);
-     const grottoCampImg = grotto?.trialType === "maze" ? getExploreMapImageUrl(party, { highlight: true }) : (grottoCampBanner?.imageUrl ?? GROTTO_BANNER_CLEANSED_URL);
+     const grottoCampBanner = grotto?.trialType === "maze" ? null : await generateGrottoBannerOverlay(party, getRandomGrottoBanner(), GROTTO_CLEANSED_BANNER_NAME);
+     const grottoCampImg = grotto?.trialType === "maze" ? getExploreMapImageUrl(party, { highlight: true }) : (grottoCampBanner?.imageUrl ?? getRandomGrottoBanner());
      const grottoCampEmbed = new EmbedBuilder()
       .setTitle("🕳️ **Complete the grotto trial first**")
       .setColor(getExploreOutcomeColor("move", regionColors[party.region] || "#9C27B0"))
@@ -4239,7 +4384,7 @@ module.exports = {
      if (grotto) {
       if (grotto.status === "cleared") {
        const rollCmdId = getExploreCommandId();
-       const clearedRevisitBanner = await generateGrottoBannerOverlay(party, GROTTO_BANNER_CLEANSED_URL, GROTTO_CLEANSED_BANNER_NAME);
+       const clearedRevisitBanner = await generateGrottoBannerOverlay(party, getRandomGrottoBanner(), GROTTO_CLEANSED_BANNER_NAME);
        const clearedRevisitEmbed = new EmbedBuilder()
         .setTitle("🗺️ **Expedition: Grotto already cleared**")
         .setColor(getExploreOutcomeColor("grotto_revisit", regionColors[party.region] || "#00ff99"))
@@ -4279,8 +4424,8 @@ module.exports = {
         logger.warn("EXPLORE", `[explore.js]⚠️ Maze render (revisit): ${err?.message || err}`);
        }
       }
-      const revisitCleansedBanner = grotto.trialType === "maze" ? null : await generateGrottoBannerOverlay(party, GROTTO_BANNER_CLEANSED_URL, GROTTO_CLEANSED_BANNER_NAME);
-      const revisitImg = grotto.trialType === "maze" ? revisitMazeImg : (revisitCleansedBanner?.imageUrl ?? GROTTO_BANNER_CLEANSED_URL);
+      const revisitCleansedBanner = grotto.trialType === "maze" ? null : await generateGrottoBannerOverlay(party, getRandomGrottoBanner(), GROTTO_CLEANSED_BANNER_NAME);
+      const revisitImg = grotto.trialType === "maze" ? revisitMazeImg : (revisitCleansedBanner?.imageUrl ?? getRandomGrottoBanner());
       const embed = new EmbedBuilder()
        .setTitle("🗺️ **Expedition: Revisiting Grotto**")
        .setColor(getExploreOutcomeColor("grotto_revisit", regionColors[party.region] || "#00ff99"))
@@ -4399,7 +4544,7 @@ module.exports = {
       pushProgressLog(party, plumeHolder.character.name, "grotto_blessing", "Blessing trial: each party member received a Spirit Orb.", undefined, undefined, new Date());
       await party.save(); // Always persist so dashboard shows current hearts/stamina/progress
       const blessingFlavorRevisit = getRandomBlessingFlavor();
-      const blessingRevisitBanner = await generateGrottoBannerOverlay(party, GROTTO_BANNER_CLEANSED_URL, GROTTO_CLEANSED_BANNER_NAME);
+      const blessingRevisitBanner = await generateGrottoBannerOverlay(party, getRandomGrottoBanner(), GROTTO_CLEANSED_BANNER_NAME);
       const blessingEmbed = new EmbedBuilder()
        .setTitle("🗺️ **Expedition: Grotto cleansed (revisit)**")
        .setColor(getExploreOutcomeColor("grotto_blessing", regionColors[party.region] || "#00ff99"))
@@ -4434,7 +4579,7 @@ module.exports = {
       continueDescRevisit += `Complete the trial to receive a **Spirit Orb**. Use ${grottoCmdRevisit} for your turn.`;
      }
      if (grottoDoc.trialType === 'target_practice') continueDescRevisit += '\n\n_Each action will take **1** 🟩 stamina._';
-     const continueRevisitBanner = await generateGrottoBannerOverlay(party, GROTTO_BANNER_CLEANSED_URL, GROTTO_CLEANSED_BANNER_NAME);
+     const continueRevisitBanner = await generateGrottoBannerOverlay(party, getRandomGrottoBanner(), GROTTO_CLEANSED_BANNER_NAME);
      const continueEmbed = new EmbedBuilder()
       .setTitle("🗺️ **Expedition: Grotto cleansed (revisit)**")
       .setColor(getExploreOutcomeColor("grotto_cleansed", regionColors[party.region] || "#00ff99"))
@@ -4515,13 +4660,15 @@ module.exports = {
        completedAt: null,
       });
       const grottoCmd = getActiveGrottoCommand(grotto?.trialType);
+      const grottoRollBanner = grotto?.trialType === "maze" ? null : await generateGrottoBannerOverlay(party, getRandomGrottoBanner(), GROTTO_CLEANSED_BANNER_NAME);
+      const grottoRollImg = grotto?.trialType === "maze" ? getExploreMapImageUrl(party, { highlight: true }) : (grottoRollBanner?.imageUrl ?? getRandomGrottoBanner());
       const grottoRollEmbed = new EmbedBuilder()
        .setTitle("🕳️ **Complete the grotto trial first**")
        .setColor(getExploreOutcomeColor("move", regionColors[party.region] || "#9C27B0"))
        .setDescription(
         `You cannot use </explore roll:${getExploreCommandId()}> until the trial is complete.\n\nUse **${grottoCmd}** for your turn.`
        )
-       .setImage(getExploreMapImageUrl(party, { highlight: true }));
+       .setImage(grottoRollImg);
       addExplorationStandardFields(grottoRollEmbed, {
        party,
        expeditionId,
@@ -4530,7 +4677,7 @@ module.exports = {
        showNextAndCommands: true,
        showRestSecureMove: false,
       });
-      return interaction.editReply({ embeds: [grottoRollEmbed] });
+      return interaction.editReply({ embeds: [grottoRollEmbed], ...(grottoRollBanner?.attachment ? { files: [grottoRollBanner.attachment] } : {}) });
      }
 
      if (!SKIP_PIN_REQUIREMENT_FOR_TESTING) {
@@ -7511,6 +7658,10 @@ module.exports = {
 
     party.square = newLocation.square;
     party.quadrant = newLocation.quadrant;
+    party.leftGrottoSquare = null;
+    party.leftGrottoQuadrant = null;
+    party.markModified("leftGrottoSquare");
+    party.markModified("leftGrottoQuadrant");
     if (destMapSquare && destMapSquare.region) {
      party.region = destMapSquare.region;
      party.markModified("region");

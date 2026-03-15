@@ -95,6 +95,9 @@ const PartySchema = new Schema({
   endedAt: { type: Date },
   /** Secured quadrant where the party last camped; used to block consecutive /camp in same quadrant until they move. */
   lastCampedAtQuadrant: { square: { type: String }, quadrant: { type: String } },
+  /** When set, party has left the grotto at this location without completing it; they can use roll/travel until they move or re-enter. */
+  leftGrottoSquare: { type: String, default: null },
+  leftGrottoQuadrant: { type: String, default: null },
   /** Pending choice from a special exploration outcome (monster_camp, ruins, grotto, chest). While set, only that choice should be resolved. */
   pendingChoice: {
     type: {

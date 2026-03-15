@@ -35,6 +35,7 @@ const GrottoSchema = new Schema({
     puzzleSubType: { type: String, enum: ['odd_structure', 'offering_statue'], default: null },
     puzzleVariant: { type: Number, default: null }, // 0-4 for odd structure
     puzzleClueIndex: { type: Number, default: null }, // 0-13 for offering statue
+    offeringAttempts: { type: Number, default: 0 }, // wrong offerings so far; 3 = trial failed, grotto cleared
     offeringSubmitted: { type: Boolean, default: false },
     offeringApproved: { type: Boolean, default: null },
     offeringDeniedAt: { type: Date, default: null },

@@ -114,7 +114,7 @@ function rollPuzzleConfig() {
   };
 }
 
-function getPuzzleFlavor(grotto) {
+function getPuzzleFlavor(grotto, cmdId) {
   const state = grotto?.puzzleState || {};
   const subType = state.puzzleSubType;
   if (!subType) return null;
@@ -127,7 +127,9 @@ function getPuzzleFlavor(grotto) {
     const idx = state.puzzleClueIndex ?? 0;
     const c = OFFERING_STATUE_CLUES[idx];
     if (!c) return null;
-    return `${OFFERING_STATUE_ENTRY}\n\n*${c.clue}*\n\n↳ Offer one item that fits the clue. Only that amount will be taken from party inventories (any character — not loadout; no transfers during expedition). ➾ \`</explore grotto puzzle items:...>\``;
+    const hintBlock = 'Offer one item that fits the clue. Only that amount will be taken from party inventories (any character — not loadout; no transfers during expedition).';
+    const cmd = cmdId ? `</explore grotto puzzle:${cmdId}>` : '`/explore grotto puzzle` (items)';
+    return `${OFFERING_STATUE_ENTRY}\n\n*${c.clue}*\n\n\`\`\`${hintBlock}\`\`\`\n\n➾ ${cmd}`;
   }
   return null;
 }
