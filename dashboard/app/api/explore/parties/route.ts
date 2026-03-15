@@ -2,7 +2,7 @@
 // POST /api/explore/parties — create expedition party
 
 import { NextResponse } from "next/server";
-import { connect } from "@/lib/db";
+import { connect, isDatabaseUnavailableError, logDatabaseUnavailableOnce } from "@/lib/db";
 import { getSession } from "@/lib/session";
 import mongoose from "mongoose";
 
@@ -59,6 +59,13 @@ export async function GET() {
 
     return NextResponse.json({ parties: list });
   } catch (err) {
+    if (isDatabaseUnavailableError(err)) {
+      logDatabaseUnavailableOnce("explore/parties");
+      return NextResponse.json(
+        { parties: [] },
+        { status: 200, headers: { "X-Degraded": "database" } }
+      );
+    }
     console.error("[explore/parties GET]", err);
     return NextResponse.json(
       { error: "Failed to load your expeditions" },
@@ -115,6 +122,13 @@ export async function POST(req: Request) {
       quadrant: party.quadrant,
     });
   } catch (err) {
+    if (isDatabaseUnavailableError(err)) {
+      logDatabaseUnavailableOnce("explore/parties");
+      return NextResponse.json(
+        { error: "Database unavailable", code: "database_unavailable" },
+        { status: 503 }
+      );
+    }
     console.error("[explore/parties POST]", err);
     return NextResponse.json(
       { error: "Failed to create expedition" },

@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { connect } from "@/lib/db";
+import { connect, isDatabaseUnavailableError, logDatabaseUnavailableOnce } from "@/lib/db";
 import { logger } from "@/utils/logger";
 
 const MONTH_NAMES = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
@@ -102,6 +102,13 @@ export async function GET() {
     const month = quests.length > 0 ? currentMonthDisplay() : null;
     return NextResponse.json({ quests, month });
   } catch (e) {
+    if (isDatabaseUnavailableError(e)) {
+      logDatabaseUnavailableOnce("quests/monthly");
+      return NextResponse.json(
+        { quests: [], month: null },
+        { status: 200, headers: { "X-Degraded": "database" } }
+      );
+    }
     logger.error("api/quests/monthly", e instanceof Error ? e.message : String(e));
     return NextResponse.json(
       { error: "Failed to fetch monthly quests" },

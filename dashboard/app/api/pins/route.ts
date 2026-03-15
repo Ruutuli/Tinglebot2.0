@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import mongoose from "mongoose";
-import { connect, isDatabaseUnavailableError } from "@/lib/db";
+import { connect, isDatabaseUnavailableError, logDatabaseUnavailableOnce } from "@/lib/db";
 import { getSession } from "@/lib/session";
 
 export const dynamic = "force-dynamic";
@@ -18,13 +18,14 @@ export async function GET() {
   try {
     await connect();
   } catch (err) {
-    console.error("[api/pins] GET connect error:", err);
     if (isDatabaseUnavailableError(err)) {
+      logDatabaseUnavailableOnce("pins");
       return NextResponse.json(
-        { error: "Database unavailable", code: "database_unavailable" },
-        { status: 503 }
+        { success: true, pins: [] },
+        { status: 200, headers: { "X-Degraded": "database" } }
       );
     }
+    console.error("[api/pins] GET connect error:", err);
     return NextResponse.json({ error: "Failed to fetch pins" }, { status: 500 });
   }
 
@@ -56,13 +57,14 @@ export async function GET() {
     }));
     return NextResponse.json({ success: true, pins: pinsWithCreator });
   } catch (error) {
-    console.error("[api/pins] GET error:", error);
     if (isDatabaseUnavailableError(error)) {
+      logDatabaseUnavailableOnce("pins");
       return NextResponse.json(
-        { error: "Database unavailable", code: "database_unavailable" },
-        { status: 503 }
+        { success: true, pins: [] },
+        { status: 200, headers: { "X-Degraded": "database" } }
       );
     }
+    console.error("[api/pins] GET error:", error);
     return NextResponse.json({ error: "Failed to fetch pins" }, { status: 500 });
   }
 }

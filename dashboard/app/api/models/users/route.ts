@@ -1,6 +1,6 @@
 import type { NextRequest } from "next/server";
 import { NextResponse } from "next/server";
-import { connect } from "@/lib/db";
+import { connect, isDatabaseUnavailableError, logDatabaseUnavailableOnce } from "@/lib/db";
 import {
   parsePaginatedQuery,
   getFilterParamMultiple,
@@ -360,6 +360,13 @@ export async function GET(req: NextRequest) {
 
     return response;
   } catch (e) {
+    if (isDatabaseUnavailableError(e)) {
+      logDatabaseUnavailableOnce("models/users");
+      return NextResponse.json(
+        buildListResponse({ data: [], total: 0, page: 1, limit: 10 }),
+        { status: 200, headers: { "X-Degraded": "database" } }
+      );
+    }
     logger.error("api/models/users", e instanceof Error ? e.message : String(e));
     return NextResponse.json({ error: "Failed to fetch users" }, { status: 500 });
   }

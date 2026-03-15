@@ -12,7 +12,7 @@
 // ============================================================================
 
 import { NextRequest, NextResponse } from "next/server";
-import { connect } from "@/lib/db";
+import { connect, isDatabaseUnavailableError, logDatabaseUnavailableOnce } from "@/lib/db";
 import { getSession } from "@/lib/session";
 import { logger } from "@/utils/logger";
 
@@ -146,6 +146,13 @@ export async function GET() {
     const notifications = docs.map(transformNotification);
     return NextResponse.json({ notifications });
   } catch (err: unknown) {
+    if (isDatabaseUnavailableError(err)) {
+      logDatabaseUnavailableOnce("notifications");
+      return NextResponse.json(
+        { notifications: [] },
+        { status: 200, headers: { "X-Degraded": "database" } }
+      );
+    }
     return handleError("Failed to fetch notifications", err, "Failed to fetch notifications");
   }
 }

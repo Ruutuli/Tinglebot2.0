@@ -2642,8 +2642,8 @@ module.exports = {
        .setTitle("🗺️ **Grotto: Target Practice — Already Failed**")
        .setColor(0x8b0000)
        .setDescription(
-        "The party already failed this Target Practice trial.\n\n" +
-        `You can return later: use ${cmdDiscovery} in this quadrant to revisit — the grotto stays open, no cleanse needed.`
+        "The party already failed this Target Practice trial this expedition.\n\n" +
+        "To try again, you’ll need a **fresh explore** (a new expedition). On your next run, when you find another Target Practice grotto, the trial will be available again."
        )
        .setThumbnail(TARGET_PRACTICE_THUMBNAIL_URL)
        .setImage(getRandomGrottoBanner());
@@ -2705,8 +2705,7 @@ module.exports = {
       await party.save(); // Always persist so dashboard shows current hearts/stamina/progress
       const outcome = getFailOutcome();
       const flavor = outcome.flavor.replace(/\{char\}/g, character.name);
-      const cmdDiscovery = `</explore discovery:${cmdId}>`;
-      const desc = `The blimp looms before you. ${flavor}\n\n↳ **${outcome.ctaHint}** ➾ ${cmdRoll}\n\nYou can return later: use ${cmdDiscovery} in this quadrant to revisit — the grotto stays open, no cleanse needed.`;
+      const desc = `The blimp looms before you. ${flavor}\n\n↳ **${outcome.ctaHint}** ➾ ${cmdRoll}\n\nYou can’t retry this grotto this expedition. To try again, start a **fresh explore** (a new expedition)—when you find another Target Practice grotto, the trial will be available again.`;
       const embed = new EmbedBuilder()
        .setTitle("🗺️ **Grotto: Target Practice — Failed**")
        .setColor(0x8b0000)

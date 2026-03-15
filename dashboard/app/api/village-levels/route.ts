@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { connect } from "@/lib/db";
+import { connect, isDatabaseUnavailableError, logDatabaseUnavailableOnce } from "@/lib/db";
 import { logger } from "@/utils/logger";
 
 const VILLAGE_ORDER = ["Rudania", "Inariko", "Vhintl"] as const;
@@ -51,6 +51,13 @@ export async function GET() {
     
     return response;
   } catch (e) {
+    if (isDatabaseUnavailableError(e)) {
+      logDatabaseUnavailableOnce("village-levels");
+      return NextResponse.json(
+        { villages: VILLAGE_ORDER.map(() => null) },
+        { status: 200, headers: { "X-Degraded": "database" } }
+      );
+    }
     logger.error("api/village-levels", e instanceof Error ? e.message : String(e));
     return NextResponse.json(
       { error: "Failed to fetch village levels" },

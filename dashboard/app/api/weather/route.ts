@@ -3,7 +3,7 @@
 // ============================================================================
 
 import { NextResponse } from "next/server";
-import { connect } from "@/lib/db";
+import { connect, isDatabaseUnavailableError, logDatabaseUnavailableOnce } from "@/lib/db";
 import { logger } from "@/utils/logger";
 
 // ============================================================================
@@ -98,6 +98,13 @@ export async function GET() {
 
     return response;
   } catch (err: unknown) {
+    if (isDatabaseUnavailableError(err)) {
+      logDatabaseUnavailableOnce("weather");
+      return NextResponse.json(
+        { weather: [] },
+        { status: 200, headers: { "X-Degraded": "database" } }
+      );
+    }
     const error = err instanceof Error ? err : new Error(String(err));
     logger.error("[route.ts]❌ Failed to fetch weather:", error.message);
     return NextResponse.json(

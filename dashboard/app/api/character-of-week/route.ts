@@ -1,6 +1,6 @@
 import type { NextRequest } from "next/server";
 import { NextResponse } from "next/server";
-import { connect } from "@/lib/db";
+import { connect, isDatabaseUnavailableError, logDatabaseUnavailableOnce } from "@/lib/db";
 import {
   getCurrentCharacterOfWeek,
   setCharacterOfWeek,
@@ -39,6 +39,13 @@ export async function GET(req: NextRequest) {
       rotationInfo: buildRotationInfo(nextRotation, timeUntilRotation, totalRotations),
     });
   } catch (error) {
+    if (isDatabaseUnavailableError(error)) {
+      logDatabaseUnavailableOnce("character-of-week");
+      return NextResponse.json(
+        { characterOfWeek: null, rotationInfo: null },
+        { status: 200, headers: { "X-Degraded": "database" } }
+      );
+    }
     logger.error(
       "api/character-of-week",
       `Error fetching character of the week: ${error instanceof Error ? error.message : String(error)}`

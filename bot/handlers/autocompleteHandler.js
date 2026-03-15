@@ -229,8 +229,8 @@ const safeRespondWithValidation = safeAutocompleteResponse;
 
 async function safeRespondWithError(interaction, error) {
   try {
-    // Don't attempt respond if interaction was already acknowledged (40060)
-    if (error?.code === 40060) return;
+    // Don't attempt respond if interaction expired (10062) or already acknowledged (40060)
+    if (error?.code === 10062 || error?.code === 40060) return;
 
     if (!interaction.responded && interaction.isAutocomplete()) {
       // Check if interaction is still valid before responding
@@ -283,6 +283,10 @@ async function handleAutocomplete(interaction) {
         // Route to internal handler
         await handleAutocompleteInternal(interaction, commandName, focusedOption);
     } catch (error) {
+        // Unknown interaction (10062) or already acknowledged (40060) — skip logging
+        if (error?.code === 10062 || error?.code === 40060) {
+            return;
+        }
         handleError(error, "autocompleteHandler.js");
         const commandName = interaction?.commandName || 'unknown';
         let focusedOptionName = 'unknown';
@@ -3211,6 +3215,10 @@ async function handleItemJobVoucherAutocomplete(interaction, focusedOption) {
 
     await interaction.respond(formattedChoices.slice(0, 25));
   } catch (error) {
+    // Handle "Unknown interaction" and "Already acknowledged" gracefully (no log)
+    if (error.code === 10062 || error.code === 40060) {
+      return;
+    }
     handleError(error, "autocompleteHandler.js");
     console.error("[autocompleteHandler.js]❌ Error in handleItemJobNameAutocomplete:", error);
     await safeRespondWithError(interaction, error);

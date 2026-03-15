@@ -116,6 +116,23 @@ export function isDatabaseUnavailableError(e: unknown): boolean {
   );
 }
 
+/** Log "database unavailable" at most once per 5 minutes to avoid log spam when MongoDB is down. */
+let lastDatabaseUnavailableLog = 0;
+const DATABASE_UNAVAILABLE_LOG_INTERVAL_MS = 5 * 60 * 1000;
+
+export function logDatabaseUnavailableOnce(operation?: string): void {
+  const now = Date.now();
+  if (now - lastDatabaseUnavailableLog >= DATABASE_UNAVAILABLE_LOG_INTERVAL_MS) {
+    lastDatabaseUnavailableLog = now;
+    logger.warn(
+      "lib/db",
+      operation
+        ? `Database unavailable (${operation}). Serving fallback.`
+        : "Database unavailable. Serving fallback."
+    );
+  }
+}
+
 export async function connect(): Promise<typeof mongoose> {
   if (cached.conn) {
     return cached.conn;
