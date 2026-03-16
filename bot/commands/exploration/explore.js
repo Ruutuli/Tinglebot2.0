@@ -2636,7 +2636,7 @@ module.exports = {
        .setTitle("🗺️ **Grotto: Target Practice — Already Failed**")
        .setColor(0x8b0000)
        .setDescription(
-        "**Progress:** ❌ **1/1 fail** — **Trial over.**\n\nThe party already failed this trial (this expedition). Use </explore roll:" + cmdId + "> to leave. Find another Target Practice grotto on a future expedition to try again."
+        "**Trial failed.** The party already failed this trial (this expedition). Use </explore roll:" + cmdId + "> to leave. Find another Target Practice grotto on a future expedition to try again."
        )
        .setThumbnail(TARGET_PRACTICE_THUMBNAIL_URL)
        .setImage(getRandomGrottoBanner());
@@ -2712,8 +2712,8 @@ module.exports = {
       const outcome = getFailOutcome();
       const flavor = outcome.flavor.replace(/\{char\}/g, character.name);
       const successCount = grotto.targetPracticeState.successCount || 0;
-      const progressLine = `**Progress:** ✅ ${successCount}/${TARGET_SUCCESSES} hits · ❌ **1/1 fail** — **Trial over.**`;
-      const desc = `${flavor}\n\n**Roll:** ${rollPct}% — fail (need over ${failPct}% to avoid instant fail)  *(−1 🟩 stamina)*\n\n${progressLine}\n\nUse ${cmdRoll} to leave. You can’t retry this grotto this expedition; find another Target Practice on a future run.`;
+      const progressLine = `**Progress:** ✅ ${successCount}/${TARGET_SUCCESSES} hits`;
+      const desc = `${flavor}\n\n**Roll:** ${rollPct}% — **fail** (need over ${failPct}% to avoid instant fail)  *(−1 🟩 stamina)*\n\n${progressLine}\n\n**Trial failed.** Use ${cmdRoll} to leave. You can’t retry this grotto this expedition; find another Target Practice on a future run.`;
       const embed = new EmbedBuilder()
        .setTitle("🗺️ **Grotto: Target Practice — Failed**")
        .setColor(0x8b0000)
@@ -2750,7 +2750,7 @@ module.exports = {
       const damageNote = heartsLost > 0 ? ` **${character.name}** took ${heartsLost} ❤ damage.` : "";
       const sameShooter = party.characters[characterIndex];
       const successCount = grotto.targetPracticeState.successCount || 0;
-      const progressLine = `**Progress:** ✅ ${successCount}/${TARGET_SUCCESSES} hits · ❌ 0/1 fail (one fail ends the trial)`;
+      const progressLine = `**Progress:** ✅ ${successCount}/${TARGET_SUCCESSES} hits`;
       const desc = `${flavor}\n\n**Roll:** ${rollPct}% — miss (need over ${hitPct}% to hit)  *(−1 🟩 stamina)*${damageNote}\n\n${progressLine}\n\n**Same shooter tries again** — **${sameShooter?.name ?? "—"}** in **Commands** below.`;
       const embed = new EmbedBuilder()
        .setTitle("🗺️ **Grotto: Target Practice**")
@@ -2800,7 +2800,7 @@ module.exports = {
       const outcome = getCompleteOutcome();
       const flavor = outcome.flavor.replace(/\{char\}/g, character.name);
       const progressBar3 = Array(TARGET_SUCCESSES).fill(0).map((_, i) => i < TARGET_SUCCESSES ? "🎯" : "○").join(" ");
-      const progress3Desc = `${flavor}\n\n**Roll:** ${rollPct}% (need over ${hitPct}% to hit)  *(−1 🟩 stamina)*\n\n**Progress:** ${progressBar3}  (3/3 hits) · ❌ 0/1 fail\n\n**Trial complete!**`;
+      const progress3Desc = `${flavor}\n\n**Roll:** ${rollPct}% (need over ${hitPct}% to hit)  *(−1 🟩 stamina)*\n\n**Progress:** ${progressBar3}  (3/3 hits)\n\n**Trial complete!**`;
       const progress3Embed = new EmbedBuilder()
        .setTitle("🗺️ **Grotto: Target Practice**")
        .setColor(getExploreOutcomeColor("grotto_target_success", regionColors[party.region] || "#00ff99"))
@@ -2849,7 +2849,7 @@ module.exports = {
      const outcome = getSuccessOutcome();
      const flavor = outcome.flavor.replace(/\{char\}/g, character.name);
      const progressBar = Array(TARGET_SUCCESSES).fill(0).map((_, i) => (i < newSuccesses ? "🎯" : "○")).join(" ");
-     const desc = `${flavor}\n\n**Roll:** ${rollPct}% (need over ${hitPct}% to hit)  *(−1 🟩 stamina)*\n\n**Progress:** ${progressBar}  (${newSuccesses}/${TARGET_SUCCESSES} hits) · ❌ 0/1 fail\n\n**Next:** **${nextChar?.name ?? "—"}** — see **Commands** below.`;
+     const desc = `${flavor}\n\n**Roll:** ${rollPct}% (need over ${hitPct}% to hit)  *(−1 🟩 stamina)*\n\n**Progress:** ${progressBar}  (${newSuccesses}/${TARGET_SUCCESSES} hits)\n\n**Next:** **${nextChar?.name ?? "—"}** — see **Commands** below.`;
      const embed = new EmbedBuilder()
       .setTitle("🗺️ **Grotto: Target Practice**")
       .setColor(getExploreOutcomeColor("grotto_target_success", regionColors[party.region] || "#00ff99"))
