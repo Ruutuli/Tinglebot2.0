@@ -43,7 +43,7 @@ const { SlashCommandBuilder } = require("@discordjs/builders");
 const { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, AttachmentBuilder } = require("discord.js");
 
 // ------------------- Database ------------------
-const { fetchAllItems, fetchItemsByMonster, createRelic, getCharacterInventoryCollection, getCharacterInventoryCollectionWithModSupport, fetchMonsterByName, fetchCharacterById, getMonstersAboveTier } = require('@/database/db.js');
+const { fetchAllItems, fetchItemsByMonster, createRelic, getCharacterInventoryCollection, getCharacterInventoryCollectionWithModSupport, fetchMonsterByName, fetchCharacterById, fetchItemByName, getMonstersAboveTier } = require('@/database/db.js');
 
 // ------------------- Models ------------------
 const Raid = require("../../models/RaidModel.js");
@@ -67,11 +67,12 @@ const { triggerRaid, endExplorationRaidAsRetreat, closeRaidsForExpedition, advan
 const { startWave, joinWave, advanceWaveTurnOnItemUse } = require("../../modules/waveModule.js");
 const MapModule = require('@/modules/mapModule.js');
 const { pushProgressLog, hasDiscoveriesInQuadrant, hasUnpinnedDiscoveriesInQuadrant, updateDiscoveryGrottoStatus, markGrottoCleared, applyExpeditionFailedState } = require("../../modules/exploreModule.js");
+const { getElixirTypeByName, elixirCountersExplorationHazard, isHazardResistanceElixir } = require("../../modules/elixirModule.js");
 const { finalizeBlightApplication } = require("../../handlers/blightHandler.js");
 
 // ------------------- Utils ------------------
 const { handleInteractionError } = require('@/utils/globalErrorHandler.js');
-const { addItemInventoryDatabase, removeItemInventoryDatabase } = require('@/utils/inventoryUtils.js');
+const { addItemInventoryDatabase, removeItemInventoryDatabase, logItemRemovalToDatabase } = require('@/utils/inventoryUtils.js');
 const { addOldMapToCharacter, hasOldMap, hasAppraisedOldMap, hasAppraisedUnexpiredOldMap, hasAppraisedRedeemedOldMap, findAndRedeemOldMap } = require('@/utils/oldMapUtils.js');
 const { checkInventorySync } = require('@/utils/characterUtils.js');
 const { enforceJail } = require('@/utils/jailCheck');
@@ -626,6 +627,7 @@ async function maybeApplyQuadrantHazards(party, options = {}) {
   const hazards = await getQuadrantHazards(squareId, quadrantId);
   if (!hazards.length) return { applied: false, ko: false, heartsLost: 0, staminaLost: 0, hazardMessage: null };
 
+  const exploreElixir = party.exploreElixir;
   const location = `${String(squareId || "").trim().toUpperCase()} ${String(quadrantId || "").trim().toUpperCase()}`.trim();
   const at = options.at instanceof Date ? options.at : new Date();
 
@@ -637,6 +639,9 @@ async function maybeApplyQuadrantHazards(party, options = {}) {
   const totalStaminaBefore = Math.max(0, Number(party.totalStamina) || 0);
 
   for (const hz of hazards) {
+    // If the party used a hazard-resistance elixir this explore, skip hazards it counters
+    if (exploreElixir?.type && elixirCountersExplorationHazard(exploreElixir.type, hz)) continue;
+
     if (hz === "thunder") {
       if (Math.random() < HAZARD_PROC_CHANCE) {
         const heartsLost = Math.min(1, Math.max(0, Number(party.totalHearts) || 0));
@@ -875,7 +880,7 @@ function createRelicDmEmbed(characterName, location, relicIdStr, expeditionId) {
    { name: "Relic ID", value: relicIdStr, inline: true },
    { name: "Expedition", value: `\`${expeditionId}\``, inline: true }
   )
-  .setURL("https://www.rootsofthewild.com/relics")
+  .setURL("https://rootsofthewild.com/mechanics/relics")
   .setFooter({ text: "Use /relic appraisal-request to get it appraised" });
 }
 
@@ -1410,6 +1415,8 @@ async function buildTestingEndAfterGrottoEmbed(party, expeditionId, characterNam
  party.outcome = "success";
  party.finalLocation = { square: party.square, quadrant: party.quadrant };
  party.endedAt = new Date();
+ party.exploreElixir = undefined;
+ party.markModified("exploreElixir");
  await party.save();
  const log = party.progressLog || [];
  const turnsOrActions = log.filter((e) => e.outcome !== "end").length;
@@ -5501,7 +5508,7 @@ module.exports = {
        title = `🗺️ **Expedition: Relic found!**`;
        description =
         `**${character.name}** found something ancient in **${location}**.\n\n` +
-        "You found a relic! What is this? Take it to an Inarikian Artist or Researcher to get this appraised. You can find more info [here](https://www.rootsofthewild.com/relics).\n\n" +
+        "You found a relic! What is this? Take it to an Inarikian Artist or Researcher to get this appraised. You can find more info [here](https://rootsofthewild.com/mechanics/relics).\n\n" +
         "↳ **Continue** ➾ See **Commands** below to take your turn.";
       } else if (outcomeType === "grotto") {
        title = `🗺️ **Expedition: Grotto found!**`;
@@ -5748,7 +5755,7 @@ module.exports = {
           if (!freshParty.gatheredItems) freshParty.gatheredItems = [];
           freshParty.gatheredItems.push({ characterId: ruinsCharacter._id, characterName: ruinsCharacter.name, itemName: "Unknown Relic", quantity: 1, emoji: "🔸" });
           const ruinsRelicIdStr = ruinsSavedRelic?.relicId ? `\`${ruinsSavedRelic.relicId}\`` : '—';
-          resultDescription = summaryLine + `**${ruinsCharacter.name}** found a relic in the ruins! (ID: ${ruinsRelicIdStr}) Take it to an Inarikian Artist or Researcher to get it appraised. More info [here](https://www.rootsofthewild.com/relics).\n\n↳ **Continue** ➾ </explore roll:${getExploreCommandId()}> — id: \`${expeditionId}\` charactername: **${nextCharacter?.name ?? "—"}**`;
+          resultDescription = summaryLine + `**${ruinsCharacter.name}** found a relic in the ruins! (ID: ${ruinsRelicIdStr}) Take it to an Inarikian Artist or Researcher to get it appraised. More info [here](https://rootsofthewild.com/mechanics/relics).\n\n↳ **Continue** ➾ </explore roll:${getExploreCommandId()}> — id: \`${expeditionId}\` charactername: **${nextCharacter?.name ?? "—"}**`;
           progressMsg += "Found a relic (take to Artist/Researcher to appraise).";
           pushProgressLog(freshParty, ruinsCharacter.name, "ruins_explored", progressMsg, undefined, ruinsCostsForLog);
           pushProgressLog(freshParty, ruinsCharacter.name, "relic", `Found a relic in ${location}; take to Artist/Researcher to appraise.`, { itemName: "Unknown Relic", emoji: "🔸" }, undefined);
@@ -8076,25 +8083,28 @@ module.exports = {
     const stamina = Math.max(0, carried.staminaRecovered || 0);
 
     if (hearts === 0 && stamina === 0) {
-     const isElixir = /elixir/i.test(carried.itemName || "");
-     return interaction.editReply(
-      isElixir
-       ? `**${carried.itemName}** is a buff elixir (resistance/stat boost), not a healing item. Buff elixirs can't be used on expedition item turns yet — only items that restore hearts or stamina can be used here. You can still bring them for later use.`
-       : "That item can only be used when securing the quadrant (e.g. Wood Bundle, Eldin Ore Bundle)."
-     );
+     if (!isHazardResistanceElixir(carried.itemName)) {
+      const isElixir = /elixir/i.test(carried.itemName || "");
+      return interaction.editReply(
+       isElixir
+        ? `**${carried.itemName}** is a buff elixir (resistance/stat boost), not a healing item. Only **Electro**, **Fireproof**, and **Spicy Elixir** can be used during an expedition to protect the party from hazards for the rest of the explore.`
+        : "That item can only be used when securing the quadrant (e.g. Wood Bundle, Eldin Ore Bundle)."
+      );
+     }
+     // Hazard-resistance elixir: use for exploration protection (handled below)
     }
 
     // Pool-only: add item hearts/stamina to party pool; cap at combined party max
     const itemCaps = await getPartyPoolCaps(party);
 
-    // Prevent wasting items when they would have no effect
+    // Prevent wasting items when they would have no effect (only for healing/stamina items)
     const currentHearts = party.totalHearts ?? 0;
     const currentStamina = party.totalStamina ?? 0;
     const heartsAtMax = currentHearts >= itemCaps.maxHearts;
     const staminaAtMax = currentStamina >= itemCaps.maxStamina;
+    const isHazardElixirUse = (hearts === 0 && stamina === 0) && isHazardResistanceElixir(carried.itemName);
 
-    // If item would have no effect (pool already full), block it. Do NOT consume the item or advance turn — reply ephemeral so only the user sees it.
-    if (hearts > 0 && stamina === 0 && heartsAtMax) {
+    if (!isHazardElixirUse && hearts > 0 && stamina === 0 && heartsAtMax) {
      const fullHeartsEmbed = new EmbedBuilder()
       .setColor(0xE74C3C)
       .setTitle("❤️ Hearts are full")
@@ -8102,7 +8112,7 @@ module.exports = {
      return interaction.editReply({ embeds: [fullHeartsEmbed], ephemeral: true });
     }
 
-    if (stamina > 0 && hearts === 0 && staminaAtMax) {
+    if (!isHazardElixirUse && stamina > 0 && hearts === 0 && staminaAtMax) {
      const fullStaminaEmbed = new EmbedBuilder()
       .setColor(0x2ECC71)
       .setTitle("🟩 Stamina is full")
@@ -8110,7 +8120,7 @@ module.exports = {
      return interaction.editReply({ embeds: [fullStaminaEmbed], ephemeral: true });
     }
 
-    if (hearts > 0 && stamina > 0 && heartsAtMax && staminaAtMax) {
+    if (!isHazardElixirUse && hearts > 0 && stamina > 0 && heartsAtMax && staminaAtMax) {
      const fullPoolEmbed = new EmbedBuilder()
       .setColor(0x9B59B6)
       .setTitle("❤️🟩 Hearts and stamina are full")
@@ -8178,11 +8188,34 @@ module.exports = {
      party.markModified("totalStamina");
      logger.info("EXPLORE", `[explore.js] id=${party.partyId ?? "?"} item ${partyChar?.name ?? "?"} ${itemName ?? "?"} 🟩${beforeStaminaItem} +${stamina} → 🟩${party.totalStamina ?? 0}`);
     }
+    if (isHazardElixirUse) {
+     const elixirType = getElixirTypeByName(carried.itemName);
+     party.exploreElixir = { type: elixirType, elixirName: carried.itemName };
+     party.markModified("exploreElixir");
+     logger.info("EXPLORE", `[explore.js] id=${party.partyId ?? "?"} hazard elixir ${carried.itemName} used by ${partyChar?.name ?? "?"} — protection for rest of explore`);
+    }
 
     // Always remove from party loadout so it appears used (testing: still no DB change to character inventory)
     partyChar.items.splice(itemIndex, 1);
     // Nested mutation (items array) lives under party.characters
     party.markModified("characters");
+
+    // Log item use to InventoryLog so Dashboard Inventory All Transactions shows it
+    const locationItem = `${party.square} ${party.quadrant}`;
+    try {
+      const itemForLog = await fetchItemByName(carried.itemName).catch(() => null) || { itemName: carried.itemName };
+      const interactionUrl = interaction.guildId && interaction.channelId && interaction.id
+        ? `https://discord.com/channels/${interaction.guildId}/${interaction.channelId}/${interaction.id}`
+        : "";
+      await logItemRemovalToDatabase(character, itemForLog, {
+        quantity: 1,
+        obtain: "Expedition (Used)",
+        location: locationItem,
+        link: interactionUrl
+      });
+    } catch (logErr) {
+      logger.warn("EXPLORE", `[explore.js] Failed to log explore item use to InventoryLog: ${logErr?.message || logErr}`);
+    }
 
     // During active wave/raid: only advance wave/raid turn, NOT expedition turn (dashboard stays correct)
     // Track the next turn participant from wave/raid for proper follow-up ping
@@ -8225,25 +8258,32 @@ module.exports = {
 
     const heartsText = hearts > 0 ? `+${hearts} ❤️` : "";
     const staminaText = stamina > 0 ? `+${stamina} 🟩` : "";
-    const effect = [heartsText, staminaText].filter(Boolean).join(", ");
-    const locationItem = `${party.square} ${party.quadrant}`;
+    const hazardProtectionText = isHazardElixirUse ? "Hazard protection for the rest of the expedition" : "";
+    const effect = [heartsText, staminaText, hazardProtectionText].filter(Boolean).join(", ");
 
     // During active wave/raid, use combat turn order for "next" display; otherwise use expedition turn
     const nextCharacterItem = combatNextTurnParticipant
       ? { name: combatNextTurnParticipant.name, userId: combatNextTurnParticipant.userId }
       : (party.characters[party.currentTurn] ?? null);
-    pushProgressLog(party, character.name, "item", `${character.name} used ${carried.itemName} in ${locationItem} (${effect}).`, undefined, {
+    const progressMsg = isHazardElixirUse
+     ? `${character.name} used ${carried.itemName} in ${locationItem} — the party is now protected against quadrant hazards for the rest of this expedition.`
+     : `${character.name} used ${carried.itemName} in ${locationItem} (${[heartsText, staminaText].filter(Boolean).join(", ")}).`;
+    pushProgressLog(party, character.name, "item", progressMsg, undefined, {
      ...(hearts > 0 ? { heartsRecovered: hearts } : {}),
      ...(stamina > 0 ? { staminaRecovered: stamina } : {}),
     });
     await party.save(); // Persist pool + loadout + progress log in one place
 
+    const hazardLabel = isHazardElixirUse && party.exploreElixir?.type
+     ? (party.exploreElixir.type === "electro" ? "thunder" : party.exploreElixir.type === "fireproof" ? "hot" : party.exploreElixir.type === "spicy" ? "cold" : "quadrant")
+     : "";
+    const embedDescription = isHazardElixirUse
+     ? `${character.name} used **${carried.itemName}**. The party is now protected against **${hazardLabel}** hazards for the rest of this expedition.`
+     : `${character.name} used **${carried.itemName}** (${[heartsText, staminaText].filter(Boolean).join(", ")}).`;
     const embed = new EmbedBuilder()
      .setTitle(`🗺️ **Expedition: Used item — ${carried.itemName}**`)
      .setColor(getExploreOutcomeColor("item", regionColors[party.region] || "#4CAF50"))
-     .setDescription(
-      `${character.name} used **${carried.itemName}** (${effect}).`
-     )
+     .setDescription(embedDescription)
      .setImage("https://storage.googleapis.com/tinglebot/Borders/border_green.png");
     const hasDiscItem = await hasDiscoveriesInQuadrant(party.square, party.quadrant);
     const activeWaveIdForEmbed = activeWaveForItem?.waveId ?? null;
@@ -8569,6 +8609,8 @@ module.exports = {
     party.outcome = "success";
     party.finalLocation = { square: party.square, quadrant: party.quadrant };
     party.endedAt = new Date();
+    party.exploreElixir = undefined;
+    party.markModified("exploreElixir");
     await party.save(); // Always persist so dashboard shows current hearts/stamina/progress
 
     // Stats and highlights from progressLog and gatheredItems (use saved party with "end" entry)

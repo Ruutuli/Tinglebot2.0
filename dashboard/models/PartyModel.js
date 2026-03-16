@@ -74,6 +74,11 @@ const PartySchema = new Schema({
   visitedQuadrantsThisRun: [{ squareId: { type: String }, quadrantId: { type: String } }],
   /** Square IDs for which a path image was uploaded from this expedition; used to hide "draw path" prompt. */
   pathImageUploadedSquares: [{ type: String }],
+  /** When set, the party used a hazard-resistance elixir during this expedition; protects against quadrant hazards for the rest of the explore. */
+  exploreElixir: {
+    type: { type: String },
+    elixirName: { type: String },
+  },
 });
 
 // Avoid "Cannot overwrite `Party` model once compiled" when module is re-loaded (e.g. Next.js API routes)

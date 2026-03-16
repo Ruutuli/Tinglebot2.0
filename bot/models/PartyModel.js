@@ -98,6 +98,11 @@ const PartySchema = new Schema({
   /** When set, party has left the grotto at this location without completing it; they can use roll/travel until they move or re-enter. */
   leftGrottoSquare: { type: String, default: null },
   leftGrottoQuadrant: { type: String, default: null },
+  /** When set, the party used a hazard-resistance elixir during this expedition; it lasts the entire explore and protects against matching quadrant hazards (thunder→Electro, hot→Fireproof, cold→Spicy). */
+  exploreElixir: {
+    type: { type: String },
+    elixirName: { type: String },
+  },
   /** Pending choice from a special exploration outcome (monster_camp, ruins, grotto, chest). While set, only that choice should be resolved. */
   pendingChoice: {
     type: {

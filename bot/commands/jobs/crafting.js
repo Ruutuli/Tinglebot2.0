@@ -280,9 +280,10 @@ module.exports = {
             return interaction.editReply({ embeds: [voucherCheck.embed], flags: [MessageFlags.Ephemeral] });
           }
         } else {
-          // Restrict crafting of items that require more than 5 stamina when using a job voucher
-          if (item.staminaToCraft > 5) {
-            error('CRFT', `Item "${itemName}" requires ${item.staminaToCraft} stamina - exceeds job voucher limit`);
+          // Restrict crafting of items that require 5 stamina or more when using a job voucher.
+          // Uses base recipe cost (item.staminaToCraft) so Enduring Elixir cannot bypass this limit.
+          if (item.staminaToCraft >= 5) {
+            error('CRFT', `Item "${itemName}" requires ${item.staminaToCraft} stamina - exceeds job voucher limit (5+ not allowed)`);
             const staminaError = getJobVoucherErrorMessage('STAMINA_LIMIT', {
               characterName: character.name,
               itemName: itemName
@@ -387,14 +388,17 @@ module.exports = {
         info('CRFT', `🏘️ Village Level ${villageLevel}: No stamina reduction bonus (Level 1 or below)`);
       }
       
-      if (freshCharacter.currentStamina < crafterStaminaCost) {
-        error('CRFT', `Insufficient stamina for ${freshCharacter.name} - needed ${crafterStaminaCost}, has ${freshCharacter.currentStamina}`);
+      // Use character's actual current stamina (includes Enduring Elixir boost if active)
+      const availableStamina = freshCharacter.currentStamina ?? 0;
+      if (availableStamina < crafterStaminaCost) {
+        error('CRFT', `Insufficient stamina for ${freshCharacter.name} - needed ${crafterStaminaCost}, has ${availableStamina}`);
+        const maxStamina = freshCharacter.maxStamina ?? availableStamina;
         const staminaErrorEmbed = new EmbedBuilder()
           .setTitle('❌ Not Enough Stamina')
           .setDescription(`**${freshCharacter.name}** doesn't have enough stamina to craft this item.`)
           .addFields([
             { name: '💪 Needed', value: `${crafterStaminaCost}`, inline: true },
-            { name: '⚡ Available', value: `${freshCharacter.currentStamina}`, inline: true }
+            { name: '⚡ Available', value: `${availableStamina}${maxStamina > 0 ? ` / ${maxStamina}` : ''}`, inline: true }
           ])
           .setColor('#FF0000')
           .setImage('https://storage.googleapis.com/tinglebot/Graphics/border.png')

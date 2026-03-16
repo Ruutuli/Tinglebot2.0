@@ -396,6 +396,35 @@ const getMonsterElement = (monster) => {
   return 'none';
 };
 
+// ------------------- Exploration hazard protection -------------------
+// Maps quadrant hazard names (thunder, hot, cold) to the elixir type that counters them.
+const EXPLORATION_HAZARD_TO_ELIXIR = {
+  thunder: 'electro',
+  hot: 'fireproof',
+  cold: 'spicy',
+};
+
+/** Elixirs that can be used during an expedition to protect the party from quadrant hazards for the rest of the explore. */
+const HAZARD_RESISTANCE_ELIXIRS = ['Electro Elixir', 'Fireproof Elixir', 'Spicy Elixir'];
+
+/** Get the internal elixir type (e.g. 'electro') from an elixir item name. */
+const getElixirTypeByName = (elixirName) => {
+  const entry = ELIXIR_EFFECTS[elixirName];
+  return entry ? entry.type : null;
+};
+
+/** True if the given elixir type counters this exploration hazard (thunder / hot / cold). */
+const elixirCountersExplorationHazard = (elixirType, hazard) => {
+  if (!elixirType || !hazard) return false;
+  const h = String(hazard).trim().toLowerCase();
+  return EXPLORATION_HAZARD_TO_ELIXIR[h] === elixirType;
+};
+
+/** True if this elixir can be used during explore to grant hazard protection for the whole expedition. */
+const isHazardResistanceElixir = (elixirName) => {
+  return HAZARD_RESISTANCE_ELIXIRS.includes(String(elixirName || '').trim());
+};
+
 // ------------------- Get Resistance For Element -------------------
 // Maps element types to the resistance buff needed to counter them
 const getResistanceForElement = (element) => {
@@ -548,6 +577,10 @@ module.exports = {
   calculateBuffedStats,
   getElixirInfo,
   getAllElixirTypes,
+  getElixirTypeByName,
+  elixirCountersExplorationHazard,
+  isHazardResistanceElixir,
+  HAZARD_RESISTANCE_ELIXIRS,
   getMonsterElement,
   getResistanceForElement,
   elixirCountersMonster,

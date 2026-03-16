@@ -365,6 +365,8 @@ async function applyExpeditionFailedState(party, options = {}) {
     party.visitedQuadrantsThisRun = [];
     party.ruinRestQuadrants = [];
     party.blightExposure = 0;
+    party.exploreElixir = undefined;
+    party.markModified("exploreElixir");
     for (const c of party.characters) {
         c.currentHearts = 0;
         c.currentStamina = 0;
