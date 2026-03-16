@@ -176,14 +176,13 @@ function createWeightedItemList(items, fv, job, villageLevel = 1) {
     // Normalize itemRarity to string to match adjustedWeights keys
     const normalizedRarity = String(item.itemRarity);
     let weight = adjustedWeights[normalizedRarity];
-    // Boost Courser Bee Honey for Beekeeper job (only honey item Beekeepers gather)
+    // Slight boost Courser Bee Honey for Beekeeper job (only honey item Beekeepers gather)
     if (
       job &&
       job.replace(/\s+/g, '').toLowerCase() === 'beekeeper' &&
       item.itemName === 'Courser Bee Honey'
     ) {
-      weight *= 5;
-      weight *= 5;
+      weight *= 2;
       honeyBoostLog.push({ item: item.itemName, originalWeight: adjustedWeights[normalizedRarity], boostedWeight: weight });
     }
     for (let i = 0; i < weight; i++) {
