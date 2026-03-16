@@ -4390,22 +4390,12 @@ module.exports = {
     }
 
     if (discoveryType === "grotto") {
-     let grotto = await Grotto.findOne({
+     // Find any unsealed grotto at this location (one grotto per square/quadrant; may have been cleansed by this or a previous expedition)
+     const grotto = await Grotto.findOne({
       squareId: exactIRegex(squareId),
       quadrantId: exactIRegex(quadrantId),
       sealed: false,
-      partyId: expeditionId,
      }).sort({ unsealedAt: -1 });
-     if (!grotto) {
-      const grottoFallback = await Grotto.findOne({
-       squareId: exactIRegex(squareId),
-       quadrantId: exactIRegex(quadrantId),
-       sealed: false,
-      }).sort({ unsealedAt: -1 });
-      if (grottoFallback && String(grottoFallback.partyId || "").trim() === String(expeditionId || "").trim()) {
-       grotto = grottoFallback;
-      }
-     }
      if (grotto) {
       if (grotto.trialType === "target_practice" && grotto.targetPracticeState?.failed) {
        const rollCmdId = getExploreCommandId();
