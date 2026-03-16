@@ -2629,13 +2629,14 @@ module.exports = {
      const TARGET_SUCCESSES = 3;
      const BASE_FAIL = 0.15;
      const BASE_MISS = 0.25;
-    if (grotto.targetPracticeState.failed) {
+    const failedByThisExpedition = grotto.targetPracticeState.failed && String(grotto.partyId || "").trim() === String(expeditionId || "").trim();
+    if (failedByThisExpedition) {
       const cmdId = getExploreCommandId();
       const failedEmbed = new EmbedBuilder()
        .setTitle("🗺️ **Grotto: Target Practice — Already Failed**")
        .setColor(0x8b0000)
        .setDescription(
-        "**Progress:** ❌ **1/1 fail** — **Trial over.**\n\nThe party already failed this trial. Use </explore roll:" + cmdId + "> to leave. Find another Target Practice grotto on a future expedition to try again."
+        "**Progress:** ❌ **1/1 fail** — **Trial over.**\n\nThe party already failed this trial (this expedition). Use </explore roll:" + cmdId + "> to leave. Find another Target Practice grotto on a future expedition to try again."
        )
        .setThumbnail(TARGET_PRACTICE_THUMBNAIL_URL)
        .setImage(getRandomGrottoBanner());
@@ -2651,6 +2652,15 @@ module.exports = {
        hasUnpinnedDiscoveriesInQuadrant: await hasUnpinnedDiscoveriesInQuadrant(party),
       });
       return interaction.editReply({ embeds: [failedEmbed] });
+    }
+    if (grotto.targetPracticeState.failed && String(grotto.partyId || "").trim() !== String(expeditionId || "").trim()) {
+     grotto.targetPracticeState.failed = false;
+     grotto.targetPracticeState.successCount = 0;
+     grotto.targetPracticeState.turnIndex = 0;
+     grotto.partyId = expeditionId;
+     grotto.markModified("targetPracticeState");
+     grotto.markModified("partyId");
+     await grotto.save();
     }
      const characterIndex = party.characters.findIndex((c) => c._id && c._id.toString() === character._id.toString());
      if (characterIndex === -1) {
@@ -4397,14 +4407,15 @@ module.exports = {
       sealed: false,
      }).sort({ unsealedAt: -1 });
      if (grotto) {
-      if (grotto.trialType === "target_practice" && grotto.targetPracticeState?.failed) {
+      const failedByThisExpedition = grotto.trialType === "target_practice" && grotto.targetPracticeState?.failed && String(grotto.partyId || "").trim() === String(expeditionId || "").trim();
+      if (failedByThisExpedition) {
        const rollCmdId = getExploreCommandId();
        const failedRevisitBanner = await generateGrottoBannerOverlay(party, getRandomGrottoBanner(), GROTTO_CLEANSED_BANNER_NAME);
        const failedRevisitEmbed = new EmbedBuilder()
         .setTitle("🗺️ **Expedition: Grotto — Trial Failed**")
         .setColor(getExploreOutcomeColor("grotto_target_fail", regionColors[party.region] || "#00ff99"))
         .setDescription(
-         `Party is at the grotto in **${location}**, but the **Target Practice** trial has **failed**.\n\n` +
+         `Party is at the grotto in **${location}**, but the **Target Practice** trial has **failed** (this expedition).\n\n` +
          `Use </explore roll:${rollCmdId}> to leave. You can’t retry this grotto this expedition; find another Target Practice on a future run.`
         )
         .setThumbnail(TARGET_PRACTICE_THUMBNAIL_URL)
