@@ -1101,27 +1101,27 @@ async function hasActiveGrottoAtLocation(party, expeditionId) {
 // Resolve grotto by optional name/id, or fall back to most recently unsealed.
 // activeOnly: when true, only return grottos that are not cleared (status !== "cleared", completedAt null).
 async function resolveGrottoAtLocation(squareId, quadrantId, expeditionId, grottoOption, activeOnly = false) {
- const query = {
+ const baseQuery = {
   squareId: new RegExp(`^${String(squareId).trim().replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}$`, "i"),
   quadrantId: new RegExp(`^${String(quadrantId).trim().replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}$`, "i"),
-  partyId: expeditionId,
   sealed: false,
  };
  if (activeOnly) {
-  query.status = { $ne: "cleared" };
-  query.completedAt = null;
+  baseQuery.status = { $ne: "cleared" };
+  baseQuery.completedAt = null;
  }
  if (grottoOption && String(grottoOption).trim()) {
   const val = String(grottoOption).trim();
   if (val === "none") return null;
-  const byName = await Grotto.findOne({ ...query, name: new RegExp(`^${val.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}$`, "i") });
+  const byName = await Grotto.findOne({ ...baseQuery, name: new RegExp(`^${val.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}$`, "i") });
   if (byName) {
    if (activeOnly && (byName.status === "cleared" || byName.completedAt)) return null;
    return byName;
   }
   try {
    const byId = await Grotto.findById(val);
-   if (byId && byId.partyId === expeditionId && !byId.sealed) {
+   const atLocation = byId && String(byId.squareId || "").trim().toLowerCase() === String(squareId || "").trim().toLowerCase() && String(byId.quadrantId || "").trim().toUpperCase() === String(quadrantId || "").trim().toUpperCase();
+   if (byId && !byId.sealed && atLocation) {
     if (activeOnly && (byId.status === "cleared" || byId.completedAt)) return null;
     return byId;
    }
@@ -1129,7 +1129,7 @@ async function resolveGrottoAtLocation(squareId, quadrantId, expeditionId, grott
   // User supplied a name/id but it didn't match — don't fall back to "any grotto"
   return null;
  }
- return Grotto.findOne(query).sort({ unsealedAt: -1 });
+ return Grotto.findOne(baseQuery).sort({ unsealedAt: -1 });
 }
 
 // ------------------- getActiveGrottoCommand ------------------
@@ -4454,16 +4454,15 @@ module.exports = {
        return interaction.editReply({ embeds: [clearedRevisitEmbed], ...(clearedRevisitBanner.attachment ? { files: [clearedRevisitBanner.attachment] } : {}) });
       }
       const trialLabel = getTrialLabel(grotto.trialType);
-      const cmdId = getExploreCommandId();
       const instructions = {
        blessing: "The grotto held a blessing. Everyone received a Spirit Orb!",
-       target_practice: "Establish turn order. **Each shot costs 1 🟩 stamina.** Some misses can cause damage to the shooter. **3 hits** wins; **1 fail** ends the trial (use </explore roll> to leave). See **Commands** below.",
-       puzzle: "Discuss with your group. Submit an offering (items); staff will review. If approved, everyone gets Spirit Orbs. See **Commands** below.",
-       maze: "Use North, East, South, or West to move, or Song of Scrying at a wall. See **Commands** below.",
+       target_practice: "**3 hits** wins, **1 fail** ends the trial. Each shot costs 1 🟩. See **Commands** below.",
+       puzzle: "Submit an offering (items); staff will review. If approved, everyone gets Spirit Orbs. See **Commands** below.",
+       maze: "Move North, East, South, or West; use Song of Scrying at a wall. See **Commands** below.",
       };
-      const text = (grotto.status === "cleared" && grotto.trialType === "blessing")
+      const desc = (grotto.status === "cleared" && grotto.trialType === "blessing")
        ? GROTTO_ALREADY_CLEARED_BLESSING
-       : (instructions[grotto.trialType] || `Complete the ${trialLabel} trial.`);
+       : (instructions[grotto.trialType] || `Complete the ${trialLabel} trial. See **Commands** below.`);
       let revisitMazeFiles = [];
       let revisitMazeImg = getExploreMapImageUrl(party, { highlight: true });
       if (grotto.trialType === "maze" && grotto.mazeState?.layout) {
@@ -4478,11 +4477,10 @@ module.exports = {
       const revisitCleansedBanner = grotto.trialType === "maze" ? null : await generateGrottoBannerOverlay(party, getRandomGrottoBanner(), GROTTO_CLEANSED_BANNER_NAME);
       const revisitImg = grotto.trialType === "maze" ? revisitMazeImg : (revisitCleansedBanner?.imageUrl ?? getRandomGrottoBanner());
       const embed = new EmbedBuilder()
-       .setTitle("🗺️ **Expedition: Revisiting Grotto**")
+       .setTitle(`🗺️ **Grotto: ${trialLabel}**`)
        .setColor(getExploreOutcomeColor("grotto_revisit", regionColors[party.region] || "#00ff99"))
-       .setDescription(`Party is at grotto in **${location}** (grotto is **cleansed** / open; trial in progress).\n\n**Trial:** ${trialLabel}\n\n${text}`)
-       .setImage(revisitImg)
-       .setFooter({ text: "Status: Uncleansed = need plume. Cleansed (open) = trial in progress. Cleared = done." });
+       .setDescription(desc)
+       .setImage(revisitImg);
       addExplorationStandardFields(embed, {
        party,
        expeditionId,
@@ -4493,6 +4491,7 @@ module.exports = {
        hasActiveGrotto: true,
        activeGrottoCommand: getActiveGrottoCommand(grotto.trialType),
        hasUnpinnedDiscoveriesInQuadrant: await hasUnpinnedDiscoveriesInQuadrant(party),
+       compactGrottoCommands: true,
       });
       if (grotto.trialType === "maze" && revisitMazeFiles.length) embed.setFooter({ text: GROTTO_MAZE_LEGEND });
       const revisitFiles = grotto.trialType === "maze" ? revisitMazeFiles : (revisitCleansedBanner?.attachment ? [revisitCleansedBanner.attachment] : []);

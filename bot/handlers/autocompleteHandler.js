@@ -3716,8 +3716,8 @@ async function handleExploreGrottoNameAutocomplete(interaction, focusedOption) {
   const grottos = await Grotto.find({
    squareId: new RegExp(`^${squareId.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}$`, "i"),
    quadrantId: new RegExp(`^${quadrantId.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}$`, "i"),
-   partyId: expeditionId,
    sealed: false,
+   status: { $ne: "cleared" },
    completedAt: null,
   })
    .sort({ unsealedAt: -1 })
