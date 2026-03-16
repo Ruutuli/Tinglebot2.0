@@ -76,4 +76,5 @@ const PartySchema = new Schema({
   pathImageUploadedSquares: [{ type: String }],
 });
 
-module.exports = mongoose.model('Party', PartySchema);
+// Avoid "Cannot overwrite `Party` model once compiled" when module is re-loaded (e.g. Next.js API routes)
+module.exports = mongoose.models.Party || mongoose.model('Party', PartySchema);

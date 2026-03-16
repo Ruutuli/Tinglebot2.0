@@ -470,6 +470,7 @@ const createCharacterEmbed = (character) => {
    { name: "🎫 __Active Job Voucher__", value: character.jobVoucher && character.jobVoucherJob ? `> ${capitalizeWords(character.jobVoucherJob)}` : `> N/A`, inline: true },
    { name: "🔹 __Blighted__", value: `> ${character.blighted ? `Yes (Stage ${character.blightStage})` : "No"}`, inline: true },
    { name: "🔹 __Spirit Orbs__", value: `> ${character.spiritOrbs}`, inline: true },
+   { name: "🗺️ __Explores__", value: `> ${(character.exploreCount ?? 0).toLocaleString()}`, inline: true },
    { name: "💥 __KO Status__", value: `> ${character.ko ? "True" : "False"}`, inline: true },
    { name: "📦 __Inventory__", value: `> [Inventory Link](${character.inventory})`, inline: false },
    { name: "🔗 __Application Link__", value: `> [Link](${character.appLink})`, inline: false }

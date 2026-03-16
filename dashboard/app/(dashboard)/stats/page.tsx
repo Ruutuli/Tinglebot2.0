@@ -105,6 +105,11 @@ type StatsData = {
     byStatus: Array<{ status: string; count: number }>;
     byTier: Array<{ tier: number; count: number }>;
   };
+  explores: {
+    expeditions: number;
+    byRegion: Array<{ region: string; count: number }>;
+    byCharacter: Array<{ characterName: string; characterId: string; expeditions: number }>;
+  };
   stealStats: {
     totalAttempts: number;
     successfulSteals: number;
@@ -190,6 +195,7 @@ const SECTION_ACCENT_COLORS: Record<string, string> = {
   relics: "var(--totk-light-ocher)",
   relationships: "var(--stats-accent-relationship)",
   raids: "var(--totk-mid-ocher)",
+  explores: "var(--botw-blue)",
   stealStats: "var(--stats-accent-steal)",
   minigames: "var(--totk-light-green)",
   inventory: "var(--botw-blue)",
@@ -207,6 +213,7 @@ const SECTION_ACCENT_HEX: Record<string, string> = {
   relics: "#e5dcb7",
   relationships: "#e07a7a",
   raids: "#b99f65",
+  explores: "#00a3da",
   stealStats: "#b494e3",
   minigames: "#49d59c",
   tokens: "#f5c842",
@@ -588,6 +595,9 @@ export default function StatsPage() {
           <StatCard icon="fa-scroll" label="Quests" value={statsData.quests.total.toLocaleString()} color={SECTION_ACCENT_COLORS.quests} />
           <StatCard icon="fa-gem" label="Relics" value={statsData.relics.total.toLocaleString()} color={SECTION_ACCENT_COLORS.relics} />
           <StatCard icon="fa-dragon" label="Raids" value={(statsData.raids?.total ?? 0).toLocaleString()} color={SECTION_ACCENT_COLORS.raids} />
+          {statsData.explores != null && (
+            <StatCard icon="fa-map" label="Expeditions" value={Number(statsData.explores.expeditions ?? 0).toLocaleString()} color={SECTION_ACCENT_COLORS.explores} />
+          )}
         </div>
 
         {/* Character Statistics */}
@@ -616,6 +626,11 @@ export default function StatsPage() {
 
         {/* Raid Statistics */}
         {statsData.raids && <RaidStatsSection data={statsData.raids} />}
+
+        {/* Explore Statistics */}
+        {statsData.explores != null && (statsData.explores.expeditions > 0 || (statsData.explores.byRegion?.length ?? 0) > 0 || (statsData.explores.byCharacter?.length ?? 0) > 0) && (
+          <ExploreStatsSection data={statsData.explores} />
+        )}
 
         {/* Steal Statistics */}
         {statsData.stealStats && <StealStatsSection data={statsData.stealStats} />}
@@ -1365,6 +1380,73 @@ function RaidStatsSection({ data }: { data: StatsData["raids"] }) {
             </div>
           )}
         </div>
+      </SectionCard>
+    </div>
+  );
+}
+
+/* ============================================================================ */
+/* ------------------- Explore Statistics Section ------------------- */
+/* ============================================================================ */
+
+function ExploreStatsSection({ data }: { data: StatsData["explores"] }) {
+  const expeditions = Number(data?.expeditions ?? 0);
+  const byRegion = data?.byRegion ?? [];
+  const byCharacter = data?.byCharacter ?? [];
+  const regionChartData = useMemo(
+    () => byRegion.map((r) => ({ name: r.region, count: r.count })),
+    [byRegion]
+  );
+  return (
+    <div className="space-y-6">
+      <SectionCard title="Explore Statistics" icon="fa-map" accentColor={SECTION_ACCENT_COLORS.explores}>
+        <p className="mb-4 text-sm text-[var(--botw-pale)]">
+          Total expeditions (parties that went exploring), regions most explored, and how many expeditions each character has been on (from party data).
+        </p>
+        <div className="mb-6">
+          <Metric label="Total expeditions" value={expeditions.toLocaleString()} accent="green" />
+        </div>
+
+        {expeditions > 0 && (
+          <>
+            <h4 className="mb-2 text-sm font-semibold text-[var(--totk-light-ocher)]">Expeditions by region</h4>
+            {regionChartData.length > 0 ? (
+              <div className="mb-6 min-w-0">
+                <SharedBarChart
+                  data={regionChartData}
+                  layout="vertical"
+                  height={Math.max(120, regionChartData.length * 36)}
+                  barColor={SECTION_ACCENT_HEX.explores}
+                  barSize={24}
+                  nameLabel="Expeditions"
+                />
+              </div>
+            ) : (
+              <p className="mb-6 text-sm text-[var(--totk-grey-200)]">No region breakdown available.</p>
+            )}
+
+            <h4 className="mb-2 text-sm font-semibold text-[var(--totk-light-ocher)]">Characters (expeditions participated)</h4>
+            {byCharacter.length > 0 ? (
+              <div className="space-y-1.5 sm:space-y-2">
+                {byCharacter.map((c) => (
+                  <div
+                    key={c.characterId || c.characterName}
+                    className="flex min-h-[44px] min-w-0 w-full items-center justify-between gap-2 rounded-lg border border-[var(--totk-dark-ocher)]/30 bg-[var(--totk-grey-400)]/20 px-3 py-2 sm:px-4"
+                  >
+                    <span className="min-w-0 truncate font-medium text-[var(--botw-pale)]" title={c.characterName}>
+                      {c.characterName}
+                    </span>
+                    <span className="shrink-0 tabular-nums text-sm text-[var(--totk-light-green)] sm:text-base">
+                      {c.expeditions} expedition{c.expeditions !== 1 ? "s" : ""}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p className="text-sm text-[var(--totk-grey-200)]">No character breakdown available.</p>
+            )}
+          </>
+        )}
       </SectionCard>
     </div>
   );

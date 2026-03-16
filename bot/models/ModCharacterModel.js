@@ -151,6 +151,9 @@ const modCharacterSchema = new Schema({
   },
   spiritOrbs: { type: Number, default: 0 },
 
+  // ------------------- Exploration stats -------------------
+  exploreCount: { type: Number, default: 0 },
+
   // ------------------- Companions -------------------
   currentActivePet: { 
     type: Schema.Types.ObjectId, 

@@ -30,6 +30,7 @@ const GrottoSchema = new Schema({
     turnIndex: { type: Number, default: 0 },
     successCount: { type: Number, default: 0 },
     failed: { type: Boolean, default: false },
+    phase: { type: Number, default: 1 }, // 1 = warm-up (2 hits), 2 = precision (1 hit at higher bar)
   },
   puzzleState: {
     puzzleSubType: { type: String, enum: ['odd_structure', 'offering_statue'], default: null },

@@ -23,6 +23,7 @@ export async function GET() {
     const RaidModule = await import("@/models/RaidModel.js");
     const StealStatsModule = await import("@/models/StealStatsModel.js");
     const MinigameModule = await import("@/models/MinigameModel.js");
+    const PartyModule = await import("@/models/PartyModel.js");
 
     const Character = CharacterModule.default || CharacterModule;
     const Weather = WeatherModule.default || WeatherModule;
@@ -35,6 +36,7 @@ export async function GET() {
     const Raid = RaidModule.default || RaidModule;
     const StealStats = StealStatsModule.default || StealStatsModule;
     const Minigame = MinigameModule.default || MinigameModule;
+    const Party = PartyModule.default || PartyModule;
 
     const UserModule = await import("@/models/UserModel.js");
     const User = UserModule.default || UserModule;
@@ -518,6 +520,43 @@ export async function GET() {
       rare: stealStatsDocs.reduce((s, d) => s + (d.itemsByRarity?.rare ?? 0), 0),
     };
 
+    // ------------------- Explore Statistics (from Party DB) -------------------
+    const exploreMatch = { status: { $in: ["started", "completed", "failed"] } };
+    // Use native collection so we always get plain arrays (Mongoose aggregate can behave differently across envs)
+    const db = mongoose.connection?.db;
+    let exploreExpeditionCount = 0;
+    let exploreByRegion: Array<{ _id?: string | null; count?: number }> = [];
+    let exploreByCharacter: Array<{ _id?: unknown; characterName?: string; expeditions?: number }> = [];
+    if (db) {
+      const partiesColl = db.collection("parties");
+      const [count, byRegion, byCharacter] = await Promise.all([
+        partiesColl.countDocuments(exploreMatch),
+        partiesColl.aggregate([
+          { $match: exploreMatch },
+          { $group: { _id: "$region", count: { $sum: 1 } } },
+          { $sort: { count: -1 } },
+        ]).toArray(),
+        partiesColl.aggregate([
+          { $match: exploreMatch },
+          { $unwind: "$characters" },
+          {
+            $group: {
+              _id: "$characters._id",
+              characterName: { $first: "$characters.name" },
+              expeditions: { $sum: 1 },
+            },
+          },
+          { $sort: { expeditions: -1 } },
+          { $limit: 50 },
+        ]).toArray(),
+      ]);
+      exploreExpeditionCount = count;
+      exploreByRegion = byRegion as Array<{ _id?: string | null; count?: number }>;
+      exploreByCharacter = byCharacter as Array<{ _id?: unknown; characterName?: string; expeditions?: number }>;
+    } else {
+      exploreExpeditionCount = await Party.countDocuments(exploreMatch);
+    }
+
     // ------------------- Minigame Statistics -------------------
     const [
       minigameTotal,
@@ -787,6 +826,19 @@ export async function GET() {
         byVillage: raidByVillage.map((item) => ({ village: item._id || "Unknown", count: item.count })),
         byResult: raidByResult.map((item) => ({ result: item._id || "Unknown", count: item.count })),
         byTier: raidByTier.map((item) => ({ tier: item._id ?? 0, count: item.count })),
+      },
+      explores: {
+        expeditions: exploreExpeditionCount,
+        byRegion: Array.isArray(exploreByRegion)
+          ? exploreByRegion.map((r: { _id?: string | null; count?: number }) => ({ region: r._id ?? "Unknown", count: r.count ?? 0 }))
+          : [],
+        byCharacter: Array.isArray(exploreByCharacter)
+          ? exploreByCharacter.map((c: { _id?: unknown; characterName?: string; expeditions?: number }) => ({
+              characterName: c.characterName ?? "Unknown",
+              characterId: c._id != null ? String(c._id) : "",
+              expeditions: c.expeditions ?? 0,
+            }))
+          : [],
       },
       stealStats: {
         totalAttempts: stealTotalAttempts,

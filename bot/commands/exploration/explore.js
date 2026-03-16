@@ -343,6 +343,26 @@ function getTargetPracticeModifiers(character) {
   return { failReduction, missReduction };
 }
 
+// ------------------- getTargetPracticeGearFlavor ------------------
+// Flavor line when character has bow/slingshot or Hunter/Scout helping their aim.
+function getTargetPracticeGearFlavor(character, outcomeType) {
+  if (!character || typeof outcomeType !== "string") return "";
+  const { failReduction, missReduction } = getTargetPracticeModifiers(character);
+  if (failReduction === 0 && missReduction === 0) return "";
+  const weaponName = (character?.gearWeapon?.name || "").trim();
+  const job = (character?.job || "").trim();
+  const isHunterOrScout = ["Hunter", "Hunter (Looting)", "Scout"].includes(job);
+  const gearParts = [];
+  if (weaponName) gearParts.push(weaponName);
+  if (isHunterOrScout) gearParts.push(`${job} training`);
+  const gearStr = gearParts.length > 0 ? gearParts.join(" and ") : "your gear";
+  const yourGear = gearStr.startsWith("your ") ? gearStr : `your ${gearStr}`;
+  if (outcomeType === "hit") return ` **Thanks to ${yourGear},** the shot landed true.`;
+  if (outcomeType === "miss") return ` **${yourGear.charAt(0).toUpperCase() + yourGear.slice(1)}** gave you a better chance—still a narrow miss.`;
+  if (outcomeType === "fail") return ` **Even with ${yourGear},** the Koroks had the last laugh this time.`;
+  return "";
+}
+
 // ------------------- Village mapping (Raid: Rudania | Inariko | Vhintl) ------------------
 const REGION_TO_VILLAGE = {
  eldin: "Rudania",
@@ -1758,7 +1778,7 @@ async function handleGrottoCleanse(i, msg, party, expeditionId, characterIndex, 
   grottoDoc.unsealedAt = at;
   grottoDoc.unsealedBy = cleanseCharacter.name;
   grottoDoc.completedAt = null;
-  grottoDoc.targetPracticeState = { turnIndex: 0, successCount: 0, failed: false };
+  grottoDoc.targetPracticeState = { turnIndex: 0, successCount: 0, failed: false, phase: 1 };
   grottoDoc.puzzleState = puzzleState || { puzzleSubType: null, puzzleVariant: null, puzzleClueIndex: null };
   grottoDoc.testOfPowerState = { raidStarted: false, raidId: null };
   grottoDoc.mazeState = { currentNode: "", steps: [], facing: "s", layout: undefined, openedChests: [], triggeredTraps: [], usedScryingWalls: [] };
@@ -2626,10 +2646,18 @@ module.exports = {
      if (grotto.status === "cleared" || grotto.completedAt) {
       return interaction.editReply({ embeds: [createExplorationErrorEmbed("🗺️ **Grotto already cleared**", "This grotto has already been cleared.", { party, expeditionId, location, nextCharacter: party?.characters?.[party?.currentTurn] ?? null, showNextAndCommands: true })] });
      }
+     // Ensure targetPracticeState exists (old grottos may lack it)
+     if (!grotto.targetPracticeState || typeof grotto.targetPracticeState !== "object") {
+      grotto.targetPracticeState = { turnIndex: 0, successCount: 0, failed: false, phase: 1 };
+      grotto.markModified("targetPracticeState");
+     }
+     const TARGET_SUCCESSES_PHASE1 = 2;
      const TARGET_SUCCESSES = 3;
      const BASE_FAIL = 0.15;
      const BASE_MISS = 0.25;
-    const failedByThisExpedition = grotto.targetPracticeState.failed && String(grotto.partyId || "").trim() === String(expeditionId || "").trim();
+     const BASE_FAIL_PHASE2 = 0.22;
+     const BASE_MISS_PHASE2 = 0.33;
+    const failedByThisExpedition = grotto.targetPracticeState?.failed && String(grotto.partyId || "").trim() === String(expeditionId || "").trim();
     if (failedByThisExpedition) {
       const cmdId = getExploreCommandId();
       const failedEmbed = new EmbedBuilder()
@@ -2653,10 +2681,12 @@ module.exports = {
       });
       return interaction.editReply({ embeds: [failedEmbed] });
     }
-    if (grotto.targetPracticeState.failed && String(grotto.partyId || "").trim() !== String(expeditionId || "").trim()) {
+    if (grotto.targetPracticeState?.failed && String(grotto.partyId || "").trim() !== String(expeditionId || "").trim()) {
+     if (!grotto.targetPracticeState) grotto.targetPracticeState = { turnIndex: 0, successCount: 0, failed: false, phase: 1 };
      grotto.targetPracticeState.failed = false;
      grotto.targetPracticeState.successCount = 0;
      grotto.targetPracticeState.turnIndex = 0;
+     grotto.targetPracticeState.phase = 1;
      grotto.partyId = expeditionId;
      grotto.markModified("targetPracticeState");
      grotto.markModified("partyId");
@@ -2692,9 +2722,13 @@ module.exports = {
       return;
      }
      
+     const currentPhase = grotto.targetPracticeState.phase || 1;
+     const isPhase2 = currentPhase === 2;
+     const baseFail = isPhase2 ? BASE_FAIL_PHASE2 : BASE_FAIL;
+     const baseMiss = isPhase2 ? BASE_MISS_PHASE2 : BASE_MISS;
      const { failReduction, missReduction } = getTargetPracticeModifiers(character);
-     const failThreshold = Math.max(0.04, BASE_FAIL - failReduction);
-     const missThreshold = Math.max(0.10, BASE_MISS - missReduction);
+     const failThreshold = Math.max(0.05, baseFail - failReduction);
+     const missThreshold = Math.max(0.10, baseMiss - missReduction);
      const hitThreshold = failThreshold + missThreshold;
     const roll = Math.random();
     const rollPct = Math.round(roll * 100);
@@ -2710,12 +2744,13 @@ module.exports = {
       pushProgressLog(party, character.name, "grotto_target_fail", `Target Practice: ${character.name} failed the roll. Party may return later.`, undefined, undefined, new Date());
       await party.save(); // Always persist so dashboard shows current hearts/stamina/progress
       const outcome = getFailOutcome();
-      const flavor = outcome.flavor.replace(/\{char\}/g, character.name);
+      const flavor = outcome.flavor.replace(/\{char\}/g, character.name) + getTargetPracticeGearFlavor(character, "fail");
       const successCount = grotto.targetPracticeState.successCount || 0;
-      const progressLine = `**Progress:** ✅ ${successCount}/${TARGET_SUCCESSES} hits`;
+      const phaseNoteFail = isPhase2 ? " **(Phase 2: precision)**" : "";
+      const progressLine = `**Progress:** ✅ ${successCount}/${TARGET_SUCCESSES} hits${phaseNoteFail}`;
       const desc = `${flavor}\n\n**Roll:** ${rollPct}% — **fail** (need over ${failPct}% to avoid instant fail)  *(−1 🟩 stamina)*\n\n${progressLine}\n\n**Trial failed.** Use ${cmdRoll} to leave. You can’t retry this grotto this expedition; find another Target Practice on a future run.`;
       const embed = new EmbedBuilder()
-       .setTitle("🗺️ **Grotto: Target Practice — Failed**")
+       .setTitle(isPhase2 ? "🗺️ **Grotto: Target Practice — Phase 2 — Failed**" : "🗺️ **Grotto: Target Practice — Failed**")
        .setColor(0x8b0000)
        .setDescription(desc)
        .setThumbnail(TARGET_PRACTICE_THUMBNAIL_URL)
@@ -2735,7 +2770,7 @@ module.exports = {
 
      if (roll < hitThreshold) {
       const outcome = getMissOutcome();
-      const flavor = outcome.flavor.replace(/\{char\}/g, character.name);
+      const flavor = outcome.flavor.replace(/\{char\}/g, character.name) + getTargetPracticeGearFlavor(character, "miss");
       const damageAmount = outcome.heartsLost ?? 0;
       let heartsLost = 0;
       if (damageAmount > 0) {
@@ -2750,10 +2785,11 @@ module.exports = {
       const damageNote = heartsLost > 0 ? ` **${character.name}** took ${heartsLost} ❤ damage.` : "";
       const sameShooter = party.characters[characterIndex];
       const successCount = grotto.targetPracticeState.successCount || 0;
-      const progressLine = `**Progress:** ✅ ${successCount}/${TARGET_SUCCESSES} hits`;
+      const phaseNoteMiss = isPhase2 ? " **(Phase 2: precision)**" : "";
+      const progressLine = `**Progress:** ✅ ${successCount}/${TARGET_SUCCESSES} hits${phaseNoteMiss}`;
       const desc = `${flavor}\n\n**Roll:** ${rollPct}% — miss (need over ${hitPct}% to hit)  *(−1 🟩 stamina)*${damageNote}\n\n${progressLine}\n\n**Same shooter tries again** — **${sameShooter?.name ?? "—"}** in **Commands** below.`;
       const embed = new EmbedBuilder()
-       .setTitle("🗺️ **Grotto: Target Practice**")
+       .setTitle(isPhase2 ? "🗺️ **Grotto: Target Practice — Phase 2**" : "🗺️ **Grotto: Target Practice**")
        .setColor(getExploreOutcomeColor("grotto_puzzle_success", regionColors[party.region] || "#00ff99"))
        .setDescription(desc)
        .setThumbnail(TARGET_PRACTICE_THUMBNAIL_URL)
@@ -2798,7 +2834,7 @@ module.exports = {
       pushProgressLog(party, character.name, "grotto_target_success", `Target Practice completed. Each party member received a Spirit Orb.`, undefined, undefined, new Date());
       await party.save(); // Always persist so dashboard shows current hearts/stamina/progress
       const outcome = getCompleteOutcome();
-      const flavor = outcome.flavor.replace(/\{char\}/g, character.name);
+      const flavor = outcome.flavor.replace(/\{char\}/g, character.name) + getTargetPracticeGearFlavor(character, "hit");
       const progressBar3 = Array(TARGET_SUCCESSES).fill(0).map((_, i) => i < TARGET_SUCCESSES ? "🎯" : "○").join(" ");
       const progress3Desc = `${flavor}\n\n**Roll:** ${rollPct}% (need over ${hitPct}% to hit)  *(−1 🟩 stamina)*\n\n**Progress:** ${progressBar3}  (3/3 hits)\n\n**Trial complete!**`;
       const progress3Embed = new EmbedBuilder()
@@ -2842,14 +2878,47 @@ module.exports = {
       }
       return;
      }
+     if (newSuccesses === TARGET_SUCCESSES_PHASE1 && (grotto.targetPracticeState.phase || 1) === 1) {
+      grotto.targetPracticeState.phase = 2;
+      grotto.markModified("targetPracticeState");
+      await grotto.save();
+      const outcome = getSuccessOutcome();
+      const flavor = outcome.flavor.replace(/\{char\}/g, character.name) + getTargetPracticeGearFlavor(character, "hit");
+      const phase2HitPct = Math.round((Math.max(0.05, BASE_FAIL_PHASE2 - 0) + Math.max(0.10, BASE_MISS_PHASE2 - 0)) * 100);
+      const progressBar = "🎯 🎯 ○";
+      const desc = `${flavor}\n\n**Roll:** ${rollPct}% (need over ${hitPct}% to hit)  *(−1 🟩 stamina)*\n\n**Progress:** ${progressBar}  (2/3 hits)\n\nThe blimp darts around—**Phase 2: Precision round!** One more hit required; the next shot needs **over ${phase2HitPct}%** to land.\n\n**Next:** **${party.characters[(characterIndex + 1) % party.characters.length]?.name ?? "—"}** — see **Commands** below.`;
+      const phase2Embed = new EmbedBuilder()
+       .setTitle("🗺️ **Grotto: Target Practice — Phase 2**")
+       .setColor(getExploreOutcomeColor("grotto_target_success", regionColors[party.region] || "#00ff99"))
+       .setDescription(desc)
+       .setThumbnail(TARGET_PRACTICE_THUMBNAIL_URL)
+       .setImage(getRandomGrottoBanner())
+       .setFooter({ text: "Phase 2: Precision — need higher roll to hit. Each shot costs 1 🟩 stamina." });
+      const nextCharPhase2 = party.characters[(characterIndex + 1) % party.characters.length];
+      addExplorationStandardFields(phase2Embed, {
+       party,
+       expeditionId,
+       location,
+       nextCharacter: nextCharPhase2 ?? null,
+       showNextAndCommands: true,
+       showRestSecureMove: false,
+       hasActiveGrotto: true,
+       activeGrottoCommand: cmdTargetPractice,
+       hasUnpinnedDiscoveriesInQuadrant: await hasUnpinnedDiscoveriesInQuadrant(party),
+       compactGrottoCommands: true,
+      });
+      await interaction.editReply({ embeds: [phase2Embed] });
+      if (getExplorationNextTurnContent(nextCharPhase2)) await interaction.followUp({ content: getExplorationNextTurnContent(nextCharPhase2) }).catch(() => {});
+      return;
+     }
      await grotto.save();
-     // Next shooter = next person in party order (hit passes the turn; miss keeps same shooter — see miss block above).
      const nextIdx = (characterIndex + 1) % party.characters.length;
      const nextChar = party.characters[nextIdx];
      const outcome = getSuccessOutcome();
-     const flavor = outcome.flavor.replace(/\{char\}/g, character.name);
+     const flavor = outcome.flavor.replace(/\{char\}/g, character.name) + getTargetPracticeGearFlavor(character, "hit");
      const progressBar = Array(TARGET_SUCCESSES).fill(0).map((_, i) => (i < newSuccesses ? "🎯" : "○")).join(" ");
-     const desc = `${flavor}\n\n**Roll:** ${rollPct}% (need over ${hitPct}% to hit)  *(−1 🟩 stamina)*\n\n**Progress:** ${progressBar}  (${newSuccesses}/${TARGET_SUCCESSES} hits)\n\n**Next:** **${nextChar?.name ?? "—"}** — see **Commands** below.`;
+     const phaseNote = (grotto.targetPracticeState.phase || 1) === 2 ? " **(Phase 2: precision)**" : "";
+     const desc = `${flavor}\n\n**Roll:** ${rollPct}% (need over ${hitPct}% to hit)  *(−1 🟩 stamina)*\n\n**Progress:** ${progressBar}  (${newSuccesses}/${TARGET_SUCCESSES} hits)${phaseNote}\n\n**Next:** **${nextChar?.name ?? "—"}** — see **Commands** below.`;
      const embed = new EmbedBuilder()
       .setTitle("🗺️ **Grotto: Target Practice**")
       .setColor(getExploreOutcomeColor("grotto_target_success", regionColors[party.region] || "#00ff99"))
@@ -4556,7 +4625,7 @@ module.exports = {
       grottoDoc.unsealedAt = at;
       grottoDoc.unsealedBy = plumeHolder.character.name;
       grottoDoc.completedAt = null;
-      grottoDoc.targetPracticeState = { turnIndex: 0, successCount: 0, failed: false };
+      grottoDoc.targetPracticeState = { turnIndex: 0, successCount: 0, failed: false, phase: 1 };
       grottoDoc.puzzleState = puzzleStateRevisit || { puzzleSubType: null, puzzleVariant: null, puzzleClueIndex: null };
       grottoDoc.testOfPowerState = { raidStarted: false, raidId: null };
       grottoDoc.mazeState = { currentNode: "", steps: [], facing: "s", layout: undefined, openedChests: [], triggeredTraps: [], usedScryingWalls: [] };
@@ -5024,6 +5093,13 @@ module.exports = {
      }
      if (outcomeType !== "monster" && outcomeType !== "item") {
       appendExploreStat(`${new Date().toISOString()}\tfinal\t${outcomeType}\t${location}`);
+     }
+
+     // Increment explore count for each party member (stats: how many explores this character has done)
+     const partyCharacterIds = (party.characters || []).map((pc) => pc?._id).filter(Boolean);
+     for (const charId of partyCharacterIds) {
+      Character.updateOne({ _id: charId }, { $inc: { exploreCount: 1 } }).catch((err) => logger.warn("EXPLORE", `[explore.js] exploreCount increment Character: ${err?.message || err}`));
+      ModCharacter.updateOne({ _id: charId }, { $inc: { exploreCount: 1 } }).catch((err) => logger.warn("EXPLORE", `[explore.js] exploreCount increment ModCharacter: ${err?.message || err}`));
      }
 
      if (outcomeType === "explored") {

@@ -17,6 +17,13 @@ function escapeSquareIdForRegex(squareId) {
     return String(squareId || '').trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
+// Progress log outcomes that represent one explore roll (main /explore roll handler). Used to derive explore count from party DB.
+const EXPLORE_ROLL_OUTCOMES = new Set([
+    "explored", "item", "fairy", "monster", "chest", "old_map", "ruins_found", "safe_space", "relic",
+    "monster_camp", "grotto", "ruins_skipped", "monster_camp_skipped", "grotto_skipped", "chest_skipped",
+    "raid", "ruin_rest", "hot_spring", "ko"
+]);
+
 // Progress log outcomes that are "reportable" (can be pinned on dashboard). When leaving a square, unpinned ones are cleared.
 // Ruins: only "ruin_rest" (rest spot) is pinable; finding/skipping ruins does not require a pin.
 // Keep legacy outcomes for backward compatibility with older progress logs.
@@ -426,6 +433,30 @@ async function handleExpeditionFailedFromWave(expeditionId, client) {
     }
 }
 
+// ------------------- getExploreCountFromParties ------------------
+// Derives total explore count for a character from the party database (parties they were in, progressLog roll outcomes).
+// Use together with character.exploreCount: display max(exploreCount, getExploreCountFromParties) for backward compatibility.
+async function getExploreCountFromParties(characterId) {
+    if (!characterId) return 0;
+    try {
+        const parties = await Party.find(
+            { 'characters._id': characterId, status: { $in: ['started', 'completed', 'failed'] } },
+            { progressLog: 1 }
+        ).lean();
+        let total = 0;
+        for (const party of parties || []) {
+            const log = party.progressLog || [];
+            for (const entry of log) {
+                if (entry && EXPLORE_ROLL_OUTCOMES.has(entry.outcome)) total += 1;
+            }
+        }
+        return total;
+    } catch (err) {
+        handleError(err, 'exploreModule.js', { operation: 'getExploreCountFromParties', characterId });
+        return 0;
+    }
+}
+
 module.exports = {
     getCharacterItems,
     formatCharacterItems,
@@ -439,5 +470,6 @@ module.exports = {
     updateDiscoveryGrottoStatus,
     markGrottoCleared,
     applyExpeditionFailedState,
-    handleExpeditionFailedFromWave
+    handleExpeditionFailedFromWave,
+    getExploreCountFromParties
 };
