@@ -164,11 +164,11 @@ type QuadrantBlockProps = {
   defaultOpen?: boolean;
   isOpen?: boolean;
   onToggle?: () => void;
-  /** When false, hide terrain/items/monsters/old map/explored-by (e.g. on model list page). */
-  showMapDetails?: boolean;
+  /** When false, hide the "Old map #N → ..." line (e.g. on model list page). */
+  showOldMapLine?: boolean;
 };
 
-function QuadrantBlock({ q, defaultOpen = false, isOpen: controlledOpen, onToggle, showMapDetails = true }: QuadrantBlockProps) {
+function QuadrantBlock({ q, defaultOpen = false, isOpen: controlledOpen, onToggle, showOldMapLine = true }: QuadrantBlockProps) {
   const [internalOpen, setInternalOpen] = useState(defaultOpen);
   const open = controlledOpen !== undefined ? controlledOpen : internalOpen;
   const setOpen = onToggle ?? (() => setInternalOpen((o) => !o));
@@ -237,92 +237,88 @@ function QuadrantBlock({ q, defaultOpen = false, isOpen: controlledOpen, onToggl
       </button>
       {open && (
         <div className="px-3 pb-3 pt-2 space-y-2.5 border-t border-[var(--totk-dark-ocher)]/30">
-          {showMapDetails && (
-            <>
-              {q.noCamp && (
-                <p className="quad-nocamp text-xs flex items-center gap-1.5">
-                  <i className="fas fa-info-circle" aria-hidden /> No camp (path/village)
-                </p>
-              )}
-              {(q.hazards?.length ?? 0) > 0 && (
-                <MetaRow icon="fa-bolt" label="Hazards">
-                  <TagList labels={q.hazards} getTagClass={getHazardClass} />
-                </MetaRow>
-              )}
-              {(q.terrain?.length ?? 0) > 0 && (
-                <MetaRow icon="fa-mountain" label="Terrain">
-                  <TagList labels={q.terrain} getTagClass={getTerrainClass} />
-                </MetaRow>
-              )}
-              {(q.items?.length ?? 0) > 0 && (
-                <MetaRow icon="fa-cube" label="Items">
-                  <TagList labels={q.items} getTagClass={getItemTypeClass} />
-                </MetaRow>
-              )}
-              {(q.monsters?.length ?? 0) > 0 && (
-                <MetaRow icon="fa-dragon" label="Monsters">
-                  <TagList labels={q.monsters} getTagClass={getMonsterClass} />
-                </MetaRow>
-              )}
-              {(q.bossMonsters?.length ?? 0) > 0 && (
-                <MetaRow icon="fa-skull" label="Boss monsters">
-                  <TagList labels={q.bossMonsters} getTagClass={getMonsterClass} />
-                </MetaRow>
-              )}
-              {(q.special?.length ?? 0) > 0 && (
-                <MetaRow icon="fa-star" label="Special">
-                  <TagList labels={q.special} />
-                </MetaRow>
-              )}
-              {discoveryCount > 0 && (
-                <MetaRow icon="fa-compass" label="Discoveries">
-                  <div className="flex flex-wrap gap-1.5">
-                    {(Array.isArray(q.discoveries) ? q.discoveries : []).map((d, i) => {
-                      const type = (d?.type ?? "").toString();
-                      const number = (d?.number ?? "").toString();
-                      const name = (d?.name ?? "").toString();
-                      const typeLower = type.toLowerCase();
-                      let label: string;
-                      if (typeLower === "grotto" || typeLower.startsWith("grotto_")) {
-                        label = name.trim() || "Grotto";
-                      } else if (typeLower.startsWith("monster_camp")) {
-                        label = "Monster camp";
-                      } else if (typeLower === "ruin_rest") {
-                        label = "Ruin rest spot";
-                      } else if (number) {
-                        label = `${type} #${number}`;
-                      } else {
-                        label = type || "Discovery";
-                      }
-                      return (
-                        <span
-                          key={i}
-                          className="map-square-tag inline-flex items-center rounded-full border border-emerald-600/40 bg-emerald-950/40 px-2 py-0.5 text-xs text-[var(--totk-light-ocher)] shadow-sm"
-                        >
-                          {label}
-                        </span>
-                      );
-                    })}
-                  </div>
-                </MetaRow>
-              )}
-              {(q.oldMapNumber != null || q.oldMapLeadsTo) && (
-                <p className="text-xs text-[var(--totk-grey-200)] flex items-center gap-1.5">
-                  <i className="fas fa-map" aria-hidden /> Old map #{q.oldMapNumber ?? "?"} → {q.oldMapLeadsTo ?? "—"}
-                </p>
-              )}
-              {q.ruinRestStamina != null && q.ruinRestStamina > 0 && (
-                <p className="text-xs text-[var(--totk-light-green)] flex items-center gap-1.5">
-                  <i className="fas fa-campground" aria-hidden /> Ruin rest: +{q.ruinRestStamina} stamina
-                </p>
-              )}
-              {q.exploredBy && (
-                <p className="text-xs text-[var(--totk-grey-200)]">
-                  Explored by {q.exploredBy}
-                  {q.exploredAt ? ` · ${formatDate(q.exploredAt)}` : ""}
-                </p>
-              )}
-            </>
+          {q.noCamp && (
+            <p className="quad-nocamp text-xs flex items-center gap-1.5">
+              <i className="fas fa-info-circle" aria-hidden /> No camp (path/village)
+            </p>
+          )}
+          {(q.hazards?.length ?? 0) > 0 && (
+            <MetaRow icon="fa-bolt" label="Hazards">
+              <TagList labels={q.hazards} getTagClass={getHazardClass} />
+            </MetaRow>
+          )}
+          {(q.terrain?.length ?? 0) > 0 && (
+            <MetaRow icon="fa-mountain" label="Terrain">
+              <TagList labels={q.terrain} getTagClass={getTerrainClass} />
+            </MetaRow>
+          )}
+          {(q.items?.length ?? 0) > 0 && (
+            <MetaRow icon="fa-cube" label="Items">
+              <TagList labels={q.items} getTagClass={getItemTypeClass} />
+            </MetaRow>
+          )}
+          {(q.monsters?.length ?? 0) > 0 && (
+            <MetaRow icon="fa-dragon" label="Monsters">
+              <TagList labels={q.monsters} getTagClass={getMonsterClass} />
+            </MetaRow>
+          )}
+          {(q.bossMonsters?.length ?? 0) > 0 && (
+            <MetaRow icon="fa-skull" label="Boss monsters">
+              <TagList labels={q.bossMonsters} getTagClass={getMonsterClass} />
+            </MetaRow>
+          )}
+          {(q.special?.length ?? 0) > 0 && (
+            <MetaRow icon="fa-star" label="Special">
+              <TagList labels={q.special} />
+            </MetaRow>
+          )}
+          {discoveryCount > 0 && (
+            <MetaRow icon="fa-compass" label="Discoveries">
+              <div className="flex flex-wrap gap-1.5">
+                {(Array.isArray(q.discoveries) ? q.discoveries : []).map((d, i) => {
+                  const type = (d?.type ?? "").toString();
+                  const number = (d?.number ?? "").toString();
+                  const name = (d?.name ?? "").toString();
+                  const typeLower = type.toLowerCase();
+                  let label: string;
+                  if (typeLower === "grotto" || typeLower.startsWith("grotto_")) {
+                    label = name.trim() || "Grotto";
+                  } else if (typeLower.startsWith("monster_camp")) {
+                    label = "Monster camp";
+                  } else if (typeLower === "ruin_rest") {
+                    label = "Ruin rest spot";
+                  } else if (number) {
+                    label = `${type} #${number}`;
+                  } else {
+                    label = type || "Discovery";
+                  }
+                  return (
+                    <span
+                      key={i}
+                      className="map-square-tag inline-flex items-center rounded-full border border-emerald-600/40 bg-emerald-950/40 px-2 py-0.5 text-xs text-[var(--totk-light-ocher)] shadow-sm"
+                    >
+                      {label}
+                    </span>
+                  );
+                })}
+              </div>
+            </MetaRow>
+          )}
+          {showOldMapLine && (q.oldMapNumber != null || q.oldMapLeadsTo) && (
+            <p className="text-xs text-[var(--totk-grey-200)] flex items-center gap-1.5">
+              <i className="fas fa-map" aria-hidden /> Old map #{q.oldMapNumber ?? "?"} → {q.oldMapLeadsTo ?? "—"}
+            </p>
+          )}
+          {q.ruinRestStamina != null && q.ruinRestStamina > 0 && (
+            <p className="text-xs text-[var(--totk-light-green)] flex items-center gap-1.5">
+              <i className="fas fa-campground" aria-hidden /> Ruin rest: +{q.ruinRestStamina} stamina
+            </p>
+          )}
+          {q.exploredBy && (
+            <p className="text-xs text-[var(--totk-grey-200)]">
+              Explored by {q.exploredBy}
+              {q.exploredAt ? ` · ${formatDate(q.exploredAt)}` : ""}
+            </p>
           )}
         </div>
       )}
@@ -330,7 +326,7 @@ function QuadrantBlock({ q, defaultOpen = false, isOpen: controlledOpen, onToggl
   );
 }
 
-export function MapSquareCard({ square, showMapDetails = true }: { square: MapSquare; showMapDetails?: boolean }) {
+export function MapSquareCard({ square, showOldMapLine = true }: { square: MapSquare; showOldMapLine?: boolean }) {
   const quadrants = Array.isArray(square.quadrants) ? square.quadrants : [];
   const firstExpandableIndex = quadrants.findIndex(
     (q) => (q.status ?? "").toLowerCase() !== "inaccessible"
@@ -504,7 +500,7 @@ export function MapSquareCard({ square, showMapDetails = true }: { square: MapSq
                   defaultOpen={false}
                   isOpen={isExpandable ? openQuadrantIndex === i : undefined}
                   onToggle={isExpandable ? () => setOpenQuadrantIndex((prev) => (prev === i ? null : i)) : undefined}
-                  showMapDetails={showMapDetails}
+                  showOldMapLine={showOldMapLine}
                 />
               );
             })}

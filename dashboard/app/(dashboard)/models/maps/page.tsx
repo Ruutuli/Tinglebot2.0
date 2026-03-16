@@ -80,7 +80,7 @@ export default function MapsPage() {
         <>
           <div className="mb-6 grid gap-6 sm:grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 items-start">
             {squares.map((square) => (
-              <MapSquareCard key={square._id} square={square} showMapDetails={false} />
+              <MapSquareCard key={square._id} square={square} showOldMapLine={false} />
             ))}
           </div>
           {total > itemsPerPage && (
