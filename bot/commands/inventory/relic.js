@@ -21,6 +21,7 @@ const RelicModel = require('@/models/RelicModel.js');
 const RelicAppraisalRequest = require('@/models/RelicAppraisalRequestModel.js');
 const ModCharacter = require('@/models/ModCharacterModel.js');
 const { generateUniqueId } = require('@/utils/uniqueIdUtils.js');
+const { getAppraisalText } = require('@/data/relicAppraisalText.js');
 
 /** Image used for unappraised / unknown relics (HW Sealed Weapon Icon). */
 const UNAPPRAISED_RELIC_IMAGE_URL = 'https://static.wikia.nocookie.net/zelda_gamepedia_en/images/7/7c/HW_Sealed_Weapon_Icon.png/revision/latest?cb=20150918051232';
@@ -28,10 +29,29 @@ const UNAPPRAISED_RELIC_IMAGE_URL = 'https://static.wikia.nocookie.net/zelda_gam
 const RELIC_EMBED_BORDER_URL = 'https://storage.googleapis.com/tinglebot/Graphics/border.png';
 /** Token reward for turning in a duplicate relic (already discovered by another player). */
 const DUPLICATE_RELIC_REWARD_TOKENS = 500;
-/** Instructions for finder after appraisal: provide art to archive in Library. */
-const ART_INSTRUCTIONS = 'The owner of the character who found this relic should provide their **artistic rendition** of the item based on the appraisal description above. Once this art is submitted, it will go on display in the **Library Archives**.';
 /** Dashboard URL for Library Archives (submit relic art). */
 const LIBRARY_ARCHIVES_URL = `${(process.env.DASHBOARD_URL || process.env.APP_URL || 'https://tinglebot.xyz').replace(/\/$/, '')}/library/archives`;
+/** Roots of the Wild — Relic mechanics & rules (linked from all relic embeds). */
+const RELIC_MECHANICS_URL = 'https://rootsofthewild.com/mechanics/relics';
+/** Footer text for all relic embeds (includes rules link). */
+const RELIC_EMBED_FOOTER = `Relics · ${RELIC_MECHANICS_URL}`;
+/** Instructions for finder after appraisal (concise). Art: 500×500+ PNG, 1:1, transparent; due 2 months. */
+const ART_INSTRUCTIONS = `Submit **original art** (500×500+ PNG, 1:1, transparent bg) to the [Library Archives](${LIBRARY_ARCHIVES_URL}) within **2 months**.`;
+/** Intro line for embed when we show full appraisal text (so finder knows it's for art reference). */
+const APPRAISAL_INTRO = '**Use this appraisal as reference when creating your art for the Library Archives.**\n\n';
+
+/** Relic embed color (ocher/orange). Same for all relic embeds. */
+const RELIC_EMBED_COLOR = 0xe67e22;
+
+/** Apply consistent styling to any relic embed: color, thumbnail, image, footer, timestamp. */
+function applyRelicEmbedStyle(embed) {
+  return embed
+    .setColor(RELIC_EMBED_COLOR)
+    .setThumbnail(UNAPPRAISED_RELIC_IMAGE_URL)
+    .setImage(RELIC_EMBED_BORDER_URL)
+    .setFooter({ text: RELIC_EMBED_FOOTER })
+    .setTimestamp();
+}
 
 function normalizeVillage(v) {
   return (v || '').trim().toLowerCase();
@@ -212,12 +232,11 @@ module.exports = {
           const status = r.deteriorated ? '⚠️ Deteriorated' : r.archived ? '✅ Archived' : r.appraised ? '🎲 Revealed' : '🔸 Unappraised';
           return `• \`${id}\` — ${status}${r.rollOutcome ? ` — **${r.rollOutcome}**` : ''}`;
         });
-        const embed = new EmbedBuilder()
-          .setTitle(`📜 Relics: ${characterName}`)
-          .setDescription(lines.join('\n'))
-          .setColor(0xe67e22)
-          .setThumbnail(UNAPPRAISED_RELIC_IMAGE_URL)
-          .setImage(RELIC_EMBED_BORDER_URL);
+        const embed = applyRelicEmbedStyle(
+          new EmbedBuilder()
+            .setTitle(`📜 Relics: ${characterName}`)
+            .setDescription(lines.join('\n'))
+        );
         return interaction.editReply({ embeds: [embed] });
       }
 
@@ -232,21 +251,20 @@ module.exports = {
           return interaction.reply({ content: '❌ This relic has not been appraised yet.', ephemeral: true });
         }
         const displayRelicId = relic.relicId || relic._id;
-        const embed = new EmbedBuilder()
-          .setTitle(`📜 ${relic.rollOutcome || relic.name}`)
-          .setDescription(relic.appraisalDescription || 'No description.')
-          .addFields(
-            { name: 'Relic ID', value: `\`${displayRelicId}\``, inline: true },
-            { name: 'Discovered By', value: relic.discoveredBy || '—', inline: true },
-            { name: 'Location', value: relic.locationFound || 'Unknown', inline: true },
-            { name: 'Appraised By', value: relic.appraisedBy || '—', inline: true },
-            { name: 'Art Submitted', value: relic.artSubmitted ? '✅' : '❌', inline: true },
-            { name: 'Archived', value: relic.archived ? '✅' : '❌', inline: true },
-            { name: 'Deteriorated', value: relic.deteriorated ? '⚠️ Yes' : 'No', inline: true }
-          )
-          .setColor(0xe67e22)
-          .setThumbnail(UNAPPRAISED_RELIC_IMAGE_URL)
-          .setImage(RELIC_EMBED_BORDER_URL);
+        const embed = applyRelicEmbedStyle(
+          new EmbedBuilder()
+            .setTitle(`📜 ${relic.rollOutcome || relic.name}`)
+            .setDescription(relic.appraisalDescription || 'No description.')
+            .addFields(
+              { name: 'Relic ID', value: `\`${displayRelicId}\``, inline: true },
+              { name: 'Discovered By', value: relic.discoveredBy || '—', inline: true },
+              { name: 'Location', value: relic.locationFound || 'Unknown', inline: true },
+              { name: 'Appraised By', value: relic.appraisedBy || '—', inline: true },
+              { name: 'Art Submitted', value: relic.artSubmitted ? '✅' : '❌', inline: true },
+              { name: 'Archived', value: relic.archived ? '✅' : '❌', inline: true },
+              { name: 'Deteriorated', value: relic.deteriorated ? '⚠️ Yes' : 'No', inline: true }
+            )
+        );
         return (interaction.deferred ? interaction.editReply : interaction.reply).call(interaction, { embeds: [embed] });
       }
 
@@ -330,62 +348,58 @@ module.exports = {
           const revealResult = await revealRelicImmediately(relic._id, { finderOwnerUserId: interaction.user.id, interaction });
           if (!revealResult) {
             const displayRelicId = relic.relicId || relic._id;
-            const userEmbed = new EmbedBuilder()
-              .setTitle('📜 Relic appraised by NPC!')
-              .setDescription('Your relic has been appraised. **500 tokens** have been deducted.')
-              .setColor(0xe67e22)
-              .addFields(
-                { name: 'Relic ID', value: `\`${displayRelicId}\``, inline: true },
-                { name: 'Request ID', value: `\`${appraisalRequestId}\``, inline: true },
-                { name: 'Payment', value: '500 tokens', inline: true }
-              )
-              .setTimestamp();
+            const userEmbed = applyRelicEmbedStyle(
+              new EmbedBuilder()
+                .setTitle('📜 Relic appraised by NPC')
+                .setDescription('Your relic has been appraised. **500 tokens** deducted.')
+                .addFields(
+                  { name: 'Relic ID', value: `\`${displayRelicId}\``, inline: true },
+                  { name: 'Request ID', value: `\`${appraisalRequestId}\``, inline: true },
+                  { name: 'Payment', value: '500 tokens', inline: true }
+                )
+            );
             return interaction.editReply({ embeds: [userEmbed] });
           }
           const { outcome, isDuplicate, duplicateRewardGiven, duplicateItemName, displayRelicId } = revealResult;
+          const fullAppraisal = getAppraisalText(outcome.name);
+          const descriptionForEmbed = fullAppraisal ? APPRAISAL_INTRO + fullAppraisal : outcome.description;
           let submitInstructions = isDuplicate
             ? (duplicateRewardGiven
-              ? `This relic is a duplicate. It has been submitted to the archives—no art needed. You received **${DUPLICATE_RELIC_REWARD_TOKENS} tokens** for turning it in.`
-              : 'This relic is a duplicate. It has been submitted to the archives—no art needed.')
-            : ART_INSTRUCTIONS + ` Use Relic ID \`${displayRelicId}\` when submitting on the [Library Archives](${LIBRARY_ARCHIVES_URL}) dashboard.`;
+              ? `Duplicate — submitted to archives. No art needed. You received **${DUPLICATE_RELIC_REWARD_TOKENS} tokens**.`
+              : 'Duplicate — submitted to archives. No art needed.')
+            : ART_INSTRUCTIONS + ` Use Relic ID \`${displayRelicId}\` when submitting.`;
           if (isDuplicate && duplicateItemName) {
-            submitInstructions += ` A random healing or stamina item (**${duplicateItemName}**) has been added to your finder character's inventory.`;
+            submitInstructions += ` A healing/stamina item (**${duplicateItemName}**) was added to your finder's inventory.`;
           }
-          const userEmbed = new EmbedBuilder()
-            .setTitle(`📜 Relic appraised by NPC — ${outcome.name}`)
-            .setDescription(outcome.description)
-            .setColor(0xe67e22)
-            .setThumbnail(UNAPPRAISED_RELIC_IMAGE_URL)
-            .setImage(RELIC_EMBED_BORDER_URL)
-            .addFields(
-              { name: 'Relic', value: outcome.name, inline: true },
-              { name: 'Relic ID', value: `\`${displayRelicId}\``, inline: true },
-              { name: 'Duplicate?', value: isDuplicate ? 'Yes (no art required)' : 'No', inline: true },
-              { name: 'Next step', value: submitInstructions, inline: false }
-            )
-            .setFooter({ text: isDuplicate ? 'Duplicate — already in archives' : 'Submit your art on the dashboard (Library) to archive' })
-            .setTimestamp();
+          const userEmbed = applyRelicEmbedStyle(
+            new EmbedBuilder()
+              .setTitle(`📜 Relic appraised by NPC — ${outcome.name}`)
+              .setDescription(descriptionForEmbed)
+              .addFields(
+                { name: 'Relic', value: outcome.name, inline: true },
+                { name: 'Relic ID', value: `\`${displayRelicId}\``, inline: true },
+                { name: 'Duplicate?', value: isDuplicate ? 'Yes' : 'No', inline: true },
+                { name: 'Next step', value: submitInstructions, inline: false }
+              )
+          );
           return interaction.editReply({ embeds: [userEmbed] });
         }
 
         const displayRequestId = request.appraisalRequestId || request._id;
         const displayPayment = payment || 'None';
-        const userEmbed = new EmbedBuilder()
-          .setTitle('📜 Appraisal request created!')
-          .setDescription('An Artist or Researcher in Inariko can use `/relic appraisal-accept` to appraise.')
-          .setColor(0xe67e22)
-          .setThumbnail(UNAPPRAISED_RELIC_IMAGE_URL)
-          .setImage(RELIC_EMBED_BORDER_URL)
-          .addFields(
-            { name: 'Request ID', value: `\`${displayRequestId}\``, inline: true },
-            { name: 'Relic ID', value: `\`${relic.relicId || relic._id}\``, inline: true },
-            { name: 'Owner', value: characterName, inline: true },
-            { name: 'Appraiser', value: appraiser, inline: true },
-            { name: 'Payment', value: displayPayment, inline: true },
-            { name: 'Next step', value: 'Use `/relic appraisal-accept` in Inariko with the Request ID above.', inline: false }
-          )
-          .setFooter({ text: 'Use /relic appraisal-accept in Inariko' })
-          .setTimestamp();
+        const userEmbed = applyRelicEmbedStyle(
+          new EmbedBuilder()
+            .setTitle('📜 Appraisal request created')
+            .setDescription('An Artist or Researcher in Inariko can use `/relic appraisal-accept` to appraise (costs 3 stamina).')
+            .addFields(
+              { name: 'Request ID', value: `\`${displayRequestId}\``, inline: true },
+              { name: 'Relic ID', value: `\`${relic.relicId || relic._id}\``, inline: true },
+              { name: 'Finder', value: characterName, inline: true },
+              { name: 'Appraiser', value: appraiser, inline: true },
+              { name: 'Payment', value: displayPayment, inline: true },
+              { name: 'Next step', value: 'Use `/relic appraisal-accept` in Inariko with the Request ID above.', inline: false }
+            )
+        );
 
         return interaction.editReply({ embeds: [userEmbed] });
       }
@@ -449,27 +463,27 @@ module.exports = {
           });
         }
         const { outcome, isDuplicate, duplicateRewardGiven, duplicateItemName, displayRelicId } = revealResult;
+        const fullAppraisal = getAppraisalText(outcome.name);
+        const descriptionForEmbed = fullAppraisal ? APPRAISAL_INTRO + fullAppraisal : outcome.description;
         let submitInstructions = isDuplicate
           ? (duplicateRewardGiven
-            ? `This relic is a duplicate. It has been submitted to the archives—no art needed. The finder received **${DUPLICATE_RELIC_REWARD_TOKENS} tokens** for turning it in.`
-            : 'This relic is a duplicate. It has been submitted to the archives—no art needed.')
-          : ART_INSTRUCTIONS + ` Use Relic ID \`${displayRelicId}\` when submitting on the [Library Archives](${LIBRARY_ARCHIVES_URL}) dashboard.`;
+            ? `Duplicate — submitted to archives. No art needed. Finder received **${DUPLICATE_RELIC_REWARD_TOKENS} tokens**.`
+            : 'Duplicate — submitted to archives. No art needed.')
+          : ART_INSTRUCTIONS + ` Use Relic ID \`${displayRelicId}\` when submitting.`;
         if (isDuplicate && duplicateItemName) {
-          submitInstructions += ` A random healing or stamina item (**${duplicateItemName}**) was added to the finder's inventory.`;
+          submitInstructions += ` A healing/stamina item (**${duplicateItemName}**) was added to the finder's inventory.`;
         }
-        const embed = new EmbedBuilder()
-          .setTitle(`📜 Relic appraised by ${appraiserName} — ${outcome.name}`)
-          .setDescription(outcome.description)
-          .setColor(0xe67e22)
-          .setThumbnail(UNAPPRAISED_RELIC_IMAGE_URL)
-          .setImage(RELIC_EMBED_BORDER_URL)
-          .addFields(
-            { name: 'Relic', value: outcome.name, inline: true },
-            { name: 'Relic ID', value: `\`${displayRelicId}\``, inline: true },
-            { name: 'Duplicate?', value: isDuplicate ? 'Yes (no art required)' : 'No', inline: true },
-            { name: 'Next step', value: submitInstructions, inline: false }
-          )
-          .setFooter({ text: isDuplicate ? 'Duplicate — already in archives' : 'Finder: submit your art on the dashboard (Library) to archive' });
+        const embed = applyRelicEmbedStyle(
+          new EmbedBuilder()
+            .setTitle(`📜 Relic appraised by ${appraiserName} — ${outcome.name}`)
+            .setDescription(descriptionForEmbed)
+            .addFields(
+              { name: 'Relic', value: outcome.name, inline: true },
+              { name: 'Relic ID', value: `\`${displayRelicId}\``, inline: true },
+              { name: 'Duplicate?', value: isDuplicate ? 'Yes' : 'No', inline: true },
+              { name: 'Next step', value: submitInstructions, inline: false }
+            )
+        );
         return interaction.editReply({ embeds: [embed] });
       }
 

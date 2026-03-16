@@ -12,6 +12,13 @@ const RELIC_ARCHIVE_CHANNEL_ID =
   process.env.ADMIN_REVIEW_CHANNEL_ID ||
   "1381479893090566144";
 
+/** Relic embed styling (match bot relic embeds). */
+const RELIC_EMBED_COLOR = 0xe67e22;
+const RELIC_EMBED_THUMBNAIL_URL =
+  "https://static.wikia.nocookie.net/zelda_gamepedia_en/images/7/7c/HW_Sealed_Weapon_Icon.png/revision/latest?cb=20150918051232";
+const RELIC_EMBED_IMAGE_URL = "https://storage.googleapis.com/tinglebot/Graphics/border.png";
+const RELIC_EMBED_FOOTER = "Relics · https://rootsofthewild.com/mechanics/relics";
+
 export function notifyRelicArchiveRequest(options: {
   title: string;
   relicId: string;
@@ -56,10 +63,13 @@ export function notifyRelicArchiveRequest(options: {
   ].join("\n");
 
   const embed = {
-    title: "📚 New relic archive request",
+    title: "📜 New relic archive request",
     description,
-    color: 0xe67e22, // ocher/orange
-    footer: { text: "Library Archives • Relic Archive Requests" },
+    color: RELIC_EMBED_COLOR,
+    thumbnail: { url: RELIC_EMBED_THUMBNAIL_URL },
+    image: { url: RELIC_EMBED_IMAGE_URL },
+    footer: { text: RELIC_EMBED_FOOTER },
+    timestamp: new Date().toISOString(),
   };
 
   discordApiRequest(`channels/${RELIC_ARCHIVE_CHANNEL_ID}/messages`, "POST", { embeds: [embed] }).catch(
