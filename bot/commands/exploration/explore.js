@@ -84,7 +84,7 @@ const fs = require("fs");
 const path = require("path");
 
 // ------------------- Data ------------------
-const { rollGrottoTrialType, getTrialLabel, GROTTO_CLEARED_FLAVOR, GROTTO_ALREADY_CLEARED_BLESSING, GROTTO_CLEANSED_VS_CLEARED } = require('@/data/grottoTrials.js');
+const { rollGrottoTrialType, getTrialLabel, GROTTO_CLEARED_FLAVOR, GROTTO_ALREADY_CLEARED_BLESSING, GROTTO_CLEANSED_VS_CLEARED, GROTTO_STATUS_LEGEND } = require('@/data/grottoTrials.js');
 const { rollPuzzleConfig, getPuzzleFlavor, getOfferingStatueClueText, ensurePuzzleConfig, checkPuzzleOffer, getPuzzleConsumeItems, getRandomPuzzleSuccessFlavor } = require('@/data/grottoPuzzleData.js');
 const { getRandomGrottoName, getRandomGrottoNameUnused } = require('@/data/grottoNames.js');
 const { getFailOutcome, getMissOutcome, getSuccessOutcome, getCompleteOutcome } = require('@/data/grottoTargetPracticeOutcomes.js');
@@ -394,7 +394,7 @@ const EXPLORATION_CHEST_RELIC_CHANCE = 0.02;
 const EXPLORATION_OUTCOME_CHANCES = {
   monster: 0.20,   // combat encounters
   item: 0.42,      // finding items (gather) — increased from 0.33
-  explored: 0.145, // fallback when grotto can't be placed (square has grotto, at cap, etc.)
+  explored: 0.195, // fallback when grotto can't be placed (square has grotto, at cap, etc.)
   fairy: 0.05,
   chest: 0.01,     // reduced: chests show up less often
   old_map: 0.01,   // less likely: map finds
@@ -402,7 +402,7 @@ const EXPLORATION_OUTCOME_CHANCES = {
   relic: 0.005,
   camp: 0.02,      // safe space
   monster_camp: 0.04,
-  grotto: 0.08,    // grotto discovery (was 0.02; increased so parties find grottos more often)
+  grotto: 0.03,    // grotto discovery (lowered so grottos are rarer)
 };
 
 // ------------------- Hot Spring: chance to heal 1 heart when rolling in a Hot Spring quadrant (only when party has missing hearts) ------------------
@@ -2575,7 +2575,7 @@ module.exports = {
       }
      } else {
       const instructions = {
-       target_practice: "Establish turn order. Each shot costs 1 stamina. Some misses can cause damage to the shooter. 3 successes wins, 1 fail ends the trial. See **Commands** below.",
+       target_practice: "Establish turn order. **Each shot costs 1 🟩 stamina.** Some misses can cause damage to the shooter. **3 hits** wins; **1 fail** ends the trial (use </explore roll> to leave). See **Commands** below.",
        test_of_power: "Boss battle — no backing out. Prepare and fight; spirit orbs on victory. (Test of Power flow uses raid-style encounter; ensure party is ready.)",
        maze: "Use North, East, South, or West to move, or Song of Scrying at a wall. See **Commands** below.",
       };
@@ -2631,12 +2631,11 @@ module.exports = {
      const BASE_MISS = 0.25;
     if (grotto.targetPracticeState.failed) {
       const cmdId = getExploreCommandId();
-      const cmdDiscovery = `</explore discovery:${cmdId}>`;
       const failedEmbed = new EmbedBuilder()
        .setTitle("🗺️ **Grotto: Target Practice — Already Failed**")
        .setColor(0x8b0000)
        .setDescription(
-        "The party already failed this trial. Use </explore roll:" + cmdId + "> to leave. Find another Target Practice grotto on a future expedition to try again."
+        "**Progress:** ❌ **1/1 fail** — **Trial over.**\n\nThe party already failed this trial. Use </explore roll:" + cmdId + "> to leave. Find another Target Practice grotto on a future expedition to try again."
        )
        .setThumbnail(TARGET_PRACTICE_THUMBNAIL_URL)
        .setImage(getRandomGrottoBanner());
@@ -2702,7 +2701,9 @@ module.exports = {
       await party.save(); // Always persist so dashboard shows current hearts/stamina/progress
       const outcome = getFailOutcome();
       const flavor = outcome.flavor.replace(/\{char\}/g, character.name);
-      const desc = `${flavor}\n\n**Roll:** ${rollPct}% — fail (need over ${failPct}% to avoid instant fail)\n\nUse ${cmdRoll} to leave. You can’t retry this grotto this expedition; find another Target Practice on a future run.`;
+      const successCount = grotto.targetPracticeState.successCount || 0;
+      const progressLine = `**Progress:** ✅ ${successCount}/${TARGET_SUCCESSES} hits · ❌ **1/1 fail** — **Trial over.**`;
+      const desc = `${flavor}\n\n**Roll:** ${rollPct}% — fail (need over ${failPct}% to avoid instant fail)  *(−1 🟩 stamina)*\n\n${progressLine}\n\nUse ${cmdRoll} to leave. You can’t retry this grotto this expedition; find another Target Practice on a future run.`;
       const embed = new EmbedBuilder()
        .setTitle("🗺️ **Grotto: Target Practice — Failed**")
        .setColor(0x8b0000)
@@ -2738,7 +2739,9 @@ module.exports = {
       }
       const damageNote = heartsLost > 0 ? ` **${character.name}** took ${heartsLost} ❤ damage.` : "";
       const sameShooter = party.characters[characterIndex];
-      const desc = `${flavor}\n\n**Roll:** ${rollPct}% — miss (need over ${hitPct}% to hit)${damageNote}\n\n**Same shooter tries again** — **${sameShooter?.name ?? "—"}** in **Commands** below.`;
+      const successCount = grotto.targetPracticeState.successCount || 0;
+      const progressLine = `**Progress:** ✅ ${successCount}/${TARGET_SUCCESSES} hits · ❌ 0/1 fail (one fail ends the trial)`;
+      const desc = `${flavor}\n\n**Roll:** ${rollPct}% — miss (need over ${hitPct}% to hit)  *(−1 🟩 stamina)*${damageNote}\n\n${progressLine}\n\n**Same shooter tries again** — **${sameShooter?.name ?? "—"}** in **Commands** below.`;
       const embed = new EmbedBuilder()
        .setTitle("🗺️ **Grotto: Target Practice**")
        .setColor(getExploreOutcomeColor("grotto_puzzle_success", regionColors[party.region] || "#00ff99"))
@@ -2787,7 +2790,7 @@ module.exports = {
       const outcome = getCompleteOutcome();
       const flavor = outcome.flavor.replace(/\{char\}/g, character.name);
       const progressBar3 = Array(TARGET_SUCCESSES).fill(0).map((_, i) => i < TARGET_SUCCESSES ? "🎯" : "○").join(" ");
-      const progress3Desc = `${flavor}\n\n**Roll:** ${rollPct}% (need over ${hitPct}% to hit)\n\n**Progress:** ${progressBar3}  (3/3 hits)\n\n**Trial complete!**`;
+      const progress3Desc = `${flavor}\n\n**Roll:** ${rollPct}% (need over ${hitPct}% to hit)  *(−1 🟩 stamina)*\n\n**Progress:** ${progressBar3}  (3/3 hits) · ❌ 0/1 fail\n\n**Trial complete!**`;
       const progress3Embed = new EmbedBuilder()
        .setTitle("🗺️ **Grotto: Target Practice**")
        .setColor(getExploreOutcomeColor("grotto_target_success", regionColors[party.region] || "#00ff99"))
@@ -2836,7 +2839,7 @@ module.exports = {
      const outcome = getSuccessOutcome();
      const flavor = outcome.flavor.replace(/\{char\}/g, character.name);
      const progressBar = Array(TARGET_SUCCESSES).fill(0).map((_, i) => (i < newSuccesses ? "🎯" : "○")).join(" ");
-     const desc = `${flavor}\n\n**Roll:** ${rollPct}% (need over ${hitPct}% to hit)\n\n**Progress:** ${progressBar}  (${newSuccesses}/${TARGET_SUCCESSES} hits)\n\n**Next:** **${nextChar?.name ?? "—"}** — see **Commands** below.`;
+     const desc = `${flavor}\n\n**Roll:** ${rollPct}% (need over ${hitPct}% to hit)  *(−1 🟩 stamina)*\n\n**Progress:** ${progressBar}  (${newSuccesses}/${TARGET_SUCCESSES} hits) · ❌ 0/1 fail\n\n**Next:** **${nextChar?.name ?? "—"}** — see **Commands** below.`;
      const embed = new EmbedBuilder()
       .setTitle("🗺️ **Grotto: Target Practice**")
       .setColor(getExploreOutcomeColor("grotto_target_success", regionColors[party.region] || "#00ff99"))
@@ -4387,8 +4390,48 @@ module.exports = {
     }
 
     if (discoveryType === "grotto") {
-     const grotto = await Grotto.findOne({ squareId, quadrantId, sealed: false, partyId: expeditionId }).sort({ unsealedAt: -1 });
+     let grotto = await Grotto.findOne({
+      squareId: exactIRegex(squareId),
+      quadrantId: exactIRegex(quadrantId),
+      sealed: false,
+      partyId: expeditionId,
+     }).sort({ unsealedAt: -1 });
+     if (!grotto) {
+      const grottoFallback = await Grotto.findOne({
+       squareId: exactIRegex(squareId),
+       quadrantId: exactIRegex(quadrantId),
+       sealed: false,
+      }).sort({ unsealedAt: -1 });
+      if (grottoFallback && String(grottoFallback.partyId || "").trim() === String(expeditionId || "").trim()) {
+       grotto = grottoFallback;
+      }
+     }
      if (grotto) {
+      if (grotto.trialType === "target_practice" && grotto.targetPracticeState?.failed) {
+       const rollCmdId = getExploreCommandId();
+       const failedRevisitBanner = await generateGrottoBannerOverlay(party, getRandomGrottoBanner(), GROTTO_CLEANSED_BANNER_NAME);
+       const failedRevisitEmbed = new EmbedBuilder()
+        .setTitle("🗺️ **Expedition: Grotto — Trial Failed**")
+        .setColor(getExploreOutcomeColor("grotto_target_fail", regionColors[party.region] || "#00ff99"))
+        .setDescription(
+         `Party is at the grotto in **${location}**, but the **Target Practice** trial has **failed**.\n\n` +
+         `Use </explore roll:${rollCmdId}> to leave. You can’t retry this grotto this expedition; find another Target Practice on a future run.`
+        )
+        .setThumbnail(TARGET_PRACTICE_THUMBNAIL_URL)
+        .setImage(failedRevisitBanner?.imageUrl ?? getRandomGrottoBanner());
+       addExplorationStandardFields(failedRevisitEmbed, {
+        party,
+        expeditionId,
+        location,
+        nextCharacter: party.characters[party.currentTurn] ?? null,
+        showNextAndCommands: true,
+        showRestSecureMove: false,
+        hasActiveGrotto: false,
+        hasDiscoveriesInQuadrant: await hasDiscoveriesInQuadrant(party.square, party.quadrant),
+        hasUnpinnedDiscoveriesInQuadrant: await hasUnpinnedDiscoveriesInQuadrant(party),
+       });
+       return interaction.editReply({ embeds: [failedRevisitEmbed], ...(failedRevisitBanner?.attachment ? { files: [failedRevisitBanner.attachment] } : {}) });
+      }
       if (grotto.status === "cleared") {
        const rollCmdId = getExploreCommandId();
        const clearedRevisitBanner = await generateGrottoBannerOverlay(party, getRandomGrottoBanner(), GROTTO_CLEANSED_BANNER_NAME);
@@ -4413,7 +4456,7 @@ module.exports = {
       const cmdId = getExploreCommandId();
       const instructions = {
        blessing: "The grotto held a blessing. Everyone received a Spirit Orb!",
-       target_practice: "Establish turn order. Each shot costs 1 stamina. Some misses can cause damage to the shooter. 3 successes wins, 1 fail ends the trial. See **Commands** below.",
+       target_practice: "Establish turn order. **Each shot costs 1 🟩 stamina.** Some misses can cause damage to the shooter. **3 hits** wins; **1 fail** ends the trial (use </explore roll> to leave). See **Commands** below.",
        puzzle: "Discuss with your group. Submit an offering (items); staff will review. If approved, everyone gets Spirit Orbs. See **Commands** below.",
        maze: "Use North, East, South, or West to move, or Song of Scrying at a wall. See **Commands** below.",
       };
@@ -4436,8 +4479,9 @@ module.exports = {
       const embed = new EmbedBuilder()
        .setTitle("🗺️ **Expedition: Revisiting Grotto**")
        .setColor(getExploreOutcomeColor("grotto_revisit", regionColors[party.region] || "#00ff99"))
-       .setDescription(`Party is at grotto in **${location}** (grotto is **cleansed**; trial in progress).\n\n**Trial:** ${trialLabel}\n\n${text}`)
-       .setImage(revisitImg);
+       .setDescription(`Party is at grotto in **${location}** (grotto is **cleansed** / open; trial in progress).\n\n**Trial:** ${trialLabel}\n\n${text}`)
+       .setImage(revisitImg)
+       .setFooter({ text: "Status: Uncleansed = need plume. Cleansed (open) = trial in progress. Cleared = done." });
       addExplorationStandardFields(embed, {
        party,
        expeditionId,
@@ -4460,9 +4504,18 @@ module.exports = {
       if (character) plumeHolder = { characterIndex: 0, character };
      }
      if (!plumeHolder) {
-      return interaction.editReply(
-       `No party member has a Goddess Plume in their expedition loadout to cleanse this grotto. Add one to your loadout before departing, or use </explore roll:${getExploreCommandId()}> and when you get a grotto here choose **Yes** to cleanse with a plume.`
-      );
+      return interaction.editReply({
+       embeds: [
+        createExplorationErrorEmbed(
+         "❌ **No Goddess Plume**",
+         "No party member has a Goddess Plume in their expedition loadout to **open** (cleanse) this grotto.\n\n" +
+         "**Add one to your loadout before departing**, or use </explore roll:" + getExploreCommandId() + "> and when you get a grotto here choose **Open** to cleanse with a plume.\n\n" +
+         "_You only need a plume once to open a grotto. If you already opened it and failed the trial, select this discovery again to **revisit** — no second plume needed._\n\n" +
+         GROTTO_STATUS_LEGEND,
+         { party, expeditionId, location, nextCharacter: party?.characters?.[party?.currentTurn] ?? null, showNextAndCommands: true }
+        ),
+       ],
+      });
      }
      const grottoPayResult = await payStaminaOrStruggle(party, plumeHolder.characterIndex, 1, { order: "currentFirst", action: "grotto_plume" });
      if (!grottoPayResult.ok) {
@@ -4941,8 +4994,8 @@ module.exports = {
       }
       // One find per expedition (grotto, ruins, or monster_camp); prevents farming
       if (FIND_OUTCOMES_ROLL.includes(outcomeType) && partyHasFindThisExpedition(party)) {
-       outcomeType = rollOutcome();
-       continue;
+       outcomeType = lastOutcomeHere === "explored" ? "item" : "explored";
+       break;
       }
       if (!SPECIAL_OUTCOMES.includes(outcomeType)) break;
       if (specialCount >= MAX_SPECIAL_EVENTS_PER_SQUARE) {
@@ -5323,6 +5376,10 @@ module.exports = {
         chestRuinsCosts,
         at
        );
+       // Persist immediately so one-find-per-expedition is enforced on next roll (and so button handlers see correct progressLog)
+       if (outcomeType === "grotto") {
+        await party.save();
+       }
       }
       // Note: monster_camp and ruins do NOT log here - they log when the user chooses (mark/fight/leave for camp; Yes for ruins)
       // Choice outcomes: don't advance until they choose; "Next" and ping = roller. Non-choice: advance now.
