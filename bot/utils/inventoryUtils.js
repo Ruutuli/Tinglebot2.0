@@ -261,7 +261,7 @@ async function removeNegativeQuantityEntries(inventoryCollection) {
 async function addItemInventoryDatabase(characterId, itemName, quantity, interaction, obtain = "", options = {}) {
   try {
     const { craftedAt = null, fortuneTellerBoost = false } = options;
-    const allowedNullInteractionObtain = ['Trade', 'Character Birthday'];
+    const allowedNullInteractionObtain = ['Trade', 'Character Birthday', 'Duplicate Relic Turn-In'];
     if (!interaction && !allowedNullInteractionObtain.includes(obtain)) {
       throw new Error("Interaction object is undefined.");
     }

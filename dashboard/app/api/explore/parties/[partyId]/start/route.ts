@@ -149,8 +149,8 @@ export async function POST(
       const ch = charDoc as Record<string, unknown> | null;
       const mh = typeof ch?.maxHearts === "number" ? (ch.maxHearts as number) : 0;
       const ms = typeof ch?.maxStamina === "number" ? (ch.maxStamina as number) : 0;
-      const h = typeof ch?.currentHearts === "number" ? (ch.currentHearts as number) : mh;
-      const s = typeof ch?.currentStamina === "number" ? (ch.currentStamina as number) : ms;
+      const h = typeof ch?.currentHearts === "number" ? (ch.currentHearts as number) : 0;
+      const s = typeof ch?.currentStamina === "number" ? (ch.currentStamina as number) : 0;
       const updated = { ...c, currentHearts: h, currentStamina: s, maxHearts: mh, maxStamina: ms };
       updatedCharacters.push(updated);
       totalHeartsSum += h;

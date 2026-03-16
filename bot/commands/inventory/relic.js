@@ -12,7 +12,9 @@ const {
   fetchCharacterByNameAndUserId,
   getOrCreateToken,
   updateTokenBalance,
+  fetchAllItems,
 } = require('@/database/db.js');
+const { addItemInventoryDatabase } = require('@/utils/inventoryUtils.js');
 const { updateCurrentStamina } = require('../../modules/characterStatsModule.js');
 const { rollRelicOutcome } = require('@/utils/relicUtils.js');
 const RelicModel = require('@/models/RelicModel.js');
@@ -35,8 +37,20 @@ function normalizeVillage(v) {
   return (v || '').trim().toLowerCase();
 }
 
-/** Immediately reveal an appraised relic (roll outcome, update DB, handle duplicates). Returns { outcome, isDuplicate, duplicateRewardGiven, displayRelicId } or null. */
-async function revealRelicImmediately(relicId, { finderOwnerUserId }) {
+/** Items that restore hearts or stamina (for duplicate relic reward). Fetched once per call. */
+async function getHealingOrStaminaItems() {
+  const allItems = await fetchAllItems();
+  if (!allItems || !Array.isArray(allItems)) return [];
+  return allItems.filter(
+    (item) =>
+      item &&
+      item.itemName &&
+      ((Number(item.modifierHearts) > 0 || Number(item.staminaRecovered) > 0))
+  );
+}
+
+/** Immediately reveal an appraised relic (roll outcome, update DB, handle duplicates). Returns { outcome, isDuplicate, duplicateRewardGiven, duplicateItemName, displayRelicId } or null. */
+async function revealRelicImmediately(relicId, { finderOwnerUserId, interaction }) {
   const relic = await fetchRelicById(relicId);
   if (!relic || !relic.appraised) return null;
   if (relic.rollOutcome || relic.archived || relic.deteriorated) return null;
@@ -64,6 +78,7 @@ async function revealRelicImmediately(relicId, { finderOwnerUserId }) {
   await RelicModel.findByIdAndUpdate(relic._id, updateData);
 
   let duplicateRewardGiven = false;
+  let duplicateItemName = null;
   if (isDuplicate && updateData.archived && finderOwnerUserId) {
     const updatedRelic = await RelicModel.findById(relic._id);
     if (updatedRelic && !updatedRelic.duplicateRewardGiven) {
@@ -73,10 +88,27 @@ async function revealRelicImmediately(relicId, { finderOwnerUserId }) {
       });
       await RelicModel.findByIdAndUpdate(relic._id, { duplicateRewardGiven: true });
       duplicateRewardGiven = true;
+
+      // Give finder's character a random food/healing/stamina item (if they have a character and we have interaction)
+      if (relic.characterId && interaction) {
+        try {
+          const healingItems = await getHealingOrStaminaItems();
+          if (healingItems.length > 0) {
+            const randomItem = healingItems[Math.floor(Math.random() * healingItems.length)];
+            const itemName = randomItem.itemName || randomItem.name;
+            if (itemName) {
+              await addItemInventoryDatabase(relic.characterId, itemName, 1, interaction, 'Duplicate Relic Turn-In');
+              duplicateItemName = itemName;
+            }
+          }
+        } catch (itemErr) {
+          console.error('[relic.js] Duplicate relic random item reward failed:', itemErr?.message || itemErr);
+        }
+      }
     }
   }
   const displayRelicId = relic.relicId || relic._id;
-  return { outcome, isDuplicate, duplicateRewardGiven, displayRelicId };
+  return { outcome, isDuplicate, duplicateRewardGiven, duplicateItemName, displayRelicId };
 }
 
 /** Resolve relic appraisal request by MongoDB _id or short ID (e.g. A473582). */
@@ -295,7 +327,7 @@ module.exports = {
           request.updatedAt = new Date();
           await request.save();
 
-          const revealResult = await revealRelicImmediately(relic._id, { finderOwnerUserId: interaction.user.id });
+          const revealResult = await revealRelicImmediately(relic._id, { finderOwnerUserId: interaction.user.id, interaction });
           if (!revealResult) {
             const displayRelicId = relic.relicId || relic._id;
             const userEmbed = new EmbedBuilder()
@@ -310,12 +342,15 @@ module.exports = {
               .setTimestamp();
             return interaction.editReply({ embeds: [userEmbed] });
           }
-          const { outcome, isDuplicate, duplicateRewardGiven, displayRelicId } = revealResult;
-          const submitInstructions = isDuplicate
+          const { outcome, isDuplicate, duplicateRewardGiven, duplicateItemName, displayRelicId } = revealResult;
+          let submitInstructions = isDuplicate
             ? (duplicateRewardGiven
               ? `This relic is a duplicate. It has been submitted to the archives—no art needed. You received **${DUPLICATE_RELIC_REWARD_TOKENS} tokens** for turning it in.`
               : 'This relic is a duplicate. It has been submitted to the archives—no art needed.')
             : ART_INSTRUCTIONS + ` Use Relic ID \`${displayRelicId}\` when submitting on the [Library Archives](${LIBRARY_ARCHIVES_URL}) dashboard.`;
+          if (isDuplicate && duplicateItemName) {
+            submitInstructions += ` A random healing or stamina item (**${duplicateItemName}**) has been added to your finder character's inventory.`;
+          }
           const userEmbed = new EmbedBuilder()
             .setTitle(`📜 Relic appraised by NPC — ${outcome.name}`)
             .setDescription(outcome.description)
@@ -406,18 +441,22 @@ module.exports = {
 
         const revealResult = await revealRelicImmediately(request.relicMongoId || request.relicId, {
           finderOwnerUserId: request.finderOwnerUserId,
+          interaction,
         });
         if (!revealResult) {
           return interaction.editReply({
             content: `📜 **Relic appraised by ${appraiserName}!**\n> ${description}\n> **Relic ID:** \`${request.relicId}\``,
           });
         }
-        const { outcome, isDuplicate, duplicateRewardGiven, displayRelicId } = revealResult;
-        const submitInstructions = isDuplicate
+        const { outcome, isDuplicate, duplicateRewardGiven, duplicateItemName, displayRelicId } = revealResult;
+        let submitInstructions = isDuplicate
           ? (duplicateRewardGiven
             ? `This relic is a duplicate. It has been submitted to the archives—no art needed. The finder received **${DUPLICATE_RELIC_REWARD_TOKENS} tokens** for turning it in.`
             : 'This relic is a duplicate. It has been submitted to the archives—no art needed.')
           : ART_INSTRUCTIONS + ` Use Relic ID \`${displayRelicId}\` when submitting on the [Library Archives](${LIBRARY_ARCHIVES_URL}) dashboard.`;
+        if (isDuplicate && duplicateItemName) {
+          submitInstructions += ` A random healing or stamina item (**${duplicateItemName}**) was added to the finder's inventory.`;
+        }
         const embed = new EmbedBuilder()
           .setTitle(`📜 Relic appraised by ${appraiserName} — ${outcome.name}`)
           .setDescription(outcome.description)
