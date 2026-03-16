@@ -262,11 +262,6 @@ function QuadrantBlock({ q, defaultOpen = false, isOpen: controlledOpen, onToggl
               <TagList labels={q.monsters} getTagClass={getMonsterClass} />
             </MetaRow>
           )}
-          {(q.bossMonsters?.length ?? 0) > 0 && (
-            <MetaRow icon="fa-skull" label="Boss monsters">
-              <TagList labels={q.bossMonsters} getTagClass={getMonsterClass} />
-            </MetaRow>
-          )}
           {(q.special?.length ?? 0) > 0 && (
             <MetaRow icon="fa-star" label="Special">
               <TagList labels={q.special} />
