@@ -10,10 +10,8 @@ import {
   ALLOWED_IMAGE_TYPES,
   MAX_FILE_BYTES,
 } from "@/lib/character-validation";
-import path from "path";
 import { notifyRelicArchiveRequest } from "@/lib/relicArchiveNotify";
-
-const { getAppraisalText } = require(path.join(process.cwd(), "..", "bot", "data", "relicOutcomes.js"));
+import { getAppraisalText } from "@/lib/relicOutcomes";
 
 export const dynamic = "force-dynamic";
 

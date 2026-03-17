@@ -1,10 +1,8 @@
 import type { NextRequest } from "next/server";
 import { NextResponse } from "next/server";
-import path from "path";
 import { connect } from "@/lib/db";
 import { getSession } from "@/lib/session";
-
-const { getAppraisalText } = require(path.join(process.cwd(), "..", "bot", "data", "relicOutcomes.js"));
+import { getAppraisalText } from "@/lib/relicOutcomes";
 
 export const dynamic = "force-dynamic";
 

@@ -49,6 +49,10 @@ const nextConfig: NextConfig = {
   // Set turbopack root to the project directory explicitly
   turbopack: {
     root: projectRoot,
+    // So dashboard can import bot/data/relicOutcomes.js via static path (repo root = parent of dashboard)
+    resolveAlias: {
+      "@/bot/relicOutcomes": path.resolve(projectRoot, "..", "bot", "data", "relicOutcomes.js"),
+    },
   },
   // Explicitly set webpack context and resolve root to the project directory
   webpack: (config, { isServer }) => {
@@ -58,7 +62,7 @@ const nextConfig: NextConfig = {
       // Set resolve modules to only look in project's node_modules first
       config.resolve.modules = [
         path.resolve(projectRoot, "node_modules"),
-        ...(config.resolve.modules?.filter((m: string) => 
+        ...(config.resolve.modules?.filter((m: string) =>
           !m.includes("node_modules") || m === "node_modules"
         ) || []),
       ];
@@ -66,6 +70,12 @@ const nextConfig: NextConfig = {
       if (!config.resolve.roots) {
         config.resolve.roots = [projectRoot];
       }
+      // Allow API routes to load bot/data/relicOutcomes.js via a static alias (parent of dashboard = repo root)
+      const repoRoot = path.resolve(projectRoot, "..");
+      config.resolve.alias = {
+        ...config.resolve.alias,
+        "@/bot/relicOutcomes": path.resolve(repoRoot, "bot", "data", "relicOutcomes.js"),
+      };
     }
     
     // Ignore villageModule which may not exist in the dashboard codebase

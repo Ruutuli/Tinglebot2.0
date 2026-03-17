@@ -4,10 +4,8 @@ import mongoose from "mongoose";
 import { connect } from "@/lib/db";
 import { getSession, isAdminUser } from "@/lib/session";
 import { isModeratorUser } from "@/lib/moderator";
-import path from "path";
 import { notifyRelicArchiveApproved } from "@/lib/relicArchiveNotify";
-
-const { getAppraisalText } = require(path.join(process.cwd(), "..", "bot", "data", "relicOutcomes.js"));
+import { getAppraisalText } from "@/lib/relicOutcomes";
 
 export const dynamic = "force-dynamic";
 
