@@ -87,6 +87,30 @@
   );
 }
 
+/* Mod application: 1–10 scale number buttons */
+.scale-number-btn {
+  cursor: pointer;
+}
+.scale-number-btn:hover:not([aria-pressed="true"]) {
+  background: rgba(117, 105, 80, 0.45) !important;
+  border-color: var(--totk-mid-ocher) !important;
+  transform: translateY(-1px);
+}
+.scale-number-btn:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px rgba(26, 22, 21, 0.95), 0 0 0 4px var(--totk-light-green);
+}
+
+/* Mod application: Yes/No/Maybe option buttons */
+.option-btn {
+  cursor: pointer;
+}
+.option-btn:hover:not([aria-pressed="true"]) {
+  background: rgba(117, 105, 80, 0.45) !important;
+  border-color: var(--totk-mid-ocher) !important;
+  transform: translateY(-1px);
+}
+
 /* [globals.css]✨ Tailwind CSS v4 theme configuration - */
 /* stylelint-disable-next-line at-rule-no-unknown */
 @theme {

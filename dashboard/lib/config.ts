@@ -41,6 +41,19 @@ export function getAppUrl(): string {
 }
 
 /**
+ * Get the canonical public URL for outbound links (Discord, emails).
+ * Prefers DOMAIN so links always point at the live site (e.g. tinglebot), not localhost.
+ * Use this when building URLs that are sent to Discord or other external consumers.
+ */
+export function getPublicAppUrl(): string {
+  const domain = process.env.DOMAIN;
+  if (domain) {
+    return `https://${domain.replace(/\/$/, "")}`;
+  }
+  return getAppUrl().replace(/\/$/, "");
+}
+
+/**
  * Get the Discord OAuth redirect URI (redirect_uri).
  * When request is provided, uses that request's origin so the callback lands on the same host
  * (e.g. localhost when you started login on localhost). Otherwise uses env/getAppUrl().

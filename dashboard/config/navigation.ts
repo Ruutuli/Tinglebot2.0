@@ -37,6 +37,7 @@ export const navItems: NavItem[] = [
     icon: "fa-comments",
     children: [
       { href: "/suggestion-box", label: "Suggestion Box", icon: "fa-lightbulb" },
+      { href: "/mod-application", label: "Mod Application", icon: "fa-shield-halved" },
       { href: "/member-lore", label: "Member Submitted Lore", icon: "fa-scroll" },
       { href: "/member-quests", label: "Member Quests", icon: "fa-scroll" },
     ],
@@ -68,6 +69,7 @@ export const navItems: NavItem[] = [
       { href: "/admin/tablerolls", label: "Table Rolls", icon: "fa-dice" },
       { href: "/admin/member-quest-proposals", label: "Member Quest Proposals", icon: "fa-scroll" },
       { href: "/admin/relic-archives", label: "Relic Archive Requests", icon: "fa-book" },
+      { href: "/admin/mod-applications", label: "Mod Applications", icon: "fa-shield-halved" },
     ],
   },
 ];

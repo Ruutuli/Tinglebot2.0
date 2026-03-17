@@ -7,7 +7,7 @@ import { discordApiRequest } from "@/lib/discord";
 import { buildApplicationEmbed } from "./discordEmbeds";
 import { logger } from "@/utils/logger";
 import { getVotesForCharacter } from "@/lib/ocApplicationService";
-import { getAppUrl } from "@/lib/config";
+import { getAppUrl, getPublicAppUrl } from "@/lib/config";
 import { createSlug } from "@/lib/string-utils";
 
 const ADMIN_REVIEW_CHANNEL_ID =
@@ -333,6 +333,48 @@ export async function postVoteNotification(
     logger.error(
       "discordPostingService",
       `Error posting vote notification: ${error instanceof Error ? error.message : String(error)}`
+    );
+  }
+}
+
+const MOD_APPLICATIONS_CHANNEL_ID =
+  process.env.ADMIN_REVIEW_CHANNEL_ID || "964342870796537909";
+
+/**
+ * Notify moderators when a new mod application is submitted.
+ * Posts to the admin review channel (964342870796537909) with applicant name and link to review.
+ */
+export async function notifyModApplicationSubmitted(
+  discordUsername: string,
+  applicationId: string
+): Promise<void> {
+  try {
+    const channelId = MOD_APPLICATIONS_CHANNEL_ID;
+    if (!channelId) {
+      logger.warn(
+        "discordPostingService",
+        "No channel ID configured for mod application notification"
+      );
+      return;
+    }
+
+    const baseUrl = getPublicAppUrl();
+    const reviewUrl = `${baseUrl}/admin/mod-applications`;
+
+    const content = `📋 **New mod application** from **${discordUsername}**.\n[Review in Admin](${reviewUrl})`;
+
+    await discordApiRequest(`channels/${channelId}/messages`, "POST", {
+      content,
+    });
+
+    logger.info(
+      "discordPostingService",
+      `Sent mod application notification for ${applicationId} (${discordUsername})`
+    );
+  } catch (error) {
+    logger.error(
+      "discordPostingService",
+      `Error sending mod application notification: ${error instanceof Error ? error.message : String(error)}`
     );
   }
 }
