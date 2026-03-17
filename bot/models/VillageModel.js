@@ -197,6 +197,11 @@ const VillageSchema = new mongoose.Schema({
         type: Date,
         default: null,
     },
+    /** When a Blessed Hourglass relic is activated in this village, blight roll is skipped until this date (1 week). */
+    blessedHourglassActiveUntil: {
+        type: Date,
+        default: null,
+    },
 }, { timestamps: true });
 
 // ============================================================================

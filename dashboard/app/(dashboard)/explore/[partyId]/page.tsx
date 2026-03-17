@@ -444,6 +444,8 @@ type PartyData = {
   quadrantState?: string;
   /** True when party is inside a grotto (active trial at current square+quadrant). */
   inGrotto?: boolean;
+  /** True when party has Lens of Truth (relic or item); entire map is revealed (no fog). */
+  hasLensOfTruth?: boolean;
   /** Q1–Q4 status from exploring map model (Square.quadrants[].status); drives quadrant colors */
   quadrantStatuses?: Record<string, string>;
   gatheredItems?: GatheredItem[];
@@ -1682,6 +1684,8 @@ export default function ExplorePartyPage() {
                   {(() => {
                     const fogLayer = squarePreview.layers.find((l) => l.name === "MAP_0001_hidden-areas");
                     if (!fogLayer) return null;
+                    // Lens of Truth: reveal entire map (no fog)
+                    if (party.hasLensOfTruth) return null;
                     // Prefer party.quadrantStatuses (includes exploredQuadrantsThisRun) so "explored" shows even if map DB wasn't updated
                     const statuses = party.quadrantStatuses ?? squarePreview.quadrantStatuses ?? {};
                     const fogQuadrants: number[] = [];
@@ -2799,9 +2803,9 @@ export default function ExplorePartyPage() {
                           {(() => {
                             const fogLayer = displayPreview!.layers.find((l) => l.name === "MAP_0001_hidden-areas");
                             if (!fogLayer) return null;
+                            if (party.hasLensOfTruth) return null;
                             const statuses = displayPreview!.quadrantStatuses ?? party.quadrantStatuses ?? {};
                             const fogQuadrants: number[] = [];
-                            // Only remove fog when quadrant is actually explored or secured - not just because party is standing there
                             (["Q1", "Q2", "Q3", "Q4"] as const).forEach((qId, i) => {
                               const s = (statuses[qId] ?? "unexplored").toLowerCase();
                               if (s !== "explored" && s !== "secured" && s !== "secured_nocamp") fogQuadrants.push(i + 1);

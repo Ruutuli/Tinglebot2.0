@@ -52,6 +52,17 @@ const RelicSchema = new Schema({
   functionality: { type: String, default: '' },        // Details about the relic's abilities or functions.
   origins: { type: String, default: '' },              // Background or origin information.
   uses: { type: String, default: '' },                 // Potential uses or applications.
+
+  // ------------------- Consumable / use state (bot sets these; e.g. Blight Candle burns out) -------------------
+  usedAt: { type: Date, default: null },              // When the relic was last used (e.g. Blessed Hourglass activation).
+  consumedAt: { type: Date, default: null },          // When the relic was consumed/burned out (e.g. Blight Candle).
+  relicState: {                                       // Optional state for consumables.
+    type: {
+      burnedOut: { type: Boolean, default: false },
+      usesLeft: { type: Number, default: null },
+    },
+    default: null,
+  },
 }, { collection: 'relics' });
 
 module.exports = mongoose.models.Relic || mongoose.model('Relic', RelicSchema);

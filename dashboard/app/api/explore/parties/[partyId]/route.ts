@@ -2,9 +2,13 @@
 
 import type { NextRequest } from "next/server";
 import { NextResponse } from "next/server";
-import { connect, isDatabaseUnavailableError } from "@/lib/db";
+import { connect, isDatabaseUnavailableError, getInventoriesDb } from "@/lib/db";
 import { getSession } from "@/lib/session";
 import mongoose from "mongoose";
+
+function escapeRegExp(s: string): string {
+  return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
 
 export const dynamic = "force-dynamic";
 
@@ -307,6 +311,48 @@ export async function GET(
     }
     const endedAt = p.endedAt instanceof Date ? p.endedAt.toISOString() : typeof p.endedAt === "string" ? p.endedAt : undefined;
 
+    // Lens of Truth (relic or item): party can see entire map (no fog)
+    let hasLensOfTruth = false;
+    const Relic =
+      mongoose.models.Relic ??
+      ((await import("@/models/RelicModel.js")) as unknown as { default: mongoose.Model<unknown> }).default;
+    const partyNames = partyCharacters.map((c) => String(c.name ?? "").trim()).filter(Boolean);
+    const orClauses: Array<Record<string, unknown>> = [{ characterId: { $in: characterIdsForQuery } }];
+    for (const n of partyNames) {
+      if (n) orClauses.push({ discoveredBy: new RegExp(`^${escapeRegExp(n)}$`, "i") });
+    }
+    const lensRelic = await Relic.findOne({
+      rollOutcome: { $in: ["Lens Of Truth", "Lense Of Truth"] },
+      appraised: true,
+      duplicateOf: { $exists: true, $ne: null },
+      $or: orClauses,
+    })
+      .lean()
+      .exec();
+    if (lensRelic) hasLensOfTruth = true;
+    if (!hasLensOfTruth && characterIdsForQuery.length > 0) {
+      try {
+        const invDb = await getInventoriesDb();
+        for (const c of partyCharacters as Array<{ _id: unknown; name?: string }>) {
+          const name = String(c.name ?? "").trim().toLowerCase();
+          if (!name) continue;
+          const col = invDb.collection(name);
+          const charId = c._id instanceof mongoose.Types.ObjectId ? c._id : new mongoose.Types.ObjectId(String(c._id));
+          const hasItem = await col.findOne({
+            characterId: charId,
+            itemName: { $regex: /^Lens of Truth$/i },
+            quantity: { $gte: 1 },
+          });
+          if (hasItem) {
+            hasLensOfTruth = true;
+            break;
+          }
+        }
+      } catch {
+        // ignore inventory errors
+      }
+    }
+
     // Party is "in grotto" when there is an active (cleansed) grotto at current location for this expedition
     let inGrotto = false;
     if (status === "started" && typeof p.partyId === "string" && p.partyId && squareId && quadrantId) {
@@ -331,6 +377,7 @@ export async function GET(
       quadrant: p.quadrant,
       status: p.status,
       outcome,
+      hasLensOfTruth,
       inGrotto,
       totalHearts: p.totalHearts ?? 0,
       totalStamina: p.totalStamina ?? 0,

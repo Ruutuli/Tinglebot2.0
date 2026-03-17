@@ -69,6 +69,7 @@ const MapModule = require('@/modules/mapModule.js');
 const { pushProgressLog, hasDiscoveriesInQuadrant, hasUnpinnedDiscoveriesInQuadrant, updateDiscoveryGrottoStatus, markGrottoCleared, applyExpeditionFailedState } = require("../../modules/exploreModule.js");
 const { getElixirTypeByName, elixirCountersExplorationHazard, isHazardResistanceElixir } = require("../../modules/elixirModule.js");
 const { finalizeBlightApplication } = require("../../handlers/blightHandler.js");
+const { partyHasRelic, consumeBlightCandleUse, partyHasLensOfTruthRelic, characterHasRelic } = require('@/utils/relicUtils.js');
 
 // ------------------- Utils ------------------
 const { handleInteractionError } = require('@/utils/globalErrorHandler.js');
@@ -947,11 +948,16 @@ function createDisabledYesNoRow(outcomeType, expeditionId, characterIndex, label
 async function grantExplorationChestLootToParty(party, location, interaction) {
  const allItems = await fetchAllItems();
  const lootLines = [];
+ const squareStr = String(party.square || "").trim().toUpperCase();
+ const quadrantStr = String(party.quadrant || "").trim().toUpperCase();
+ const mapSquareForChest = await Square.findOne({ squareId: new RegExp(`^${String(party.square || "").trim().replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}$`, "i") }).lean();
+ const regionStr = mapSquareForChest?.region ?? "";
  for (const pc of party.characters) {
   const char = await Character.findById(pc._id);
   if (!char) continue;
   let isRelic = Math.random() < EXPLORATION_CHEST_RELIC_CHANCE;
   if (isRelic && (await characterAlreadyFoundRelicThisExpedition(party, char.name, char._id))) isRelic = false;
+  if (isRelic && (await characterHasPendingRelic(char.name))) isRelic = false;
   if (isRelic) {
    try {
     const savedRelic = await createRelic({
@@ -960,6 +966,9 @@ async function grantExplorationChestLootToParty(party, location, interaction) {
      characterId: char._id,
      discoveredDate: new Date(),
      locationFound: location,
+     region: regionStr,
+     square: squareStr,
+     quadrant: quadrantStr,
      appraised: false,
     });
     lootLines.push(`${char.name}: 🔸 Unknown Relic (${savedRelic?.relicId || '—'})`);
@@ -1557,6 +1566,27 @@ async function characterAlreadyFoundRelicThisExpedition(party, characterName, ch
  return false;
 }
 
+// ------------------- characterHasPendingRelic ------------------
+// True if character has any relic that is unappraised (and not deteriorated) OR appraised but art not submitted.
+// Such characters cannot find another relic until they complete the current one.
+async function characterHasPendingRelic(characterName) {
+ const name = (characterName || "").toString().trim();
+ if (!name) return false;
+ try {
+  const pending = await Relic.findOne({
+   discoveredBy: name,
+   $or: [
+    { appraised: false, deteriorated: false },
+    { appraised: true, artSubmitted: false },
+   ],
+  }).lean();
+  return !!pending;
+ } catch (err) {
+  logger.warn("EXPLORE", `[explore.js]⚠️ Pending relic check failed: ${err?.message || err}`);
+  return false;
+ }
+}
+
 const REPORTABLE_DISCOVERY_OUTCOMES = new Set(["monster_camp", "ruins", "grotto"]);
 
 // ------------------- pullGrottoDiscoveriesFromQuadrant ------------------
@@ -1670,20 +1700,9 @@ async function getPartyWideInventory(party) {
 }
 
 // ------------------- partyHasLensOfTruth ------------------
-// True if any party member has "Lens of Truth" in inventory (grottos use inventory, not party/loadout items)
+// True if any party member has Lens of Truth as relic or inventory item (grottos + map reveal).
 async function partyHasLensOfTruth(party) {
-  for (const slot of party.characters || []) {
-    try {
-      const collection = await getCharacterInventoryCollectionWithModSupport(slot);
-      const entry = await collection.findOne({
-        characterId: slot._id,
-        itemName: { $regex: /^Lens of Truth$/i },
-        quantity: { $gte: 1 },
-      });
-      if (entry) return true;
-    } catch (_) { /* skip */ }
-  }
-  return false;
+  return partyHasLensOfTruthRelic(party.characters || [], getCharacterInventoryCollectionWithModSupport);
 }
 
 // ------------------- handleGrottoCleanse ------------------
@@ -1948,7 +1967,7 @@ if (trialType === "puzzle" && grottoDoc.puzzleState?.puzzleSubType) {
 
 // ------------------- applyBlightExposure ------------------
 // Roll blight chance for each party member when revealing/traveling through blighted quadrant.
-// Base chance: 15% per party member who isn't already blighted.
+// Base chance: 15% per party member who isn't already blighted. Blight Candle halves the chance (7.5%).
 // Returns: { blightedMembers: [{ name, roll }], safeMembers: [{ name, roll }] }
 const BLIGHT_EXPOSURE_CHANCE = 0.15; // 15% chance to contract blight
 
@@ -1956,9 +1975,13 @@ async function applyBlightExposure(party, square, quadrant, reason, characterNam
  const location = `${square} ${quadrant}`;
  const prev = typeof party.blightExposure === "number" ? party.blightExposure : 0;
  const displayTotal = prev + 1;
+
+ const hasBlightCandle = await partyHasRelic(party.characters || [], 'Blight Candle');
+ const effectiveChance = hasBlightCandle ? BLIGHT_EXPOSURE_CHANCE * 0.5 : BLIGHT_EXPOSURE_CHANCE;
  
  const blightedMembers = [];
  const safeMembers = [];
+ let candleConsumer = null; // first party member with Blight Candle to consume one use
  
  // Roll for each party member
  for (const partyChar of party.characters) {
@@ -1977,10 +2000,13 @@ async function applyBlightExposure(party, square, quadrant, reason, characterNam
   if (charDoc?.blighted && charDoc?.blightStage > 0) {
    continue;
   }
+  if (hasBlightCandle && !candleConsumer && (await characterHasRelic(partyChar._id, 'Blight Candle', partyChar.name))) {
+   candleConsumer = partyChar;
+  }
   
-  // Roll for blight (1-100, need to roll above threshold to be safe)
+  // Roll for blight (effective chance: 15% or 7.5% with Blight Candle)
   const roll = Math.random();
-  const contracted = roll < BLIGHT_EXPOSURE_CHANCE;
+  const contracted = roll < effectiveChance;
   const rollDisplay = Math.floor(roll * 100) + 1;
   
   if (contracted && charDoc) {
@@ -2033,6 +2059,13 @@ async function applyBlightExposure(party, square, quadrant, reason, characterNam
   undefined,
   undefined
  );
+ if (hasBlightCandle && candleConsumer) {
+  try {
+   await consumeBlightCandleUse(candleConsumer._id, candleConsumer.name);
+  } catch (e) {
+   logger.warn("EXPLORE", `[explore.js] Blight Candle consume use failed: ${e?.message || e}`);
+  }
+ }
  await party.save();
  return { blightedMembers, safeMembers };
 }
@@ -4777,6 +4810,25 @@ module.exports = {
       }
      }
 
+     // Block roll if character has an unappraised relic (must get it appraised before exploring)
+     const charNameForRelic = (character.name || "").toString().trim();
+     if (charNameForRelic) {
+      const unappraisedRelic = await Relic.findOne({
+       discoveredBy: charNameForRelic,
+       appraised: false,
+       deteriorated: false,
+      }).lean();
+      if (unappraisedRelic) {
+       return interaction.editReply({
+        embeds: [createExplorationErrorEmbed(
+         "❌ **Unappraised relic**",
+         `**${character.name}** has an unappraised relic and must get it appraised before exploring. Take it to an Inarikian Artist or Researcher, or use NPC appraisal (500 tokens). Then you can roll again.`,
+         { party, expeditionId, location: party ? `${party.square} ${party.quadrant}` : undefined, nextCharacter: party?.characters?.[party?.currentTurn] ?? null, showNextAndCommands: true }
+        )],
+       });
+      }
+     }
+
      if (party.status !== "started") {
       return interaction.editReply({ embeds: [createExplorationErrorEmbed("❌ **Expedition not started**", "This expedition has not been started yet.", { party, expeditionId, location: party ? `${party.square} ${party.quadrant}` : undefined, nextCharacter: party?.characters?.[party?.currentTurn] ?? null, showNextAndCommands: true })] });
      }
@@ -5091,6 +5143,10 @@ module.exports = {
        outcomeType = rollOutcome();
        continue;
       }
+      if (outcomeType === "relic" && (await characterHasPendingRelic(character.name))) {
+       outcomeType = rollOutcome();
+       continue;
+      }
       if (specialCount >= 1 && Math.random() > DISCOVERY_REDUCE_CHANCE_WHEN_ANY) {
        const reason = `square already has ${specialCount} special discovery/discoveries; roll failed discovery-reduce (${(DISCOVERY_REDUCE_CHANCE_WHEN_ANY * 100).toFixed(0)}% keep chance)`;
        outcomeType = rollOutcome();
@@ -5392,12 +5448,19 @@ module.exports = {
        let savedRelic = null;
        if (!false) {
         try {
+         const squareStr = String(party.square || "").trim().toUpperCase();
+         const quadrantStr = String(party.quadrant || "").trim().toUpperCase();
+         const mapSquareForRelic = await Square.findOne({ squareId: new RegExp(`^${String(party.square || "").trim().replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}$`, "i") }).lean();
+         const regionStr = mapSquareForRelic?.region ?? "";
          savedRelic = await createRelic({
           name: "Unknown Relic",
           discoveredBy: character.name,
           characterId: character._id,
           discoveredDate: new Date(),
           locationFound: location,
+          region: regionStr,
+          square: squareStr,
+          quadrant: quadrantStr,
           appraised: false,
          });
         } catch (err) {
@@ -5690,6 +5753,9 @@ module.exports = {
          if (ruinsOutcome === "relic" && (await characterAlreadyFoundRelicThisExpedition(freshParty, ruinsCharacter.name, ruinsCharacter._id))) {
           ruinsOutcome = "camp";
          }
+         if (ruinsOutcome === "relic" && (await characterHasPendingRelic(ruinsCharacter.name))) {
+          ruinsOutcome = "camp";
+         }
          const ruinsAt = new Date();
          // Only mark ruins on the map when it's a rest spot (camp); other outcomes don't add a pin
          if (ruinsOutcome === "camp") {
@@ -5740,12 +5806,19 @@ module.exports = {
           let ruinsSavedRelic = null;
           if (!false) {
            try {
+            const squareStrRuins = String(freshParty.square || "").trim().toUpperCase();
+            const quadrantStrRuins = String(freshParty.quadrant || "").trim().toUpperCase();
+            const mapSquareForRuins = await Square.findOne({ squareId: new RegExp(`^${String(freshParty.square || "").trim().replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}$`, "i") }).lean();
+            const regionStrRuins = mapSquareForRuins?.region ?? "";
             ruinsSavedRelic = await createRelic({
              name: "Unknown Relic",
              discoveredBy: ruinsCharacter.name,
              characterId: ruinsCharacter._id,
              discoveredDate: new Date(),
              locationFound: location,
+             region: regionStrRuins,
+             square: squareStrRuins,
+             quadrant: quadrantStrRuins,
              appraised: false,
             });
            } catch (err) {
@@ -5838,21 +5911,33 @@ module.exports = {
           lootForLog = { itemName: "Star Fragment", emoji: "" };
           pushProgressLog(freshParty, ruinsCharacter.name, "ruins_explored", progressMsg, lootForLog, ruinsCostsForLog);
          } else if (ruinsOutcome === "blight") {
-          progressMsg += `Found blight; ${ruinsCharacter.name} is now blighted.`;
-          if (!false) {
+          const partyHadBlightCandle = await partyHasRelic(freshParty.characters || [], 'Blight Candle');
+          const candleSave = partyHadBlightCandle && Math.random() < 0.5;
+          if (candleSave) {
            try {
-            await finalizeBlightApplication(ruinsCharacter, ruinsCharacter.userId, {
-             client: i.client,
-             guild: i.guild,
-             source: "Ruins exploration",
-             alreadySaved: false,
-            });
+            await consumeBlightCandleUse(ruinsCharacter._id, ruinsCharacter.name);
            } catch (err) {
-            handleInteractionError(err, i, { source: "explore.js ruins blight finalize" });
-            logger.warn("EXPLORE", `[explore.js]⚠️ Ruins blight finalizeBlightApplication: ${err?.message || err}`);
+            logger.warn("EXPLORE", `[explore.js] Blight Candle consume (ruins save) failed: ${err?.message || err}`);
            }
+           progressMsg += `Found blight; party's Blight Candle repelled it—narrow escape.`;
+           resultDescription = summaryLine + `**${ruinsCharacter.name}** found **blight** in the ruins, but the party's **Blight Candle** flared and repelled it. Narrow escape!\n\n↳ **Continue** ➾ </explore roll:${getExploreCommandId()}> — id: \`${expeditionId}\` charactername: **${nextCharacter?.name ?? "—"}**`;
+          } else {
+           progressMsg += `Found blight; ${ruinsCharacter.name} is now blighted.`;
+           if (!false) {
+            try {
+             await finalizeBlightApplication(ruinsCharacter, ruinsCharacter.userId, {
+              client: i.client,
+              guild: i.guild,
+              source: "Ruins exploration",
+              alreadySaved: false,
+             });
+            } catch (err) {
+             handleInteractionError(err, i, { source: "explore.js ruins blight finalize" });
+             logger.warn("EXPLORE", `[explore.js]⚠️ Ruins blight finalizeBlightApplication: ${err?.message || err}`);
+            }
+           }
+           resultDescription = summaryLine + `**${ruinsCharacter.name}** found… **BLIGHT** in the ruins. They've been blighted! You can be healed by **Oracles, Sages & Dragons**. [Learn more about blight stages and healing](https://rootsofthewild.com/world/blight)\n\n↳ **Continue** ➾ </explore roll:${getExploreCommandId()}> — id: \`${expeditionId}\` charactername: **${nextCharacter?.name ?? "—"}**`;
           }
-          resultDescription = summaryLine + `**${ruinsCharacter.name}** found… **BLIGHT** in the ruins. They've been blighted! You can be healed by **Oracles, Sages & Dragons**. [Learn more about blight stages and healing](https://rootsofthewild.com/world/blight)\n\n↳ **Continue** ➾ </explore roll:${getExploreCommandId()}> — id: \`${expeditionId}\` charactername: **${nextCharacter?.name ?? "—"}**`;
           pushProgressLog(freshParty, ruinsCharacter.name, "ruins_explored", progressMsg, undefined, ruinsCostsForLog);
          } else {
           // goddess_plume
@@ -7895,14 +7980,40 @@ module.exports = {
             } else if (leadsTo === "relic") {
               const mapOwnerChar = party.characters.find((c) => c.name === mapOwnerName);
               const mapOwnerDoc = mapOwnerChar ? await Character.findById(mapOwnerChar._id) : null;
-              if (mapOwnerDoc) {
+              if (mapOwnerDoc && (await characterHasPendingRelic(mapOwnerDoc.name))) {
+                const allItemsMap = await fetchAllItems();
+                if (allItemsMap && allItemsMap.length > 0) {
+                  const fallbackItem = allItemsMap[Math.floor(Math.random() * allItemsMap.length)];
+                  try {
+                    await addItemInventoryDatabase(mapOwnerDoc._id, fallbackItem.itemName, 1, interaction, "Exploration Map");
+                    if (!party.gatheredItems) party.gatheredItems = [];
+                    party.gatheredItems.push({ characterId: mapOwnerDoc._id, characterName: mapOwnerDoc.name, itemName: fallbackItem.itemName, quantity: 1, emoji: fallbackItem.emoji || "" });
+                    pushProgressLog(party, mapOwnerName, "map_chest", `Map #${quadWithMap.oldMapNumber} would have led to a relic at **${locationMove}**, but **${mapOwnerName}** is still carrying one (appraise or submit art first)—found **${fallbackItem.itemName}** instead.`, { itemName: fallbackItem.itemName, emoji: fallbackItem.emoji || "" }, undefined);
+                    await party.save();
+                    moveDescription += `\n\n🗺️ **Your map led you here!** **${mapOwnerName}**'s map would have revealed a relic, but they're still carrying one (get it appraised or submit your art first)—they found **${fallbackItem.itemName}** instead.`;
+                  } catch (err) {
+                    logger.warn("EXPLORE", `[explore.js] map-led relic→item grant: ${err?.message || err}`);
+                    moveDescription += `\n\n🗺️ **Your map led you here!** **${mapOwnerName}**'s map would have revealed a relic, but they're still carrying one—grant failed.`;
+                  }
+                } else {
+                  pushProgressLog(party, mapOwnerName, "map_chest", `Map #${quadWithMap.oldMapNumber} would have led to a relic at **${locationMove}**, but **${mapOwnerName}** is still carrying one (appraise or submit art first).`, undefined, undefined);
+                  await party.save();
+                  moveDescription += `\n\n🗺️ **Your map led you here!** **${mapOwnerName}**'s map would have revealed a relic, but they're still carrying one (get it appraised or submit your art first).`;
+                }
+              } else if (mapOwnerDoc) {
                 try {
+                  const squareStrMove = String(party.square || "").trim().toUpperCase();
+                  const quadrantStrMove = String(party.quadrant || "").trim().toUpperCase();
+                  const regionStrMove = destMapSquare?.region ?? "";
                   const savedRelic = await createRelic({
                     name: "Unknown Relic",
                     discoveredBy: mapOwnerDoc.name,
                     characterId: mapOwnerDoc._id,
                     discoveredDate: new Date(),
                     locationFound: locationMove,
+                    region: regionStrMove,
+                    square: squareStrMove,
+                    quadrant: quadrantStrMove,
                     appraised: false,
                   });
                   if (!party.gatheredItems) party.gatheredItems = [];

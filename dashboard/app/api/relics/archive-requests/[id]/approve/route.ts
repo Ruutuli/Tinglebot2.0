@@ -1,8 +1,13 @@
 import type { NextRequest } from "next/server";
 import { NextResponse } from "next/server";
+import mongoose from "mongoose";
 import { connect } from "@/lib/db";
 import { getSession, isAdminUser } from "@/lib/session";
 import { isModeratorUser } from "@/lib/moderator";
+import path from "path";
+import { notifyRelicArchiveApproved } from "@/lib/relicArchiveNotify";
+
+const { getAppraisalText } = require(path.join(process.cwd(), "..", "bot", "data", "relicOutcomes.js"));
 
 export const dynamic = "force-dynamic";
 
@@ -58,7 +63,6 @@ export async function POST(
       return NextResponse.json({ error: "Relic is already archived" }, { status: 400 });
     }
 
-    const wasFirstArchived = (await Relic.countDocuments({ archived: true })) === 0;
     const discovererUserId = archiveRequest.submitterUserId; // submitter is the discoverer's owner
 
     const req = archiveRequest.toObject?.() ?? archiveRequest;
@@ -66,32 +70,63 @@ export async function POST(
     const posY = req.libraryPositionY != null ? Number(req.libraryPositionY) : NaN;
     const displaySize = req.libraryDisplaySize != null ? Number(req.libraryDisplaySize) : 8;
 
-    const updateData: Record<string, unknown> = {
-      artSubmitted: true,
-      imageUrl: archiveRequest.imageUrl,
-      archived: true,
-      rollOutcome: archiveRequest.title,
-      discoveredBy: archiveRequest.discoveredBy,
-      appraisedBy: archiveRequest.appraisedBy,
-      appraisalDescription: archiveRequest.info,
-      region: archiveRequest.region,
-      square: archiveRequest.square,
-      quadrant: archiveRequest.quadrant,
-      ...(wasFirstArchived && { firstCompletionRewardGiven: true }),
-    };
-    if (!Number.isNaN(posX) && !Number.isNaN(posY) && posX >= 0 && posX <= 100 && posY >= 0 && posY <= 100) {
-      updateData.libraryPositionX = posX;
-      updateData.libraryPositionY = posY;
-      updateData.libraryDisplaySize = Math.max(2, Math.min(25, Number.isNaN(displaySize) ? 8 : displaySize));
-    }
+    const canonicalAppraisal = getAppraisalText(archiveRequest.title);
+    const descriptionForLibrary = (canonicalAppraisal && canonicalAppraisal.trim() !== "")
+      ? canonicalAppraisal.trim()
+      : archiveRequest.info;
 
-    await Relic.findByIdAndUpdate(relic._id, updateData);
+    // Atomic first-archive: use a transaction so only one approval can claim the 1000-token reward.
+    // "First" = first by approval time (no other archived relic exists when we run).
+    let wasFirstArchived = false;
+    const txnSession = await mongoose.startSession();
+    try {
+      await txnSession.startTransaction();
+      const archivedCount = await Relic.countDocuments({ archived: true }).session(txnSession);
+      wasFirstArchived = archivedCount === 0;
+      const updateData: Record<string, unknown> = {
+        artSubmitted: true,
+        imageUrl: archiveRequest.imageUrl,
+        archived: true,
+        rollOutcome: archiveRequest.title,
+        discoveredBy: archiveRequest.discoveredBy,
+        appraisedBy: archiveRequest.appraisedBy,
+        appraisalDescription: descriptionForLibrary,
+        description: descriptionForLibrary,
+        region: archiveRequest.region,
+        square: archiveRequest.square,
+        quadrant: archiveRequest.quadrant,
+        ...(wasFirstArchived && { firstCompletionRewardGiven: true }),
+      };
+      if (!Number.isNaN(posX) && !Number.isNaN(posY) && posX >= 0 && posX <= 100 && posY >= 0 && posY <= 100) {
+        updateData.libraryPositionX = posX;
+        updateData.libraryPositionY = posY;
+        updateData.libraryDisplaySize = Math.max(2, Math.min(25, Number.isNaN(displaySize) ? 8 : displaySize));
+      }
+      await Relic.findByIdAndUpdate(relic._id, updateData, { session: txnSession });
+      await txnSession.commitTransaction();
+    } catch (txnErr) {
+      await txnSession.abortTransaction().catch(() => {});
+      throw txnErr;
+    } finally {
+      txnSession.endSession();
+    }
 
     await RelicArchiveRequest.findByIdAndUpdate(id, {
       status: "approved",
       modApprovedBy: user.id,
       modApprovedAt: new Date(),
       updatedAt: new Date(),
+    });
+
+    notifyRelicArchiveApproved({
+      title: archiveRequest.title,
+      relicId: archiveRequest.relicId,
+      discoveredBy: archiveRequest.discoveredBy,
+      appraisedBy: archiveRequest.appraisedBy,
+      region: archiveRequest.region ?? undefined,
+      square: archiveRequest.square ?? undefined,
+      quadrant: archiveRequest.quadrant ?? undefined,
+      imageUrl: archiveRequest.imageUrl ?? undefined,
     });
 
     if (wasFirstArchived && discovererUserId) {

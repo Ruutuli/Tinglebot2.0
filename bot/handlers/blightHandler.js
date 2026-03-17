@@ -40,6 +40,7 @@ const {
 const Character = require('@/models/CharacterModel');
 const ModCharacter = require('@/models/ModCharacterModel');
 const User = require('@/models/UserModel');
+const { Village } = require('@/models/VillageModel');
 
 // ------------------- Utilities -------------------
 const logger = require('@/utils/logger');
@@ -52,6 +53,7 @@ const Mount = require('@/models/MountModel');
 const { getModCharacterByName } = require('../modules/modCharacters');
 // Module for generating flavorful text and lore
 const { generateBlightSubmissionExpiryFlavorText } = require('../modules/flavorTextModule');
+const { characterHasRelic } = require('@/utils/relicUtils.js');
 
 // ------------------- Utility Functions -------------------
 // Global error handler, inventory utils, Google Sheets utils, storage, and unique ID utils
@@ -158,6 +160,13 @@ async function finalizeBlightApplication(character, userId, options = {}) {
   };
 
   const characterName = character.name || 'Unknown Character';
+
+  // Moon Pearl: bearer is immune to blight — do not apply
+  if (await characterHasRelic(character._id, 'Moon Pearl', character.name)) {
+    logger.info('BLIGHT', `Skipping blight application for ${characterName} — has Moon Pearl (immune).`);
+    return result;
+  }
+
   const BLIGHT_ROLE_ID = '798387447967907910';
 
   // Step 1: Ensure character blight fields and save (if not already saved)
@@ -2193,6 +2202,53 @@ async function rollForBlightProgression(interaction, characterName) {
       return;
     }
 
+    // Skip roll when character has Moon Pearl (blight immunity)
+    if (await characterHasRelic(character._id, 'Moon Pearl', character.name)) {
+      const immuneEmbed = new EmbedBuilder()
+        .setColor('#9B59B6')
+        .setTitle('🟣 Moon Pearl — Blight immune')
+        .setDescription(
+          `**${characterName}** carries the **Moon Pearl** and is immune to the corrupting influence of the blight.\n\nNo roll is required.`
+        )
+        .setThumbnail(character.icon)
+        .setAuthor({ name: `${characterName}'s Blight Status`, iconURL: interaction.user.displayAvatarURL() })
+        .setImage('https://storage.googleapis.com/tinglebot/border%20blight.png')
+        .setFooter({ text: 'Blight Roll Call', iconURL: 'https://storage.googleapis.com/tinglebot/Graphics/blight_white.png' })
+        .setTimestamp();
+      await interaction.editReply({
+        content: `<@${interaction.user.id}>`,
+        embeds: [immuneEmbed],
+        flags: [4096],
+      });
+      return;
+    }
+
+    // Skip roll when character's village has Blessed Hourglass active
+    const villageName = (character.currentVillage || '').trim();
+    if (villageName) {
+      const village = await Village.findOne({ name: { $regex: `^${villageName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, $options: 'i' } }).lean();
+      if (village && village.blessedHourglassActiveUntil && new Date() < new Date(village.blessedHourglassActiveUntil)) {
+        const hourglassEmbed = new EmbedBuilder()
+          .setColor('#E8D5B7')
+          .setTitle('⏳ Blessed Hourglass — No roll needed')
+          .setDescription(
+            `**${characterName}** is in **${village.name}**, where a **Blessed Hourglass** is active.\n\n` +
+            `No blight roll is required this period; respite until <t:${Math.floor(new Date(village.blessedHourglassActiveUntil).getTime() / 1000)}:F>.`
+          )
+          .setThumbnail(character.icon)
+          .setAuthor({ name: `${characterName}'s Blight Status`, iconURL: interaction.user.displayAvatarURL() })
+          .setImage('https://storage.googleapis.com/tinglebot/border%20blight.png')
+          .setFooter({ text: 'Blight Roll Call', iconURL: 'https://storage.googleapis.com/tinglebot/Graphics/blight_white.png' })
+          .setTimestamp();
+        await interaction.editReply({
+          content: `<@${interaction.user.id}>`,
+          embeds: [hourglassEmbed],
+          flags: [4096],
+        });
+        return;
+      }
+    }
+
     // ------------------- Enhanced Blight Call Timing Logic -------------------
     const now = new Date();
     
@@ -3662,6 +3718,16 @@ async function checkMissedRolls(client) {
       if (character.blightPaused) {
         console.log(`[blightHandler]: Skipping missed roll for ${character.name} - blight progression is paused.`);
         continue;
+      }
+
+      // ---- SKIP missed roll if character's village has Blessed Hourglass active ----
+      const charVillageName = (character.currentVillage || '').trim();
+      if (charVillageName) {
+        const village = await Village.findOne({ name: { $regex: `^${charVillageName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, $options: 'i' } }).lean();
+        if (village && village.blessedHourglassActiveUntil && now < new Date(village.blessedHourglassActiveUntil)) {
+          console.log(`[blightHandler]: Skipping missed roll for ${character.name} - Blessed Hourglass active in ${village.name} until ${village.blessedHourglassActiveUntil}.`);
+          continue;
+        }
       }
 
       // ========================================================================

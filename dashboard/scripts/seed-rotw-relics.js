@@ -19,7 +19,7 @@
 // Uses GCS relic images; CSV "Relic Image" is ignored.
 const GCS_RELIC_BASE = 'https://storage.googleapis.com/tinglebot/relics/';
 const RELIC_IMAGE_MAP = {
-  'Ancient Sheikah Orb': GCS_RELIC_BASE + 'orbbbbbbbb_m2627.png',
+  '': GCS_RELIC_BASE + 'orbbbbbbbb_m2627.png',
   'Ancient Zonai Dragon Idol': GCS_RELIC_BASE + 'zonai_dragon_idol_icon_morganini.png',
   'Blight Geodes': GCS_RELIC_BASE + 'its_a_geode_trans_midge.png',
   'Blighted Dragon Parts': GCS_RELIC_BASE + 'blighted_dragon_parts_icon_morganini.png',

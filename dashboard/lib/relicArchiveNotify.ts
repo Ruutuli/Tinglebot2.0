@@ -12,12 +12,17 @@ const RELIC_ARCHIVE_CHANNEL_ID =
   process.env.ADMIN_REVIEW_CHANNEL_ID ||
   "1381479893090566144";
 
+/** Channel to post when a relic archive request is approved (character submitted to Library Archives). */
+const RELIC_ARCHIVE_APPROVED_CHANNEL_ID = "629028490179510308";
+
 /** Relic embed styling (match bot relic embeds). */
 const RELIC_EMBED_COLOR = 0xe67e22;
 const RELIC_EMBED_THUMBNAIL_URL =
   "https://static.wikia.nocookie.net/zelda_gamepedia_en/images/7/7c/HW_Sealed_Weapon_Icon.png/revision/latest?cb=20150918051232";
 const RELIC_EMBED_IMAGE_URL = "https://storage.googleapis.com/tinglebot/Graphics/border.png";
 const RELIC_EMBED_FOOTER = "Relics · https://rootsofthewild.com/mechanics/relics";
+
+const MOD_ROLE_ID = process.env.MOD_ROLE_ID || "";
 
 export function notifyRelicArchiveRequest(options: {
   title: string;
@@ -31,6 +36,7 @@ export function notifyRelicArchiveRequest(options: {
   libraryPositionX?: number;
   libraryPositionY?: number;
   libraryDisplaySize?: number;
+  imageUrl?: string;
 }): void {
   if (!RELIC_ARCHIVE_CHANNEL_ID) {
     console.warn(
@@ -39,7 +45,7 @@ export function notifyRelicArchiveRequest(options: {
     return;
   }
 
-  const { title, relicId, discoveredBy, appraisedBy, region, square, quadrant, infoSnippet, libraryPositionX, libraryPositionY, libraryDisplaySize } = options;
+  const { title, relicId, discoveredBy, appraisedBy, region, square, quadrant, infoSnippet, libraryPositionX, libraryPositionY, libraryDisplaySize, imageUrl } = options;
   const location = [region, square, quadrant].filter(Boolean).join(" • ") || "—";
   const baseUrl = getAppUrl().replace(/\/$/, "");
   const reviewUrl = `${baseUrl}/admin/relic-archives`;
@@ -62,19 +68,107 @@ export function notifyRelicArchiveRequest(options: {
     `**[Review in dashboard](${reviewUrl})**`,
   ].join("\n");
 
-  const embed = {
+  const embed: {
+    title: string;
+    description: string;
+    color: number;
+    thumbnail: { url: string };
+    image?: { url: string };
+    footer: { text: string };
+    timestamp: string;
+  } = {
     title: "📜 New relic archive request",
     description,
     color: RELIC_EMBED_COLOR,
     thumbnail: { url: RELIC_EMBED_THUMBNAIL_URL },
-    image: { url: RELIC_EMBED_IMAGE_URL },
     footer: { text: RELIC_EMBED_FOOTER },
     timestamp: new Date().toISOString(),
   };
 
-  discordApiRequest(`channels/${RELIC_ARCHIVE_CHANNEL_ID}/messages`, "POST", { embeds: [embed] }).catch(
+  if (imageUrl && imageUrl.trim()) {
+    embed.image = { url: imageUrl.trim() };
+  } else {
+    embed.image = { url: RELIC_EMBED_IMAGE_URL };
+  }
+
+  const content = MOD_ROLE_ID ? `<@&${MOD_ROLE_ID}>` : undefined;
+
+  discordApiRequest(`channels/${RELIC_ARCHIVE_CHANNEL_ID}/messages`, "POST", { content, embeds: [embed] }).catch(
     (err) => {
       console.warn("[relicArchiveNotify] Discord post failed:", err);
     }
   );
+}
+
+/**
+ * Notify the Library Archives channel when a relic archive request is approved.
+ * Posts a fancy embed with character name, relic title, and the relic image.
+ * Fire-and-forget; does not block or throw.
+ */
+export function notifyRelicArchiveApproved(options: {
+  title: string;
+  relicId: string;
+  discoveredBy: string;
+  appraisedBy: string;
+  region?: string;
+  square?: string;
+  quadrant?: string;
+  imageUrl?: string;
+}): void {
+  const {
+    title,
+    relicId,
+    discoveredBy,
+    appraisedBy,
+    region,
+    square,
+    quadrant,
+    imageUrl,
+  } = options;
+
+  const baseUrl = getAppUrl().replace(/\/$/, "");
+  const archivesUrl = `${baseUrl}/library/archives`;
+  const location = [region, square, quadrant].filter(Boolean).join(" · ") || "—";
+
+  const description = [
+    `**${discoveredBy}** has submitted a relic to the **Library Archives**!`,
+    "",
+    `▸ **Relic:** ${title}`,
+    `▸ **Appraised by:** ${appraisedBy}`,
+    `▸ **Location:** ${location}`,
+    "",
+    `[View in Library Archives →](${archivesUrl})`,
+  ].join("\n");
+
+  const embed: {
+    title: string;
+    description: string;
+    color: number;
+    author?: { name: string; icon_url?: string };
+    image?: { url: string };
+    thumbnail?: { url: string };
+    footer: { text: string };
+    timestamp: string;
+  } = {
+    title: "📚 Relic added to the Library Archives",
+    description,
+    color: 0xc9a227, // warm gold
+    author: { name: "Library Archives" },
+    footer: { text: "Library Archives · rootsofthewild.com" },
+    timestamp: new Date().toISOString(),
+  };
+
+  if (imageUrl && imageUrl.trim()) {
+    embed.image = { url: imageUrl.trim() };
+  } else {
+    embed.thumbnail = { url: RELIC_EMBED_THUMBNAIL_URL };
+  }
+
+  discordApiRequest(
+    `channels/${RELIC_ARCHIVE_APPROVED_CHANNEL_ID}/messages`,
+    "POST",
+    { embeds: [embed] }
+  ).catch((err) => {
+    console.warn("[relicArchiveNotify] Discord approved post failed:", err);
+  });
 }

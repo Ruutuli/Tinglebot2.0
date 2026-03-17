@@ -10,7 +10,10 @@ import {
   ALLOWED_IMAGE_TYPES,
   MAX_FILE_BYTES,
 } from "@/lib/character-validation";
+import path from "path";
 import { notifyRelicArchiveRequest } from "@/lib/relicArchiveNotify";
+
+const { getAppraisalText } = require(path.join(process.cwd(), "..", "bot", "data", "relicOutcomes.js"));
 
 export const dynamic = "force-dynamic";
 
@@ -73,8 +76,10 @@ export async function POST(request: NextRequest) {
   if (!appraisedBy) {
     return NextResponse.json({ error: "Appraised By is required" }, { status: 400 });
   }
-  if (!info) {
-    return NextResponse.json({ error: "Info (description) is required" }, { status: 400 });
+  const canonicalAppraisal = getAppraisalText(title);
+  const effectiveInfo = (canonicalAppraisal && canonicalAppraisal.trim() !== "") ? canonicalAppraisal.trim() : info;
+  if (!effectiveInfo) {
+    return NextResponse.json({ error: "Info (description) is required when there is no canonical appraisal text for this relic." }, { status: 400 });
   }
   if (
     typeof libraryPositionX !== "number" ||
@@ -201,7 +206,7 @@ export async function POST(request: NextRequest) {
       region,
       square,
       quadrant,
-      info,
+      info: effectiveInfo,
       imageUrl: result.url,
       status: "pending",
       libraryPositionX,
@@ -217,10 +222,11 @@ export async function POST(request: NextRequest) {
       region: region || undefined,
       square: square || undefined,
       quadrant: quadrant || undefined,
-      infoSnippet: info || undefined,
+      infoSnippet: effectiveInfo || undefined,
       libraryPositionX,
       libraryPositionY,
       libraryDisplaySize: size,
+      imageUrl: result.url,
     });
 
     return NextResponse.json({

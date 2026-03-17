@@ -1614,10 +1614,15 @@ const findRelicByIdOrRelicId = async (id) => {
 };
 
 // ------------------- fetchRelicsByCharacter -------------------
+// Case-insensitive match on discoveredBy so autocomplete/input casing does not matter.
 const fetchRelicsByCharacter = async (characterName) => {
  try {
   await connectToTinglebot();
-  return await RelicModel.find({ discoveredBy: characterName }).lean();
+  const trimmed = (characterName || '').trim();
+  if (!trimmed) return [];
+  return await RelicModel.find({
+   discoveredBy: new RegExp(`^${escapeRegExp(trimmed)}$`, 'i'),
+  }).lean();
  } catch (error) {
   handleError(error, "relicService.js");
   console.error(

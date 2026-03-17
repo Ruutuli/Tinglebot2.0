@@ -16,12 +16,13 @@ const {
 } = require('@/database/db.js');
 const { addItemInventoryDatabase } = require('@/utils/inventoryUtils.js');
 const { updateCurrentStamina } = require('../../modules/characterStatsModule.js');
-const { rollRelicOutcome } = require('@/utils/relicUtils.js');
+const { rollRelicOutcome, normalizeRelicName } = require('@/utils/relicUtils.js');
 const RelicModel = require('@/models/RelicModel.js');
+const { Village } = require('@/models/VillageModel.js');
 const RelicAppraisalRequest = require('@/models/RelicAppraisalRequestModel.js');
 const ModCharacter = require('@/models/ModCharacterModel.js');
 const { generateUniqueId } = require('@/utils/uniqueIdUtils.js');
-const { getAppraisalText } = require('@/data/relicAppraisalText.js');
+const { getAppraisalText } = require('@/data/relicOutcomes.js');
 
 /** Image used for unappraised / unknown relics (HW Sealed Weapon Icon). */
 const UNAPPRAISED_RELIC_IMAGE_URL = 'https://static.wikia.nocookie.net/zelda_gamepedia_en/images/7/7c/HW_Sealed_Weapon_Icon.png/revision/latest?cb=20150918051232';
@@ -170,7 +171,10 @@ module.exports = {
         .setName('info')
         .setDescription('View info on an appraised relic')
         .addStringOption(opt =>
-          opt.setName('relic_id').setDescription('Relic ID (e.g. R473582 or MongoDB _id)').setRequired(true)
+          opt.setName('character').setDescription('Character who discovered the relic').setRequired(true).setAutocomplete(true)
+        )
+        .addStringOption(opt =>
+          opt.setName('relic').setDescription('Relic (by name)').setRequired(true).setAutocomplete(true)
         )
     )
 
@@ -205,6 +209,21 @@ module.exports = {
         .addStringOption(opt =>
           opt.setName('description').setDescription('Appraisal description of the relic').setRequired(true)
         )
+    )
+
+    .addSubcommand(sub =>
+      sub
+        .setName('use')
+        .setDescription('Use or activate a relic that has a mechanical effect')
+        .addStringOption(opt =>
+          opt.setName('character').setDescription('Character who owns the relic (discovered it)').setRequired(true).setAutocomplete(true)
+        )
+        .addStringOption(opt =>
+          opt.setName('relic_id').setDescription('Relic ID (e.g. R473582 or MongoDB _id)').setRequired(true)
+        )
+        .addStringOption(opt =>
+          opt.setName('village').setDescription('Village (for Blessed Hourglass only; defaults to character location)').setRequired(false).setAutocomplete(true)
+        )
     ),
 
   async execute(interaction) {
@@ -215,7 +234,7 @@ module.exports = {
         return interaction.reply({ content: '❌ Interaction expired. Please try again.', ephemeral: true });
       }
 
-      const deferSubs = ['list', 'appraisal-request', 'appraisal-accept'];
+      const deferSubs = ['list', 'appraisal-request', 'appraisal-accept', 'use'];
       if (deferSubs.includes(sub)) {
         await interaction.deferReply();
       }
@@ -227,30 +246,54 @@ module.exports = {
         if (!relics || relics.length === 0) {
           return interaction.editReply({ content: `❌ No relics found for **${characterName}**.` });
         }
-        const lines = relics.map(r => {
+        const kept = [];
+        const toSubmit = [];
+        const unappraised = [];
+        const other = [];
+        for (const r of relics) {
           const id = r.relicId || r._id;
-          const status = r.deteriorated ? '⚠️ Deteriorated' : r.archived ? '✅ Archived' : r.appraised ? '🎲 Revealed' : '🔸 Unappraised';
-          return `• \`${id}\` — ${status}${r.rollOutcome ? ` — **${r.rollOutcome}**` : ''}`;
-        });
+          const namePart = r.rollOutcome ? ` — **${r.rollOutcome}**` : '';
+          if (r.deteriorated) {
+            other.push(`• \`${id}\` — ⚠️ Deteriorated${namePart}`);
+          } else if (!r.appraised) {
+            unappraised.push(`• \`${id}\` — 🔸 Unappraised${namePart}`);
+          } else if (r.duplicateOf) {
+            kept.push(`• \`${id}\` — ✅ **Keep (duplicate)**${namePart}`);
+          } else {
+            toSubmit.push(`• \`${id}\` — 📤 Submit to Library (unique)${namePart}`);
+          }
+        }
+        const parts = [];
+        if (kept.length) parts.push(`**Relics you keep (duplicates — can use)**\n${kept.join('\n')}`);
+        if (toSubmit.length) parts.push(`**Must submit to Library (unique)**\n${toSubmit.join('\n')}`);
+        if (unappraised.length) parts.push(`**Unappraised**\n${unappraised.join('\n')}`);
+        if (other.length) parts.push(other.join('\n'));
         const embed = applyRelicEmbedStyle(
           new EmbedBuilder()
             .setTitle(`📜 Relics: ${characterName}`)
-            .setDescription(lines.join('\n'))
+            .setDescription(parts.join('\n\n'))
+            .setFooter({ text: 'Only duplicates are kept; unique must submit to Library. · ' + RELIC_EMBED_FOOTER })
         );
         return interaction.editReply({ embeds: [embed] });
       }
 
       // ------------------- /relic info -------------------
       if (sub === 'info') {
-        const relicId = interaction.options.getString('relic_id');
-        const relic = await fetchRelicById(relicId);
+        const characterNameRaw = interaction.options.getString('character');
+        const characterName = characterNameRaw && characterNameRaw.includes('|') ? characterNameRaw.split('|')[0].trim() : (characterNameRaw || '').trim();
+        const relicOption = interaction.options.getString('relic');
+        const relic = await fetchRelicById(relicOption);
         if (!relic) {
-          return interaction.reply({ content: '❌ No relic found by that ID.', ephemeral: true });
+          return interaction.reply({ content: '❌ No relic found. Pick a relic from the list for that character.', ephemeral: true });
+        }
+        if ((relic.discoveredBy || '').toLowerCase() !== characterName.toLowerCase()) {
+          return interaction.reply({ content: `❌ That relic was discovered by **${relic.discoveredBy}**, not ${characterName}.`, ephemeral: true });
         }
         if (!relic.appraised) {
           return interaction.reply({ content: '❌ This relic has not been appraised yet.', ephemeral: true });
         }
         const displayRelicId = relic.relicId || relic._id;
+        const kept = !!relic.duplicateOf;
         const embed = applyRelicEmbedStyle(
           new EmbedBuilder()
             .setTitle(`📜 ${relic.rollOutcome || relic.name}`)
@@ -259,6 +302,7 @@ module.exports = {
               { name: 'Relic ID', value: `\`${displayRelicId}\``, inline: true },
               { name: 'Discovered By', value: relic.discoveredBy || '—', inline: true },
               { name: 'Location', value: relic.locationFound || 'Unknown', inline: true },
+              { name: 'Status', value: kept ? '✅ **Keep (duplicate)** — can use' : '📤 Submit to Library (unique)', inline: true },
               { name: 'Appraised By', value: relic.appraisedBy || '—', inline: true },
               { name: 'Art Submitted', value: relic.artSubmitted ? '✅' : '❌', inline: true },
               { name: 'Archived', value: relic.archived ? '✅' : '❌', inline: true },
@@ -485,6 +529,72 @@ module.exports = {
             )
         );
         return interaction.editReply({ embeds: [embed] });
+      }
+
+      // ------------------- /relic use -------------------
+      if (sub === 'use') {
+        const characterNameRaw = interaction.options.getString('character');
+        const characterName = characterNameRaw && characterNameRaw.includes('|') ? characterNameRaw.split('|')[0].trim() : (characterNameRaw || '').trim();
+        const relicId = interaction.options.getString('relic_id');
+        const villageOption = (interaction.options.getString('village') || '').trim();
+
+        const relic = await fetchRelicById(relicId);
+        if (!relic) {
+          return interaction.editReply({ content: '❌ Relic not found.' });
+        }
+        if (!relic.appraised) {
+          return interaction.editReply({ content: '❌ This relic has not been appraised yet.' });
+        }
+        if (relic.deteriorated) {
+          return interaction.editReply({ content: '❌ This relic cannot be used (deteriorated).' });
+        }
+        if (!relic.duplicateOf) {
+          return interaction.editReply({
+            content: '❌ You can only **use** relics you **keep** (duplicates). This relic is unique and must be submitted to the Library — you don’t keep it.',
+          });
+        }
+        if ((relic.discoveredBy || '').toLowerCase() !== characterName.toLowerCase()) {
+          return interaction.editReply({ content: `❌ This relic was discovered by **${relic.discoveredBy}**, not ${characterName}.` });
+        }
+
+        const ownerChar = await fetchCharacterByNameAndUserId(characterName, interaction.user.id) ||
+          await ModCharacter.findOne({ name: new RegExp(`^${characterName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'i') })
+            .then(m => (m && String(m.userId) === interaction.user.id ? m : null));
+        if (!ownerChar) {
+          return interaction.editReply({ content: '❌ You must own the character who discovered the relic.' });
+        }
+
+        const outcomeName = (relic.rollOutcome || relic.name || '').trim();
+        const canonical = normalizeRelicName(outcomeName);
+
+        if (canonical === 'Blessed Hourglass') {
+          const villageName = villageOption || (ownerChar.currentVillage || '').trim();
+          if (!villageName) {
+            return interaction.editReply({ content: '❌ Specify a village, or ensure your character has a current location set.' });
+          }
+          const village = await Village.findOne({ name: { $regex: `^${villageName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, $options: 'i' } });
+          if (!village) {
+            return interaction.editReply({ content: `❌ Village **${villageName}** not found.` });
+          }
+          const oneWeekFromNow = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
+          village.blessedHourglassActiveUntil = oneWeekFromNow;
+          await village.save();
+          await RelicModel.findByIdAndUpdate(relic._id, { usedAt: new Date() });
+          const embed = applyRelicEmbedStyle(
+            new EmbedBuilder()
+              .setTitle('⏳ Blessed Hourglass activated')
+              .setDescription(`The **Blessed Hourglass** has been activated in **${village.name}**.\n\nInhabitants of this village do not need to roll for blight for **one week** (until <t:${Math.floor(oneWeekFromNow.getTime() / 1000)}:F>).`)
+              .addFields(
+                { name: 'Village', value: village.name, inline: true },
+                { name: 'Respite until', value: `<t:${Math.floor(oneWeekFromNow.getTime() / 1000)}:F>`, inline: true }
+              )
+          );
+          return interaction.editReply({ embeds: [embed] });
+        }
+
+        return interaction.editReply({
+          content: '❌ This relic has no mechanical use in the bot (yet). Only **Blessed Hourglass** can be used here; others (e.g. Moon Pearl, Blight Candle) work passively.',
+        });
       }
 
       return interaction.reply({ content: '❌ Unknown subcommand.', ephemeral: true });

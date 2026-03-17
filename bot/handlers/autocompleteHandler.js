@@ -889,8 +889,49 @@ async function handleAutocompleteInternal(interaction, commandName, focusedOptio
           case "relic":
             if (interaction.options._subcommand) {
               const relicSub = interaction.options.getSubcommand();
-              if (focusedOption.name === "character" && (relicSub === "list" || relicSub === "appraisal-request")) {
+              if (focusedOption.name === "character" && (relicSub === "list" || relicSub === "appraisal-request" || relicSub === "use" || relicSub === "info")) {
                 await handleCharacterBasedCommandsAutocomplete(interaction, focusedOption, "relic");
+              } else if (focusedOption.name === "relic" && relicSub === "info") {
+                let characterName = (interaction.options.get("character")?.value || "").toString().trim();
+                if (characterName.includes("|")) characterName = characterName.split("|")[0].trim();
+                if (!characterName) {
+                  await interaction.respond([]);
+                } else {
+                  const relics = await fetchRelicsByCharacter(characterName);
+                  const focusedValue = (focusedOption?.value || "").toString().toLowerCase();
+                  const choices = (relics || [])
+                    .map(r => {
+                      const id = r.relicId || String(r._id);
+                      const displayName = r.rollOutcome || r.name || "Unknown";
+                      return { name: `${displayName} (${id})`, value: id };
+                    })
+                    .filter(c => c.value.toLowerCase().includes(focusedValue) || c.name.toLowerCase().includes(focusedValue));
+                  await interaction.respond(choices.slice(0, 25));
+                }
+              } else if (focusedOption.name === "relic_id" && relicSub === "use") {
+                let characterName = (interaction.options.get("character")?.value || "").toString().trim();
+                if (characterName.includes("|")) characterName = characterName.split("|")[0].trim();
+                if (!characterName) {
+                  await interaction.respond([]);
+                } else {
+                  const relics = await fetchRelicsByCharacter(characterName);
+                  const kept = (relics || []).filter(r => r.appraised && r.duplicateOf && !r.deteriorated && !r.consumedAt && r.relicState?.burnedOut !== true);
+                  const focusedValue = (focusedOption?.value || "").toString().toLowerCase();
+                  const choices = kept
+                    .map(r => {
+                      const id = r.relicId || String(r._id);
+                      return { name: `${r.rollOutcome || r.name} (${id})`, value: id };
+                    })
+                    .filter(c => c.value.toLowerCase().includes(focusedValue) || c.name.toLowerCase().includes(focusedValue));
+                  await interaction.respond(choices.slice(0, 25));
+                }
+              } else if (focusedOption.name === "village" && relicSub === "use") {
+                const allVillages = getAllVillages();
+                const focusedValue = (focusedOption?.value || "").toString().toLowerCase();
+                const choices = allVillages
+                  .filter(v => v.toLowerCase().includes(focusedValue))
+                  .map(v => ({ name: v, value: v }));
+                await interaction.respond(choices.slice(0, 25));
               } else if (focusedOption.name === "relic_id" && relicSub === "appraisal-request") {
                 let characterName = (interaction.options.get("character")?.value || "").toString().trim();
                 if (characterName.includes("|")) {

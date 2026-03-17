@@ -7,7 +7,7 @@ import { isModeratorUser } from "@/lib/moderator";
 
 export const dynamic = "force-dynamic";
 
-/** PATCH /api/relics/archives/[id]/placement — update library map position for an archived relic. Auth required. */
+/** PATCH /api/relics/archives/[id]/placement — update library map position for an archived relic. Auth required. [id] is the relic's MongoDB _id (ObjectId), not the short relicId (e.g. R473582). */
 export async function PATCH(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -129,7 +129,6 @@ export async function PATCH(
 
     console.log("[placement] Updating relic in DB", { relicId: String(relic._id), update });
 
-    await connect();
     const db = mongoose.connection.db;
     if (!db) {
       console.error("[placement] No database on connection");

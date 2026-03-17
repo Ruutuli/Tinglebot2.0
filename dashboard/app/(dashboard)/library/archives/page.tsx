@@ -51,6 +51,8 @@ export default function LibraryArchivesPage() {
   const [uploadSquare, setUploadSquare] = useState("");
   const [uploadQuadrant, setUploadQuadrant] = useState("");
   const [uploadInfo, setUploadInfo] = useState("");
+  /** True when prefill returned canonical appraisal text (description is prefilled; backend will use it). */
+  const [uploadHasAppraisalText, setUploadHasAppraisalText] = useState(false);
   const [uploadLibraryPositionX, setUploadLibraryPositionX] = useState<number | null>(null);
   const [uploadLibraryPositionY, setUploadLibraryPositionY] = useState<number | null>(null);
   const [uploadLibraryDisplaySize, setUploadLibraryDisplaySize] = useState(MAP_PIN_SIZE);
@@ -174,6 +176,9 @@ export default function LibraryArchivesPage() {
       setUploadRegion(data.region ?? "");
       setUploadSquare(data.square ?? "");
       setUploadQuadrant(data.quadrant ?? "");
+      const appraisalText = typeof data.appraisalText === "string" ? data.appraisalText : "";
+      setUploadHasAppraisalText(appraisalText.length > 0);
+      setUploadInfo(appraisalText);
     } catch (e) {
       setLoadRelicError(e instanceof Error ? e.message : "Failed to load");
     } finally {
@@ -190,8 +195,8 @@ export default function LibraryArchivesPage() {
       setUploadMessage({ type: "err", text: "Enter a Relic ID and click Load to fill relic details." });
       return;
     }
-    if (!uploadInfo.trim()) {
-      setUploadMessage({ type: "err", text: "Info (description) is required." });
+    if (!uploadHasAppraisalText && !uploadInfo.trim()) {
+      setUploadMessage({ type: "err", text: "Info (description) is required when there is no canonical appraisal text for this relic." });
       return;
     }
     if (uploadLibraryPositionX == null || uploadLibraryPositionY == null) {
@@ -230,6 +235,7 @@ export default function LibraryArchivesPage() {
       setUploadSquare("");
       setUploadQuadrant("");
       setUploadInfo("");
+      setUploadHasAppraisalText(false);
       setUploadLibraryPositionX(null);
       setUploadLibraryPositionY(null);
       setUploadLibraryDisplaySize(MAP_PIN_SIZE);
@@ -247,6 +253,7 @@ export default function LibraryArchivesPage() {
     uploadDiscoveredBy,
     uploadAppraisedBy,
     uploadInfo,
+    uploadHasAppraisalText,
     uploadRegion,
     uploadSquare,
     uploadQuadrant,
@@ -628,11 +635,16 @@ export default function LibraryArchivesPage() {
                   Step 2 — Description & image
                 </h3>
                 <label className="block">
-                  <span className="mb-1.5 block text-xs font-medium text-[var(--botw-pale)]/90">Info (description) <span className="text-red-400">*</span></span>
+                  <span className="mb-1.5 block text-xs font-medium text-[var(--botw-pale)]/90">
+                    Info (description) {!uploadHasAppraisalText && <span className="text-red-400">*</span>}
+                  </span>
+                  {uploadHasAppraisalText && (
+                    <p className="mb-1 text-xs text-[var(--totk-grey-200)]">Prefilled from canonical appraisal text; you can edit. Library will use the canonical text.</p>
+                  )}
                   <textarea
                     value={uploadInfo}
                     onChange={(e) => setUploadInfo(e.target.value)}
-                    placeholder="Appraisal description / lore (e.g. A sliver of agatized coral...)"
+                    placeholder={uploadHasAppraisalText ? "Canonical appraisal text (editable)" : "Appraisal description / lore required when no canonical text exists"}
                     rows={4}
                     className="w-full rounded-lg border border-[var(--totk-dark-ocher)] bg-[var(--botw-warm-black)] px-3 py-2.5 text-[var(--botw-pale)] placeholder:text-[var(--totk-grey-200)]/60 focus:border-[var(--totk-light-ocher)]/60 focus:outline-none focus:ring-1 focus:ring-[var(--totk-light-ocher)]/40"
                   />
