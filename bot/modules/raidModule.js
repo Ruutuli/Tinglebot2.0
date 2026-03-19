@@ -1724,14 +1724,22 @@ async function triggerRaid(monster, interaction, villageId, isBloodMoon = false,
     }
     const embed = await createRaidEmbed(raidData, monsterImage, firstTurn);
 
-    let channelContent = isBloodMoon ? `🌙 **BLOOD MOON RAID!**` : expeditionId ? `🗺️ **EXPEDITION RAID!**` : isQuotaBased ? `📅 **VILLAGE RAID!**` : `⚠️ **RAID TRIGGERED!** ⚠️`;
+    const channelContent = isBloodMoon
+      ? `🌙 **BLOOD MOON RAID!**`
+      : expeditionId
+        ? `🗺️ **EXPEDITION RAID!**`
+        : isQuotaBased
+          ? `📅 **VILLAGE RAID!**`
+          : `⚠️ **RAID TRIGGERED!** ⚠️`;
+
+    // Note: Discord always renders message "content" above embeds.
+    // To make the @ mention appear as a *new post after the embed*, we send it as a second message.
+    const raidMessage = await interaction.channel.send({ content: channelContent, embeds: [embed] });
     if (expeditionId && firstTurn?.userId) {
-      channelContent = `🗺️ **EXPEDITION RAID!**\n<@${firstTurn.userId}> **You're next** — use </raid:1470659276287774734> to take your turn.`;
+      await interaction.channel.send({
+        content: `<@${firstTurn.userId}> **You're next** — use </raid:1470659276287774734> to take your turn.`
+      });
     }
-    const raidMessage = await interaction.channel.send({
-      content: channelContent,
-      embeds: [embed]
-    });
 
     // Create the raid thread with error handling
     let thread = null;
