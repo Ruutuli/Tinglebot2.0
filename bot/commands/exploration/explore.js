@@ -22,7 +22,7 @@
 //   - Items used outside combat advance the expedition turn (so "Next" and who can use item stay in sync)
 //   - Camping, retreat attempts, and most roll outcomes advance the expedition turn
 //   - Choice-based outcomes (monster_camp, chest, ruins, grotto) defer turn advancement until the choice is made
-//   - Wave currentTurn resets to 0 when advancing to the next monster (first participant always starts each monster)
+//   - Wave currentTurn continues across monsters; after a kill, the next participant acts first
 //
 // Turn advancement pattern (use party.advanceTurn() when possible for consistency):
 //   party.currentTurn = (party.currentTurn + 1) % party.characters.length;
@@ -948,6 +948,31 @@ function createDisabledYesNoRow(outcomeType, expeditionId, characterIndex, label
 async function grantExplorationChestLootToParty(party, location, interaction) {
  const allItems = await fetchAllItems();
  const lootLines = [];
+ const mapDmSentKeys = new Set();
+ const sendChestMapDm = async (charDoc, mapItemName) => {
+  try {
+   if (!interaction?.client || !charDoc || !mapItemName) return;
+   const uid = charDoc.userId || interaction.user?.id;
+   if (!uid) return;
+   const dedupeKey = `${uid}:${mapItemName}`;
+   if (mapDmSentKeys.has(dedupeKey)) return;
+   mapDmSentKeys.add(dedupeKey);
+   const mapDmEmbed = new EmbedBuilder()
+    .setTitle("🗺️ Expedition map found")
+    .setDescription(`**${mapItemName}** was found in a chest and saved to **${charDoc.name}**'s map collection. Take it to the Inariko Library to get it deciphered.`)
+    .setThumbnail(OLD_MAP_ICON_URL)
+    .setImage(MAP_EMBED_BORDER_URL)
+    .addFields(
+      { name: "Map", value: `**${mapItemName}**`, inline: true },
+      { name: "Expedition", value: `\`${party.partyId}\``, inline: true }
+    )
+    .setURL(OLD_MAPS_LINK)
+    .setColor(0x2ecc71)
+    .setFooter({ text: "Roots of the Wild • Old Maps" });
+   const user = await interaction.client.users.fetch(uid).catch(() => null);
+   if (user) await user.send({ embeds: [mapDmEmbed] }).catch(() => {});
+  } catch (_) {}
+ };
  const squareStr = String(party.square || "").trim().toUpperCase();
  const quadrantStr = String(party.quadrant || "").trim().toUpperCase();
  const mapSquareForChest = await Square.findOne({ squareId: new RegExp(`^${String(party.square || "").trim().replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}$`, "i") }).lean();
@@ -984,6 +1009,9 @@ async function grantExplorationChestLootToParty(party, location, interaction) {
      try {
       await addItemInventoryDatabase(char._id, fallback.itemName, 1, interaction, "Exploration Chest");
       lootLines.push(`${char.name}: ${fallback.emoji || "📦"} ${fallback.itemName}`);
+      if (/^Map #\d+$/.test(fallback.itemName)) {
+       await sendChestMapDm(char, fallback.itemName);
+      }
      } catch (_) {}
     }
    }
@@ -999,6 +1027,9 @@ async function grantExplorationChestLootToParty(party, location, interaction) {
    try {
     await addItemInventoryDatabase(char._id, item.itemName, 1, interaction, "Exploration Chest");
     lootLines.push(`${char.name}: ${item.emoji || "📦"} ${item.itemName}`);
+    if (/^Map #\d+$/.test(item.itemName)) {
+     await sendChestMapDm(char, item.itemName);
+    }
    } catch (err) {
     handleInteractionError(err, interaction, { source: "explore.js chest open" });
     lootLines.push(`${char.name}: (failed to add item)`);

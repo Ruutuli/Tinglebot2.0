@@ -558,8 +558,18 @@ waveSchema.methods.advanceToNextMonster = async function(defeatedByParticipant, 
         maxHearts: nextMonster.maxHearts || nextMonster.hearts
       };
       
-      // Reset turn order to start
-      this.currentTurn = 0;
+      // Continue turn order across monsters: next participant after the killer goes first.
+      // Fallback to index 0 if we cannot resolve the killer in participants.
+      if (this.participants && this.participants.length > 0) {
+        const killerIndex = defeatedByParticipant
+          ? this.participants.findIndex(p => p.characterId.toString() === defeatedByParticipant.characterId.toString())
+          : -1;
+        this.currentTurn = killerIndex >= 0
+          ? (killerIndex + 1) % this.participants.length
+          : 0;
+      } else {
+        this.currentTurn = 0;
+      }
       
       return await this.save();
       
