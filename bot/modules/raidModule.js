@@ -582,10 +582,12 @@ async function joinRaid(character, raidId, options = {}) {
     }
 
     // ------------------- Blight Rain Check -------------------
+    // IMPORTANT: Exploration raids (raid.expeditionId) should NOT apply blight from Blight Rain.
+    // Blight Rain infection is only checked for normal village raids.
     const weatherData = await getCurrentWeather(raid.village);
     let blightRainMessage = null;
     
-    if (weatherData?.special?.label === 'Blight Rain') {
+    if (!raid.expeditionId && weatherData?.special?.label === 'Blight Rain') {
       // Mod characters and Hibiki are immune to blight infection
       const HIBIKI_USER_ID = "668281042414600212";
       if (character.isModCharacter || character.userId === HIBIKI_USER_ID) {

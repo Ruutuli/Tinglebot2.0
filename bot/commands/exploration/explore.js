@@ -1895,7 +1895,7 @@ async function handleGrottoCleanse(i, msg, party, expeditionId, characterIndex, 
    )
    .setImage(cleansedBannerBlessing?.imageUrl ?? getRandomGrottoBanner())
    .setThumbnail(GROTTO_CLEARED_THUMBNAIL_URL);
-  addExplorationStandardFields(blessingClearedEmbed, { party: freshParty, expeditionId, location, nextCharacter, showNextAndCommands: true, showRestSecureMove: false, ruinRestRecovered, hasDiscoveriesInQuadrant: await hasDiscoveriesInQuadrant(freshParty.square, freshParty.quadrant), hasUnpinnedDiscoveriesInQuadrant: false });
+  addExplorationStandardFields(blessingClearedEmbed, { party: freshParty, expeditionId, location, nextCharacter, showNextAndCommands: true, showRestSecureMove: false, grottoExitCommands: true, ruinRestRecovered, hasDiscoveriesInQuadrant: await hasDiscoveriesInQuadrant(freshParty.square, freshParty.quadrant), hasUnpinnedDiscoveriesInQuadrant: false });
   blessingClearedEmbed.addFields({
    name: "📍 **__Set pin on map__**",
    value: `You have discovery(ies) in this quadrant that aren't pinned yet. [Set a pin on the explore page](${explorePageUrlGrotto}) so they stay on the map when you leave.`,
@@ -4722,7 +4722,7 @@ module.exports = {
        )
        .setImage(getExploreMapImageUrl(party, { highlight: true }))
        .setThumbnail(GROTTO_BANNER_CLEANSED_URL);
-      addExplorationStandardFields(blessingEmbed, { party, expeditionId, location, nextCharacter: party.characters[party.currentTurn] ?? null, showNextAndCommands: true, showRestSecureMove: false, hasDiscoveriesInQuadrant: await hasDiscoveriesInQuadrant(party.square, party.quadrant), hasUnpinnedDiscoveriesInQuadrant: await hasUnpinnedDiscoveriesInQuadrant(party) });
+      addExplorationStandardFields(blessingEmbed, { party, expeditionId, location, nextCharacter: party.characters[party.currentTurn] ?? null, showNextAndCommands: true, showRestSecureMove: false, grottoExitCommands: true, hasDiscoveriesInQuadrant: await hasDiscoveriesInQuadrant(party.square, party.quadrant), hasUnpinnedDiscoveriesInQuadrant: await hasUnpinnedDiscoveriesInQuadrant(party) });
       const explorePageUrlRevisit = getExplorePageUrl(expeditionId);
       blessingEmbed.addFields({
        name: "📍 **__Set pin on webpage__**",
