@@ -1415,9 +1415,10 @@ function ExploreStatsSection({ data }: { data: StatsData["explores"] }) {
                 <SharedBarChart
                   data={regionChartData}
                   layout="vertical"
-                  height={Math.max(120, regionChartData.length * 36)}
+                  // Give each region label enough vertical breathing room so ticks/labels can't overlap.
+                  height={Math.max(160, regionChartData.length * 48)}
                   barColor={SECTION_ACCENT_HEX.explores}
-                  barSize={24}
+                  barSize={22}
                   nameLabel="Expeditions"
                 />
               </div>
