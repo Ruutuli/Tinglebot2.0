@@ -82,6 +82,7 @@ const SKIP_PIN_REQUIREMENT_FOR_TESTING = false;
 const { generateGrottoMaze, getPathCellAt, getNeighbourCoords, getCellBeyondWall, removeScryingWall } = require('@/utils/grottoMazeGenerator.js');
 const { renderMazeToBuffer } = require('@/utils/grottoMazeRenderer.js');
 const logger = require("@/utils/logger.js");
+const { isValidImageUrl } = require("@/utils/validation.js");
 const fs = require("fs");
 const path = require("path");
 
@@ -8381,8 +8382,10 @@ module.exports = {
 
     // Log item use to InventoryLog so Dashboard Inventory All Transactions shows it
     const locationItem = `${party.square} ${party.quadrant}`;
+    let itemRowForUsedItemEmbed = null;
     try {
       const itemForLog = await fetchItemByName(carried.itemName).catch(() => null) || { itemName: carried.itemName };
+      itemRowForUsedItemEmbed = itemForLog;
       const interactionUrl = interaction.guildId && interaction.channelId && interaction.id
         ? `https://discord.com/channels/${interaction.guildId}/${interaction.channelId}/${interaction.id}`
         : "";
@@ -8464,6 +8467,10 @@ module.exports = {
      .setColor(getExploreOutcomeColor("item", regionColors[party.region] || "#4CAF50"))
      .setDescription(embedDescription)
      .setImage("https://storage.googleapis.com/tinglebot/Borders/border_green.png");
+    const itemImg = itemRowForUsedItemEmbed?.image;
+    if (itemImg && itemImg !== "No Image" && isValidImageUrl(itemImg)) {
+     embed.setThumbnail(itemImg);
+    }
     const hasDiscItem = await hasDiscoveriesInQuadrant(party.square, party.quadrant);
     const activeWaveIdForEmbed = activeWaveForItem?.waveId ?? null;
     // When in a grotto trial (no wave), show grotto command + item instead of roll/camp/discovery
@@ -9465,7 +9472,8 @@ module.exports = {
      ...(totalStaminaRecovered > 0 ? [`+${totalStaminaRecovered} 🟩`] : [])
     ];
     const recoveryValue = recoveryParts.length > 0 ? `Party: ${recoveryParts.join(" ")}` : (paidHeartsToStruggle ? "Stamina only (no ❤️ recovery due to struggle)" : "");
-    const campFlavor = getRandomCampFlavor();
+    const quadrantMetaForCampFlavor = await getQuadrantMeta(party.square, party.quadrant);
+    const campFlavor = getRandomCampFlavor(quadrantMetaForCampFlavor);
     const quadrantStateLabel = isSecured ? "secured" : (party.quadrantState === "explored" ? "explored" : "unexplored");
     const costNote = struggleHeartsPaid > 0
      ? ` (-${struggleHeartsPaid}❤ struggle${campPayResult?.staminaPaid > 0 ? `, -${campPayResult.staminaPaid}🟩` : ""} in ${quadrantStateLabel} quadrant)`

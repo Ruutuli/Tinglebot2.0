@@ -3,18 +3,120 @@
  * Camp: peaceful rest flavor text; actual recovery is applied by /explore logic.
  */
 
-/** Peaceful rest flavor messages. Used when /explore camp is used (overnight camp). */
-const CAMP_FLAVOR_MESSAGES = [
+/**
+ * Overnight camp flavor by terrain. Keys match Map CSV terrain categories (same as SAFE_SPACE_FLAVOR_BY_TERRAIN).
+ */
+const CAMP_FLAVOR_BY_TERRAIN = {
+  "grasslands & plains": [
+    "A wide sky of stars stretches from horizon to horizon; the prairie wind thins to a lullaby.",
+    "Crickets in the tall grass trade verses until the party drifts off on dry, level ground.",
+    "Dew beads on boot leather by dawn; the plain has given them nothing but open air and rest.",
+    "They bank the fire low—out here, light carries—yet the ring of embers feels like a small kingdom.",
+    "A distant roll of thunder never arrives; only cool air off the steppe and easy breathing.",
+    "Wild things call across the dark, far-off and harmless; sleep comes anyway on beaten herd trails.",
+    "Sunrise paints the grass gold; the party wakes to the smell of dust, sun, and yesterday's miles.",
+    "Cloud shadow once swept the camp; by morning the land is bright and oddly gentle.",
+    "Someone counts constellations until their voice trails off; the plains do not hurry anyone.",
+    "The night is big enough to swallow worry; they let it, and wake ready to walk again.",
+  ],
+  "forest & woodland": [
+    "The canopy holds back the rain; only a patient drip-drip finds them, and soon even that fades.",
+    "Moss and root cradle their packs; the woods smell of wet bark and honest fatigue.",
+    "Firelight catches in spider silk between branches—fragile lanterns for one night only.",
+    "An owl asks its question once; no one answers. The forest accepts the silence.",
+    "Fallen logs make a rough circle; sap steams faintly where the heat kisses the wood.",
+    "By dawn, mist threads the trunks; birdsong stacks in layers until the party blinks awake.",
+    "Something heavy moves through brush, then away; they tighten watch, then sleep in shifts, then sleep.",
+    "Needles cushion the ground better than they expected; pine and earth ground their dreams.",
+    "A brook mutters beyond the ferns, steady enough to measure the hours until light.",
+    "The clearing felt hidden when they chose it; by morning it still feels like a secret kept for them.",
+  ],
+  "mountain & highland": [
+    "Wind hammers the pass, but this alcove of stone turns it to a dull roar—lullaby of the heights.",
+    "They sleep in shifts against the cold; shared cloaks and shared breath beat the thin air.",
+    "Stars look close enough to snag; the mountain lets them borrow its ceiling for one night.",
+    "Loose stone once skitters downslope; nothing follows. They breathe, and the ridge holds.",
+    "Morning light cuts the mist like a blade; below the clouds, the world is only rumor.",
+    "A cairn watches their camp—older than their route. They leave it untouched and wake humbled.",
+    "Bedrock leaches cold through bedrolls; still, backs stop aching, if only for a few hours.",
+    "The echo of their own settling fades; the peak seems to exhale with them.",
+    "Ice in a crevice glitters by firelight; they do not touch it, only borrow its shine.",
+    "Dawn comes sharp and honest; thin grass in the crack of the world steadies their first steps.",
+  ],
+  "snow & ice biomes": [
+    "They melt snow for tea and huddle close; every breath steams and every hour is earned.",
+    "The drift wall cuts the gale; inside their little hollow, sound becomes wool and darkness.",
+    "Moonlight on ice throws a blue glow into the tent cloth—cold light, but strangely soft.",
+    "Frost feathers their hoods by morning; stiffness is the tax, clarity is the gift.",
+    "Something cracks on the frozen pond far off; here, the ice stays silent and holds.",
+    "Snow eats their footfalls and their whispers; the night feels padded, almost kind.",
+    "They stamp feeling back into their feet at sunrise; color returns to the world in slow strips.",
+    "Stunted pines wear snow like cloaks; beneath them the drifts are shallow, the sleep deeper.",
+    "Shared warmth is policy, not romance; no one jokes about it. Everyone wakes.",
+    "The aurora—or only cloud—ripples overhead; either way, the party watches until eyelids win.",
+  ],
+  "desert & arid": [
+    "Day's heat leaks from the sand; by midnight the ground is honest stone again, cool against backs.",
+    "They sleep in the lee of a dune while sand hisses above—private, shifting roof.",
+    "Stars burn without competition; no trees, no clouds, only the bowl of the sky and quiet talk.",
+    "A lizard shares the overhang; neither side picks a fight. Truce until dawn.",
+    "The wash runs dry at their feet; pebbles remember sun. Sleep is a shallow well, but enough.",
+    "Dawn glare hits early; they pack before the desert remembers it is supposed to hurt.",
+    "Wind has carved the hoodoos into seats; they fit the puzzle, another layer of stone.",
+    "Waterskins circle once, twice; rest without water would be foolish—they found both.",
+    "Coyote song stitches the dark; far enough to admire, close enough to remind them they're alive.",
+    "Mirage memory fades with the stars; the sand under them is only sand, and solid enough.",
+  ],
+  "water & wetlands": [
+    "A dry hummock above the reeds becomes an island; frogs argue the party to sleep.",
+    "Mist blurs the marsh at dawn; shapes ten steps out could be anything—they're gone by breakfast.",
+    "Mud cracks under a thin crust; they chose footing carefully, then stopped where it held.",
+    "Dragonflies vanish with the light; in their place, ripples and the smell of wet life.",
+    "Roots make a crooked bed; damp climbs the hems, but mosquitoes miss their timing.",
+    "Something splashes away, uninterested; the party exhales and lets the bog be background.",
+    "Fire struggles in the wet air; they feed it patiently until steam replaces smoke.",
+    "Cattails rustle a secret; sleep comes in pieces, then all at once.",
+    "Morning fog lifts in rags; the water remembers the sky, and so do they.",
+    "Half-sunken logs serve as benches, then pillows; balance is a skill they didn't know they had.",
+  ],
+  volcanic: [
+    "Warm stone radiates through bedrolls; the ground remembers fire longer than the sun does.",
+    "Ash drifts like grey snow; the overhang keeps their faces clean enough to rest.",
+    "Sulphur stings, then dulls; shallow breaths become habit, then sleep.",
+    "Obsidian glints around the fire—beautiful, sharp. They pick their bed sites with care.",
+    "The earth thrums once, distant; they wait. Silence returns, and with it, heavy eyelids.",
+    "Steam threads a crack; they don't drink, but the heat on their palms feels like promise.",
+    "Cinders crunch like gravel; every small sound is loud until tiredness normalizes the noise.",
+    "Cooled basalt cups their camp; vents mutter elsewhere, a reminder and a lullaby.",
+    "Glassy bubbles in the rock tell old stories; the party adds one quiet night to the pile.",
+    "Dawn comes thin and warm; ash-light softens the world into something almost gentle.",
+  ],
+  "coastal & sea edge": [
+    "The tide turns while they sleep; foam whispers up the sand, then retreats like a polite guest.",
+    "Driftwood fences the fire from the breeze; salt and smoke braid in the air.",
+    "Gulls argue at first light, indifferent; the party is just more debris on a generous shore.",
+    "A cove cups them out of the wind; waves tap the rocks—a metronome for dreams.",
+    "Sand still holds yesterday's sun at their backs; the sea cools their faces toward morning.",
+    "Tide pools mirror broken clouds; no one disturbs the anemones—this is rest, not foraging.",
+    "Seaweed dries to leathery ribbons; stacked right, it breaks the spray better than expected.",
+    "The horizon is a clean cut between blues; for now they're only tired, not lost.",
+    "Foam hisses, withdraws, returns; the rhythm steadies nerves better than any speech.",
+    "Stars double in the wet sand; walking to the tent feels like stepping through sky.",
+  ],
+};
+
+/** When quadrant has no terrain tags or none match known categories. */
+const CAMP_FLAVOR_DEFAULT = [
   "A refreshing breeze soothes the party as they rest under the stars.",
   "The night passes peacefully with a chorus of crickets serenading the camp.",
-  "Despite the eerie sounds from the nearby woods, everyone manages to get some rest.",
   "The campfire crackles pleasantly, casting a warm glow that comforts everyone.",
   "An unexpected downpour forces the party to huddle together, sharing stories until dawn.",
-  "The party finds a perfect sleeping spot, nestled between protective boulders.",
+  "The party finds a perfect sleeping spot, nestled between sheltering stone and luck.",
   "A dreamless sleep invigorates the party, preparing them for the day ahead.",
   "Waking up to the sight of a beautiful sunrise lifts everyone's spirits.",
-  "A nocturnal animal visits the camp, curiously sniffing around before disappearing into the darkness.",
-  "The party takes turns telling tales of their past adventures, strengthening their bonds.",
+  "A nocturnal visitor sniffs the packs, then melts into the dark—curiosity, not hunger.",
+  "The party trades quiet stories until voices thin; bonds tighten in the easy dark.",
+  "Whatever the land around them, this pause holds—until dawn asks them to move again.",
 ];
 
 /**
@@ -170,10 +272,16 @@ function pickSafeSpaceTerrainKey(quadrantMeta) {
 
 /**
  * Pick a random camp flavor message. For /explore camp (overnight camp).
+ * @param {object} [quadrantMeta] — from getQuadrantMeta (uses .terrain[])
  * @returns {string}
  */
-function getRandomCampFlavor() {
-  return CAMP_FLAVOR_MESSAGES[Math.floor(Math.random() * CAMP_FLAVOR_MESSAGES.length)];
+function getRandomCampFlavor(quadrantMeta) {
+  const categoryKey = pickSafeSpaceTerrainKey(quadrantMeta);
+  const pool =
+    categoryKey && Array.isArray(CAMP_FLAVOR_BY_TERRAIN[categoryKey]) && CAMP_FLAVOR_BY_TERRAIN[categoryKey].length > 0
+      ? CAMP_FLAVOR_BY_TERRAIN[categoryKey]
+      : CAMP_FLAVOR_DEFAULT;
+  return pool[Math.floor(Math.random() * pool.length)];
 }
 
 /**
@@ -191,7 +299,8 @@ function getRandomSafeSpaceFlavor(quadrantMeta) {
 }
 
 module.exports = {
-  CAMP_FLAVOR_MESSAGES,
+  CAMP_FLAVOR_BY_TERRAIN,
+  CAMP_FLAVOR_DEFAULT,
   SAFE_SPACE_FLAVOR_BY_TERRAIN,
   SAFE_SPACE_FLAVOR_DEFAULT,
   getRandomCampFlavor,
