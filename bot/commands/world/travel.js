@@ -691,6 +691,10 @@ module.exports = {
       );
       if (!isChannelValid) return;
 
+      // Mark character as mid-travel so other commands (like /item) can block.
+      character.traveling = true;
+      await character.save();
+
       // ------------------- Update Mount After All Validations Pass -------------------
       // if (mode === 'on mount') {
       //   // Deduct mount stamina and update lastMountTravel
@@ -743,6 +747,20 @@ module.exports = {
       });
       
     } catch (error) {
+      // If the travel flag was set but the command failed mid-way (error/timeout),
+      // clear it so characters don't get stuck being "mid travel" forever.
+      try {
+        const characterNameForClear = interaction.options.getString('charactername');
+        const userIdForClear = interaction.user.id;
+        const characterToClear = await fetchCharacterByNameAndUserId(characterNameForClear, userIdForClear);
+        if (characterToClear?.traveling) {
+          characterToClear.traveling = false;
+          await characterToClear.save();
+        }
+      } catch (clearErr) {
+        console.warn(`[travel.js]: ⚠️ Failed to clear traveling flag after error: ${clearErr?.message || clearErr}`);
+      }
+
       handleInteractionError(error, 'travel.js (execute)', {
         commandName: 'travel',
         userTag: interaction.user.tag,
@@ -814,6 +832,9 @@ async function checkAndHandleKO(character, channel, startingVillage) {
       active: true,
       endDate: debuffEndDate
     };
+
+    // Travel is aborted on KO, so clear the in-transit flag.
+    character.traveling = false;
 
     await character.save();
 
@@ -938,6 +959,9 @@ async function processTravelDay(day, context) {
     // ------------------- Check if Journey is Complete -------------------
     if (day > totalTravelDuration) {
       character.currentVillage = destination;
+
+      // Travel completed, clear in-transit flag.
+      character.traveling = false;
       await character.save();
       const finalChannelId = PATH_CHANNELS[paths[paths.length - 1]] || currentChannel;
       const finalChannel = await interaction.client.channels.fetch(finalChannelId);
@@ -1497,8 +1521,9 @@ async function processTravelDay(day, context) {
       }
     } else {
       // ------------------- Safe Day of Travel -------------------
-      // Check for chest discovery (8% chance on roads)
-      const chestFound = Math.random() < 0.08;
+      // Check for chest discovery (incredibly rare on roads)
+      // 0.1% per safe travel day => ~1 chest per 1000 travel-day rolls
+      const chestFound = Math.random() < 0.001;
       context.chestFound = chestFound;
       
       // Generate Do Nothing flavor ONCE for this day

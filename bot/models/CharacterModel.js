@@ -175,6 +175,10 @@ const characterSchema = new Schema({
     }
   ],
 
+  // When true, the character is currently mid-world-travel between villages.
+  // Used to block certain actions (e.g. /item healing) while in transit.
+  traveling: { type: Boolean, default: false },
+
   // ------------------- Additional features -------------------
   jobVoucher: {
     type: Boolean,

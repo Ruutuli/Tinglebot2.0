@@ -292,6 +292,20 @@ module.exports = {
         return void await interaction.editReply({ embeds: [errorEmbed] });
       }
 
+      // ------------------- Block /item when character is mid-world travel -------------------
+      if (character.traveling) {
+        const errorEmbed = new EmbedBuilder()
+          .setColor(0xff6600)
+          .setTitle('🛣️ Cannot use /item while traveling')
+          .setDescription(
+            `**${character.name}** is currently mid-travel between villages.\n` +
+            `You cannot use the general \`/item\` command for this character until they arrive.\n\n` +
+            `Please try again after their travel finishes.`
+          )
+          .setFooter({ text: 'Travel in progress' });
+        return void await interaction.editReply({ embeds: [errorEmbed] });
+      }
+
       // ------------------- Job Voucher Handling -------------------
       // Specialized logic for 'Job Voucher' item: job assignment, perk display, Google Sheets logging.
       if (item.itemName.toLowerCase() === 'job voucher') {
