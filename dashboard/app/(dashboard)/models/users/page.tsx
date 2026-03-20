@@ -22,7 +22,7 @@ type User = {
     xp?: number;
   };
   quests?: {
-    bot?: { completed?: number; pending?: number };
+    bot?: { completed?: number; pending?: number; pendingSlotOnly?: number };
     legacy?: { completed?: number; pending?: number };
     typeTotals?: {
       art?: number;
