@@ -745,6 +745,19 @@ function normalizeCharacterName(value) {
  return pipe === -1 ? trimmed : trimmed.slice(0, pipe).trim();
 }
 
+// Strip trailing " — ❤ …" from autocomplete/pasted labels; normalize hyphens for loadout item matching.
+const EXPEDITION_ITEM_LABEL_SPLIT = /\s*[\u2014\u2013\u2012\u2010\u2011—\-–]\s*.*$/u;
+
+function normalizeExpeditionItemNameKey(s) {
+ if (!s || typeof s !== "string") return "";
+ return s
+  .trim()
+  .normalize("NFKC")
+  .replace(/[\u2010\u2011\u2012\u2013\u2014\u2212]/g, "-")
+  .replace(/\s+/g, " ")
+  .toLowerCase();
+}
+
 // ------------------- findCharacterByNameAndUser ------------------
 // Look up character by name and userId; checks both Character and ModCharacter.
 async function findCharacterByNameAndUser(characterName, userId) {
@@ -8185,7 +8198,9 @@ module.exports = {
     }
 
     const characterIndex = party.characters.findIndex(
-     (c) => c.name === characterName
+     (c) =>
+      c.name != null &&
+      c.name.trim().toLowerCase() === (characterName || "").trim().toLowerCase()
     );
     if (characterIndex === -1) {
      return interaction.editReply(
@@ -8209,15 +8224,36 @@ module.exports = {
     }
     const partyChar = party.characters[characterIndex];
     // Normalize input: autocomplete display is "ItemName — ❤ N | 🟩 N"; if user pastes that, strip suffix so we match stored itemName
-    const normalizedItemInput = (itemName || "").trim().replace(/\s*[—\-]\s*.*$/, "").trim();
-    const itemKey = normalizedItemInput.toLowerCase();
+    const normalizedItemInput = (itemName || "").trim().replace(EXPEDITION_ITEM_LABEL_SPLIT, "").trim();
+    const itemKey = normalizeExpeditionItemNameKey(normalizedItemInput);
     const itemIndex = partyChar.items.findIndex(
-     (i) => i.itemName && i.itemName.trim().toLowerCase() === itemKey
+     (i) => i.itemName && normalizeExpeditionItemNameKey(i.itemName) === itemKey
     );
     if (itemIndex === -1) {
-     return interaction.editReply(
-      `Your character doesn't have **${itemName}** in their expedition loadout.`
-     );
+     const loadoutLines = (partyChar.items || [])
+      .filter((i) => i.itemName)
+      .map(
+       (i) =>
+        `• **${i.itemName}** — ❤️${i.modifierHearts || 0} | 🟩${i.staminaRecovered || 0}`
+      )
+      .join("\n");
+     const tried = normalizedItemInput || (itemName || "").trim() || "—";
+     const desc =
+      `**${partyChar.name}** does not have **${tried}** in their expedition loadout (by item name).\n\n` +
+      (loadoutLines
+       ? `**Their loadout in this expedition:**\n${loadoutLines}\n\nPick the item from the **item** autocomplete, or check the dashboard loadout matches.`
+       : `_No items are stored on this character in the expedition party data._`);
+     return interaction.editReply({
+      embeds: [
+       createExplorationErrorEmbed("❌ **Item not in loadout**", desc, {
+        party,
+        expeditionId,
+        location: `${party.square} ${party.quadrant}`,
+        nextCharacter: party?.characters?.[party?.currentTurn] ?? null,
+        showNextAndCommands: true,
+       }),
+      ],
+     });
     }
 
     const carried = partyChar.items[itemIndex];
