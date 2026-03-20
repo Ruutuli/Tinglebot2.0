@@ -417,7 +417,7 @@ const EXPLORATION_CHEST_RELIC_CHANCE = 0.02;
 const EXPLORATION_OUTCOME_CHANCES = {
   monster: 0.20,   // combat encounters
   item: 0.42,      // finding items (gather) — increased from 0.33
-  explored: 0.195, // fallback when grotto can't be placed (square has grotto, at cap, etc.)
+  explored: 0.215, // fallback when grotto can't be placed (square has grotto, at cap, etc.); absorbs grotto weight reduction
   fairy: 0.05,
   chest: 0.01,     // reduced: chests show up less often
   old_map: 0.01,   // less likely: map finds
@@ -425,7 +425,7 @@ const EXPLORATION_OUTCOME_CHANCES = {
   relic: 0.005,
   camp: 0.02,      // safe space
   monster_camp: 0.04,
-  grotto: 0.03,    // grotto discovery (lowered so grottos are rarer)
+  grotto: 0.01,    // grotto discovery (~1% per roll; was 3%)
 };
 
 // ------------------- Hot Spring: chance to heal 1 heart when rolling in a Hot Spring quadrant (only when party has missing hearts) ------------------
