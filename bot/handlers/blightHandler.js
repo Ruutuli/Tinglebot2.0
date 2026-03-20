@@ -2315,6 +2315,85 @@ async function rollForBlightProgression(interaction, characterName) {
       return;
     }
 
+    // ------------------- Missed Roll Failsafe -------------------
+    // If they skipped one (or more) prior daily windows, advance before
+    // applying today's random roll outcome, so the bot response reflects reality.
+    if (character.lastRollDate) {
+      const DAY_MS = 24 * 60 * 60 * 1000;
+
+      // Determine the rolling window start (1:00 AM UTC) for the last time they rolled.
+      const lastRollUtcHour = getHourInUTC(character.lastRollDate);
+      let lastWindowStart;
+      if (lastRollUtcHour < 1) {
+        const d = new Date(character.lastRollDate);
+        d.setUTCDate(d.getUTCDate() - 1);
+        lastWindowStart = get1AMUTC(d);
+      } else {
+        lastWindowStart = get1AMUTC(character.lastRollDate);
+      }
+
+      const dayDiff = Math.round((rollBoundary.getTime() - lastWindowStart.getTime()) / DAY_MS);
+      // Missed windows are all full windows between lastWindowStart and the current window.
+      // Example: lastWindowStart -> current window is 2 days apart => missed 1 window.
+      const missedCount = Math.max(0, dayDiff - 1);
+
+      const currentStage = character.blightStage || 1;
+      if (missedCount > 0 && currentStage < 5) {
+        // Determine what stage we *should* be at based on the last manual /blight roll.
+        // This prevents double-advancing if the scheduled missed-roll job already ran.
+        let lastRolledStage = currentStage;
+        try {
+          const BlightRollHistory = require('@/models/BlightRollHistoryModel');
+
+          if (mongoose.connection.readyState === 0) {
+            await mongoose.connect(process.env.MONGODB_URI, {
+              useNewUrlParser: true,
+              useUnifiedTopology: true
+            });
+          }
+
+          const lastRollHistory = await BlightRollHistory
+            .findOne({ characterId: character._id })
+            .sort({ timestamp: -1 });
+
+          if (lastRollHistory && typeof lastRollHistory.newStage === 'number') {
+            lastRolledStage = lastRollHistory.newStage;
+          }
+        } catch (historyErr) {
+          logger.warn('BLIGHT', `Missed-roll failsafe history lookup failed for ${characterName}: ${historyErr.message}`);
+        }
+
+        const expectedStage = Math.min(5, lastRolledStage + missedCount);
+        if (expectedStage > currentStage) {
+          const toStage = expectedStage;
+
+          character.blightStage = toStage;
+          character.blightEffects = {
+            rollMultiplier: toStage === 2 ? 1.5 : 1.0,
+            noMonsters: toStage >= 3,
+            noGathering: toStage >= 4
+          };
+
+          if (toStage === 5) {
+            character.deathDeadline = character.deathDeadline ||
+              new Date(Date.now() + 7 * DAY_MS);
+          }
+
+          await character.save();
+
+          // If the failsafe pushes them to stage 5, they can't roll anymore.
+          if (toStage === 5) {
+            await interaction.editReply({
+              content: `⚠️ **${characterName}** is at Stage 5 Blight and cannot roll anymore.\n\n` +
+                `You have until <t:${Math.floor(character.deathDeadline.getTime() / 1000)}:F> to be healed by a Dragon or your character will die.`,
+              flags: [4096],
+            });
+            return;
+          }
+        }
+      }
+    }
+
     // ------------------- Roll & Stage Determination -------------------
     character.lastRollDate = new Date(); // Use UTC time consistently
     
@@ -3690,20 +3769,22 @@ async function checkMissedRolls(client) {
       
       // ---- SKIP missed roll progression if newly blighted after previous blight call ----
       if (character.blightedAt) {
-        const isBlightedAfterPreviousCall = character.blightedAt >= previousBlightCall;
+        // Grace period: if they were infected after the start of the current rolling window,
+        // they shouldn't be penalized for missing this window's roll call.
+        const isBlightedAfterCurrentWindowStart = character.blightedAt >= currentRollBoundary;
         
-        if (isBlightedAfterPreviousCall) {
-          console.log(`[blightHandler]: Skipping missed roll for ${character.name} (blightedAt=${character.blightedAt.toISOString()}, previousBlightCall=${previousBlightCall.toISOString()}) - infected after previous blight call.`);
+        if (isBlightedAfterCurrentWindowStart) {
+          console.log(`[blightHandler]: Skipping missed roll for ${character.name} (blightedAt=${character.blightedAt.toISOString()}, windowStart=${currentRollBoundary.toISOString()}) - infected after current rolling window start.`);
           continue;
         }
       }
       
       // ---- CRITICAL: Check if character rolled in the period we're checking ----
-      // The period we're checking is from previousBlightCall to currentRollBoundary
-      // If they rolled after previousBlightCall, they rolled in the period and didn't miss it
+      // We consider the current rolling window (windowStart=currentRollBoundary).
+      // If they rolled after windowStart, they didn't miss this window.
       // This is the primary check that prevents false progression
-      if (character.lastRollDate && character.lastRollDate > previousBlightCall) {
-        console.log(`[blightHandler]: ✅ Skipping missed roll for ${character.name} - rolled in period. Last roll: ${character.lastRollDate.toISOString()}, Previous boundary: ${previousBlightCall.toISOString()}`);
+      if (character.lastRollDate && character.lastRollDate > currentRollBoundary) {
+        console.log(`[blightHandler]: ✅ Skipping missed roll for ${character.name} - rolled in period. Last roll: ${character.lastRollDate.toISOString()}, Window start: ${currentRollBoundary.toISOString()}`);
         continue;
       }
       
@@ -3958,11 +4039,12 @@ async function checkMissedRolls(client) {
       //
       // We've already skipped above: rolled in period, paused, or stage 5.
       const isPastBlightCallTime = (utcHour === 0 && utcMinute >= 59) || utcHour >= 1;
-      const lastRollBeforePreviousCall = !character.lastRollDate || character.lastRollDate <= previousBlightCall;
-      const shouldProgress = isPastBlightCallTime && lastRollBeforePreviousCall && character.blightStage < 5;
+      // Auto-advance if they didn't roll during the current rolling window.
+      const lastRollBeforeCurrentWindow = !character.lastRollDate || character.lastRollDate <= currentRollBoundary;
+      const shouldProgress = isPastBlightCallTime && lastRollBeforeCurrentWindow && character.blightStage < 5;
       
       if (shouldProgress) {
-        console.log(`[blightHandler]: ⚠️ ${character.name} missed roll - Last roll: ${lastRollDate.toISOString()}, Previous boundary: ${previousBlightCall.toISOString()}, Current time: ${now.toISOString()}, Progressing from Stage ${character.blightStage}`);
+        console.log(`[blightHandler]: ⚠️ ${character.name} missed roll - Last roll: ${lastRollDate.toISOString()}, Window start: ${currentRollBoundary.toISOString()}, Current time: ${now.toISOString()}, Progressing from Stage ${character.blightStage}`);
         
         // Fetch the actual document from the correct model to update and save
         let characterDoc;
