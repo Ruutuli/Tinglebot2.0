@@ -104,7 +104,7 @@ module.exports = {
   .addSubcommand(subcommand =>
    subcommand
     .setName("turnin")
-    .setDescription("Exchange 10 completed quests for a special reward")
+    .setDescription("Exchange 10 completed quests for a Character Slot or Spirit Orb (meme slot credits are slot-only)")
     .addStringOption(option =>
      option
       .setName("reward")
@@ -386,11 +386,19 @@ const completionSummary = legacyCompleted > 0
    ].filter(Boolean).join("\n")
    : "⚠️ **Not transferred** — use `/quest transfer` to import your legacy quests.";
 
+  const orbEl = turnInSummary.orbEligiblePending ?? legacyPending + currentPending;
+  const slotOnlyP = turnInSummary.slotOnlyPending ?? 0;
+  const orbSets = turnInSummary.redeemableOrbSets ?? Math.floor(orbEl / 10);
+  const pendingLine =
+   slotOnlyP > 0
+    ? `• 🎁 **Pending:** ${this.formatQuestCount(pendingTurnIns)} total (${this.formatQuestCount(orbEl)} toward Spirit Orb, ${this.formatQuestCount(slotOnlyP)} slot-only from Hard Art Meme) • Slot sets: **${redeemableSets}** • Orb sets: **${orbSets}**`
+    : `• 🎁 **Pending Turn-Ins:** ${this.formatQuestCount(pendingTurnIns)} • Sets Ready: **${redeemableSets}**`;
+
 const snapshotLines = [
  `• 🎯 **Tracked Quests:** ${this.formatQuestCount(totalCompleted)}`,
  `• 🗒️ **Legacy Quests:** ${this.formatQuestCount(legacyCompleted)}`,
  `• 🧮 **All-Time Total:** ${this.formatQuestCount(allTimeTotal)}`,
-`• 🎁 **Pending Turn-Ins:** ${this.formatQuestCount(pendingTurnIns)} • Sets Ready: **${redeemableSets}**`,
+ pendingLine,
    `• 🧭 **Unique Quest Types:** ${uniqueTypes}`,
    `• 🏆 **Favorite Quest Type:** ${favoriteType}`,
    `• 📅 **Last Completion:** ${lastCompletionAt}`
@@ -481,8 +489,24 @@ async handleQuestTurnIn(interaction) {
   const currentSummary = user.getQuestTurnInSummary();
   const totalPending = currentSummary.totalPending || 0;
   const redeemableSets = currentSummary.redeemableSets || 0;
+  const orbEligiblePending = currentSummary.orbEligiblePending ?? 0;
+  const redeemableOrbSets = currentSummary.redeemableOrbSets ?? Math.floor(orbEligiblePending / 10);
+  const slotOnlyPending = currentSummary.slotOnlyPending ?? 0;
 
-  if (totalPending < requiredTurnIns || redeemableSets < 1) {
+  if (rewardType === "spirit_orb") {
+   if (orbEligiblePending < requiredTurnIns || redeemableOrbSets < 1) {
+    const shortage = requiredTurnIns - (orbEligiblePending % requiredTurnIns || requiredTurnIns);
+    let extra =
+     slotOnlyPending > 0
+      ? `\n• You have ${this.formatQuestCount(slotOnlyPending)} **slot-only** credit(s) from Hard Group Art Memes — those apply to **Character Slot** turn-ins only.`
+      : "";
+    return interaction.reply({
+     content:
+      `❌ You need at least ${requiredTurnIns} quest turn-ins that count toward a **Spirit Orb**. You currently have ${this.formatQuestCount(orbEligiblePending)}.\n• Spirit Orb sets ready: ${this.formatQuestCount(redeemableOrbSets)}\n• Toward next Spirit Orb: ${this.formatQuestCount(currentSummary.orbRemainder ?? orbEligiblePending % 10)}/10\n• Turn-ins needed: ${this.formatQuestCount(shortage)}${extra}`,
+     flags: MessageFlags.Ephemeral
+    });
+   }
+  } else if (totalPending < requiredTurnIns || redeemableSets < 1) {
    const shortage = requiredTurnIns - (totalPending % requiredTurnIns || requiredTurnIns);
    const message =
     totalPending < requiredTurnIns
@@ -510,7 +534,7 @@ async handleQuestTurnIn(interaction) {
    }
   }
 
-  const consumeResult = await user.consumeQuestTurnIns(requiredTurnIns);
+  const consumeResult = await user.consumeQuestTurnIns(requiredTurnIns, { rewardType });
   if (!consumeResult.success) {
    return interaction.reply({
     content: `❌ ${consumeResult.error || "Unable to redeem quest turn-ins right now. Please try again later."}`,
@@ -622,8 +646,10 @@ async handleQuestTurnIn(interaction) {
     name: "📊 Updated Turn-In Progress",
     value: [
      `• Pending Turn-Ins: ${this.formatQuestCount(updatedSummary.totalPending || 0)}`,
-     `• Sets Ready: ${this.formatQuestCount(updatedSummary.redeemableSets || 0)}`,
-     `• Toward Next: ${this.formatQuestCount(updatedSummary.remainder || 0)}/10`
+     `• Sets Ready (slot or orb): ${this.formatQuestCount(updatedSummary.redeemableSets || 0)}`,
+     `• Toward Next: ${this.formatQuestCount(updatedSummary.remainder || 0)}/10`,
+     `• Spirit Orb–eligible pending: ${this.formatQuestCount(updatedSummary.orbEligiblePending ?? 0)} · Orb sets: ${this.formatQuestCount(updatedSummary.redeemableOrbSets ?? 0)}`,
+     `• Slot-only (meme) pending: ${this.formatQuestCount(updatedSummary.slotOnlyPending ?? 0)}`
     ].join("\n"),
     inline: false
    }

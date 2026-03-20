@@ -94,7 +94,8 @@ const userSchema = new mongoose.Schema({
   // Clear shape: bot (since bot introduced) and legacy (pre-bot, one-time import). Totals are derived.
   //
   //   quests.bot.completed   = number of bot quests completed (all-time)
-  //   quests.bot.pending    = not yet turned in (redeem 10 for reward); equals completed until consumeQuestTurnIns
+  //   quests.bot.pending     = not yet turned in, redeemable for Spirit Orb OR Character Slot (general quests)
+  //   quests.bot.pendingSlotOnly = hard group art meme credits — Character Slot turn-in only
   //
   //   quests.legacy.completed = legacy quests imported (pre-bot total)
   //   quests.legacy.pending   = legacy quests not yet turned in
@@ -108,7 +109,8 @@ const userSchema = new mongoose.Schema({
   quests: {
     bot: {
       completed: { type: Number, default: 0 },
-      pending: { type: Number, default: 0 }
+      pending: { type: Number, default: 0 },
+      pendingSlotOnly: { type: Number, default: 0 }
     },
     legacy: {
       completed: { type: Number, default: 0 },
@@ -134,7 +136,8 @@ const userSchema = new mongoose.Schema({
         rewardedAt: { type: Date, default: null },
         tokensEarned: { type: Number, default: 0 },
         itemsEarned: [{ name: String, quantity: Number }],
-        rewardSource: { type: String, default: 'immediate' }
+        rewardSource: { type: String, default: 'immediate' },
+        slotOnlyTurnIn: { type: Boolean, default: false }
       }
     ],
     turnIns: {
@@ -144,7 +147,8 @@ const userSchema = new mongoose.Schema({
         turnedInAt: { type: Date, default: Date.now },
         amount: { type: Number },
         fromBot: { type: Number },
-        fromLegacy: { type: Number }
+        fromLegacy: { type: Number },
+        fromBotSlotOnly: { type: Number, default: 0 }
       }]
     }
   },
@@ -482,7 +486,7 @@ function getQuestTypeKey(questType = '') {
 
 function defaultQuestTracking() {
   return {
-    bot: { completed: 0, pending: 0 },
+    bot: { completed: 0, pending: 0, pendingSlotOnly: 0 },
     legacy: { completed: 0, pending: 0, transferredAt: null, transferUsed: false },
     lastCompletionAt: null,
     typeTotals: {
@@ -517,11 +521,13 @@ function migrateQuestShapeToBotLegacy(quests) {
   if (needBot) {
     quests.bot = {
       completed: safePendingNumber(quests.totalCompleted),
-      pending: safePendingNumber(quests.pendingTurnIns)
+      pending: safePendingNumber(quests.pendingTurnIns),
+      pendingSlotOnly: 0
     };
   } else {
     if (typeof quests.bot.completed !== 'number') quests.bot.completed = safePendingNumber(quests.totalCompleted);
     if (typeof quests.bot.pending !== 'number') quests.bot.pending = safePendingNumber(quests.pendingTurnIns);
+    if (typeof quests.bot.pendingSlotOnly !== 'number') quests.bot.pendingSlotOnly = 0;
   }
   if (needLegacy) {
     quests.legacy = {
@@ -537,7 +543,10 @@ function migrateQuestShapeToBotLegacy(quests) {
 }
 
 function shouldFixPendingTurnInsFromCompletions(questTracking) {
-  const actualCompletions = countUniqueQuestCompletions(questTracking.completions || []);
+  if (safePendingNumber(questTracking.bot?.pendingSlotOnly) > 0) return false;
+  const completions = questTracking.completions || [];
+  if (completions.some((c) => c && c.slotOnlyTurnIn === true)) return false;
+  const actualCompletions = countUniqueQuestCompletions(completions);
   const currentPending = questTracking.bot?.pending ?? 0;
   const legacyPending = questTracking.legacy?.pending ?? 0;
   const legacyTransferUsed = questTracking.legacy?.transferUsed || false;
@@ -584,19 +593,45 @@ userSchema.methods.ensureQuestTracking = function() {
     }
     this.quests.bot.completed = safePendingNumber(this.quests.bot.completed);
     this.quests.bot.pending = safePendingNumber(this.quests.bot.pending);
+    if (typeof this.quests.bot.pendingSlotOnly !== 'number') {
+      this.quests.bot.pendingSlotOnly = 0;
+    } else {
+      this.quests.bot.pendingSlotOnly = safePendingNumber(this.quests.bot.pendingSlotOnly);
+    }
     this.recomputePendingTurnInsIfNeeded('ensureQuestTracking');
     if (this.quests.bot.pending < 0) {
       this.quests.bot.pending = 0;
       logger.info('QUEST', `ensureQuestTracking: clamped bot.pending for user ${this.discordId}`);
     }
-    // If user has turn-in history, bot.pending cannot exceed (bot.completed - total already turned in from bot)
+    if (this.quests.bot.pendingSlotOnly < 0) {
+      this.quests.bot.pendingSlotOnly = 0;
+    }
+    // If user has turn-in history, bot pending (general + slot-only) cannot exceed (bot.completed - total already turned in from bot)
     const turnInHistory = this.quests.turnIns?.history;
     if (Array.isArray(turnInHistory) && turnInHistory.length > 0) {
-      const totalConsumedFromBot = turnInHistory.reduce((sum, e) => sum + (safePendingNumber(e.fromBot) || 0), 0);
-      const maxPossibleBotPending = Math.max(0, (this.quests.bot.completed || 0) - totalConsumedFromBot);
-      if (this.quests.bot.pending > maxPossibleBotPending) {
-        this.quests.bot.pending = maxPossibleBotPending;
-        logger.info('QUEST', `ensureQuestTracking: clamped bot.pending to possible max for user ${this.discordId}: ${maxPossibleBotPending}`);
+      const totalConsumedFromBot = turnInHistory.reduce(
+        (sum, e) =>
+          sum +
+          safePendingNumber(e.fromBot) +
+          safePendingNumber(e.fromBotSlotOnly),
+        0
+      );
+      const maxCombined = Math.max(0, (this.quests.bot.completed || 0) - totalConsumedFromBot);
+      let g = safePendingNumber(this.quests.bot.pending);
+      let s = safePendingNumber(this.quests.bot.pendingSlotOnly);
+      if (g + s > maxCombined) {
+        let over = g + s - maxCombined;
+        while (over > 0 && s > 0) {
+          s -= 1;
+          over -= 1;
+        }
+        while (over > 0 && g > 0) {
+          g -= 1;
+          over -= 1;
+        }
+        this.quests.bot.pending = g;
+        this.quests.bot.pendingSlotOnly = s;
+        logger.info('QUEST', `ensureQuestTracking: clamped bot pending pools for user ${this.discordId}: general=${g} slotOnly=${s}`);
       }
     }
 
@@ -640,7 +675,8 @@ userSchema.methods.recordQuestCompletion = async function({
   rewardedAt = null,
   tokensEarned = 0,
   itemsEarned = [],
-  rewardSource = 'immediate'
+  rewardSource = 'immediate',
+  slotOnlyTurnIn = false
 } = {}) {
   const questTracking = this.ensureQuestTracking();
   const completionTimestamp = rewardedAt || completedAt || new Date();
@@ -668,7 +704,7 @@ userSchema.methods.recordQuestCompletion = async function({
       totalCompleted: questTracking.bot.completed,
       lastCompletionAt: questTracking.lastCompletionAt,
       typeTotals: questTracking.typeTotals,
-      pendingTurnIns: questTracking.bot.pending
+      pendingTurnIns: this.getQuestPendingTurnIns()
     };
   }
   
@@ -683,6 +719,9 @@ userSchema.methods.recordQuestCompletion = async function({
       existingCompletion.tokensEarned = tokensEarned;
       existingCompletion.itemsEarned = normalizedItems;
       existingCompletion.rewardSource = rewardSource;
+      if (slotOnlyTurnIn === true) {
+        existingCompletion.slotOnlyTurnIn = true;
+      }
       isNewCompletion = false;
     }
   } else {
@@ -705,6 +744,9 @@ userSchema.methods.recordQuestCompletion = async function({
         existingCompletion.tokensEarned = tokensEarned;
         existingCompletion.itemsEarned = normalizedItems;
         existingCompletion.rewardSource = rewardSource;
+        if (slotOnlyTurnIn === true) {
+          existingCompletion.slotOnlyTurnIn = true;
+        }
         // Try to set questId if we now have it
         if (questId) {
           existingCompletion.questId = questId;
@@ -723,10 +765,15 @@ userSchema.methods.recordQuestCompletion = async function({
       rewardedAt: rewardedAt || completionTimestamp,
       tokensEarned,
       itemsEarned: normalizedItems,
-      rewardSource
+      rewardSource,
+      slotOnlyTurnIn: Boolean(slotOnlyTurnIn)
     });
     questTracking.bot.completed += 1;
-    questTracking.bot.pending = (questTracking.bot.pending || 0) + 1;
+    if (slotOnlyTurnIn === true) {
+      questTracking.bot.pendingSlotOnly = (questTracking.bot.pendingSlotOnly || 0) + 1;
+    } else {
+      questTracking.bot.pending = (questTracking.bot.pending || 0) + 1;
+    }
     questTracking.typeTotals[typeKey] = (questTracking.typeTotals[typeKey] || 0) + 1;
   } else {
     const actualCompletions = countUniqueQuestCompletions(questTracking.completions);
@@ -746,7 +793,7 @@ userSchema.methods.recordQuestCompletion = async function({
     questTracking.completions = questTracking.completions.slice(-25);
   }
 
-  logger.info('QUEST', `recordQuestCompletion: userId=${this.discordId} questId=${questId || '(none)'} rewardSource=${rewardSource} isNew=${isNewCompletion} bot.completed=${questTracking.bot.completed} bot.pending=${questTracking.bot.pending}`);
+  logger.info('QUEST', `recordQuestCompletion: userId=${this.discordId} questId=${questId || '(none)'} rewardSource=${rewardSource} isNew=${isNewCompletion} bot.completed=${questTracking.bot.completed} bot.pending=${questTracking.bot.pending} bot.pendingSlotOnly=${questTracking.bot.pendingSlotOnly || 0}`);
 
   await this.save();
 
@@ -754,7 +801,7 @@ userSchema.methods.recordQuestCompletion = async function({
     totalCompleted: questTracking.bot.completed,
     lastCompletionAt: questTracking.lastCompletionAt,
     typeTotals: questTracking.typeTotals,
-    pendingTurnIns: questTracking.bot.pending
+    pendingTurnIns: this.getQuestPendingTurnIns()
   };
 };
 
@@ -847,29 +894,39 @@ userSchema.methods.getQuestPendingTurnIns = function() {
   const questTracking = this.ensureQuestTracking();
   const legacyPending = safePendingNumber(questTracking.legacy?.pending);
   const botPending = safePendingNumber(questTracking.bot?.pending);
-  return Math.max(0, legacyPending + botPending);
+  const slotOnly = safePendingNumber(questTracking.bot?.pendingSlotOnly);
+  return Math.max(0, legacyPending + botPending + slotOnly);
 };
 
 userSchema.methods.getQuestTurnInSummary = function() {
   const questTracking = this.ensureQuestTracking();
   const legacyPending = safePendingNumber(questTracking.legacy?.pending);
   const botPending = safePendingNumber(questTracking.bot?.pending);
-  const totalPending = Math.max(0, legacyPending + botPending);
+  const slotOnlyPending = safePendingNumber(questTracking.bot?.pendingSlotOnly);
+  const orbEligiblePending = Math.max(0, legacyPending + botPending);
+  const totalPending = Math.max(0, orbEligiblePending + slotOnlyPending);
   const redeemableSets = Math.floor(totalPending / 10);
   const remainder = totalPending % 10;
+  const redeemableOrbSets = Math.floor(orbEligiblePending / 10);
+  const orbRemainder = orbEligiblePending % 10;
 
   return {
     totalPending,
     redeemableSets,
     remainder,
     legacyPending,
-    currentPending: botPending
+    currentPending: botPending,
+    slotOnlyPending,
+    orbEligiblePending,
+    redeemableOrbSets,
+    orbRemainder
   };
 };
 
-userSchema.methods.consumeQuestTurnIns = async function(amount = 10) {
+userSchema.methods.consumeQuestTurnIns = async function(amount = 10, options = {}) {
   const questTracking = this.ensureQuestTracking();
   const sanitizedAmount = Number.isFinite(amount) ? Math.max(0, Math.floor(amount)) : 0;
+  const rewardType = options.rewardType === 'spirit_orb' ? 'spirit_orb' : 'character_slot';
 
   if (sanitizedAmount <= 0) {
     return { success: false, error: 'Amount to consume must be greater than zero.' };
@@ -878,8 +935,21 @@ userSchema.methods.consumeQuestTurnIns = async function(amount = 10) {
   // Use centralized fix so current pending is correct before we read/deduct (handles legacy-aware rules)
   this.recomputePendingTurnInsIfNeeded('consumeQuestTurnIns');
 
-  const totalPending = this.getQuestPendingTurnIns();
-  if (totalPending < sanitizedAmount) {
+  const legacyBefore = safePendingNumber(questTracking.legacy?.pending);
+  const botBefore = safePendingNumber(questTracking.bot?.pending);
+  const slotOnlyBefore = safePendingNumber(questTracking.bot?.pendingSlotOnly);
+  const orbEligibleBefore = legacyBefore + botBefore;
+  const totalPending = orbEligibleBefore + slotOnlyBefore;
+
+  if (rewardType === 'spirit_orb') {
+    if (orbEligibleBefore < sanitizedAmount) {
+      return {
+        success: false,
+        error:
+          `Not enough quest turn-ins that count toward a Spirit Orb. You have ${orbEligibleBefore} (Hard Group Art Meme credits are for character slots only). You need ${sanitizedAmount}.`
+      };
+    }
+  } else if (totalPending < sanitizedAmount) {
     return {
       success: false,
       error: `Not enough pending quest turn-ins. You currently have ${totalPending}.`
@@ -893,44 +963,62 @@ userSchema.methods.consumeQuestTurnIns = async function(amount = 10) {
   let remaining = sanitizedAmount;
   let consumedFromCurrent = 0;
   let consumedFromLegacy = 0;
+  let consumedFromSlotOnly = 0;
 
-  const botPendingBefore = safePendingNumber(questTracking.bot?.pending);
-  const legacyPendingBeforeDeduct = safePendingNumber(questTracking.legacy?.pending);
-
-  if (botPendingBefore > 0 && remaining > 0) {
-    consumedFromCurrent = Math.min(botPendingBefore, remaining);
-    questTracking.bot.pending = Math.max(0, botPendingBefore - consumedFromCurrent);
-    remaining -= consumedFromCurrent;
+  if (rewardType === 'spirit_orb') {
+    if (botBefore > 0 && remaining > 0) {
+      consumedFromCurrent = Math.min(botBefore, remaining);
+      remaining -= consumedFromCurrent;
+    }
+    if (remaining > 0 && legacyBefore > 0) {
+      consumedFromLegacy = Math.min(legacyBefore, remaining);
+      remaining -= consumedFromLegacy;
+    }
+  } else {
+    if (botBefore > 0 && remaining > 0) {
+      consumedFromCurrent = Math.min(botBefore, remaining);
+      remaining -= consumedFromCurrent;
+    }
+    if (remaining > 0 && legacyBefore > 0) {
+      consumedFromLegacy = Math.min(legacyBefore, remaining);
+      remaining -= consumedFromLegacy;
+    }
+    if (remaining > 0 && slotOnlyBefore > 0) {
+      consumedFromSlotOnly = Math.min(slotOnlyBefore, remaining);
+      remaining -= consumedFromSlotOnly;
+    }
   }
 
-  if (remaining > 0 && legacyPendingBeforeDeduct > 0) {
-    consumedFromLegacy = Math.min(legacyPendingBeforeDeduct, remaining);
-    questTracking.legacy.pending = Math.max(0, legacyPendingBeforeDeduct - consumedFromLegacy);
-    remaining -= consumedFromLegacy;
-  }
+  questTracking.bot.pending = Math.max(0, botBefore - consumedFromCurrent);
+  questTracking.legacy.pending = Math.max(0, legacyBefore - consumedFromLegacy);
+  questTracking.bot.pendingSlotOnly = Math.max(0, slotOnlyBefore - consumedFromSlotOnly);
 
   questTracking.bot.pending = safePendingNumber(questTracking.bot?.pending);
   questTracking.legacy.pending = safePendingNumber(questTracking.legacy?.pending);
+  questTracking.bot.pendingSlotOnly = safePendingNumber(questTracking.bot?.pendingSlotOnly);
 
-  // When total pending is 0 after consume, clear both to 0 so nothing is left
   const totalAfterConsume = this.getQuestPendingTurnIns();
   if (totalAfterConsume <= 0) {
     questTracking.bot.pending = 0;
+    questTracking.bot.pendingSlotOnly = 0;
     questTracking.legacy.pending = 0;
   }
 
   if (remaining > 0) {
-    const consumed = consumedFromCurrent + consumedFromLegacy;
-    logger.error('QUEST', `consumeQuestTurnIns: attempted to consume ${sanitizedAmount} but only consumed ${consumed} (current=${consumedFromCurrent} legacy=${consumedFromLegacy}); totalPending before was ${totalPending}; userId=${this.discordId}`);
+    const consumed = consumedFromCurrent + consumedFromLegacy + consumedFromSlotOnly;
+    logger.error(
+      'QUEST',
+      `consumeQuestTurnIns: attempted to consume ${sanitizedAmount} but only consumed ${consumed} (bot=${consumedFromCurrent} legacy=${consumedFromLegacy} slotOnly=${consumedFromSlotOnly}); totalPending before was ${totalPending}; userId=${this.discordId}`
+    );
   }
 
-  // Atomic DB update: use pipeline so pending never goes negative and deduction always persists (robust against missing nested paths)
   const setsThisTimeForUpdate = Math.floor(sanitizedAmount / 10) || 1;
   const historyEntry = {
     turnedInAt: new Date(),
     amount: sanitizedAmount,
     fromBot: consumedFromCurrent,
-    fromLegacy: consumedFromLegacy
+    fromLegacy: consumedFromLegacy,
+    fromBotSlotOnly: consumedFromSlotOnly
   };
   const updatePipeline = [
     {
@@ -939,6 +1027,12 @@ userSchema.methods.consumeQuestTurnIns = async function(amount = 10) {
           $max: [
             0,
             { $subtract: [{ $ifNull: ['$quests.bot.pending', 0] }, consumedFromCurrent] }
+          ]
+        },
+        'quests.bot.pendingSlotOnly': {
+          $max: [
+            0,
+            { $subtract: [{ $ifNull: ['$quests.bot.pendingSlotOnly', 0] }, consumedFromSlotOnly] }
           ]
         },
         'quests.legacy.pending': {
@@ -982,8 +1076,8 @@ userSchema.methods.consumeQuestTurnIns = async function(amount = 10) {
     };
   }
 
-  // Sync in-memory doc from DB so any later reads are correct; response uses DB-backed summary only
   this.quests.bot.pending = safePendingNumber(updatedDoc.quests.bot?.pending);
+  this.quests.bot.pendingSlotOnly = safePendingNumber(updatedDoc.quests.bot?.pendingSlotOnly);
   this.quests.legacy.pending = safePendingNumber(updatedDoc.quests.legacy?.pending);
   this.quests.turnIns = updatedDoc.quests.turnIns || this.quests.turnIns;
 
@@ -993,6 +1087,7 @@ userSchema.methods.consumeQuestTurnIns = async function(amount = 10) {
     consumed: sanitizedAmount,
     consumedFromCurrent,
     consumedFromLegacy,
+    consumedFromSlotOnly,
     remainingPending: turnInSummary.totalPending,
     turnInSummary
   };

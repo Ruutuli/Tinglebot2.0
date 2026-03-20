@@ -84,6 +84,8 @@ export type QuestCompletion = {
   tokensEarned: number;
   itemsEarned: Array<{ name: string; quantity: number }>;
   rewardSource: string;
+  /** Hard Group Art Meme — counts toward character slot turn-ins only */
+  slotOnlyTurnIn?: boolean;
 };
 
 export type QuestTypeTotals = {
@@ -107,6 +109,7 @@ export type QuestTurnInEntry = {
   amount: number;
   fromBot: number;
   fromLegacy: number;
+  fromBotSlotOnly?: number;
 };
 
 export type QuestTurnIns = {
@@ -124,6 +127,8 @@ export type QuestListEntry = {
 export type QuestBot = {
   completed: number;
   pending: number;
+  /** Hard Group Art Meme credits — character slot turn-in only */
+  pendingSlotOnly?: number;
 };
 
 export type Quests = {

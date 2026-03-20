@@ -1999,7 +1999,7 @@ const createArtSubmissionEmbed = (submissionData) => {
       memeValue += ` – ${submissionData.memeTemplate}`;
     }
     if (submissionData.memeMode === 'hard') {
-      memeValue += '\n_Eligible for 1 slot point if requirements met (Full Color + Waist Up or Full Body)._';
+      memeValue += '\n_Turn-in credit is **character slot only** (not Spirit Orb). Eligible for 1 slot point if requirements met (Full Color + Waist Up or Full Body)._';
     }
     fields.push({ name: 'Group Art Meme', value: memeValue, inline: false });
   }

@@ -2317,7 +2317,7 @@ async function handleApprove(interaction) {
           }
         }
 
-        // Record 1 quest completion for Hard Mode Group Art Meme (counts toward 10-quest turn-in)
+        // Record 1 quest completion for Hard Mode Group Art Meme (slot-only turn-in pool; not Spirit Orb)
         if (submission.category === 'art' && submission.isGroupMeme === true && submission.memeMode === 'hard') {
           try {
             const memeUser = await User.getOrCreateUser(submission.userId);
@@ -2325,9 +2325,10 @@ async function handleApprove(interaction) {
               questId: 'GROUP_MEME_HARD_' + submission.submissionId,
               questType: 'art',
               questTitle: submission.memeTemplate ? 'Group Art Meme (Hard): ' + submission.memeTemplate : 'Group Art Meme (Hard)',
-              rewardSource: 'immediate'
+              rewardSource: 'immediate',
+              slotOnlyTurnIn: true
             });
-            console.log(`[mod.js]: ✅ Recorded 1 quest completion for Hard Mode Group Meme (submission ${submissionId}, user ${submission.userId})`);
+            console.log(`[mod.js]: ✅ Recorded 1 slot-only quest completion for Hard Mode Group Meme (submission ${submissionId}, user ${submission.userId})`);
           } catch (memeQuestError) {
             console.error(`[mod.js]: ❌ Error recording quest completion for Hard Mode Group Meme (submission ${submissionId}):`, memeQuestError);
             // Continue with approval even if this fails

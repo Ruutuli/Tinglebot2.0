@@ -447,7 +447,7 @@ async function handleConfirmation(interaction, userId, submissionData) {
         if (submissionData.isGroupMeme === true && submissionData.memeMode === 'hard') {
           notificationFields.push({
             name: '🎨 Group Art Meme (Hard)',
-            value: '1 quest completion will be recorded for the submitter on approval (counts toward 10-quest turn-in). Eligible for 1 slot point if requirements met (Full Color + Waist Up or Full Body).',
+            value: '1 quest completion will be recorded for the submitter on approval (character slot turn-in pool only — not Spirit Orb). Eligible for 1 slot point if requirements met (Full Color + Waist Up or Full Body).',
             inline: false
           });
         }

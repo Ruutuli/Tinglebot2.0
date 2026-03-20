@@ -83,7 +83,7 @@ function toNonNegInt(value) {
 
 function defaultQuestTracking() {
   return {
-    bot: { completed: 0, pending: 0 },
+    bot: { completed: 0, pending: 0, pendingSlotOnly: 0 },
     legacy: {
       completed: 0,
       pending: 0,
@@ -114,6 +114,7 @@ function getQuestSnapshot(userDoc) {
   const legacy = (q && q.legacy) || {};
   const botCompleted = q.bot?.completed ?? q.totalCompleted;
   const botPending = q.bot?.pending ?? q.pendingTurnIns;
+  const botPendingSlotOnly = toNonNegInt(q.bot?.pendingSlotOnly);
   // Prefer old keys when present so we don't hide legacy data (Mongoose may add legacy.completed/pending = 0 from schema)
   const legacyCompleted =
     legacy.totalTransferred !== undefined && legacy.totalTransferred !== null
@@ -126,6 +127,7 @@ function getQuestSnapshot(userDoc) {
   return {
     botCompleted,
     botPending,
+    botPendingSlotOnly,
     legacyCompleted,
     legacyPending,
     legacyTransferUsed: legacy.transferUsed,
@@ -141,7 +143,8 @@ function computeDerived(snapshot) {
   const botPending = toNonNegInt(snapshot.botPending);
   const legacyPending = toNonNegInt(snapshot.legacyPending);
   const totalCompletedAllTime = botCompleted + legacyCompleted;
-  const totalPendingTurnIns = botPending + legacyPending;
+  const botPendingSlotOnly = toNonNegInt(snapshot.botPendingSlotOnly);
+  const totalPendingTurnIns = botPending + legacyPending + botPendingSlotOnly;
   const redeemableSets = Math.floor(totalPendingTurnIns / 10);
   const remainder = totalPendingTurnIns % 10;
   return {
@@ -161,9 +164,10 @@ function migrateQuestShape(q) {
   if (!q || typeof q !== "object") return false;
   let changed = false;
   if (q.totalCompleted !== undefined || q.pendingTurnIns !== undefined) {
-    if (!q.bot || typeof q.bot !== "object") q.bot = { completed: 0, pending: 0 };
+    if (!q.bot || typeof q.bot !== "object") q.bot = { completed: 0, pending: 0, pendingSlotOnly: 0 };
     if (typeof q.bot.completed !== "number") q.bot.completed = toNonNegInt(q.totalCompleted);
     if (typeof q.bot.pending !== "number") q.bot.pending = toNonNegInt(q.pendingTurnIns);
+    if (typeof q.bot.pendingSlotOnly !== "number") q.bot.pendingSlotOnly = 0;
     changed = true;
   }
   const legacy = q.legacy || {};
@@ -224,6 +228,7 @@ function applyFixesToUser(userDoc) {
   }
   if (typeof q.bot.completed !== "number") q.bot.completed = defaultQuestTracking().bot.completed;
   if (typeof q.bot.pending !== "number") q.bot.pending = defaultQuestTracking().bot.pending;
+  if (typeof q.bot.pendingSlotOnly !== "number") q.bot.pendingSlotOnly = defaultQuestTracking().bot.pendingSlotOnly;
 
   if (!q.legacy || typeof q.legacy !== "object") {
     q.legacy = { ...defaultQuestTracking().legacy };
@@ -292,7 +297,11 @@ function applyFixesToUser(userDoc) {
   }
 
   const actualUnique = countUniqueQuestCompletions(q.completions);
-  if (q.bot.completed < actualUnique) {
+  const hasSlotOnlyTracking =
+    toNonNegInt(q.bot.pendingSlotOnly) > 0 ||
+    (Array.isArray(q.completions) && q.completions.some((c) => c && c.slotOnlyTurnIn === true));
+
+  if (!hasSlotOnlyTracking && q.bot.completed < actualUnique) {
     const diff = actualUnique - q.bot.completed;
     q.bot.completed = actualUnique;
     q.bot.pending = toNonNegInt(q.bot.pending) + diff;
@@ -300,7 +309,7 @@ function applyFixesToUser(userDoc) {
     changed = true;
   }
 
-  if (q.bot.pending === 0 && q.bot.completed > 0 && q.bot.completed === actualUnique) {
+  if (!hasSlotOnlyTracking && q.bot.pending === 0 && q.bot.completed > 0 && q.bot.completed === actualUnique) {
     q.bot.pending = q.bot.completed;
     changes.push(`fix: bot pending 0 → ${q.bot.completed} (= bot.completed)`);
     changed = true;

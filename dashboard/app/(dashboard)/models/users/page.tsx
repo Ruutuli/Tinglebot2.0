@@ -207,10 +207,11 @@ export default function UsersPage() {
               const xp = u.leveling?.xp ?? 0;
               const questsCompleted = u.quests?.bot?.completed ?? (u.quests as { totalCompleted?: number })?.totalCompleted ?? 0;
               const pendingTurnIns = u.quests?.bot?.pending ?? (u.quests as { pendingTurnIns?: number })?.pendingTurnIns ?? 0;
+              const botPendingSlotOnly = u.quests?.bot?.pendingSlotOnly ?? 0;
               const legacyTransferred = u.quests?.legacy?.completed ?? (u.quests?.legacy as { totalTransferred?: number })?.totalTransferred ?? 0;
               const legacyPending = u.quests?.legacy?.pending ?? (u.quests?.legacy as { pendingTurnIns?: number })?.pendingTurnIns ?? 0;
               const allTimeQuests = questsCompleted + legacyTransferred;
-              const totalPending = pendingTurnIns + legacyPending;
+              const totalPending = pendingTurnIns + legacyPending + botPendingSlotOnly;
               const helpWantedTotal = u.helpWanted?.totalCompletions ?? 0;
               const helpWantedCurrent = u.helpWanted?.currentCompletions ?? 0;
               const ownedCharacters = u.characterCount ?? 0;
@@ -356,6 +357,12 @@ export default function UsersPage() {
                           valueClass="text-[var(--totk-light-green)]"
                         />
                       </div>
+                      {botPendingSlotOnly > 0 && (
+                        <p className="text-[10px] text-[var(--totk-light-ocher)]/90">
+                          Includes {formatInt(botPendingSlotOnly)} Hard Art Meme credit
+                          {botPendingSlotOnly === 1 ? "" : "s"} (character slot turn-in only).
+                        </p>
+                      )}
                     </div>
                   </div>
 

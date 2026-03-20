@@ -1166,11 +1166,22 @@ function QuestSection({ user }: { user: UserProfile }) {
                 {turnInSummary.totalPending} total
               </Pill>
               <Pill className="bg-[var(--botw-blue)]/20 text-[var(--botw-blue)]">
-                {turnInSummary.redeemableSets} sets
+                {turnInSummary.redeemableSets} sets (slot)
               </Pill>
               <Pill className="bg-[var(--totk-grey-400)]/50 text-[var(--botw-pale)]">
                 {turnInSummary.remainder} left
               </Pill>
+              <Pill className="bg-[var(--totk-light-green)]/15 text-[var(--totk-light-green)]">
+                {turnInSummary.orbEligiblePending} orb-eligible
+              </Pill>
+              <Pill className="bg-[var(--totk-light-green)]/15 text-[var(--totk-light-green)]">
+                {turnInSummary.redeemableOrbSets} orb sets
+              </Pill>
+              {turnInSummary.slotOnlyPending > 0 && (
+                <Pill className="bg-[var(--totk-mid-ocher)]/25 text-[var(--totk-light-ocher)]">
+                  {turnInSummary.slotOnlyPending} meme (slot only)
+                </Pill>
+              )}
             </div>
           </div>
 
@@ -2715,9 +2726,13 @@ function getXPRequiredForLevel(targetLevel: number): number {
 function calculateQuestTurnInSummary(quests: UserProfile["quests"]) {
   const legacyPending = quests.legacy?.pending ?? (quests.legacy as { pendingTurnIns?: number })?.pendingTurnIns ?? 0;
   const currentPending = quests.bot?.pending ?? (quests as { pendingTurnIns?: number }).pendingTurnIns ?? 0;
-  const totalPending = legacyPending + currentPending;
+  const slotOnlyPending = quests.bot?.pendingSlotOnly ?? 0;
+  const orbEligiblePending = legacyPending + currentPending;
+  const totalPending = orbEligiblePending + slotOnlyPending;
   const redeemableSets = Math.floor(totalPending / 10);
   const remainder = totalPending % 10;
+  const redeemableOrbSets = Math.floor(orbEligiblePending / 10);
+  const orbRemainder = orbEligiblePending % 10;
 
   return {
     totalPending,
@@ -2725,6 +2740,10 @@ function calculateQuestTurnInSummary(quests: UserProfile["quests"]) {
     remainder,
     legacyPending,
     currentPending,
+    slotOnlyPending,
+    orbEligiblePending,
+    redeemableOrbSets,
+    orbRemainder,
   };
 }
 

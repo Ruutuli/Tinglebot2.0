@@ -5613,7 +5613,7 @@ module.exports = {
         "**Open** — Cleanse the grotto now (1 Goddess Plume + 1 stamina).";
       } else if (outcomeType === "camp") {
        // Random event: safe space (instant recovery). Not the /explore camp command.
-       const safeSpaceFlavorRoll = getRandomSafeSpaceFlavor();
+       const safeSpaceFlavorRoll = getRandomSafeSpaceFlavor(quadrantMeta);
        title = `🗺️ **Expedition: Found a safe space and rested!**`;
        description =
         `**${character.name}** found a safe space in **${location}** and rested!\n\n\`\`\`\n${safeSpaceFlavorRoll}\n\`\`\`\n\nRecovered ❤️ **${campHeartsRecovered}** heart(s) and 🟩 **${campStaminaRecovered}** stamina.`;
