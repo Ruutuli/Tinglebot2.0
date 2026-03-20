@@ -745,8 +745,9 @@ function normalizeCharacterName(value) {
  return pipe === -1 ? trimmed : trimmed.slice(0, pipe).trim();
 }
 
-// Strip trailing " — ❤ …" from autocomplete/pasted labels; normalize hyphens for loadout item matching.
-const EXPEDITION_ITEM_LABEL_SPLIT = /\s*[\u2014\u2013\u2012\u2010\u2011—\-–]\s*.*$/u;
+// Strip trailing " — ❤ …" from autocomplete/pasted labels. Require whitespace before em/en dash so
+// in-name hyphens (e.g. Deep-Fried) are not treated as the label separator.
+const EXPEDITION_ITEM_LABEL_SPLIT = /\s+[\u2014\u2013]\s+.*$/u;
 
 function normalizeExpeditionItemNameKey(s) {
  if (!s || typeof s !== "string") return "";
