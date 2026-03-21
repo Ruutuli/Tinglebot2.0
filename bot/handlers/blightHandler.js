@@ -113,6 +113,19 @@ function get1AMUTC(date = new Date()) {
   return utcDate;
 }
 
+// First 1:00 AM UTC boundary for the roll window where daily /blight rolls first apply after infection.
+function getFirstBlightRollObligationBoundary(blightedAt) {
+  if (!blightedAt) return null;
+  const at = new Date(blightedAt);
+  let boundary = get1AMUTC(at);
+  if (at.getTime() >= boundary.getTime()) {
+    const next = new Date(at);
+    next.setUTCDate(next.getUTCDate() + 1);
+    boundary = get1AMUTC(next);
+  }
+  return boundary;
+}
+
 // ============================================================================
 // ------------------- Database Connection -------------------
 // Use DatabaseConnectionManager for unified connection management
@@ -183,6 +196,7 @@ async function finalizeBlightApplication(character, userId, options = {}) {
           noMonsters: false,
           noGathering: false
         };
+        character.lastRollDate = null;
       }
       character.blightPaused = false;
       await character.save();
@@ -908,7 +922,9 @@ async function completeBlightHealing(character, interaction = null, client = nul
     noMonsters: false,
     noGathering: false
   };
-  
+  character.lastRollDate = null;
+  character.deathDeadline = null;
+
   await character.save();
 
   // Check if user has any other blighted characters and manage blighted role
@@ -2332,6 +2348,11 @@ async function rollForBlightProgression(interaction, characterName) {
         lastWindowStart = get1AMUTC(character.lastRollDate);
       }
 
+      const obligationBoundary = getFirstBlightRollObligationBoundary(character.blightedAt);
+      if (obligationBoundary && lastWindowStart.getTime() < obligationBoundary.getTime()) {
+        lastWindowStart = obligationBoundary;
+      }
+
       const dayDiff = Math.round((rollBoundary.getTime() - lastWindowStart.getTime()) / DAY_MS);
       // Missed windows are all full windows between lastWindowStart and the current window.
       // Example: lastWindowStart -> current window is 2 days apart => missed 1 window.
@@ -2352,8 +2373,16 @@ async function rollForBlightProgression(interaction, characterName) {
             });
           }
 
+          const historyFilter = {
+            characterId: character._id,
+            rollValue: { $gte: 1 }
+          };
+          if (character.blightedAt) {
+            historyFilter.timestamp = { $gte: character.blightedAt };
+          }
+
           const lastRollHistory = await BlightRollHistory
-            .findOne({ characterId: character._id })
+            .findOne(historyFilter)
             .sort({ timestamp: -1 });
 
           if (lastRollHistory && typeof lastRollHistory.newStage === 'number') {
