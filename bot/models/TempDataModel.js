@@ -153,7 +153,8 @@ const tempDataSchema = new mongoose.Schema({
       'cache',         // General caching
       'session',       // User sessions
       'temp',         // Temporary data
-      'pendingSheetOperation' // Pending Google Sheets operations
+      'pendingSheetOperation', // Pending Google Sheets operations
+      'blupeeSpawn' // Blupee minigame: active spawn + per-user round locks per channel
     ],
     index: true
   },
@@ -218,6 +219,9 @@ tempDataSchema.pre('save', function(next) {
       break;
     case 'travelEncounter':
       this.expiresAt = new Date(Date.now() + 5 * 60 * 1000); // 5 minutes (match encounter timeout)
+      break;
+    case 'blupeeSpawn':
+      this.expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000); // 30 days (until next spawn replaces)
       break;
     case 'blight_warning':
     case 'healing_warning':

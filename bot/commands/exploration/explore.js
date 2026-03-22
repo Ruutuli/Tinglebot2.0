@@ -428,9 +428,11 @@ const EXPLORATION_OUTCOME_CHANCES = {
   grotto: 0.01,    // grotto discovery (~1% per roll; was 3%)
 };
 
-// ------------------- Hot Spring: chance to heal 1 heart when rolling in a Hot Spring quadrant (only when party has missing hearts) ------------------
+// ------------------- Hot Spring: chance to heal up to 25% of max party hearts when rolling in a Hot Spring quadrant (only when party has missing hearts) ------------------
 const HOT_SPRING_HEAL_CHANCE = 0.25;
-const HOT_SPRING_HEAL_AMOUNT = 1;
+const HOT_SPRING_HEAL_FRACTION = 0.25;
+// Camping in a hot-spring quadrant: extra hearts and/or stamina (rolled separately; same fraction cap as roll hot spring)
+const HOT_SPRING_CAMP_EXTRA_BONUS_CHANCE = 0.75;
 
 // ------------------- Retreat (tier 5+ raids): +5% per fail, cap 95% ------------------
 const RETREAT_BASE_CHANCE = 0.5;
@@ -1553,6 +1555,24 @@ function countSpecialEventsInSquare(party, square) {
   count += 1;
  }
  return count;
+}
+
+// Types stored on exploringMap that count toward MAX_SPECIAL_EVENTS_PER_SQUARE (aligned with SPECIAL_OUTCOMES).
+const MAP_DISCOVERY_TYPES_FOR_CAP = new Set(["monster_camp", "grotto", "ruins"]);
+
+// ------------------- countSpecialDiscoveriesOnMap ------------------
+function countSpecialDiscoveriesOnMap(squareDoc) {
+ if (!squareDoc?.quadrants || !Array.isArray(squareDoc.quadrants)) return 0;
+ let n = 0;
+ for (const q of squareDoc.quadrants) {
+  const discoveries = q.discoveries;
+  if (!Array.isArray(discoveries)) continue;
+  for (const d of discoveries) {
+   const t = String(d?.type || "").toLowerCase();
+   if (MAP_DISCOVERY_TYPES_FOR_CAP.has(t)) n += 1;
+  }
+ }
+ return n;
 }
 
 const MAX_GROTTOS_PER_SQUARE = 2;
@@ -5085,25 +5105,29 @@ module.exports = {
 
      const location = `${party.square} ${party.quadrant}`;
 
-     // Hot Spring: if quadrant has Hot Spring and party has room for hearts, chance to heal 1 heart (no proc when full)
+     // Hot Spring: if quadrant has Hot Spring and party has room for hearts, chance to heal up to 25% of max hearts (no proc when full)
      let hotSpringMessage = null;
      const quadrantMeta = await getQuadrantMeta(party.square, party.quadrant);
      const hasHotSpring = (quadrantMeta.special || []).some((s) => String(s || "").toLowerCase() === "hot spring");
      if (hasHotSpring && (party.totalHearts ?? 0) < poolCaps.maxHearts && Math.random() < HOT_SPRING_HEAL_CHANCE) {
       const beforeHearts = Math.max(0, party.totalHearts ?? 0);
-      party.totalHearts = Math.min(poolCaps.maxHearts, beforeHearts + HOT_SPRING_HEAL_AMOUNT);
+      const missing = poolCaps.maxHearts - beforeHearts;
+      const rawCap = Math.floor(poolCaps.maxHearts * HOT_SPRING_HEAL_FRACTION);
+      const healCap = Math.max(rawCap, 1);
+      const hotSpringHealAmount = Math.min(missing, healCap);
+      party.totalHearts = Math.min(poolCaps.maxHearts, beforeHearts + hotSpringHealAmount);
       party.markModified("totalHearts");
       await party.save();
-      pushProgressLog(party, character.name, "hot_spring", `The hot springs in ${location} soothed the party. +${HOT_SPRING_HEAL_AMOUNT} ❤`, undefined, { heartsRecovered: HOT_SPRING_HEAL_AMOUNT }, new Date());
-      hotSpringMessage = `The hot springs soothed the party. **+${HOT_SPRING_HEAL_AMOUNT} ❤**`;
-      logger.info("EXPLORE", `[explore.js] id=${party.partyId ?? "?"} hot_spring ❤${beforeHearts} +${HOT_SPRING_HEAL_AMOUNT} → ❤${party.totalHearts ?? 0}`);
+      pushProgressLog(party, character.name, "hot_spring", `The hot springs in ${location} soothed the party. +${hotSpringHealAmount} ❤`, undefined, { heartsRecovered: hotSpringHealAmount }, new Date());
+      hotSpringMessage = `The hot springs soothed the party. **+${hotSpringHealAmount} ❤**`;
+      logger.info("EXPLORE", `[explore.js] id=${party.partyId ?? "?"} hot_spring ❤${beforeHearts} +${hotSpringHealAmount} → ❤${party.totalHearts ?? 0}`);
      }
 
      // Calculate danger level based on distance from start
      const dangerLevel = calculateDangerLevel(party);
 
      // Single outcome per roll: one of monster, item, explored, fairy, chest, old_map, ruins, relic, camp, monster_camp, grotto (chances in EXPLORATION_OUTCOME_CHANCES)
-     // Reroll if: explored twice in a row; or special (ruins/relic/camp/monster_camp/grotto) and square has 3 discoveries; or grotto and square already has grotto; or special and discovery-reduce roll fails
+     // Reroll if: explored twice in a row; or special (ruins/relic/camp/monster_camp/grotto) and square has 3 discoveries (progressLog and/or exploringMap); or grotto and square already has grotto; or special and discovery-reduce roll fails
      // Monster chance is boosted based on distance from start (dangerBonus added to monster chance, taken from item/explored)
      function rollOutcome() {
       // Build adjusted chances based on danger level
@@ -5141,7 +5165,6 @@ module.exports = {
      }
      let outcomeType = rollOutcome();
      const currentSquareNorm = normalizeSquareId(party.square);
-     const specialCount = countSpecialEventsInSquare(party, party.square);
      const lastOutcomeHere = getLastProgressOutcomeForLocation(party, party.square, party.quadrant);
      // Only use map doc that matches this square (avoid wrong square false positives)
      let mapSquareForGrotto = null;
@@ -5149,6 +5172,10 @@ module.exports = {
       const found = await Square.findOne({ squareId: new RegExp(`^${String(party.square).trim().replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}$`, "i") });
       if (found && normalizeSquareId(found.squareId) === currentSquareNorm) mapSquareForGrotto = found;
      }
+     const specialCount = Math.max(
+      countSpecialEventsInSquare(party, party.square),
+      countSpecialDiscoveriesOnMap(mapSquareForGrotto)
+     );
      for (;;) {
       // Don't allow "explored" twice in a row at the same location
       if (outcomeType === "explored" && lastOutcomeHere === "explored") {
@@ -9421,12 +9448,38 @@ module.exports = {
     }
     party.markModified("characters");
     if (!paidHeartsToStruggle && totalHeartsRecovered < 1 && (party.totalHearts ?? 0) < sumMaxHearts) totalHeartsRecovered = 1;
+
+    const quadrantMetaForCampFlavor = await getQuadrantMeta(party.square, party.quadrant);
+    const campInHotSpring = (quadrantMetaForCampFlavor.special || []).some((s) => String(s || "").toLowerCase() === "hot spring");
+    let hotSpringCampExtraHearts = 0;
+    if (campInHotSpring && !paidHeartsToStruggle) {
+     const projectedHearts = Math.min(sumMaxHearts, (party.totalHearts ?? 0) + totalHeartsRecovered);
+     const missingAfterCamp = sumMaxHearts - projectedHearts;
+     if (missingAfterCamp > 0 && Math.random() < HOT_SPRING_CAMP_EXTRA_BONUS_CHANCE) {
+      const rawCapExtra = Math.floor(sumMaxHearts * HOT_SPRING_HEAL_FRACTION);
+      const healCapExtra = Math.max(rawCapExtra, 1);
+      hotSpringCampExtraHearts = Math.min(missingAfterCamp, healCapExtra);
+      totalHeartsRecovered += hotSpringCampExtraHearts;
+     }
+    }
+
     // Stamina: random up to staminaPct of party max (25% unsecured, 50% secured).
     const poolStam = party.totalStamina ?? 0;
     const staminaRoom = Math.max(0, sumMaxStamina - poolStam);
     const staminaCap = Math.floor(sumMaxStamina * staminaPct);
     const staminaMaxRecover = Math.min(staminaRoom, staminaCap);
     let totalStaminaRecovered = staminaMaxRecover > 0 ? (1 + Math.floor(Math.random() * staminaMaxRecover)) : 0;
+    let hotSpringCampExtraStamina = 0;
+    if (campInHotSpring) {
+     const projectedStam = Math.min(sumMaxStamina, poolStam + totalStaminaRecovered);
+     const missingStamAfterCamp = sumMaxStamina - projectedStam;
+     if (missingStamAfterCamp > 0 && Math.random() < HOT_SPRING_CAMP_EXTRA_BONUS_CHANCE) {
+      const rawCapStam = Math.floor(sumMaxStamina * HOT_SPRING_HEAL_FRACTION);
+      const stamHealCap = Math.max(rawCapStam, 1);
+      hotSpringCampExtraStamina = Math.min(missingStamAfterCamp, stamHealCap);
+      totalStaminaRecovered += hotSpringCampExtraStamina;
+     }
+    }
     party.totalHearts = Math.min(sumMaxHearts, Math.max(0, (party.totalHearts ?? 0) + totalHeartsRecovered));
     party.totalStamina = Math.min(sumMaxStamina, Math.max(0, (party.totalStamina ?? 0) + totalStaminaRecovered));
     party.markModified("totalHearts");
@@ -9447,9 +9500,13 @@ module.exports = {
      ? ` (-${struggleHeartsPaid} ❤ struggle${campPayResult?.staminaPaid > 0 ? `, -${campPayResult.staminaPaid} stamina` : ""})` 
      : (campPayResult?.staminaPaid > 0 ? ` (-${campPayResult.staminaPaid} stamina)` : "");
     const campLogStamina = campCostDisplay + (totalStaminaRecovered > 0 ? ` (+${totalStaminaRecovered} stamina)` : "");
+    const hotSpringCampNote =
+     hotSpringCampExtraHearts > 0 || hotSpringCampExtraStamina > 0
+      ? ` Hot springs:${hotSpringCampExtraHearts > 0 ? ` +${hotSpringCampExtraHearts} ❤ extra` : ""}${hotSpringCampExtraHearts > 0 && hotSpringCampExtraStamina > 0 ? ";" : ""}${hotSpringCampExtraStamina > 0 ? ` +${hotSpringCampExtraStamina} stamina extra` : ""}.`
+      : "";
     const campLogMessage = paidHeartsToStruggle
      ? `Camped at ${locationCamp}. Party recovered stamina only (no hearts due to struggle).${campLogStamina}`
-     : `Camped at ${locationCamp}. Party recovered hearts.${campLogStamina}`;
+     : `Camped at ${locationCamp}. Party recovered hearts.${hotSpringCampNote}${campLogStamina}`;
     pushProgressLog(
      party,
      character.name,
@@ -9472,7 +9529,6 @@ module.exports = {
      ...(totalStaminaRecovered > 0 ? [`+${totalStaminaRecovered} 🟩`] : [])
     ];
     const recoveryValue = recoveryParts.length > 0 ? `Party: ${recoveryParts.join(" ")}` : (paidHeartsToStruggle ? "Stamina only (no ❤️ recovery due to struggle)" : "");
-    const quadrantMetaForCampFlavor = await getQuadrantMeta(party.square, party.quadrant);
     const campFlavor = getRandomCampFlavor(quadrantMetaForCampFlavor);
     const quadrantStateLabel = isSecured ? "secured" : (party.quadrantState === "explored" ? "explored" : "unexplored");
     const costNote = struggleHeartsPaid > 0
@@ -9483,7 +9539,17 @@ module.exports = {
      .setTitle(campTitle)
      .setColor(getExploreOutcomeColor("camp", regionColors[party.region] || "#4CAF50"))
      .setDescription(
-      `${character.name} set up camp.${costNote}\n\n\`\`\`\n${campFlavor}\n\`\`\``
+      `${character.name} set up camp.${costNote}${
+       hotSpringCampExtraHearts > 0 || hotSpringCampExtraStamina > 0
+        ? `\n\n♨️ **Hot springs** —${
+            hotSpringCampExtraHearts > 0 ? ` +**${hotSpringCampExtraHearts}** ❤` : ""
+           }${
+            hotSpringCampExtraHearts > 0 && hotSpringCampExtraStamina > 0 ? " ·" : ""
+           }${
+            hotSpringCampExtraStamina > 0 ? ` +**${hotSpringCampExtraStamina}** 🟩` : ""
+           } extra recovery.`
+        : ""
+      }\n\n\`\`\`\n${campFlavor}\n\`\`\``
      )
      .setImage(getExploreMapImageUrl(party, { highlight: true }));
     const hasDiscCamp = await hasDiscoveriesInQuadrant(party.square, party.quadrant);
