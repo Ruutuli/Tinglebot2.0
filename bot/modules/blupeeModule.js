@@ -1,16 +1,22 @@
 // ============================================================================
-// Blupee minigame: spawns, /tableroll roll name:blupee, weighted outcomes
+// Blupee minigame: spawns, /minigame blupee, weighted outcomes
 // ============================================================================
 
 const { EmbedBuilder } = require('discord.js');
 const TableRoll = require('@/models/TableRollModel');
 const TempData = require('@/models/TempDataModel');
+const { connectToTinglebot } = require('@/database/db');
+const logger = require('@/utils/logger');
 const { addItemInventoryDatabase } = require('@/utils/inventoryUtils');
 const { handleInteractionError } = require('@/utils/globalErrorHandler');
 
 const BLUPEE_TABLE_NAME = 'blupee';
 const TEST_CHANNEL_ID = '1391812848099004578';
 const SYSTEM_CREATOR = 'blupee-system';
+/** How long a Blupee “round” stays active (Mongo TTL + roll eligibility). */
+const BLUPEE_SPAWN_DURATION_MS = 15 * 60 * 1000;
+/** Auto-spawn waves per UTC day during April (Easter event). */
+const BLUPEE_AUTO_SPAWNS_PER_DAY = 6;
 
 const BLUPEE_IMAGES = [
   'https://64.media.tumblr.com/e0644def9e3c93975b8f8de49b42d366/d494ff443666a7d7-67/s540x810/2b403639169328c797fbf9e2a2783a3647079448.gif',
@@ -31,6 +37,114 @@ function getTownHallIdSet() {
 
 function isBlupeeGloballyEnabled() {
   return String(process.env.BLUPEE_ENABLED || '').toLowerCase() === 'true';
+}
+
+/** April auto-spawns require BLUPEE_ENABLED; optional BLUPEE_AUTO_SPAWN=false to disable only the scheduler. */
+function isBlupeeAutoSpawnEnabled() {
+  if (!isBlupeeGloballyEnabled()) return false;
+  const v = process.env.BLUPEE_AUTO_SPAWN;
+  if (v === undefined || v === '') return true;
+  return String(v).toLowerCase() === 'true';
+}
+
+function isAprilUtc(date) {
+  return date.getUTCMonth() === 3;
+}
+
+function utcDateKey(d) {
+  return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}-${String(d.getUTCDate()).padStart(2, '0')}`;
+}
+
+function endOfUtcDay(d) {
+  return new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate(), 23, 59, 59, 999));
+}
+
+function randomDistinctMinutes(count, maxExclusive) {
+  const set = new Set();
+  while (set.size < count) {
+    set.add(Math.floor(Math.random() * maxExclusive));
+  }
+  return [...set].sort((a, b) => a - b);
+}
+
+async function getOrCreateDailyScheduleDoc() {
+  const now = new Date();
+  const key = utcDateKey(now);
+  let doc = await TempData.findByTypeAndKey('blupeeDailySchedule', key);
+  if (doc) return doc;
+
+  const slots = randomDistinctMinutes(BLUPEE_AUTO_SPAWNS_PER_DAY, 1440);
+  const expiresAt = endOfUtcDay(now);
+  await TempData.create({
+    type: 'blupeeDailySchedule',
+    key,
+    expiresAt,
+    data: {
+      slots,
+      fired: slots.map(() => false)
+    }
+  });
+  doc = await TempData.findByTypeAndKey('blupeeDailySchedule', key);
+  const slotLabel = slots
+    .map((m) => `${String(Math.floor(m / 60)).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}`)
+    .join(', ');
+  logger.info('BLUPEE', `Daily auto-spawn schedule ${key} UTC (${BLUPEE_AUTO_SPAWNS_PER_DAY} random times): ${slotLabel}`);
+  return doc;
+}
+
+/**
+ * Agenda: every minute. In April, when BLUPEE_ENABLED (+ BLUPEE_AUTO_SPAWN), spawns at 6 random UTC times per day in each town hall.
+ */
+async function runBlupeeAutoSpawnTick(client) {
+  const now = new Date();
+  if (!isAprilUtc(now) || !isBlupeeAutoSpawnEnabled()) return;
+
+  await connectToTinglebot();
+
+  const doc = await getOrCreateDailyScheduleDoc();
+  if (!doc?.data?.slots?.length) return;
+
+  const minuteOfDay = now.getUTCHours() * 60 + now.getUTCMinutes();
+  const slots = doc.data.slots;
+  const fired = [...(doc.data.fired || [])];
+  const idx = slots.findIndex((s, i) => s === minuteOfDay && !fired[i]);
+  if (idx === -1) return;
+
+  const guildId = process.env.GUILD_ID;
+  if (!guildId || !client) {
+    logger.warn('BLUPEE', 'Auto-spawn skipped: missing GUILD_ID or Discord client');
+    return;
+  }
+
+  let guild;
+  try {
+    guild = await client.guilds.fetch(guildId);
+  } catch (e) {
+    logger.warn('BLUPEE', `Auto-spawn guild fetch failed: ${e.message}`);
+    return;
+  }
+
+  const hallIds = [
+    process.env.RUDANIA_TOWNHALL,
+    process.env.INARIKO_TOWNHALL,
+    process.env.VHINTL_TOWNHALL
+  ].filter(Boolean);
+
+  for (const id of hallIds) {
+    try {
+      const ch = await guild.channels.fetch(id);
+      if (ch?.isTextBased()) await postBlupeeSpawn(ch);
+    } catch (e) {
+      logger.warn('BLUPEE', `Auto-spawn failed for channel ${id}: ${e.message}`);
+    }
+  }
+
+  fired[idx] = true;
+  await TempData.findOneAndUpdate(
+    { type: 'blupeeDailySchedule', key: doc.key },
+    { $set: { 'data.fired': fired } }
+  );
+  logger.success('BLUPEE', `Auto-spawn wave ${idx + 1}/${slots.length} (${utcDateKey(now)} UTC)`);
 }
 
 function testChannelRequiresSpawn() {
@@ -72,13 +186,6 @@ function canUseBlupeeHere(interaction) {
   if (isTestContext(interaction)) return true;
   if (isTownHallContext(interaction)) return isBlupeeGloballyEnabled();
   return false;
-}
-
-function needsActiveModSpawn(interaction) {
-  if (isTestContext(interaction)) {
-    return testChannelRequiresSpawn();
-  }
-  return true;
 }
 
 function buildTableEntries() {
@@ -173,22 +280,17 @@ function buildBlupeeEmbed({ outcome, flavorBody, thumbnailUrl, extraFooter, inve
   return embed;
 }
 
-async function getOrCreateVirtualSpawn(stateKey) {
-  let doc = await TempData.findByTypeAndKey('blupeeSpawn', stateKey);
-  if (doc) return doc;
-
-  const expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
-  await TempData.create({
-    type: 'blupeeSpawn',
-    key: stateKey,
-    expiresAt,
-    data: {
-      messageId: null,
-      virtual: true,
-      participantState: {}
-    }
-  });
-  return TempData.findByTypeAndKey('blupeeSpawn', stateKey);
+/** Remove the spawn announcement message after a catch (best-effort). */
+async function deleteSpawnAnnouncementMessage(client, stateKey, messageId) {
+  if (!client || !messageId) return;
+  try {
+    const ch = await client.channels.fetch(stateKey).catch(() => null);
+    if (!ch?.isTextBased()) return;
+    const msg = await ch.messages.fetch(messageId).catch(() => null);
+    if (msg) await msg.delete().catch(() => {});
+  } catch (_) {
+    /* ignore */
+  }
 }
 
 async function rollBlupee(interaction, character) {
@@ -202,19 +304,12 @@ async function rollBlupee(interaction, character) {
     });
   }
 
-  let spawnDoc = await TempData.findByTypeAndKey('blupeeSpawn', stateKey);
-
-  if (needsActiveModSpawn(interaction)) {
-    if (!spawnDoc || spawnDoc.data?.virtual) {
-      return interaction.editReply({
-        content:
-          '❌ No Blupee is active here yet. Wait for a moderator to spawn one (or use the test channel without `BLUPEE_TEST_REQUIRE_SPAWN`).'
-      });
-    }
-  } else {
-    if (!spawnDoc) {
-      spawnDoc = await getOrCreateVirtualSpawn(stateKey);
-    }
+  const spawnDoc = await TempData.findByTypeAndKey('blupeeSpawn', stateKey);
+  if (!spawnDoc || spawnDoc.data?.virtual) {
+    return interaction.editReply({
+      content:
+        '❌ No Blupee is active here yet. Wait for a moderator to spawn one, or the next scheduled spawn.'
+    });
   }
 
   const participantState = { ...(spawnDoc.data?.participantState || {}) };
@@ -225,18 +320,13 @@ async function rollBlupee(interaction, character) {
         '❌ You slipped in mud last time — **no more rolling for you this round**. Try again after the next Blupee spawn!'
     });
   }
-  if (prev === 'caught') {
-    return interaction.editReply({
-      content: '❌ You already caught a Blupee this round — let others have a chance!'
-    });
-  }
 
   let rollResult;
   try {
     rollResult = await TableRoll.rollOnTable(BLUPEE_TABLE_NAME);
   } catch (err) {
     handleInteractionError(err, 'blupeeModule.js', {
-      commandName: 'tableroll blupee',
+      commandName: 'minigame blupee',
       userId: interaction.user.id
     });
     return interaction.editReply({
@@ -254,7 +344,7 @@ async function rollBlupee(interaction, character) {
       outcome: 'miss',
       flavorBody,
       thumbnailUrl: thumb,
-      extraFooter: 'try again! `/tableroll roll name:blupee`',
+      extraFooter: 'try again! `/minigame blupee`',
       inventoryNote: null
     });
     return interaction.editReply({ embeds: [embed] });
@@ -280,12 +370,13 @@ async function rollBlupee(interaction, character) {
   }
 
   if (outcome === 'catch') {
-    participantState[userId] = 'caught';
-    await TempData.findOneAndUpdate(
-      { type: 'blupeeSpawn', key: stateKey },
-      { $set: { 'data.participantState': participantState, 'data.messageId': spawnDoc.data?.messageId ?? null, 'data.virtual': !!spawnDoc.data?.virtual } },
-      { upsert: false }
-    );
+    const deleted = await TempData.findOneAndDelete({ type: 'blupeeSpawn', key: stateKey });
+    if (!deleted) {
+      return interaction.editReply({
+        content:
+          '❌ This Blupee spawn already ended — someone else caught it, or it despawned.'
+      });
+    }
 
     const rewardName = getRewardItemName();
     let inventoryNote = '';
@@ -301,12 +392,14 @@ async function rollBlupee(interaction, character) {
       inventoryNote = `⚠️ Could not add **${rewardName}** automatically — grant it manually if needed. (${invErr.message})`;
     }
 
+    await deleteSpawnAnnouncementMessage(interaction.client, stateKey, deleted.data?.messageId);
+
     const embed = buildBlupeeEmbed({
       outcome: 'catch',
       flavorBody,
       thumbnailUrl: thumb,
       extraFooter:
-        'You have caught a blupee for this round, let others have a chance as well! Please keep track of how many rupees you gather!',
+        '**This spawn is over for everyone** — the Blupee is gone! Please keep track of how many rupees you gather.',
       inventoryNote
     });
     return interaction.editReply({ embeds: [embed] });
@@ -329,15 +422,15 @@ async function postBlupeeSpawn(channel) {
     .setColor(0x5865f2)
     .setTitle('✨ A Blupee appears!')
     .setDescription(
-      'A glowing creature darts through the town hall… Quick — try to catch it!\n\nUse `/tableroll roll name:blupee` with your character name.'
+      'A glowing creature darts through the town hall… Quick — try to catch it!\n\nUse `/minigame blupee` with your character name.\n\n**First successful catch ends this spawn for everyone** (or it despawns after **15 minutes** if nobody catches it).'
     )
     .setImage(imageUrl)
-    .setFooter({ text: 'Blupee event' })
+    .setFooter({ text: 'Despawns in 15 minutes · Blupee event' })
     .setTimestamp();
 
   const msg = await channel.send({ embeds: [embed] });
 
-  const expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
+  const expiresAt = new Date(Date.now() + BLUPEE_SPAWN_DURATION_MS);
   await TempData.findOneAndUpdate(
     { type: 'blupeeSpawn', key: stateKey },
     {
@@ -373,12 +466,15 @@ async function getBlupeeStatusSnapshot(stateKey) {
 module.exports = {
   BLUPEE_TABLE_NAME,
   TEST_CHANNEL_ID,
+  BLUPEE_AUTO_SPAWNS_PER_DAY,
   ensureBlupeeTable,
   rollBlupee,
   postBlupeeSpawn,
   getBlupeeStateKeyForDiscordChannel,
   getBlupeeStatusSnapshot,
   isBlupeeGloballyEnabled,
+  isBlupeeAutoSpawnEnabled,
+  runBlupeeAutoSpawnTick,
   testChannelRequiresSpawn,
   getRewardItemName,
   getBlupeeStateKey

@@ -154,7 +154,8 @@ const tempDataSchema = new mongoose.Schema({
       'session',       // User sessions
       'temp',         // Temporary data
       'pendingSheetOperation', // Pending Google Sheets operations
-      'blupeeSpawn' // Blupee minigame: active spawn + per-user round locks per channel
+      'blupeeSpawn', // Blupee minigame: active spawn + per-user round locks per channel
+      'blupeeDailySchedule' // April auto-spawn: 6 random UTC minute marks per day
     ],
     index: true
   },
@@ -221,7 +222,13 @@ tempDataSchema.pre('save', function(next) {
       this.expiresAt = new Date(Date.now() + 5 * 60 * 1000); // 5 minutes (match encounter timeout)
       break;
     case 'blupeeSpawn':
-      this.expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000); // 30 days (until next spawn replaces)
+      this.expiresAt = new Date(Date.now() + 15 * 60 * 1000); // 15 minutes — Blupee despawn
+      break;
+    case 'blupeeDailySchedule':
+      // End-of-day UTC set in application code; only fill if missing
+      if (!this.expiresAt) {
+        this.expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000);
+      }
       break;
     case 'blight_warning':
     case 'healing_warning':

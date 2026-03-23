@@ -557,6 +557,11 @@ async function handleAutocompleteInternal(interaction, commandName, focusedOptio
               await handleQuestIdAutocomplete(interaction, focusedOption);
             } else if (focusedOption.name === "target") {
               await handleMinigameTargetAutocomplete(interaction, focusedOption);
+            } else if (focusedOption.name === "charactername") {
+              const minigameSub = interaction.options.getSubcommand(false);
+              if (minigameSub === "blupee") {
+                await handleCharacterBasedCommandsAutocomplete(interaction, focusedOption, "minigame");
+              }
             }
             break;
 

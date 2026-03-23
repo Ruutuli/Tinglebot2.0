@@ -9,6 +9,8 @@ const {
   postBlupeeSpawn,
   getBlupeeStatusSnapshot,
   isBlupeeGloballyEnabled,
+  isBlupeeAutoSpawnEnabled,
+  BLUPEE_AUTO_SPAWNS_PER_DAY,
   testChannelRequiresSpawn,
   getRewardItemName,
   getBlupeeStateKeyForDiscordChannel,
@@ -74,8 +76,9 @@ async function execute(interaction) {
       const snap = await getBlupeeStatusSnapshot(stateKey);
       const lines = [
         `**BLUPEE_ENABLED:** ${isBlupeeGloballyEnabled() ? 'true' : 'false'}`,
+        `**April auto-spawn (UTC):** ${isBlupeeAutoSpawnEnabled() ? `on — ${BLUPEE_AUTO_SPAWNS_PER_DAY} random times/day per town hall` : 'off (needs BLUPEE_ENABLED; set BLUPEE_AUTO_SPAWN=false to disable only auto)'}`,
         `**Test channel ID:** \`${TEST_CHANNEL_ID}\` (this channel matches: ${channel.id === TEST_CHANNEL_ID || channel.parentId === TEST_CHANNEL_ID ? 'yes' : 'no'})`,
-        `**BLUPEE_TEST_REQUIRE_SPAWN:** ${testChannelRequiresSpawn() ? 'true' : 'false'}`,
+        `**BLUPEE_TEST_REQUIRE_SPAWN:** ${testChannelRequiresSpawn() ? 'true' : 'false'} (legacy; real spawn always required)`,
         `**BLUPEE_REWARD_ITEM:** ${getRewardItemName()}`,
         `**State key (this context):** \`${stateKey}\``,
         `**Active spawn doc:** ${snap.active ? 'yes' : 'no'}`,

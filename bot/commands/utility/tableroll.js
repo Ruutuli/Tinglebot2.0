@@ -371,22 +371,16 @@ module.exports = {
         });
       }
 
-      // Fetch the table first (Blupee table is ensured on demand)
-      let table = await TableRoll.findOne({ name: tableName, isActive: true });
       if (tableName.toLowerCase() === 'blupee') {
-        const { ensureBlupeeTable, rollBlupee, BLUPEE_TABLE_NAME } = require('../../modules/blupeeModule');
-        await ensureBlupeeTable();
-        table = await TableRoll.findOne({ name: BLUPEE_TABLE_NAME, isActive: true });
-        if (!table) {
-          return await interaction.reply({
-            content: `❌ Table '${tableName}' not found.`,
-            flags: [MessageFlags.Ephemeral]
-          });
-        }
-        await interaction.deferReply();
-        return rollBlupee(interaction, character);
+        return await interaction.reply({
+          content:
+            '❌ **Blupee** is played with `/minigame blupee` (choose your character name there).',
+          flags: [MessageFlags.Ephemeral]
+        });
       }
 
+      // Fetch the table first
+      const table = await TableRoll.findOne({ name: tableName, isActive: true });
       if (!table) {
         return await interaction.reply({
           content: `❌ Table '${tableName}' not found.`,

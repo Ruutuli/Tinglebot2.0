@@ -144,6 +144,18 @@ module.exports = {
             .setRequired(true)
             .setAutocomplete(true)
         )
+    )
+    .addSubcommand(subcommand =>
+      subcommand
+        .setName('blupee')
+        .setDescription('✨ Try to catch a Blupee (seasonal town hall event)')
+        .addStringOption(option =>
+          option
+            .setName('charactername')
+            .setDescription('Character name')
+            .setRequired(true)
+            .setAutocomplete(true)
+        )
     ),
 
   // ============================================================================
@@ -158,6 +170,28 @@ module.exports = {
         await this.handleJoin(interaction);
       } else if (subcommand === 'theycame-roll') {
         await this.handleRoll(interaction);
+      } else if (subcommand === 'blupee') {
+        const { connectToTinglebot, fetchCharacterByNameAndUserId } = require('@/database/db');
+        const { ensureBlupeeTable, rollBlupee } = require('../../modules/blupeeModule');
+        await connectToTinglebot();
+        const characterName = interaction.options.getString('charactername');
+        const userId = interaction.user.id;
+        if (!characterName) {
+          return await interaction.reply({
+            content: '❌ You must provide a character name.',
+            ephemeral: true
+          });
+        }
+        const character = await fetchCharacterByNameAndUserId(characterName, userId);
+        if (!character) {
+          return await interaction.reply({
+            content: `❌ Character '${characterName}' not found or does not belong to you.`,
+            ephemeral: true
+          });
+        }
+        await ensureBlupeeTable();
+        await interaction.deferReply();
+        return rollBlupee(interaction, character);
       } else {
         await interaction.reply({ content: '❌ Unknown minigame command.', ephemeral: true });
       }
