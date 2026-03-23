@@ -463,7 +463,7 @@ function parseOutcome(item) {
   return m ? m[1] : null;
 }
 
-function buildBlupeeEmbed({ outcome, flavorBody, extraFooter, inventoryNote, actorName, rollLine }) {
+function buildBlupeeEmbed({ outcome, flavorBody, extraFooter, inventoryNote, actorName, rollLine, actorIconUrl }) {
   const safeActor = (actorName || '').trim();
   const header = safeActor ? `**${safeActor}** tried to catch the Blupee!` : 'You attempt to catch a Blupee!';
   const flavorLine = (flavorBody || '').trim();
@@ -479,6 +479,7 @@ function buildBlupeeEmbed({ outcome, flavorBody, extraFooter, inventoryNote, act
     .setDescription(description)
     .setTimestamp();
 
+  if (actorIconUrl) embed.setThumbnail(actorIconUrl);
   embed.setImage('https://storage.googleapis.com/tinglebot/Graphics/border.png');
   embed.setFooter({ text: 'Blupee' });
   return embed;
@@ -509,6 +510,7 @@ async function rollBlupee(interaction, character) {
   const userId = interaction.user.id;
   const stateKey = getBlupeeStateKey(interaction);
   const actorName = character?.name || character?.characterName || null;
+  const actorIconUrl = character?.icon || null;
   const actorLabel = String(actorName || character?.characterID || character?._id || '').trim();
   const actorKey = actorLabel.toLowerCase();
 
@@ -583,7 +585,8 @@ async function rollBlupee(interaction, character) {
       extraFooter: `try again! ${getBlupeeCommandMention()}`,
       inventoryNote: null,
       actorName,
-      rollLine
+      rollLine,
+      actorIconUrl
     });
     return interaction.editReply({ embeds: [embed] });
   }
@@ -603,7 +606,8 @@ async function rollBlupee(interaction, character) {
         'No more rolling for you this round, try again next time!',
       inventoryNote: null,
       actorName,
-      rollLine
+      rollLine,
+      actorIconUrl
     });
     return interaction.editReply({ embeds: [embed] });
   }
@@ -645,7 +649,8 @@ async function rollBlupee(interaction, character) {
         '**This spawn is over for everyone** — the Blupee is gone! Most rupees at event end wins the prize.',
       inventoryNote: inventoryParts.join('\n'),
       actorName,
-      rollLine
+      rollLine,
+      actorIconUrl
     });
     return interaction.editReply({ embeds: [embed] });
   }
