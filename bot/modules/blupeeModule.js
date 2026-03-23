@@ -471,13 +471,14 @@ function parseOutcome(item) {
   return m ? m[1] : null;
 }
 
-function buildBlupeeEmbed({ outcome, flavorBody, extraFooter, inventoryNote, actorName, rollLine, actorIconUrl }) {
+function buildBlupeeEmbed({ outcome, flavorBody, extraFooter, inventoryNote, actorName, rollLine, actorIconUrl, sessionLine }) {
   const safeActor = (actorName || '').trim();
   const header = safeActor ? `**${safeActor}** tried to catch the Blupee!` : 'You attempt to catch a Blupee!';
   const flavorLine = (flavorBody || '').trim();
   const sections = [header];
   if (flavorLine) sections.push(flavorLine);
   if (rollLine) sections.push(rollLine);
+  if (sessionLine) sections.push(sessionLine);
   if (extraFooter) sections.push(extraFooter);
   if (inventoryNote) sections.push(inventoryNote);
   const description = sections.join('\n\n');
@@ -540,6 +541,7 @@ async function rollBlupee(interaction, character, requestedSessionId) {
   const participantState = { ...(spawnDoc.data?.participantState || {}) };
   const participantCharacterMap = { ...(spawnDoc.data?.participantCharacterMap || {}) };
   const spawnSessionId = String(spawnDoc.data?.sessionId || '').trim() || null;
+  const sessionLine = spawnSessionId ? `🧾 **Session ID:** \`${spawnSessionId}\`` : null;
   const activeVillage = getBlupeeVillageFromStateKey(stateKey);
   const characterVillage = String(character?.currentVillage || character?.homeVillage || '').trim();
   const requestedId = String(requestedSessionId || '').trim();
@@ -623,7 +625,8 @@ async function rollBlupee(interaction, character, requestedSessionId) {
       inventoryNote: null,
       actorName,
       rollLine,
-      actorIconUrl
+      actorIconUrl,
+      sessionLine
     });
     return interaction.editReply({ embeds: [embed] });
   }
@@ -644,7 +647,8 @@ async function rollBlupee(interaction, character, requestedSessionId) {
       inventoryNote: null,
       actorName,
       rollLine,
-      actorIconUrl
+      actorIconUrl,
+      sessionLine
     });
     return interaction.editReply({ embeds: [embed] });
   }
@@ -687,7 +691,8 @@ async function rollBlupee(interaction, character, requestedSessionId) {
       inventoryNote: inventoryParts.join('\n'),
       actorName,
       rollLine,
-      actorIconUrl
+      actorIconUrl,
+      sessionLine
     });
     return interaction.editReply({ embeds: [embed] });
   }
