@@ -69,7 +69,7 @@ const MapModule = require('@/modules/mapModule.js');
 const { pushProgressLog, hasDiscoveriesInQuadrant, hasUnpinnedDiscoveriesInQuadrant, updateDiscoveryGrottoStatus, markGrottoCleared, applyExpeditionFailedState } = require("../../modules/exploreModule.js");
 const { getElixirTypeByName, elixirCountersExplorationHazard, isHazardResistanceElixir } = require("../../modules/elixirModule.js");
 const { finalizeBlightApplication } = require("../../handlers/blightHandler.js");
-const { partyHasRelic, consumeBlightCandleUse, partyHasLensOfTruthRelic, characterHasRelic } = require('@/utils/relicUtils.js');
+const { partyHasRelic, consumeBlightCandleUse, partyHasLensOfTruthRelic, characterHasRelic, relicOwnerMatchQuery } = require('@/utils/relicUtils.js');
 
 // ------------------- Utils ------------------
 const { handleInteractionError } = require('@/utils/globalErrorHandler.js');
@@ -999,7 +999,7 @@ async function grantExplorationChestLootToParty(party, location, interaction) {
   if (!char) continue;
   let isRelic = Math.random() < EXPLORATION_CHEST_RELIC_CHANCE;
   if (isRelic && (await characterAlreadyFoundRelicThisExpedition(party, char.name, char._id))) isRelic = false;
-  if (isRelic && (await characterHasPendingRelic(char.name))) isRelic = false;
+  if (isRelic && (await characterHasPendingRelic(char))) isRelic = false;
   if (isRelic) {
    try {
     const savedRelic = await createRelic({
@@ -1635,15 +1635,19 @@ async function characterAlreadyFoundRelicThisExpedition(party, characterName, ch
 // ------------------- characterHasPendingRelic ------------------
 // True if character has any relic that is unappraised (and not deteriorated) OR appraised but art not submitted.
 // Such characters cannot find another relic until they complete the current one.
-async function characterHasPendingRelic(characterName) {
- const name = (characterName || "").toString().trim();
- if (!name) return false;
+// Scoped by characterId (see relicOwnerMatchQuery); name-only legacy relics without characterId still match.
+async function characterHasPendingRelic(character) {
+ if (!character || (!character._id && !(character.name || "").toString().trim())) return false;
  try {
   const pending = await Relic.findOne({
-   discoveredBy: name,
-   $or: [
-    { appraised: false, deteriorated: false },
-    { appraised: true, artSubmitted: false },
+   $and: [
+    relicOwnerMatchQuery(character),
+    {
+     $or: [
+      { appraised: false, deteriorated: false },
+      { appraised: true, artSubmitted: false },
+     ],
+    },
    ],
   }).lean();
   return !!pending;
@@ -4878,20 +4882,20 @@ module.exports = {
 
      // Block roll if character has an unappraised relic from before this expedition (must appraise before new explores).
      // Relics found during this run have discoveredDate >= party.createdAt — allow rolling until the expedition ends.
-     const charNameForRelic = (character.name || "").toString().trim();
-     if (charNameForRelic) {
-      const relicBlockingQuery = {
-       discoveredBy: charNameForRelic,
-       appraised: false,
-       deteriorated: false,
-      };
+     if (character._id || (character.name || "").toString().trim()) {
+      const relicBlockingParts = [
+       relicOwnerMatchQuery(character),
+       { appraised: false, deteriorated: false },
+      ];
       if (party.createdAt) {
-       relicBlockingQuery.$or = [
-        { discoveredDate: { $lt: party.createdAt } },
-        { discoveredDate: null },
-       ];
+       relicBlockingParts.push({
+        $or: [
+         { discoveredDate: { $lt: party.createdAt } },
+         { discoveredDate: null },
+        ],
+       });
       }
-      const unappraisedRelic = await Relic.findOne(relicBlockingQuery).lean();
+      const unappraisedRelic = await Relic.findOne({ $and: relicBlockingParts }).lean();
       if (unappraisedRelic) {
        return interaction.editReply({
         embeds: [createExplorationErrorEmbed(
@@ -5224,7 +5228,7 @@ module.exports = {
        outcomeType = rollOutcome();
        continue;
       }
-      if (outcomeType === "relic" && (await characterHasPendingRelic(character.name))) {
+      if (outcomeType === "relic" && (await characterHasPendingRelic(character))) {
        outcomeType = rollOutcome();
        continue;
       }
@@ -5834,7 +5838,7 @@ module.exports = {
          if (ruinsOutcome === "relic" && (await characterAlreadyFoundRelicThisExpedition(freshParty, ruinsCharacter.name, ruinsCharacter._id))) {
           ruinsOutcome = "camp";
          }
-         if (ruinsOutcome === "relic" && (await characterHasPendingRelic(ruinsCharacter.name))) {
+         if (ruinsOutcome === "relic" && (await characterHasPendingRelic(ruinsCharacter))) {
           ruinsOutcome = "camp";
          }
          const ruinsAt = new Date();
@@ -8061,7 +8065,7 @@ module.exports = {
             } else if (leadsTo === "relic") {
               const mapOwnerChar = party.characters.find((c) => c.name === mapOwnerName);
               const mapOwnerDoc = mapOwnerChar ? await Character.findById(mapOwnerChar._id) : null;
-              if (mapOwnerDoc && (await characterHasPendingRelic(mapOwnerDoc.name))) {
+              if (mapOwnerDoc && (await characterHasPendingRelic(mapOwnerDoc))) {
                 const allItemsMap = await fetchAllItems();
                 if (allItemsMap && allItemsMap.length > 0) {
                   const fallbackItem = allItemsMap[Math.floor(Math.random() * allItemsMap.length)];

@@ -6,6 +6,45 @@
 const { RELIC_OUTCOMES } = require('../data/relicOutcomes.js');
 const RelicModel = require('../models/RelicModel.js');
 
+/**
+ * Escape a string for use inside a RegExp (discoveredBy / character name).
+ * @param {string} s
+ * @returns {string}
+ */
+function escapeRegexForRelicOwner(s) {
+  return String(s || '').replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+/**
+ * Mongo filter fragment: relic belongs to this character.
+ * Prefer characterId; legacy relics without characterId match case-insensitive discoveredBy only.
+ * @param {{ _id?: unknown, name?: string }} character - Character or ModCharacter doc (minimal { _id, name })
+ * @returns {Record<string, unknown>}
+ */
+function relicOwnerMatchQuery(character) {
+  const id = character && character._id;
+  const name = character && character.name != null ? String(character.name).trim() : '';
+  const clauses = [];
+  if (id != null && id !== '') {
+    clauses.push({ characterId: id });
+  }
+  if (name) {
+    clauses.push({
+      $and: [
+        { $or: [{ characterId: null }, { characterId: { $exists: false } }] },
+        { discoveredBy: new RegExp(`^${escapeRegexForRelicOwner(name)}$`, 'i') },
+      ],
+    });
+  }
+  if (clauses.length === 0) {
+    return { _id: { $exists: false } };
+  }
+  if (clauses.length === 1) {
+    return clauses[0];
+  }
+  return { $or: clauses };
+}
+
 // Canonical names for relics that have alternate spellings (matches docs/Relics.md: "Lens Of Truth").
 // Keep in sync with bot/data/relicOutcomes.js NAME_ALIASES (used by getAppraisalText).
 const RELIC_NAME_ALIASES = {
@@ -192,4 +231,5 @@ module.exports = {
   partyHasRelic,
   partyHasLensOfTruthRelic,
   consumeBlightCandleUse,
+  relicOwnerMatchQuery,
 };

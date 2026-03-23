@@ -28,6 +28,31 @@ function escapeRegExp(s: string): string {
   return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
+/** Relic belongs to this character (characterId; legacy: no characterId + case-insensitive discoveredBy). Matches bot relicUtils.relicOwnerMatchQuery. */
+function relicOwnerMatchQuery(character: { _id?: unknown; name?: string }): Record<string, unknown> {
+  const id = character?._id;
+  const name = character?.name != null ? String(character.name).trim() : "";
+  const clauses: Record<string, unknown>[] = [];
+  if (id != null && id !== "") {
+    clauses.push({ characterId: id });
+  }
+  if (name) {
+    clauses.push({
+      $and: [
+        { $or: [{ characterId: null }, { characterId: { $exists: false } }] },
+        { discoveredBy: new RegExp(`^${escapeRegExp(name)}$`, "i") },
+      ],
+    });
+  }
+  if (clauses.length === 0) {
+    return { _id: { $exists: false } };
+  }
+  if (clauses.length === 1) {
+    return clauses[0]!;
+  }
+  return { $or: clauses };
+}
+
 /** Remove quantity of a material from character inventory. */
 async function deductMaterialFromInventory(
   collection: mongoose.mongo.Collection,
@@ -171,14 +196,15 @@ export async function POST(
 
     const characterName = String(character.name ?? "").trim();
 
-    // Block if character has unappraised relic
+    // Block if character has unappraised relic (scoped by characterId; legacy name-only relics without characterId)
     const Relic =
       mongoose.models.Relic ??
       ((await import("@/models/RelicModel.js")) as unknown as { default: Model<unknown> }).default;
     const unappraised = await Relic.findOne({
-      discoveredBy: characterName,
-      appraised: false,
-      deteriorated: false,
+      $and: [
+        relicOwnerMatchQuery({ _id: character._id, name: character.name }),
+        { appraised: false, deteriorated: false },
+      ],
     });
     if (unappraised) {
       return NextResponse.json(
