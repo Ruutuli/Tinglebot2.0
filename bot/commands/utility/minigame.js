@@ -156,6 +156,11 @@ module.exports = {
             .setRequired(true)
             .setAutocomplete(true)
         )
+    )
+    .addSubcommand(subcommand =>
+      subcommand
+        .setName('blupee-stats')
+        .setDescription('📊 View Blupee season leaderboard and your stats')
     ),
 
   // ============================================================================
@@ -192,6 +197,33 @@ module.exports = {
         await ensureBlupeeTable();
         await interaction.deferReply();
         return rollBlupee(interaction, character);
+      } else if (subcommand === 'blupee-stats') {
+        const { connectToTinglebot } = require('@/database/db');
+        const { getBlupeeStatsSnapshot } = require('../../modules/blupeeModule');
+        await connectToTinglebot();
+        await interaction.deferReply();
+
+        const stats = await getBlupeeStatsSnapshot(interaction.user.id, 10);
+        const leaderboardLines = stats.leaderboard.length
+          ? stats.leaderboard
+              .map((entry, idx) => `**${idx + 1}.** <@${entry.userId}> — **${entry.count}** rupee${entry.count === 1 ? '' : 's'}`)
+              .join('\n')
+          : 'No Blupees have been caught yet this season.';
+
+        const yourRankLine = stats.me.rank
+          ? `**Your rank:** #${stats.me.rank} with **${stats.me.count}** rupee${stats.me.count === 1 ? '' : 's'}`
+          : '**Your rank:** Unranked (0 Blupee rupees)';
+
+        const embed = new EmbedBuilder()
+          .setColor(0x5865f2)
+          .setTitle('✨ Blupee Hunt Leaderboard')
+          .setDescription(
+            `**Season:** ${stats.seasonKey}\n${yourRankLine}\n\n**Top Hunters**\n${leaderboardLines}`
+          )
+          .setFooter({ text: `Total hunters this season: ${stats.totalHunters}` })
+          .setTimestamp();
+
+        return interaction.editReply({ embeds: [embed] });
       } else {
         await interaction.reply({ content: '❌ Unknown minigame command.', ephemeral: true });
       }

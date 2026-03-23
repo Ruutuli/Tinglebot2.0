@@ -5,6 +5,8 @@
 const { EmbedBuilder } = require('discord.js');
 const TableRoll = require('@/models/TableRollModel');
 const TempData = require('@/models/TempDataModel');
+const User = require('@/models/UserModel');
+const TokenTransaction = require('@/models/TokenTransactionModel');
 const { connectToTinglebot } = require('@/database/db');
 const logger = require('@/utils/logger');
 const { handleInteractionError } = require('@/utils/globalErrorHandler');
@@ -12,6 +14,8 @@ const { handleInteractionError } = require('@/utils/globalErrorHandler');
 const BLUPEE_TABLE_NAME = 'blupee';
 const TEST_CHANNEL_ID = '1391812848099004578';
 const SYSTEM_CREATOR = 'blupee-system';
+const BLUPEE_CATCH_TOKEN_REWARD = 25;
+const BLUPEE_COMMAND_MENTION = '</minigame blupee:1413815457118556201>';
 /** How long a Blupee “round” stays active (Mongo TTL + roll eligibility). */
 const BLUPEE_SPAWN_DURATION_MS = 15 * 60 * 1000;
 /** Auto-spawn waves per UTC day during April (Easter event). */
@@ -194,6 +198,77 @@ async function incrementBlupeeRupeeTally(userId) {
   };
 }
 
+async function getBlupeeStatsSnapshot(userId, limit = 10) {
+  const seasonKey = getRupeeTallySeasonKey();
+  const keyPrefix = `${seasonKey}:`;
+  const docs = await TempData.find({
+    type: 'blupeeRupeeTally',
+    key: new RegExp(`^${keyPrefix}`),
+    expiresAt: { $gt: new Date() }
+  }).lean();
+
+  const ranked = docs
+    .map((d) => ({
+      userId: d?.data?.userId || String(d.key || '').slice(keyPrefix.length),
+      count: Number(d?.data?.count || 0)
+    }))
+    .filter((r) => r.userId && Number.isFinite(r.count) && r.count > 0)
+    .sort((a, b) => b.count - a.count);
+
+  const top = ranked.slice(0, Math.max(1, limit));
+  const meIndex = ranked.findIndex((r) => r.userId === userId);
+  const me = meIndex >= 0 ? ranked[meIndex] : null;
+
+  return {
+    seasonKey,
+    leaderboard: top,
+    totalHunters: ranked.length,
+    me: me
+      ? {
+          userId: me.userId,
+          count: me.count,
+          rank: meIndex + 1
+        }
+      : {
+          userId,
+          count: 0,
+          rank: null
+        }
+  };
+}
+
+async function awardBlupeeCatchTokens(userId) {
+  const user = await User.findOne({ discordId: userId });
+  if (!user) {
+    throw new Error(`User not found for token reward: ${userId}`);
+  }
+
+  const balanceBefore = user.tokens || 0;
+  const balanceAfter = balanceBefore + BLUPEE_CATCH_TOKEN_REWARD;
+  user.tokens = balanceAfter;
+  await user.save();
+
+  try {
+    await TokenTransaction.createTransaction({
+      userId: String(userId),
+      amount: BLUPEE_CATCH_TOKEN_REWARD,
+      type: 'earned',
+      category: 'blupee',
+      description: 'Blupee catch reward',
+      link: '',
+      balanceBefore,
+      balanceAfter
+    });
+  } catch (logErr) {
+    logger.warn('BLUPEE', `Failed to log Blupee token transaction for ${userId}: ${logErr.message}`);
+  }
+
+  return {
+    amount: BLUPEE_CATCH_TOKEN_REWARD,
+    balanceAfter
+  };
+}
+
 /** Consolidate threads with their town hall / test channel parent for one shared round. */
 function getBlupeeStateKeyFromIds(channelId, parentId) {
   const halls = getTownHallIdSet();
@@ -238,32 +313,109 @@ function buildTableEntries() {
       thumbnailImage: thumbs[0]
     },
     {
-      weight: 25,
+      weight: 1,
+      item: 'BLUPEE_OUTCOME:mud',
+      flavor:
+        'You dive heroically... straight into a puddle. The Blupee watches in silent judgment. You are done for this round. 🛑',
+      thumbnailImage: thumbs[0]
+    },
+    {
+      weight: 7,
       item: 'BLUPEE_OUTCOME:miss',
       flavor:
         "... You don't even get close! The blupee runs off!<:blupee:679149916077031424> ",
       thumbnailImage: thumbs[1]
     },
     {
-      weight: 25,
+      weight: 7,
       item: 'BLUPEE_OUTCOME:miss',
       flavor:
         'Sneak attack! You tiptoe towards the glowing creature...but -SNAP- you step on a branch...it runs. <:blupee:679149916077031424> ',
       thumbnailImage: thumbs[2]
     },
     {
-      weight: 24,
+      weight: 7,
       item: 'BLUPEE_OUTCOME:miss',
       flavor:
         'CHARGE! You rush in, arms stretched out to catch the strange rabbit shaped animal! You lunge! But - oof... you miss... <:blupee:679149916077031424> ',
       thumbnailImage: thumbs[3]
     },
     {
-      weight: 24,
+      weight: 7,
       item: 'BLUPEE_OUTCOME:miss',
       flavor:
         "You don't know how, but you felt its fur on your fingertips this time! Sadly it still got away....<:blupee:679149916077031424> ",
       thumbnailImage: thumbs[4]
+    },
+    {
+      weight: 7,
+      item: 'BLUPEE_OUTCOME:miss',
+      flavor:
+        'You throw a perfectly timed net. Unfortunately, you forgot to bring a net. The Blupee applauds your imagination and vanishes.',
+      thumbnailImage: thumbs[6]
+    },
+    {
+      weight: 7,
+      item: 'BLUPEE_OUTCOME:miss',
+      flavor:
+        'You whisper, "pspspsps" like it is a housecat. The Blupee is deeply offended and teleports two feet away, then ten more.',
+      thumbnailImage: thumbs[5]
+    },
+    {
+      weight: 7,
+      item: 'BLUPEE_OUTCOME:miss',
+      flavor:
+        'You execute a flawless combat roll, stand up dramatically, and realize you rolled in the wrong direction. Blupee gone.',
+      thumbnailImage: thumbs[2]
+    },
+    {
+      weight: 7,
+      item: 'BLUPEE_OUTCOME:miss',
+      flavor:
+        'You hold out a rupee like bait. The Blupee nods respectfully, steals your dignity, and disappears in sparkles.',
+      thumbnailImage: thumbs[1]
+    },
+    {
+      weight: 7,
+      item: 'BLUPEE_OUTCOME:miss',
+      flavor:
+        'You prepare an advanced hunter stance you saw in a book. The Blupee waits politely for the pose to finish, then leaves.',
+      thumbnailImage: thumbs[3]
+    },
+    {
+      weight: 7,
+      item: 'BLUPEE_OUTCOME:miss',
+      flavor:
+        'You leap from behind a pillar with perfect timing. The Blupee had already moved three seconds ago.',
+      thumbnailImage: thumbs[4]
+    },
+    {
+      weight: 7,
+      item: 'BLUPEE_OUTCOME:miss',
+      flavor:
+        'You try to reason with it: "Please be captured." The Blupee considers this and chooses "no."',
+      thumbnailImage: thumbs[6]
+    },
+    {
+      weight: 7,
+      item: 'BLUPEE_OUTCOME:miss',
+      flavor:
+        'For one glorious moment, you are certain this will work. For one equally glorious moment, the Blupee is gone.',
+      thumbnailImage: thumbs[5]
+    },
+    {
+      weight: 7,
+      item: 'BLUPEE_OUTCOME:miss',
+      flavor:
+        'You sprint after the glow, corner it, and reach out-then your boot squeaks. It bolts. Loudly.',
+      thumbnailImage: thumbs[2]
+    },
+    {
+      weight: 6,
+      item: 'BLUPEE_OUTCOME:miss',
+      flavor:
+        'You toss your cloak like a net, strike a heroic pose, and reveal you have successfully captured... absolutely nothing.',
+      thumbnailImage: thumbs[0]
     },
     {
       weight: 1,
@@ -301,10 +453,11 @@ function parseOutcome(item) {
   return m ? m[1] : null;
 }
 
-function buildBlupeeEmbed({ outcome, flavorBody, thumbnailUrl, extraFooter, inventoryNote }) {
-  const header = 'You attempt to catch a Blupee!';
-  const codeBlock = '```\n' + flavorBody.trim() + '\n```';
-  let description = `${header}\n${codeBlock}`;
+function buildBlupeeEmbed({ outcome, flavorBody, thumbnailUrl, extraFooter, inventoryNote, actorName }) {
+  const safeActor = (actorName || '').trim();
+  const header = safeActor ? `**${safeActor}** tried to catch the Blupee!` : 'You attempt to catch a Blupee!';
+  const flavorLine = (flavorBody || '').trim();
+  let description = `${header}\n${flavorLine}`;
   if (extraFooter) description += `\n${extraFooter}`;
   if (inventoryNote) description += `\n${inventoryNote}`;
 
@@ -335,6 +488,7 @@ async function deleteSpawnAnnouncementMessage(client, stateKey, messageId) {
 async function rollBlupee(interaction, character) {
   const userId = interaction.user.id;
   const stateKey = getBlupeeStateKey(interaction);
+  const actorName = character?.name || character?.characterName || null;
 
   if (!canUseBlupeeHere(interaction)) {
     return interaction.editReply({
@@ -383,8 +537,9 @@ async function rollBlupee(interaction, character) {
       outcome: 'miss',
       flavorBody,
       thumbnailUrl: thumb,
-      extraFooter: 'try again! `/minigame blupee`',
-      inventoryNote: null
+      extraFooter: `try again! ${BLUPEE_COMMAND_MENTION}`,
+      inventoryNote: null,
+      actorName
     });
     return interaction.editReply({ embeds: [embed] });
   }
@@ -403,7 +558,8 @@ async function rollBlupee(interaction, character) {
       thumbnailUrl: thumb,
       extraFooter:
         'No more rolling for you this round, try again next time!',
-      inventoryNote: null
+      inventoryNote: null,
+      actorName
     });
     return interaction.editReply({ embeds: [embed] });
   }
@@ -417,16 +573,20 @@ async function rollBlupee(interaction, character) {
       });
     }
 
-    let inventoryNote = '';
+    let inventoryParts = [];
     try {
+      const tokenReward = await awardBlupeeCatchTokens(userId);
       const tally = await incrementBlupeeRupeeTally(userId);
-      inventoryNote = `✅ **+1 Blupee rupee** added to your internal tally. You now have **${tally.total}** for season **${tally.seasonKey}**.`;
+      inventoryParts.push(
+        `✅ **+${tokenReward.amount} tokens** awarded. Your balance is now **${tokenReward.balanceAfter}**.`,
+        `✅ **+1 Blupee rupee** added to your internal tally. You now have **${tally.total}** for season **${tally.seasonKey}**.`
+      );
     } catch (tallyErr) {
       handleInteractionError(tallyErr, 'blupeeModule.js', {
-        commandName: 'blupee rupee tally',
+        commandName: 'blupee catch rewards',
         userId
       });
-      inventoryNote = '⚠️ Blupee was caught, but tally update failed. A mod should adjust your count manually.';
+      inventoryParts = ['⚠️ Blupee was caught, but token/rupee reward update failed. A mod should adjust your rewards manually.'];
     }
 
     await deleteSpawnAnnouncementMessage(interaction.client, stateKey, deleted.data?.messageId);
@@ -437,7 +597,8 @@ async function rollBlupee(interaction, character) {
       thumbnailUrl: thumb,
       extraFooter:
         '**This spawn is over for everyone** — the Blupee is gone! Most rupees at event end wins the prize.',
-      inventoryNote
+      inventoryNote: inventoryParts.join('\n'),
+      actorName
     });
     return interaction.editReply({ embeds: [embed] });
   }
@@ -459,7 +620,7 @@ async function postBlupeeSpawn(channel) {
     .setColor(0x5865f2)
     .setTitle('✨ A Blupee appears!')
     .setDescription(
-      'A glowing creature darts through the town hall… Quick — try to catch it!\n\nUse `/minigame blupee` with your character name.\n\n**First successful catch ends this spawn for everyone** (or it despawns after **15 minutes** if nobody catches it).'
+      `A glowing creature darts through the town hall… Quick — try to catch it!\n\nUse ${BLUPEE_COMMAND_MENTION} with your character name.\n\n**First successful catch ends this spawn for everyone** (or it despawns after **15 minutes** if nobody catches it).`
     )
     .setImage(imageUrl || BLUPEE_FALLBACK_IMAGE)
     .setFooter({ text: 'Despawns in 15 minutes · Blupee event' })
@@ -513,5 +674,6 @@ module.exports = {
   isBlupeeAutoSpawnEnabled,
   runBlupeeAutoSpawnTick,
   testChannelRequiresSpawn,
-  getBlupeeStateKey
+  getBlupeeStateKey,
+  getBlupeeStatsSnapshot
 };

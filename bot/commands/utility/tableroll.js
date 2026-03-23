@@ -374,7 +374,7 @@ module.exports = {
       if (tableName.toLowerCase() === 'blupee') {
         return await interaction.reply({
           content:
-            '❌ **Blupee** is played with `/minigame blupee` (choose your character name there).',
+            '❌ **Blupee** is played with </minigame blupee:1413815457118556201> (choose your character name there).',
           flags: [MessageFlags.Ephemeral]
         });
       }
