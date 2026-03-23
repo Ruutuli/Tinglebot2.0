@@ -1676,23 +1676,44 @@ async function helpWantedBoardCheck(client, _data = {}) {
             continue;
           }
           
-          // Check if escort quest needs regeneration due to travel blocking
           let questToPost = freshQuest;
-          if (freshQuest.type === 'escort') {
-            const { isTravelBlockedForEscort, regenerateEscortQuest } = require('@/modules/helpWantedModule');
-            const blockStatus = await isTravelBlockedForEscort(freshQuest.village);
-            if (blockStatus.blocked) {
-              logger.info('SCHEDULED', `help-wanted-board-check: regenerating escort quest ${freshQuest.questId} due to ${blockStatus.reason}`);
+
+          // Art/writing should not go live if it is already past noon Eastern (legacy bad schedules or downtime)
+          if (questToPost.type === 'art' || questToPost.type === 'writing') {
+            const { isOnOrAfterNoonEastern, regenerateArtWritingQuest } = require('@/modules/helpWantedModule');
+            if (isOnOrAfterNoonEastern()) {
+              logger.info('SCHEDULED', `help-wanted-board-check: regenerating art/writing quest ${questToPost.questId} (past noon Eastern, still unposted)`);
               try {
-                await regenerateEscortQuest(freshQuest);
+                await regenerateArtWritingQuest(questToPost, { reason: 'unposted past noon Eastern' });
+                const regenQuest = await HelpWantedQuest.findById(quest._id);
+                if (regenQuest) {
+                  questToPost = regenQuest;
+                  logger.info('SCHEDULED', `help-wanted-board-check: quest ${questToPost.questId} is now ${regenQuest.type}`);
+                }
+              } catch (regenErr) {
+                logger.error('SCHEDULED', `help-wanted-board-check: failed to regenerate art/writing quest ${questToPost.questId}: ${regenErr.message}`);
+                errorCount++;
+                continue;
+              }
+            }
+          }
+
+          // Check if escort quest needs regeneration due to travel blocking
+          if (questToPost.type === 'escort') {
+            const { isTravelBlockedForEscort, regenerateEscortQuest } = require('@/modules/helpWantedModule');
+            const blockStatus = await isTravelBlockedForEscort(questToPost.village);
+            if (blockStatus.blocked) {
+              logger.info('SCHEDULED', `help-wanted-board-check: regenerating escort quest ${questToPost.questId} due to ${blockStatus.reason}`);
+              try {
+                await regenerateEscortQuest(questToPost);
                 // Re-fetch the quest after regeneration
                 const regeneratedQuest = await HelpWantedQuest.findById(quest._id);
                 if (regeneratedQuest) {
                   questToPost = regeneratedQuest;
-                  logger.info('SCHEDULED', `help-wanted-board-check: quest ${freshQuest.questId} regenerated as ${regeneratedQuest.type}`);
+                  logger.info('SCHEDULED', `help-wanted-board-check: quest ${questToPost.questId} regenerated as ${regeneratedQuest.type}`);
                 }
               } catch (regenErr) {
-                logger.error('SCHEDULED', `help-wanted-board-check: failed to regenerate escort quest ${freshQuest.questId}: ${regenErr.message}`);
+                logger.error('SCHEDULED', `help-wanted-board-check: failed to regenerate escort quest ${questToPost.questId}: ${regenErr.message}`);
                 errorCount++;
                 continue;
               }

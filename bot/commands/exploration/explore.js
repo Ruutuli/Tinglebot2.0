@@ -4876,14 +4876,22 @@ module.exports = {
       }
      }
 
-     // Block roll if character has an unappraised relic (must get it appraised before exploring)
+     // Block roll if character has an unappraised relic from before this expedition (must appraise before new explores).
+     // Relics found during this run have discoveredDate >= party.createdAt — allow rolling until the expedition ends.
      const charNameForRelic = (character.name || "").toString().trim();
      if (charNameForRelic) {
-      const unappraisedRelic = await Relic.findOne({
+      const relicBlockingQuery = {
        discoveredBy: charNameForRelic,
        appraised: false,
        deteriorated: false,
-      }).lean();
+      };
+      if (party.createdAt) {
+       relicBlockingQuery.$or = [
+        { discoveredDate: { $lt: party.createdAt } },
+        { discoveredDate: null },
+       ];
+      }
+      const unappraisedRelic = await Relic.findOne(relicBlockingQuery).lean();
       if (unappraisedRelic) {
        return interaction.editReply({
         embeds: [createExplorationErrorEmbed(

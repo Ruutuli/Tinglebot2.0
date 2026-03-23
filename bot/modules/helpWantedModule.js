@@ -124,6 +124,36 @@ function getHourInUTC(date = new Date()) {
   return date.getUTCHours();
 }
 
+// Eastern clock hour (0–23, h23) for an instant — used for Help Wanted noon rules (America/New_York)
+function getEasternHour(date = new Date()) {
+  const formatter = new Intl.DateTimeFormat('en-US', {
+    timeZone: 'America/New_York',
+    hour: 'numeric',
+    hourCycle: 'h23'
+  });
+  const parts = formatter.formatToParts(date);
+  const h = parts.find((p) => p.type === 'hour');
+  return parseInt(h?.value ?? '0', 10);
+}
+
+// True when local time in America/New_York is 12:00–23:59 (art/writing must not be generated after this)
+function isOnOrAfterNoonEastern(date = new Date()) {
+  return getEasternHour(date) >= 12;
+}
+
+// Parses quest date (YYYY-MM-DD) + cron "m H * * *" (fired as UTC) and returns true if Eastern time is before noon that day
+function cronFiresBeforeNoonEastern(dateStr, cronExpr) {
+  const parts = cronExpr.split(' ');
+  if (parts.length < 2) return false;
+  const utcMinute = parseInt(parts[0], 10);
+  const utcHour = parseInt(parts[1], 10);
+  if (Number.isNaN(utcMinute) || Number.isNaN(utcHour)) return false;
+  const [y, mo, d] = dateStr.split('-').map((n) => parseInt(n, 10));
+  if (!y || !mo || !d) return false;
+  const utcMs = Date.UTC(y, mo - 1, d, utcHour, utcMinute, 0, 0);
+  return getEasternHour(new Date(utcMs)) < 12;
+}
+
 // Utility function to convert cron time to hour
 const cronToHour = (cronTime) => {
   const parts = cronTime.split(' ');
@@ -137,11 +167,11 @@ const isHoursApart = (hour1, hour2, minHours = 3) => {
   return minHourDiff >= minHours;
 };
 
-// Utility function to format hour for display
-const formatHour = (hour) => {
-  const period = hour >= 12 ? 'PM' : 'AM';
-  const displayHour = hour === 0 ? 12 : hour > 12 ? hour - 12 : hour;
-  return `${displayHour}:00 ${period}`;
+// Labels the cron's UTC hour (scheduled post checks use UTC vs this hour)
+const formatCronUtcHourLabel = (utcHour) => {
+  const period = utcHour >= 12 ? 'PM' : 'AM';
+  const displayHour = utcHour === 0 ? 12 : utcHour > 12 ? utcHour - 12 : utcHour;
+  return `${displayHour}:00 ${period} UTC`;
 };
 
 // ------------------- Function: getRandomElement -------------------
@@ -291,15 +321,15 @@ function getAvailableQuestTypes(isAfterNoon = false, travelBlocked = false, excl
   let availableTypes = [...QUEST_TYPES];
   const excludedReasons = [];
   
-      // Exclude art and writing if after 12pm UTC
+      // Exclude art and writing on or after 12:00 America/New_York
   if (isAfterNoon) {
     if (availableTypes.includes('art')) {
       availableTypes = availableTypes.filter(type => type !== 'art');
-        excludedReasons.push('art (after 12pm UTC)');
+        excludedReasons.push('art (on or after noon Eastern)');
     }
     if (availableTypes.includes('writing')) {
       availableTypes = availableTypes.filter(type => type !== 'writing');
-        excludedReasons.push('writing (after 12pm UTC)');
+        excludedReasons.push('writing (on or after noon Eastern)');
     }
   }
   
@@ -454,13 +484,15 @@ async function regenerateEscortQuest(quest) {
 }
 
 // ------------------- Function: regenerateArtWritingQuest -------------------
-// Regenerates an art or writing quest as a different quest type when it's after 12pm UTC
-// Includes retry logic and fallback quest types
-async function regenerateArtWritingQuest(quest) {
+// Regenerates an art or writing quest as a different quest type (e.g. past noon Eastern, or not enough pre-noon post slots).
+// options.persist: false = plain in-memory quest object during daily generation (no .save())
+async function regenerateArtWritingQuest(quest, options = {}) {
+  const persist = options.persist !== false;
+  const reasonLabel = options.reason || 'time restriction';
   const maxRetries = 3;
   const typePreferences = ['item', 'monster', 'crafting', 'escort']; // Order of preference (excluding art/writing)
   
-  logger.info('QUEST', `Regenerating ${quest.type} quest ${quest.questId} for ${quest.village} due to time restriction (after 12pm UTC)`);
+  logger.info('QUEST', `Regenerating ${quest.type} quest ${quest.questId} for ${quest.village} (${reasonLabel})`);
   
   // Check for blocked villages to filter escort destinations
   const blockedVillages = [];
@@ -542,24 +574,24 @@ async function regenerateArtWritingQuest(quest) {
       quest.requirements = newRequirements;
       quest.npcName = newNpcName;
       
-      // Save with retry
-      let saved = false;
-      for (let saveAttempt = 1; saveAttempt <= 3; saveAttempt++) {
-        try {
-          await quest.save();
-          saved = true;
-          break;
-        } catch (saveError) {
-          if (saveAttempt === 3) {
-            throw saveError;
+      if (persist && typeof quest.save === 'function') {
+        let saved = false;
+        for (let saveAttempt = 1; saveAttempt <= 3; saveAttempt++) {
+          try {
+            await quest.save();
+            saved = true;
+            break;
+          } catch (saveError) {
+            if (saveAttempt === 3) {
+              throw saveError;
+            }
+            logger.warn('QUEST', `Save attempt ${saveAttempt}/3 failed for ${quest.questId}`, saveError);
+            await new Promise(resolve => setTimeout(resolve, 100 * saveAttempt));
           }
-          logger.warn('QUEST', `Save attempt ${saveAttempt}/3 failed for ${quest.questId}`, saveError);
-          await new Promise(resolve => setTimeout(resolve, 100 * saveAttempt)); // Exponential backoff
         }
-      }
-      
-      if (!saved) {
-        throw new Error(`Failed to save regenerated quest after 3 attempts`);
+        if (!saved) {
+          throw new Error(`Failed to save regenerated quest after 3 attempts`);
+        }
       }
       
       logger.success('QUEST', `Regenerated quest ${quest.questId} as ${newType} quest with NPC ${newNpcName} for ${quest.village}`);
@@ -1881,22 +1913,21 @@ async function generateDailyQuests() {
       throw new Error(`Invalid date format: ${date}`);
     }
     
-    // Check if it's after 12pm UTC - if so, don't generate art/writing quests
-    const utcHour = getHourInUTC(now);
-    const isAfterNoon = utcHour >= 12;
+    // On or after noon America/New_York: do not generate art/writing quests
+    const easternHour = getEasternHour(now);
+    const isAfterNoon = isOnOrAfterNoonEastern(now);
     
-    // Validate UTC hour is a number
-    if (isNaN(utcHour) || utcHour < 0 || utcHour > 23) {
-      logger.error('QUEST', `Invalid UTC hour: ${utcHour}`);
-      throw new Error(`Invalid UTC hour: ${utcHour}`);
+    if (Number.isNaN(easternHour) || easternHour < 0 || easternHour > 23) {
+      logger.error('QUEST', `Invalid Eastern hour: ${easternHour}`);
+      throw new Error(`Invalid Eastern hour: ${easternHour}`);
     }
     
-    logger.info('QUEST', `Time check - Current UTC hour: ${utcHour}, isAfterNoon: ${isAfterNoon}`);
+    logger.info('QUEST', `Time check - Eastern hour (America/New_York): ${easternHour}, onOrAfterNoonEastern: ${isAfterNoon}`);
     
     if (isAfterNoon) {
-      logger.info('QUEST', `After 12pm UTC (${utcHour}:00) - Art and Writing quests will not be generated to ensure adequate completion time`);
+      logger.info('QUEST', `On or after noon Eastern — art and writing quests will not be generated`);
     } else {
-      logger.info('QUEST', `Before 12pm UTC (${utcHour}:00) - All quest types including art and writing are available`);
+      logger.info('QUEST', `Before noon Eastern — all quest types including art and writing are allowed`);
     }
 
     // Fetch village levels from database
@@ -1939,7 +1970,7 @@ async function generateDailyQuests() {
       warnings.push('Failed to clean up null questIds');
     }
     
-        // Clean up any art or writing quests that were generated after 12pm UTC
+        // Clean up any art/writing quests for today if generation runs on or after noon Eastern
     if (isAfterNoon) {
       try {
         const deletedArtWriting = await HelpWantedQuest.deleteMany({ 
@@ -1947,7 +1978,7 @@ async function generateDailyQuests() {
           type: { $in: ['art', 'writing'] } 
         });
         if (deletedArtWriting.deletedCount > 0) {
-          logger.info('QUEST', `Cleaned up ${deletedArtWriting.deletedCount} art/writing quest(s) that were generated after 12pm UTC`);
+          logger.info('QUEST', `Cleaned up ${deletedArtWriting.deletedCount} art/writing quest(s) (on or after noon Eastern)`);
         }
       } catch (error) {
         logger.warn('QUEST', `Error cleaning up art/writing quests`, error);
@@ -2027,44 +2058,10 @@ async function generateDailyQuests() {
     // Randomize village order instead of always having Rudania first
     const shuffledVillages = shuffleArray([...VILLAGES]);
     
-    // Generate quest posting times with variable buffer (3-6 hours) between each
-    // For art/writing quests, only use times before 12pm EST
-    let availableTimes = FIXED_CRON_TIMES;
-    if (isAfterNoon) {
-      // If generating after 12pm UTC, only use times before 12pm UTC for any remaining art/writing quests
-      availableTimes = FIXED_CRON_TIMES.filter(cronTime => cronToHour(cronTime) < 12);
-    }
-    
-    // Exclude midnight so Help Wanted never posts at midnight in any relevant timezone:
-    // - 00:00 UTC (midnight UTC)
-    // - 05:00 UTC = midnight EST (daily rollover; generation runs then)
-    const excludedHours = [0, 5];
-    availableTimes = availableTimes.filter(cronTime => !excludedHours.includes(cronToHour(cronTime)));
-    
-    const selectedTimes = selectTimesWithVariableBuffer(availableTimes, totalQuestsNeeded);
-    
-    // Validate that we have enough times for all quests
-    if (selectedTimes.length !== totalQuestsNeeded) {
-      const errorMsg = `Time selection failed: expected ${totalQuestsNeeded} times but got ${selectedTimes.length}. Cannot generate all quests.`;
-      logger.error('QUEST', errorMsg);
-      throw new Error(errorMsg);
-    }
-    
-    // Validate that all selected times are defined
-    const undefinedTimes = selectedTimes.filter((time, index) => !time);
-    if (undefinedTimes.length > 0) {
-      const errorMsg = `Time selection returned ${undefinedTimes.length} undefined time(s). Cannot generate all quests.`;
-      logger.error('QUEST', errorMsg);
-      throw new Error(errorMsg);
-    }
-    
-    logger.info('QUEST', `Successfully selected ${selectedTimes.length} posting times for ${totalQuestsNeeded} quest(s) across ${VILLAGES.length} villages`);
-    
     let quests = []; // Use let to allow filtering/reassignment during validation
     const failedVillages = [];
-    let questIndex = 0; // Track overall quest index for time assignment
     
-    // Generate quests sequentially - multiple quests per village based on level
+    // Phase 1: quest payloads; phase 2 assigns UTC post times (art/writing ⊆ pre-noon Eastern on `date`)
     for (let i = 0; i < shuffledVillages.length; i++) {
       const village = shuffledVillages[i];
       const villageLevel = villageLevelMap.get(village) || 1;
@@ -2096,30 +2093,14 @@ async function generateDailyQuests() {
           // Remove the used NPC from the available pool only if we have enough NPCs left
           // Allow reuse within the same village, but try to keep unique across villages
           const npcIndex = availableNPCs.indexOf(quest.npcName);
-          const remainingQuests = totalQuestsNeeded - questIndex - 1;
+          const remainingQuests = totalQuestsNeeded - quests.length - 1;
           if (npcIndex !== -1 && availableNPCs.length > remainingQuests && !villageNPCs.has(quest.npcName)) {
             // Only remove if we still have enough NPCs left and NPC hasn't been used in this village
             availableNPCs.splice(npcIndex, 1);
           }
           
-          // Assign a posting time with variable buffer from the selected times
-          const assignedTime = selectedTimes[questIndex];
-          if (!assignedTime) {
-            const errorMsg = `No posting time available for village ${village} quest ${j + 1} at index ${questIndex}. This should not happen after validation.`;
-            logger.error('QUEST', errorMsg);
-            errors.push(errorMsg);
-            if (!failedVillages.includes(village)) {
-              failedVillages.push(village);
-            }
-            questIndex++; // Still increment to maintain time slot alignment
-            continue; // Continue with next quest
-          }
-          
-          quest.scheduledPostTime = assignedTime;
-          const hour = cronToHour(quest.scheduledPostTime);
-          logger.info('QUEST', `🏘️ Generated ${quest.type} quest ${j + 1}/${questsForThisVillage} for ${village} (Level ${villageLevel}) with NPC ${quest.npcName} at posting time: ${formatHour(hour)} (${quest.scheduledPostTime})`);
+          logger.info('QUEST', `🏘️ Generated ${quest.type} quest ${j + 1}/${questsForThisVillage} for ${village} (Level ${villageLevel}) with NPC ${quest.npcName} (posting time assigned next)`);
           quests.push(quest);
-          questIndex++;
           
         } catch (error) {
           logger.error('QUEST', `Failed to generate quest ${j + 1}/${questsForThisVillage} for ${village}`, error);
@@ -2127,21 +2108,13 @@ async function generateDailyQuests() {
           if (!failedVillages.includes(village)) {
             failedVillages.push(village);
           }
-          questIndex++; // Still increment to maintain time slot alignment
           
           // Retry once for failed quests
           try {
             logger.info('QUEST', `Retrying quest generation ${j + 1}/${questsForThisVillage} for ${village}...`);
             const retryQuest = await generateQuestForVillage(village, date, pools, availableNPCs, isAfterNoon, travelBlocked);
-            const assignedTime = selectedTimes[questIndex - 1]; // Use the time slot we reserved
-            if (assignedTime) {
-              retryQuest.scheduledPostTime = assignedTime;
-              const hour = cronToHour(retryQuest.scheduledPostTime);
-              logger.success('QUEST', `Successfully generated ${retryQuest.type} quest ${j + 1}/${questsForThisVillage} for ${village} on retry`);
-              quests.push(retryQuest);
-              // Remove from failed list if all quests for this village are now successful
-              // (We'll check this after the loop)
-            }
+            logger.success('QUEST', `Successfully generated ${retryQuest.type} quest ${j + 1}/${questsForThisVillage} for ${village} on retry`);
+            quests.push(retryQuest);
           } catch (retryError) {
             logger.error('QUEST', `Retry failed for ${village} quest ${j + 1}/${questsForThisVillage}`, retryError);
             // Leave in failed list
@@ -2149,6 +2122,15 @@ async function generateDailyQuests() {
         }
       }
     }
+
+    if (quests.length !== totalQuestsNeeded) {
+      logger.warn(
+        'QUEST',
+        `Quest count ${quests.length} differs from expected ${totalQuestsNeeded} (some generations may have failed)`
+      );
+    }
+
+    await assignHelpWantedPostingTimes(quests, date, warnings);
     
     // Report on failed villages
     if (failedVillages.length > 0) {
@@ -2259,7 +2241,7 @@ async function generateDailyQuests() {
         logger.error('QUEST', `CRITICAL: Quest ${quest.questId} for ${quest.village} has no scheduledPostTime after generation!`);
         return `${quest.village}: ${quest.npcName} (${quest.questId}) - MISSING POST TIME`;
       }
-      return `${quest.village}: ${quest.npcName} (${quest.type}) at ${formatHour(hour)} (${quest.scheduledPostTime})`;
+      return `${quest.village}: ${quest.npcName} (${quest.type}) at ${formatCronUtcHourLabel(hour)} (${quest.scheduledPostTime})`;
     }).join(', ');
     logger.info('QUEST', `Daily quest schedule for ${date}: ${scheduleDetails}`);
     
@@ -2297,6 +2279,137 @@ async function generateDailyQuests() {
 // ============================================================================
 // ------------------- Time Selection with Variable Buffer -------------------
 // ============================================================================
+
+function isArtWritingQuestType(q) {
+  return q && (q.type === 'art' || q.type === 'writing');
+}
+
+// Picks `count` distinct crons from `pool` so each is at least minBuffer UTC hours from every hour in existingCrons (and within the new picks).
+function selectTimesCompatibleWithExisting(existingCrons, pool, count, minBuffer = 3) {
+  if (count === 0) return [];
+  const existingHours = existingCrons.map(cronToHour);
+  const poolSlots = pool.map((cronTime) => ({ cron: cronTime, hour: cronToHour(cronTime) }));
+  const shuffled = shuffleArray([...poolSlots]);
+  const picked = [];
+
+  const allCompatible = (hour) => {
+    const combined = [...existingHours, ...picked.map((p) => p.hour)];
+    return combined.every((h) => isHoursApart(hour, h, minBuffer));
+  };
+
+  for (const slot of shuffled) {
+    if (existingHours.includes(slot.hour) || picked.some((p) => p.hour === slot.hour)) continue;
+    if (allCompatible(slot.hour)) {
+      picked.push(slot);
+      if (picked.length === count) break;
+    }
+  }
+
+  if (picked.length < count) {
+    for (const slot of [...poolSlots].sort((a, b) => a.hour - b.hour)) {
+      if (existingHours.includes(slot.hour) || picked.some((p) => p.hour === slot.hour)) continue;
+      if (allCompatible(slot.hour)) {
+        picked.push(slot);
+        if (picked.length === count) break;
+      }
+    }
+  }
+
+  if (picked.length < count) {
+    const used = new Set([...existingHours, ...picked.map((p) => p.hour)]);
+    for (const slot of poolSlots) {
+      if (used.has(slot.hour)) continue;
+      picked.push(slot);
+      used.add(slot.hour);
+      if (picked.length === count) break;
+    }
+  }
+
+  if (picked.length < count) {
+    throw new Error(
+      `Could not select ${count} posting time(s) compatible with existing slots (picked ${picked.length})`
+    );
+  }
+  return picked.map((p) => p.cron);
+}
+
+// Assigns scheduledPostTime: art/writing only use UTC hours that fire before noon Eastern on `date`.
+async function assignHelpWantedPostingTimes(quests, date, warnings) {
+  const excludedHours = [0, 5];
+  const allSlots = FIXED_CRON_TIMES.filter((c) => !excludedHours.includes(cronToHour(c)));
+  const preNoonSlots = allSlots.filter((c) => cronFiresBeforeNoonEastern(date, c));
+
+  const maxRegen = Math.max(quests.length * 3, 24);
+  let regenAttempts = 0;
+  let artWritingCrons = [];
+
+  while (true) {
+    const awCount = quests.filter(isArtWritingQuestType).length;
+    if (awCount === 0) {
+      artWritingCrons = [];
+      break;
+    }
+    if (preNoonSlots.length === 0) {
+      logger.error('QUEST', 'No pre-noon Eastern cron slots available; converting all art/writing quests');
+      for (const q of [...quests].reverse()) {
+        if (!isArtWritingQuestType(q)) continue;
+        await regenerateArtWritingQuest(q, { persist: false, reason: 'no pre-noon Eastern slots' });
+        regenAttempts++;
+        if (regenAttempts > maxRegen) break;
+      }
+      continue;
+    }
+    try {
+      artWritingCrons = selectTimesWithVariableBuffer(preNoonSlots, awCount);
+      break;
+    } catch {
+      const victim = [...quests].reverse().find(isArtWritingQuestType);
+      if (!victim) {
+        throw new Error('Art/writing quests present but none found for slot regeneration');
+      }
+      regenAttempts++;
+      if (regenAttempts > maxRegen) {
+        throw new Error('Exceeded max regenerations while fitting art/writing into pre-noon Eastern slots');
+      }
+      logger.warn(
+        'QUEST',
+        `Insufficient pre-noon Eastern slots for ${awCount} art/writing quest(s); converting ${victim.questId}`
+      );
+      warnings.push('Some art/writing quests converted due to pre-noon Eastern slot limits');
+      await regenerateArtWritingQuest(victim, {
+        persist: false,
+        reason: 'pre-noon Eastern posting slot capacity'
+      });
+    }
+  }
+
+  const awCountFinal = quests.filter(isArtWritingQuestType).length;
+  const awHours = new Set(artWritingCrons.map(cronToHour));
+  const otherCount = quests.length - awCountFinal;
+  const otherPool = allSlots.filter((c) => !awHours.has(cronToHour(c)));
+  const otherCrons =
+    otherCount > 0 ? selectTimesCompatibleWithExisting(artWritingCrons, otherPool, otherCount) : [];
+
+  const artWritingTimesOrder = shuffleArray([...artWritingCrons]);
+  const otherTimesOrder = shuffleArray([...otherCrons]);
+  let ai = 0;
+  let oi = 0;
+  for (const q of quests) {
+    if (isArtWritingQuestType(q)) {
+      q.scheduledPostTime = artWritingTimesOrder[ai++];
+    } else {
+      q.scheduledPostTime = otherTimesOrder[oi++];
+    }
+  }
+
+  for (const q of quests) {
+    const hour = cronToHour(q.scheduledPostTime);
+    logger.info(
+      'QUEST',
+      `🏘️ Assigned ${q.type} quest for ${q.village} (NPC ${q.npcName}) posting at ${formatCronUtcHourLabel(hour)} (${q.scheduledPostTime})`
+    );
+  }
+}
 
 // ------------------- Function: selectTimesWithVariableBuffer -------------------
 // Selects times from FIXED_CRON_TIMES ensuring variable buffer (3-6 hours) between each
@@ -2440,8 +2553,8 @@ function selectTimesWithVariableBuffer(availableTimes, count) {
   uniqueSelected.sort((a, b) => a.hour - b.hour);
   
   // Log the selected times in a readable format
-  const timeDisplay = uniqueSelected.map(t => formatHour(t.hour)).join(', ');
-  logger.info('QUEST', `Selected ${uniqueSelected.length} distinct times with variable buffer (3-6 hours): ${timeDisplay}`);
+  const timeDisplay = uniqueSelected.map(t => formatCronUtcHourLabel(t.hour)).join(', ');
+  logger.info('QUEST', `Selected ${uniqueSelected.length} distinct times with variable buffer (3-6 hours, UTC): ${timeDisplay}`);
   
   return uniqueSelected.map(timeSlot => timeSlot.cron);
 }
@@ -2485,8 +2598,8 @@ function selectTimesWithBuffer(availableTimes, count) {
   selected.sort((a, b) => a.hour - b.hour);
   
   // Log the selected times in a readable format
-  const timeDisplay = selected.map(t => formatHour(t.hour)).join(', ');
-  logger.info('QUEST', `Selected times with 6-hour buffer: ${timeDisplay}`);
+  const timeDisplay = selected.map(t => formatCronUtcHourLabel(t.hour)).join(', ');
+  logger.info('QUEST', `Selected times with 6-hour buffer (UTC): ${timeDisplay}`);
   
   return selected.map(timeSlot => timeSlot.cron);
 }
@@ -3565,5 +3678,6 @@ module.exports = {
   regenerateArtWritingQuest,
   getRandomNPCName,
   getRandomNPCNameFromPool,
-  getAvailableQuestTypes
+  getAvailableQuestTypes,
+  isOnOrAfterNoonEastern
 }; 
