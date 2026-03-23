@@ -157,6 +157,12 @@ module.exports = {
         .setDescription('✨ Try to catch a Blupee (seasonal town hall event)')
         .addStringOption(option =>
           option
+            .setName('id')
+            .setDescription('Blupee session ID (example: B123456)')
+            .setRequired(true)
+        )
+        .addStringOption(option =>
+          option
             .setName('charactername')
             .setDescription('Character name')
             .setRequired(true)
@@ -185,8 +191,15 @@ module.exports = {
         const { connectToTinglebot, fetchCharacterByNameAndUserId } = require('@/database/db');
         const { ensureBlupeeTable, rollBlupee } = require('../../modules/blupeeModule');
         await connectToTinglebot();
+        const sessionId = interaction.options.getString('id');
         const characterName = interaction.options.getString('charactername');
         const userId = interaction.user.id;
+        if (!sessionId) {
+          return await interaction.reply({
+            content: '❌ You must provide a Blupee session ID.',
+            ephemeral: true
+          });
+        }
         if (!characterName) {
           return await interaction.reply({
             content: '❌ You must provide a character name.',
@@ -202,7 +215,7 @@ module.exports = {
         }
         await ensureBlupeeTable();
         await interaction.deferReply();
-        return rollBlupee(interaction, character);
+        return rollBlupee(interaction, character, sessionId);
       } else if (subcommand === 'blupee-stats') {
         const { connectToTinglebot } = require('@/database/db');
         const { getBlupeeStatsSnapshot } = require('../../modules/blupeeModule');

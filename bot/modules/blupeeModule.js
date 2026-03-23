@@ -506,7 +506,7 @@ async function deleteSpawnAnnouncementMessage(client, stateKey, messageId) {
   }
 }
 
-async function rollBlupee(interaction, character) {
+async function rollBlupee(interaction, character, requestedSessionId) {
   const userId = interaction.user.id;
   const stateKey = getBlupeeStateKey(interaction);
   const actorName = character?.name || character?.characterName || null;
@@ -531,7 +531,19 @@ async function rollBlupee(interaction, character) {
 
   const participantState = { ...(spawnDoc.data?.participantState || {}) };
   const participantCharacterMap = { ...(spawnDoc.data?.participantCharacterMap || {}) };
-  const spawnSessionId = spawnDoc.data?.sessionId || null;
+  const spawnSessionId = String(spawnDoc.data?.sessionId || '').trim() || null;
+  const requestedId = String(requestedSessionId || '').trim();
+  if (!requestedId) {
+    return interaction.editReply({
+      content: '❌ You must provide a Blupee session ID (example: `B123456`).'
+    });
+  }
+  if (!spawnSessionId || requestedId.toUpperCase() !== spawnSessionId.toUpperCase()) {
+    return interaction.editReply({
+      content:
+        `❌ Session ID mismatch. Active Blupee session here is **${spawnSessionId || 'unknown'}**. Use ${getBlupeeCommandMention()} with \`id: ${spawnSessionId || 'BXXXXXX'}\`.`
+    });
+  }
   const prev = participantState[userId];
   if (prev === 'mud') {
     return interaction.editReply({
@@ -673,7 +685,7 @@ async function postBlupeeSpawn(channel) {
     .setColor(0x5865f2)
     .setTitle('✨ A Blupee appears!')
     .setDescription(
-      `A glowing creature darts through the town hall… Quick — try to catch it!\n\nUse ${getBlupeeCommandMention()} with your character name.\n\n**First successful catch ends this spawn for everyone** (or it despawns after **15 minutes** if nobody catches it).`
+      `A glowing creature darts through the town hall… Quick — try to catch it!\n\n🧾 **Session ID:** \`${sessionId}\`\nUse ${getBlupeeCommandMention()} with:\n\`id: ${sessionId}\`\n\`charactername: <your character>\`\n\n**First successful catch ends this spawn for everyone** (or it despawns after **15 minutes** if nobody catches it).`
     )
     .setImage(imageUrl || BLUPEE_FALLBACK_IMAGE)
     .setFooter({ text: 'Despawns in 15 minutes · Blupee event' })
