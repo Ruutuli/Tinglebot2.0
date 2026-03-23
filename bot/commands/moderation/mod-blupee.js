@@ -48,26 +48,18 @@ async function execute(interaction) {
       const channelOpt = interaction.options.getChannel('channel');
       let target = channelOpt || null;
 
-      // If no explicit channel is provided, pick a random village town hall to spawn in.
+      // If no explicit channel is provided, use the dedicated test channel while in test mode.
       if (!target) {
         const guild = interaction.guild;
-        const hallIds = [
-          process.env.RUDANIA_TOWNHALL,
-          process.env.INARIKO_TOWNHALL,
-          process.env.VHINTL_TOWNHALL
-        ].filter(Boolean);
-
-        if (!guild || hallIds.length === 0) {
+        if (!guild) {
           return interaction.editReply({
-            content: '❌ Cannot auto-select a village town hall (missing guild or town hall env vars).'
+            content: '❌ Cannot auto-select test channel (missing guild context).'
           });
         }
-
-        const chosenHallId = hallIds[Math.floor(Math.random() * hallIds.length)];
-        const fetched = await guild.channels.fetch(chosenHallId).catch(() => null);
+        const fetched = await guild.channels.fetch(TEST_CHANNEL_ID).catch(() => null);
         if (!fetched || !fetched.isTextBased()) {
           return interaction.editReply({
-            content: `❌ Could not fetch a valid text channel for hall ${chosenHallId}.`
+            content: `❌ Could not fetch a valid text channel for test channel ${TEST_CHANNEL_ID}.`
           });
         }
         target = fetched;
