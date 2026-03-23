@@ -480,14 +480,15 @@ async function initializeClient() {
           if (guildId) {
             const guild = await client.guilds.fetch(guildId);
             const commands = await guild.commands.fetch();
-            const { setExploreCommandId, setWaveCommandId, setItemCommandId, setHealCommandId } = require("./embeds/embeds");
+            const { setExploreCommandId, setWaveCommandId, setItemCommandId, setHealCommandId, setMinigameCommandId } = require("./embeds/embeds");
             for (const cmd of commands.values()) {
               if (cmd.name === "explore") setExploreCommandId(cmd.id);
               else if (cmd.name === "wave") setWaveCommandId(cmd.id);
               else if (cmd.name === "item") setItemCommandId(cmd.id);
               else if (cmd.name === "heal") setHealCommandId(cmd.id);
+              else if (cmd.name === "minigame") setMinigameCommandId(cmd.id);
             }
-            logger.info("COMMANDS", "Command IDs updated for clickable mentions (explore, wave, item, heal)");
+            logger.info("COMMANDS", "Command IDs updated for clickable mentions (explore, wave, item, heal, minigame)");
           }
         } catch (err) {
           logger.warn("COMMANDS", `Could not fetch command IDs: ${err?.message || err}`);

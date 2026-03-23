@@ -120,6 +120,7 @@ let _exploreCmdId = "1471454947089580107";
 let _waveCmdId = "1456463356515979308";
 let _itemCmdId = "1379838613067530385";
 let _healCmdId = "1390420428840894557";
+let _minigameCmdId = "1413815457118556201";
 
 function getExploreCommandId() {
   return _exploreCmdId;
@@ -133,6 +134,9 @@ function getItemCommandId() {
 function getHealCommandId() {
   return _healCmdId;
 }
+function getMinigameCommandId() {
+  return _minigameCmdId;
+}
 
 function setExploreCommandId(id) {
   if (id && typeof id === "string") _exploreCmdId = id;
@@ -145,6 +149,9 @@ function setItemCommandId(id) {
 }
 function setHealCommandId(id) {
   if (id && typeof id === "string") _healCmdId = id;
+}
+function setMinigameCommandId(id) {
+  if (id && typeof id === "string") _minigameCmdId = id;
 }
 
 // Legacy export for backwards compatibility (returns fallback; prefer getExploreCommandId())
@@ -4128,6 +4135,8 @@ module.exports = {
  setItemCommandId,
  getHealCommandId,
  setHealCommandId,
+ getMinigameCommandId,
+ setMinigameCommandId,
  PATH_IMAGES,
  getExploreMapImageUrl,
  villageEmojis,

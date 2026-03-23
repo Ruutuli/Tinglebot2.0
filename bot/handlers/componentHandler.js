@@ -1812,8 +1812,10 @@ async function handleMinigameJoin(interaction) {
       console.log(`[MINIGAME COMPONENT JOIN] ${username} first player: ${firstPlayer?.username || 'None'}`);
       
       // Post auto-start as follow-up message
+      const minigameCmdId = require('../embeds/embeds.js').getMinigameCommandId();
+      const theycameRollMention = minigameCmdId ? `</minigame theycame-roll:${minigameCmdId}>` : '`/minigame theycame-roll`';
       await interaction.followUp({
-        content: `🎮 **Game Auto-Started!** ${spawnResult.message}\n\n🎯 ${firstPlayerMention}, it's your turn! Use </minigame theycame-roll:1413815457118556201> to attack aliens!`,
+        content: `🎮 **Game Auto-Started!** ${spawnResult.message}\n\n🎯 ${firstPlayerMention}, it's your turn! Use ${theycameRollMention} to attack aliens!`,
         flags: 64
       });
       console.log(`[MINIGAME COMPONENT JOIN] ${username} auto-start process completed successfully`);

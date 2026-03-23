@@ -22,6 +22,7 @@ const User = require('@/models/UserModel');
 const { generateUniqueId } = require('@/utils/uniqueIdUtils');
 const { handleInteractionError } = require('@/utils/globalErrorHandler');
 const { getVillageEmojiByName } = require('../../modules/locationsModule');
+const { getMinigameCommandId } = require('../../embeds/embeds.js');
 
 // ============================================================================
 // ------------------- Import minigame module -------------------
@@ -92,6 +93,11 @@ function createSimpleErrorEmbed(message, characterIcon = null) {
   }
   
   return embed;
+}
+
+function getMinigameSubcommandMention(subcommand) {
+  const cmdId = getMinigameCommandId();
+  return cmdId ? `</minigame ${subcommand}:${cmdId}>` : `\`/minigame ${subcommand}\``;
 }
 
 
@@ -566,7 +572,7 @@ module.exports = {
       console.log(`[MINIGAME JOIN] ${username} creating auto-start embed`);
       const startEmbedResult = await this.createMinigameEmbed(session, 'Game Started!');
       const startReplyOptions = {
-        content: `🎮 **Game Auto-Started!** ${spawnResult.message}\n\n🎯 ${firstPlayerMention}, it's your turn! Use </minigame theycame-roll:1413815457118556201> to attack aliens!`,
+        content: `🎮 **Game Auto-Started!** ${spawnResult.message}\n\n🎯 ${firstPlayerMention}, it's your turn! Use ${getMinigameSubcommandMention('theycame-roll')} to attack aliens!`,
         embeds: [startEmbedResult.embed]
       };
       if (startEmbedResult.attachment) {
@@ -1202,7 +1208,7 @@ module.exports = {
           
           // Add timeout to prevent hanging on connection issues
           const notificationPromise = interaction.followUp({
-            content: `🎯 <@${currentPlayer.discordId}>, it's your turn! Use </minigame theycame-roll:1413815457118556201> to attack aliens!`,
+            content: `🎯 <@${currentPlayer.discordId}>, it's your turn! Use ${getMinigameSubcommandMention('theycame-roll')} to attack aliens!`,
             allowedMentions: {
               users: [currentPlayer.discordId]
             }
@@ -1293,7 +1299,7 @@ module.exports = {
     embed.addFields(
       { 
         name: '🎯 Join the Defense', 
-        value: `**${availableSlots} more slots available!**\n\n</minigame theycame-join:1413815457118556201>`, 
+        value: `**${availableSlots} more slots available!**\n\n${getMinigameSubcommandMention('theycame-join')}`, 
         inline: false 
       }
     );
@@ -1309,7 +1315,7 @@ module.exports = {
       // Add next turn message for active games
       let turnOrderValue = turnOrderText;
       if (session.status === 'active') {
-        turnOrderValue += `\n\n**🎯 Use </minigame theycame-roll:1413815457118556201> to go!**`;
+        turnOrderValue += `\n\n**🎯 Use ${getMinigameSubcommandMention('theycame-roll')} to go!**`;
       }
       
       embed.addFields(
@@ -1421,7 +1427,7 @@ module.exports = {
       // Add next turn message for active games
       let turnOrderValue = turnOrderText;
       if (session.status === 'active') {
-        turnOrderValue += `\n\n**🎯 Next Turn!** Use </minigame theycame-roll:1413815457118556201> to go!`;
+        turnOrderValue += `\n\n**🎯 Next Turn!** Use ${getMinigameSubcommandMention('theycame-roll')} to go!`;
       }
       
       embed.addFields(
@@ -1565,7 +1571,7 @@ module.exports = {
       embed.addFields(
         { 
           name: '__🎯 Take Your Turn__', 
-          value: `**Use </minigame theycame-roll:1413815457118556201> to attack aliens!**`, 
+          value: `**Use ${getMinigameSubcommandMention('theycame-roll')} to attack aliens!**`, 
           inline: false 
         },
         { 

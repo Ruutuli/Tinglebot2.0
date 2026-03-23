@@ -371,14 +371,6 @@ module.exports = {
         });
       }
 
-      if (tableName.toLowerCase() === 'blupee') {
-        return await interaction.reply({
-          content:
-            '❌ **Blupee** is played with </minigame blupee:1413815457118556201> (choose your character name there).',
-          flags: [MessageFlags.Ephemeral]
-        });
-      }
-
       // Fetch the table first
       const table = await TableRoll.findOne({ name: tableName, isActive: true });
       if (!table) {

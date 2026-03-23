@@ -5179,6 +5179,9 @@ async function handleCreateMinigame(interaction, questId, village) {
   // Create instructions embed
   const villageDisplayName = selectedVillage.charAt(0).toUpperCase() + selectedVillage.slice(1);
   const villageEmoji = getVillageEmojiByName(selectedVillage) || '';
+  const minigameCmdId = require('../../embeds/embeds.js').getMinigameCommandId();
+  const theycameJoinMention = minigameCmdId ? `</minigame theycame-join:${minigameCmdId}>` : '`/minigame theycame-join`';
+  const theycameRollMention = minigameCmdId ? `</minigame theycame-roll:${minigameCmdId}>` : '`/minigame theycame-roll`';
   const instructionsEmbed = new EmbedBuilder()
     .setTitle(`👽 They Came for the Cows - ${villageDisplayName} Village Defense`)
     .setColor(0x00ff00)
@@ -5187,7 +5190,7 @@ async function handleCreateMinigame(interaction, questId, village) {
     .addFields(
       { 
         name: '🎮 How to Play', 
-        value: `**Join:** </minigame theycame-join:1413815457118556201>\n**Attack:** </minigame theycame-roll:1413815457118556201>\n\n**Target Aliens:**\n• Outer Ring (5+ to hit) • Middle Ring (4+ to hit) • Inner Ring (3+ to hit)\n\n🆘 **Want to help but not signed up?** Use \`RINGER\` in quest id to help!`, 
+        value: `**Join:** ${theycameJoinMention}\n**Attack:** ${theycameRollMention}\n\n**Target Aliens:**\n• Outer Ring (5+ to hit) • Middle Ring (4+ to hit) • Inner Ring (3+ to hit)\n\n🆘 **Want to help but not signed up?** Use \`RINGER\` in quest id to help!`, 
         inline: false 
       },
       { 
@@ -5662,10 +5665,12 @@ async function createMinigameEmbed(session, title) {
   
   // Add command instructions for active games
   if (session.status === 'active') {
+    const activeMinigameCmdId = require('../../embeds/embeds.js').getMinigameCommandId();
+    const activeRollMention = activeMinigameCmdId ? `</minigame theycame-roll:${activeMinigameCmdId}>` : '`/minigame theycame-roll`';
     embed.addFields(
       { 
         name: '🎲 Take Your Turn', 
-        value: `Use </minigame theycame-roll:1413815457118556201> to attack aliens!\n**Target format:** \`1A\`, \`2B\`, \`3C\` etc.`, 
+        value: `Use ${activeRollMention} to attack aliens!\n**Target format:** \`1A\`, \`2B\`, \`3C\` etc.`, 
         inline: false 
       }
     );
@@ -5769,7 +5774,9 @@ async function createDetailedMinigameEmbed(session, title, character = null) {
     // Add next turn message for active games
     let turnOrderValue = turnOrderText;
     if (session.status === 'active') {
-      turnOrderValue += `\n\n**🎯 Next Turn!** Use </minigame theycame-roll:1413815457118556201> to go!`;
+      const turnMinigameCmdId = require('../../embeds/embeds.js').getMinigameCommandId();
+      const turnRollMention = turnMinigameCmdId ? `</minigame theycame-roll:${turnMinigameCmdId}>` : '`/minigame theycame-roll`';
+      turnOrderValue += `\n\n**🎯 Next Turn!** Use ${turnRollMention} to go!`;
     }
     
     embed.addFields(

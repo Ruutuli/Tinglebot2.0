@@ -8,6 +8,7 @@ const TempData = require('@/models/TempDataModel');
 const User = require('@/models/UserModel');
 const TokenTransaction = require('@/models/TokenTransactionModel');
 const { connectToTinglebot } = require('@/database/db');
+const { getMinigameCommandId } = require('../embeds/embeds');
 const logger = require('@/utils/logger');
 const { handleInteractionError } = require('@/utils/globalErrorHandler');
 
@@ -15,7 +16,6 @@ const BLUPEE_TABLE_NAME = 'blupee';
 const TEST_CHANNEL_ID = '1391812848099004578';
 const SYSTEM_CREATOR = 'blupee-system';
 const BLUPEE_CATCH_TOKEN_REWARD = 25;
-const BLUPEE_COMMAND_MENTION = '</minigame blupee:1413815457118556201>';
 /** How long a Blupee “round” stays active (Mongo TTL + roll eligibility). */
 const BLUPEE_SPAWN_DURATION_MS = 15 * 60 * 1000;
 /** Auto-spawn waves per UTC day during April (Easter event). */
@@ -25,10 +25,10 @@ const BLUPEE_IMAGES = [
   'https://64.media.tumblr.com/e0644def9e3c93975b8f8de49b42d366/d494ff443666a7d7-67/s540x810/2b403639169328c797fbf9e2a2783a3647079448.gif',
   'https://i.pinimg.com/originals/78/e1/d8/78e1d874b06b19f489f2523cd83f4592.gif',
   'https://64.media.tumblr.com/828cdb665990cdb4cda2c4f362eec1b1/0b9e671beb2a906d-f2/s540x810/d26fe1a63bedcb4c9add204130c35a946d07cc1b.gif',
-  'https://64.media.tumblr.com/2369b14602317eaf5456c9b529f4c1df/e3bf8acc8fca22af-4/s1280x1920/ff049de2f77ed2f4e7fd63045714446a108579da.jpg',
+  'https://64.media.tumblr.com/78454595799c875b107225fad59fb315/00c87817d9aa4503-99/s540x810/43343e7ec06d213cf6d5487c4b58fe47fee9f07f.gif',
   'https://64.media.tumblr.com/78454595799c875b107225fad59fb315/00c87817d9aa4503-99/s540x810/43343e7ec06d213cf6d5487c4b58fe47fee9f07f.gif',
   'https://64.media.tumblr.com/1e3643683dc05caa10df5ed6ead9f47b/e3bf8acc8fca22af-33/s640x960/f3f6f20581030ef92b70dfce760ae5ffaff61cbb.gif',
-  'https://64.media.tumblr.com/738ffe6bcfe27982ef590e5b8e432e21/e4b84011d03f4327-b/s540x810/9e4d8ff9543e052880165ca2bf39f0870f139a9a.gif'
+  'https://i.pinimg.com/originals/78/e1/d8/78e1d874b06b19f489f2523cd83f4592.gif'
 ];
 const BLUPEE_FALLBACK_IMAGE = 'https://storage.googleapis.com/tinglebot/Graphics/border.png';
 
@@ -296,6 +296,11 @@ function isTownHallContext(interaction) {
   return halls.has(cid) || (pid && halls.has(pid));
 }
 
+function getBlupeeCommandMention() {
+  const cmdId = getMinigameCommandId();
+  return cmdId ? `</minigame blupee:${cmdId}>` : '`/minigame blupee`';
+}
+
 function canUseBlupeeHere(interaction) {
   if (isTestContext(interaction)) return true;
   if (isTownHallContext(interaction)) return isBlupeeGloballyEnabled();
@@ -453,11 +458,12 @@ function parseOutcome(item) {
   return m ? m[1] : null;
 }
 
-function buildBlupeeEmbed({ outcome, flavorBody, thumbnailUrl, extraFooter, inventoryNote, actorName }) {
+function buildBlupeeEmbed({ outcome, flavorBody, extraFooter, inventoryNote, actorName, rollLine }) {
   const safeActor = (actorName || '').trim();
   const header = safeActor ? `**${safeActor}** tried to catch the Blupee!` : 'You attempt to catch a Blupee!';
   const flavorLine = (flavorBody || '').trim();
   let description = `${header}\n${flavorLine}`;
+  if (rollLine) description += `\n${rollLine}`;
   if (extraFooter) description += `\n${extraFooter}`;
   if (inventoryNote) description += `\n${inventoryNote}`;
 
@@ -466,10 +472,17 @@ function buildBlupeeEmbed({ outcome, flavorBody, thumbnailUrl, extraFooter, inve
     .setDescription(description)
     .setTimestamp();
 
-  if (thumbnailUrl) embed.setThumbnail(thumbnailUrl);
   embed.setImage('https://storage.googleapis.com/tinglebot/Graphics/border.png');
   embed.setFooter({ text: 'Blupee' });
   return embed;
+}
+
+function buildBlupeeRollLine(rollResult) {
+  const rollValue = Number(rollResult?.rollValue);
+  const totalWeight = Number(rollResult?.table?.totalWeight);
+  if (!Number.isFinite(rollValue) || !Number.isFinite(totalWeight) || totalWeight <= 0) return null;
+  const ticket = Math.max(1, Math.min(totalWeight, Math.floor(rollValue) + 1));
+  return `🎲 **Roll:** ${ticket} / ${totalWeight}`;
 }
 
 /** Remove the spawn announcement message after a catch (best-effort). */
@@ -530,16 +543,16 @@ async function rollBlupee(interaction, character) {
   const entry = rollResult.result;
   const outcome = parseOutcome(entry.item);
   const flavorBody = entry.flavor || '';
-  const thumb = entry.thumbnailImage || '';
+  const rollLine = buildBlupeeRollLine(rollResult);
 
   if (outcome === 'miss') {
     const embed = buildBlupeeEmbed({
       outcome: 'miss',
       flavorBody,
-      thumbnailUrl: thumb,
-      extraFooter: `try again! ${BLUPEE_COMMAND_MENTION}`,
+      extraFooter: `try again! ${getBlupeeCommandMention()}`,
       inventoryNote: null,
-      actorName
+      actorName,
+      rollLine
     });
     return interaction.editReply({ embeds: [embed] });
   }
@@ -555,11 +568,11 @@ async function rollBlupee(interaction, character) {
     const embed = buildBlupeeEmbed({
       outcome: 'mud',
       flavorBody,
-      thumbnailUrl: thumb,
       extraFooter:
         'No more rolling for you this round, try again next time!',
       inventoryNote: null,
-      actorName
+      actorName,
+      rollLine
     });
     return interaction.editReply({ embeds: [embed] });
   }
@@ -594,11 +607,11 @@ async function rollBlupee(interaction, character) {
     const embed = buildBlupeeEmbed({
       outcome: 'catch',
       flavorBody,
-      thumbnailUrl: thumb,
       extraFooter:
         '**This spawn is over for everyone** — the Blupee is gone! Most rupees at event end wins the prize.',
       inventoryNote: inventoryParts.join('\n'),
-      actorName
+      actorName,
+      rollLine
     });
     return interaction.editReply({ embeds: [embed] });
   }
@@ -620,7 +633,7 @@ async function postBlupeeSpawn(channel) {
     .setColor(0x5865f2)
     .setTitle('✨ A Blupee appears!')
     .setDescription(
-      `A glowing creature darts through the town hall… Quick — try to catch it!\n\nUse ${BLUPEE_COMMAND_MENTION} with your character name.\n\n**First successful catch ends this spawn for everyone** (or it despawns after **15 minutes** if nobody catches it).`
+      `A glowing creature darts through the town hall… Quick — try to catch it!\n\nUse ${getBlupeeCommandMention()} with your character name.\n\n**First successful catch ends this spawn for everyone** (or it despawns after **15 minutes** if nobody catches it).`
     )
     .setImage(imageUrl || BLUPEE_FALLBACK_IMAGE)
     .setFooter({ text: 'Despawns in 15 minutes · Blupee event' })
