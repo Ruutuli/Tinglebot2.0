@@ -542,7 +542,7 @@ async function rollBlupee(interaction, character, requestedSessionId) {
   const participantCharacterMap = { ...(spawnDoc.data?.participantCharacterMap || {}) };
   const spawnSessionId = String(spawnDoc.data?.sessionId || '').trim() || null;
   const sessionLine = spawnSessionId ? `🧾 **Session ID:** \`${spawnSessionId}\`` : null;
-  const activeVillage = getBlupeeVillageFromStateKey(stateKey);
+  const activeVillage = String(spawnDoc.data?.village || getBlupeeVillageFromStateKey(stateKey) || '').trim() || null;
   const characterVillage = String(character?.currentVillage || character?.homeVillage || '').trim();
   const requestedId = String(requestedSessionId || '').trim();
   if (!requestedId) {
@@ -706,11 +706,12 @@ function getBlupeeStateKeyForDiscordChannel(channel) {
   return getBlupeeStateKeyFromIds(channel.id, channel.parentId);
 }
 
-async function postBlupeeSpawn(channel) {
+async function postBlupeeSpawn(channel, options = {}) {
   const imageUrl = getRandomBlupeeImageUrl();
   const stateKey = getBlupeeStateKeyForDiscordChannel(channel);
   const sessionId = generateBlupeeSessionId();
-  const villageName = getBlupeeVillageFromStateKey(stateKey);
+  const forcedVillage = String(options.forcedVillage || '').trim() || null;
+  const villageName = forcedVillage || getBlupeeVillageFromStateKey(stateKey);
   const locationLine = villageName ? `📍 **Village:** ${villageName}` : '📍 **Location:** Test / non-village context';
 
   const embed = new EmbedBuilder()
@@ -735,6 +736,7 @@ async function postBlupeeSpawn(channel) {
         expiresAt,
         data: {
           sessionId,
+          village: villageName,
           messageId: msg.id,
           virtual: false,
           participantState: {},

@@ -47,8 +47,10 @@ async function execute(interaction) {
 
       const channelOpt = interaction.options.getChannel('channel');
       let target = channelOpt || null;
+      let forcedVillage = null;
 
-      // If no explicit channel is provided, use the dedicated test channel while in test mode.
+      // If no explicit channel is provided, use the dedicated test channel while in test mode
+      // but still pick a random village label for validation testing.
       if (!target) {
         const guild = interaction.guild;
         if (!guild) {
@@ -63,6 +65,8 @@ async function execute(interaction) {
           });
         }
         target = fetched;
+        const villages = ['Rudania', 'Inariko', 'Vhintl'];
+        forcedVillage = villages[Math.floor(Math.random() * villages.length)];
       } else if (!target || !target.isTextBased()) {
         return interaction.editReply({
           content: '❌ Choose a text channel.'
@@ -70,9 +74,10 @@ async function execute(interaction) {
       }
 
       try {
-        const { message, stateKey, sessionId } = await postBlupeeSpawn(target);
+        const { message, stateKey, sessionId } = await postBlupeeSpawn(target, { forcedVillage });
+        const villageSuffix = forcedVillage ? ` · village **${forcedVillage}**` : '';
         return interaction.editReply({
-          content: `✅ Blupee spawned in ${target} (${stateKey}) · session \`${sessionId}\`. [Jump to message](${message.url})`
+          content: `✅ Blupee spawned in ${target} (${stateKey})${villageSuffix} · session \`${sessionId}\`. [Jump to message](${message.url})`
         });
       } catch (err) {
         handleInteractionError(err, 'mod-blupee.js', {
