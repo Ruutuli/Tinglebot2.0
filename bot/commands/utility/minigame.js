@@ -160,6 +160,7 @@ module.exports = {
             .setName('id')
             .setDescription('Blupee session ID (example: B123456)')
             .setRequired(true)
+            .setAutocomplete(true)
         )
         .addStringOption(option =>
           option

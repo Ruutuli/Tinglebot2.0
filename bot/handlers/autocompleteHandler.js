@@ -553,6 +553,11 @@ async function handleAutocompleteInternal(interaction, commandName, focusedOptio
               await handleMinigameCharacterAutocomplete(interaction, focusedOption);
             } else if (focusedOption.name === "session_id") {
               await handleMinigameSessionIdAutocomplete(interaction, focusedOption);
+            } else if (focusedOption.name === "id") {
+              const minigameSub = interaction.options.getSubcommand(false);
+              if (minigameSub === "blupee") {
+                await handleBlupeeSessionIdAutocomplete(interaction, focusedOption);
+              }
             } else if (focusedOption.name === "questid") {
               await handleQuestIdAutocomplete(interaction, focusedOption);
             } else if (focusedOption.name === "target") {
@@ -5111,6 +5116,36 @@ async function handleMinigameSessionIdAutocomplete(interaction, focusedOption) {
   } catch (error) {
     console.error(
       "[handleMinigameSessionIdAutocomplete]: Error handling minigame session ID autocomplete:",
+      error
+    );
+    await safeRespondWithError(interaction);
+  }
+}
+
+// ------------------- Blupee Session ID Autocomplete -------------------
+// Provides autocomplete suggestion for the active Blupee session in this channel context.
+async function handleBlupeeSessionIdAutocomplete(interaction, focusedOption) {
+  try {
+    const { getBlupeeStateKey, getBlupeeStatusSnapshot } = require('@/modules/blupeeModule');
+    const stateKey = getBlupeeStateKey(interaction);
+    const snap = await getBlupeeStatusSnapshot(stateKey);
+    const searchQuery = (focusedOption.value || '').toLowerCase();
+
+    const choices = [];
+    if (snap?.active && snap?.sessionId) {
+      const id = String(snap.sessionId);
+      if (id.toLowerCase().includes(searchQuery)) {
+        choices.push({
+          name: `✨ ${id} | active in this channel`,
+          value: id
+        });
+      }
+    }
+
+    await respondWithFilteredChoices(interaction, focusedOption, choices);
+  } catch (error) {
+    console.error(
+      "[handleBlupeeSessionIdAutocomplete]: Error handling blupee session ID autocomplete:",
       error
     );
     await safeRespondWithError(interaction);

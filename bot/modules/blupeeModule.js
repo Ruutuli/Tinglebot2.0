@@ -39,6 +39,14 @@ function getTownHallIdSet() {
   return ids;
 }
 
+function getBlupeeVillageFromStateKey(stateKey) {
+  if (!stateKey) return null;
+  if (stateKey === process.env.RUDANIA_TOWNHALL) return 'Rudania';
+  if (stateKey === process.env.INARIKO_TOWNHALL) return 'Inariko';
+  if (stateKey === process.env.VHINTL_TOWNHALL) return 'Vhintl';
+  return null;
+}
+
 function isBlupeeGloballyEnabled() {
   return String(process.env.BLUPEE_ENABLED || '').toLowerCase() === 'true';
 }
@@ -532,6 +540,8 @@ async function rollBlupee(interaction, character, requestedSessionId) {
   const participantState = { ...(spawnDoc.data?.participantState || {}) };
   const participantCharacterMap = { ...(spawnDoc.data?.participantCharacterMap || {}) };
   const spawnSessionId = String(spawnDoc.data?.sessionId || '').trim() || null;
+  const activeVillage = getBlupeeVillageFromStateKey(stateKey);
+  const characterVillage = String(character?.currentVillage || character?.homeVillage || '').trim();
   const requestedId = String(requestedSessionId || '').trim();
   if (!requestedId) {
     return interaction.editReply({
@@ -543,6 +553,14 @@ async function rollBlupee(interaction, character, requestedSessionId) {
       content:
         `❌ Session ID mismatch. Active Blupee session here is **${spawnSessionId || 'unknown'}**. Use ${getBlupeeCommandMention()} with \`id: ${spawnSessionId || 'BXXXXXX'}\`.`
     });
+  }
+  if (activeVillage) {
+    if (!characterVillage || characterVillage.toLowerCase() !== activeVillage.toLowerCase()) {
+      return interaction.editReply({
+        content:
+          `❌ **${actorName || 'That character'}** is not currently in **${activeVillage}**. Move them there before attempting this Blupee session.`
+      });
+    }
   }
   const prev = participantState[userId];
   if (prev === 'mud') {
@@ -558,9 +576,16 @@ async function rollBlupee(interaction, character, requestedSessionId) {
   }
   const lockedCharacter = participantCharacterMap[userId];
   if (lockedCharacter && String(lockedCharacter).trim().toLowerCase() !== actorKey) {
+    const lockEmbed = new EmbedBuilder()
+      .setColor(0xff4d4f)
+      .setTitle('❌ Character Locked For This Blupee Session')
+      .setDescription(
+        `You already used **${lockedCharacter}** for Blupee session **${spawnSessionId || 'current'}**.\n\nYou must keep using the same character until this spawn ends.`
+      )
+      .setTimestamp()
+      .setFooter({ text: 'Blupee' });
     return interaction.editReply({
-      content:
-        `❌ You already used **${lockedCharacter}** for Blupee session **${spawnSessionId || 'current'}**. You must keep using the same character until this spawn ends.`
+      embeds: [lockEmbed]
     });
   }
   if (!lockedCharacter) {
@@ -680,12 +705,14 @@ async function postBlupeeSpawn(channel) {
   const imageUrl = getRandomBlupeeImageUrl();
   const stateKey = getBlupeeStateKeyForDiscordChannel(channel);
   const sessionId = generateBlupeeSessionId();
+  const villageName = getBlupeeVillageFromStateKey(stateKey);
+  const locationLine = villageName ? `📍 **Village:** ${villageName}` : '📍 **Location:** Test / non-village context';
 
   const embed = new EmbedBuilder()
     .setColor(0x5865f2)
     .setTitle('✨ A Blupee appears!')
     .setDescription(
-      `A glowing creature darts through the town hall… Quick — try to catch it!\n\n🧾 **Session ID:** \`${sessionId}\`\nUse ${getBlupeeCommandMention()} with:\n\`id: ${sessionId}\`\n\`charactername: <your character>\`\n\n**First successful catch ends this spawn for everyone** (or it despawns after **15 minutes** if nobody catches it).`
+      `A glowing creature darts through the town hall… Quick — try to catch it!\n\n${locationLine}\n🧾 **Session ID:** \`${sessionId}\`\nUse ${getBlupeeCommandMention()} with:\n\`id: ${sessionId}\`\n\`charactername: <your character>\`\n\n**First successful catch ends this spawn for everyone** (or it despawns after **15 minutes** if nobody catches it).`
     )
     .setImage(imageUrl || BLUPEE_FALLBACK_IMAGE)
     .setFooter({ text: 'Despawns in 15 minutes · Blupee event' })
