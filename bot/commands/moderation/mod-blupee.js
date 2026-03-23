@@ -12,7 +12,6 @@ const {
   isBlupeeAutoSpawnEnabled,
   BLUPEE_AUTO_SPAWNS_PER_DAY,
   testChannelRequiresSpawn,
-  getRewardItemName,
   getBlupeeStateKeyForDiscordChannel,
   TEST_CHANNEL_ID
 } = require('../../modules/blupeeModule');
@@ -79,7 +78,7 @@ async function execute(interaction) {
         `**April auto-spawn (UTC):** ${isBlupeeAutoSpawnEnabled() ? `on — ${BLUPEE_AUTO_SPAWNS_PER_DAY} random times/day per town hall` : 'off (needs BLUPEE_ENABLED; set BLUPEE_AUTO_SPAWN=false to disable only auto)'}`,
         `**Test channel ID:** \`${TEST_CHANNEL_ID}\` (this channel matches: ${channel.id === TEST_CHANNEL_ID || channel.parentId === TEST_CHANNEL_ID ? 'yes' : 'no'})`,
         `**BLUPEE_TEST_REQUIRE_SPAWN:** ${testChannelRequiresSpawn() ? 'true' : 'false'} (legacy; real spawn always required)`,
-        `**BLUPEE_REWARD_ITEM:** ${getRewardItemName()}`,
+        '**Rupees:** internal tally only (no inventory item)',
         `**State key (this context):** \`${stateKey}\``,
         `**Active spawn doc:** ${snap.active ? 'yes' : 'no'}`,
         snap.active

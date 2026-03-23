@@ -155,7 +155,8 @@ const tempDataSchema = new mongoose.Schema({
       'temp',         // Temporary data
       'pendingSheetOperation', // Pending Google Sheets operations
       'blupeeSpawn', // Blupee minigame: active spawn + per-user round locks per channel
-      'blupeeDailySchedule' // April auto-spawn: 6 random UTC minute marks per day
+      'blupeeDailySchedule', // April auto-spawn: 6 random UTC minute marks per day
+      'blupeeRupeeTally' // Internal event rupee count per user per season
     ],
     index: true
   },
@@ -229,6 +230,9 @@ tempDataSchema.pre('save', function(next) {
       if (!this.expiresAt) {
         this.expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000);
       }
+      break;
+    case 'blupeeRupeeTally':
+      this.expiresAt = new Date(Date.now() + 400 * 24 * 60 * 60 * 1000); // Keep tallies long enough for winner payout
       break;
     case 'blight_warning':
     case 'healing_warning':

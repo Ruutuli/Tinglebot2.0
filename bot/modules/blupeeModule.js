@@ -7,7 +7,6 @@ const TableRoll = require('@/models/TableRollModel');
 const TempData = require('@/models/TempDataModel');
 const { connectToTinglebot } = require('@/database/db');
 const logger = require('@/utils/logger');
-const { addItemInventoryDatabase } = require('@/utils/inventoryUtils');
 const { handleInteractionError } = require('@/utils/globalErrorHandler');
 
 const BLUPEE_TABLE_NAME = 'blupee';
@@ -21,12 +20,13 @@ const BLUPEE_AUTO_SPAWNS_PER_DAY = 6;
 const BLUPEE_IMAGES = [
   'https://64.media.tumblr.com/e0644def9e3c93975b8f8de49b42d366/d494ff443666a7d7-67/s540x810/2b403639169328c797fbf9e2a2783a3647079448.gif',
   'https://i.pinimg.com/originals/78/e1/d8/78e1d874b06b19f489f2523cd83f4592.gif',
-  'https://64.media.tumblr.com/828cdb665990cdb4cda2c4f362eec1b1/0b9e671beb2a906d-f2/s540x810/d26fe1a63bedcb4c9add204130c35a946d07cc1b.gifv',
+  'https://64.media.tumblr.com/828cdb665990cdb4cda2c4f362eec1b1/0b9e671beb2a906d-f2/s540x810/d26fe1a63bedcb4c9add204130c35a946d07cc1b.gif',
   'https://64.media.tumblr.com/2369b14602317eaf5456c9b529f4c1df/e3bf8acc8fca22af-4/s1280x1920/ff049de2f77ed2f4e7fd63045714446a108579da.jpg',
   'https://64.media.tumblr.com/78454595799c875b107225fad59fb315/00c87817d9aa4503-99/s540x810/43343e7ec06d213cf6d5487c4b58fe47fee9f07f.gif',
-  'https://64.media.tumblr.com/1e3643683dc05caa10df5ed6ead9f47b/e3bf8acc8fca22af-33/s640x960/f3f6f20581030ef92b70dfce760ae5ffaff61cbb.gifv',
+  'https://64.media.tumblr.com/1e3643683dc05caa10df5ed6ead9f47b/e3bf8acc8fca22af-33/s640x960/f3f6f20581030ef92b70dfce760ae5ffaff61cbb.gif',
   'https://64.media.tumblr.com/738ffe6bcfe27982ef590e5b8e432e21/e4b84011d03f4327-b/s540x810/9e4d8ff9543e052880165ca2bf39f0870f139a9a.gif'
 ];
+const BLUPEE_FALLBACK_IMAGE = 'https://storage.googleapis.com/tinglebot/Graphics/border.png';
 
 function getTownHallIdSet() {
   const ids = new Set(
@@ -65,6 +65,11 @@ function randomDistinctMinutes(count, maxExclusive) {
     set.add(Math.floor(Math.random() * maxExclusive));
   }
   return [...set].sort((a, b) => a - b);
+}
+
+function getRandomBlupeeImageUrl() {
+  const candidate = BLUPEE_IMAGES[Math.floor(Math.random() * BLUPEE_IMAGES.length)];
+  return candidate || BLUPEE_FALLBACK_IMAGE;
 }
 
 async function getOrCreateDailyScheduleDoc() {
@@ -151,8 +156,42 @@ function testChannelRequiresSpawn() {
   return String(process.env.BLUPEE_TEST_REQUIRE_SPAWN || '').toLowerCase() === 'true';
 }
 
-function getRewardItemName() {
-  return (process.env.BLUPEE_REWARD_ITEM || 'Green Rupee').trim();
+function getRupeeTallySeasonKey(now = new Date()) {
+  // Easter/Blupee event happens in April, but keep key by year for easier winner lookups.
+  return `${now.getUTCFullYear()}`;
+}
+
+function getRupeeTallyDocKey(userId, seasonKey = getRupeeTallySeasonKey()) {
+  return `${seasonKey}:${userId}`;
+}
+
+async function incrementBlupeeRupeeTally(userId) {
+  const seasonKey = getRupeeTallySeasonKey();
+  const key = getRupeeTallyDocKey(userId, seasonKey);
+  const nextYearStart = new Date(Date.UTC(new Date().getUTCFullYear() + 1, 0, 1, 0, 0, 0, 0));
+
+  const updated = await TempData.findOneAndUpdate(
+    { type: 'blupeeRupeeTally', key },
+    {
+      $inc: { 'data.count': 1 },
+      $setOnInsert: {
+        type: 'blupeeRupeeTally',
+        key,
+        expiresAt: nextYearStart,
+        data: {
+          userId,
+          seasonKey,
+          count: 0
+        }
+      }
+    },
+    { upsert: true, new: true }
+  );
+
+  return {
+    seasonKey,
+    total: updated?.data?.count || 1
+  };
 }
 
 /** Consolidate threads with their town hall / test channel parent for one shared round. */
@@ -378,18 +417,16 @@ async function rollBlupee(interaction, character) {
       });
     }
 
-    const rewardName = getRewardItemName();
     let inventoryNote = '';
     try {
-      await addItemInventoryDatabase(character._id, rewardName, 1, interaction, 'Blupee catch');
-      inventoryNote = `✅ **${rewardName}** added to **${character.name}**'s inventory.`;
-    } catch (invErr) {
-      handleInteractionError(invErr, 'blupeeModule.js', {
-        commandName: 'blupee catch reward',
-        characterId: String(character._id),
-        itemName: rewardName
+      const tally = await incrementBlupeeRupeeTally(userId);
+      inventoryNote = `✅ **+1 Blupee rupee** added to your internal tally. You now have **${tally.total}** for season **${tally.seasonKey}**.`;
+    } catch (tallyErr) {
+      handleInteractionError(tallyErr, 'blupeeModule.js', {
+        commandName: 'blupee rupee tally',
+        userId
       });
-      inventoryNote = `⚠️ Could not add **${rewardName}** automatically — grant it manually if needed. (${invErr.message})`;
+      inventoryNote = '⚠️ Blupee was caught, but tally update failed. A mod should adjust your count manually.';
     }
 
     await deleteSpawnAnnouncementMessage(interaction.client, stateKey, deleted.data?.messageId);
@@ -399,7 +436,7 @@ async function rollBlupee(interaction, character) {
       flavorBody,
       thumbnailUrl: thumb,
       extraFooter:
-        '**This spawn is over for everyone** — the Blupee is gone! Please keep track of how many rupees you gather.',
+        '**This spawn is over for everyone** — the Blupee is gone! Most rupees at event end wins the prize.',
       inventoryNote
     });
     return interaction.editReply({ embeds: [embed] });
@@ -415,7 +452,7 @@ function getBlupeeStateKeyForDiscordChannel(channel) {
 }
 
 async function postBlupeeSpawn(channel) {
-  const imageUrl = BLUPEE_IMAGES[Math.floor(Math.random() * BLUPEE_IMAGES.length)];
+  const imageUrl = getRandomBlupeeImageUrl();
   const stateKey = getBlupeeStateKeyForDiscordChannel(channel);
 
   const embed = new EmbedBuilder()
@@ -424,7 +461,7 @@ async function postBlupeeSpawn(channel) {
     .setDescription(
       'A glowing creature darts through the town hall… Quick — try to catch it!\n\nUse `/minigame blupee` with your character name.\n\n**First successful catch ends this spawn for everyone** (or it despawns after **15 minutes** if nobody catches it).'
     )
-    .setImage(imageUrl)
+    .setImage(imageUrl || BLUPEE_FALLBACK_IMAGE)
     .setFooter({ text: 'Despawns in 15 minutes · Blupee event' })
     .setTimestamp();
 
@@ -476,6 +513,5 @@ module.exports = {
   isBlupeeAutoSpawnEnabled,
   runBlupeeAutoSpawnTick,
   testChannelRequiresSpawn,
-  getRewardItemName,
   getBlupeeStateKey
 };
