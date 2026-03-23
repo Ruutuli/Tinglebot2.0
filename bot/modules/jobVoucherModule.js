@@ -142,6 +142,15 @@ function getJobVoucherErrorMessage(errorType, data = {}) {
             ],
             color: '#FF0000'
         },
+        BOOSTER_ENTERTAINER_MUST_USE_SECOND_VOUCHER_FIRST: {
+            title: '❌ Booster Must Use Second Voucher First',
+            description: `**${data.targetName || 'The crafting character'}** cannot receive **Song of Double Time** (Entertainer crafting boost) until the booster has manually used their second job voucher.`,
+            fields: [
+                { name: 'Note', value: '> After accepting the boost, the booster must use a Job Voucher via **/item** (Job Voucher with job Entertainer) so the extra crafted item applies.' },
+                { name: 'How to Fix', value: '> Ask **' + (data.boosterName || 'the booster') + '** to use their second voucher via `/item` (Job Voucher, job Entertainer), then try crafting again.' }
+            ],
+            color: '#FF0000'
+        },
         // ============================================================================
         // ------------------- No Job Specified Error (Job Voucher) -------------------
         // Embed for missing job when using a job voucher

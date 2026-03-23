@@ -621,6 +621,32 @@ module.exports = {
         }
       }
 
+      // ------------------- Entertainer Crafting: Booster must have used 2nd voucher if not native Entertainer (Song of Double Time) -------------------
+      if (freshCharacter.boostedBy) {
+        const { fetchCharacterByName } = require('@/database/db');
+        const boosterCharacter = await fetchCharacterByName(freshCharacter.boostedBy);
+        const activeBoost = await retrieveBoostingRequestFromTempDataByCharacter(freshCharacter.name);
+        const isEntertainerCraftingBoost =
+          activeBoost &&
+          activeBoost.category === 'Crafting' &&
+          (activeBoost.boosterJob || '').trim().toLowerCase() === 'entertainer';
+        if (isEntertainerCraftingBoost) {
+          const isBoosterNativeEntertainer =
+            boosterCharacter && boosterCharacter.job === 'Entertainer' && !boosterCharacter.jobVoucher;
+          if (!isBoosterNativeEntertainer && !activeBoost.boosterUsedSecondVoucher) {
+            const voucherError = getJobVoucherErrorMessage('BOOSTER_ENTERTAINER_MUST_USE_SECOND_VOUCHER_FIRST', {
+              boosterName: freshCharacter.boostedBy || 'Entertainer',
+              targetName: freshCharacter.name
+            });
+            const voucherEmbed = voucherError.embed.setImage('https://storage.googleapis.com/tinglebot/Graphics/border.png');
+            for (const mat of materialsUsed) {
+              await addItemInventoryDatabase(character._id, mat.itemName, mat.quantity, interaction, 'Crafting Refund - Entertainer Second Voucher');
+            }
+            return interaction.editReply({ embeds: [voucherEmbed], content: '⚠️ **Materials have been refunded.**', flags: [MessageFlags.Ephemeral] });
+          }
+        }
+      }
+
       // ------------------- Deduct Stamina -------------------
       let updatedStamina;
       let teacherUpdatedStamina = null;

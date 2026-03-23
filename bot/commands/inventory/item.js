@@ -616,12 +616,18 @@ module.exports = {
         }
         await removeItemInventoryDatabase(character._id, 'Job Voucher', 1, interaction, `Used for job voucher: ${jobName}`);
 
-        // If this character is the booster of an active Teacher Crafting boost, mark second voucher as used (they used the standard command twice)
+        // If this character is the booster of an active Teacher or Entertainer Crafting boost, mark second voucher as used
         const jobNameNormalized = (jobName || '').trim().toLowerCase();
-        if (jobNameNormalized === 'teacher') {
+        if (jobNameNormalized === 'teacher' || jobNameNormalized === 'entertainer') {
           const { retrieveBoostingRequestFromTempDataByBooster, saveBoostingRequestToTempData } = require('../jobs/boosting');
           const activeBoost = await retrieveBoostingRequestFromTempDataByBooster(character.name);
-          if (activeBoost && activeBoost.category === 'Crafting' && !activeBoost.boosterUsedSecondVoucher) {
+          const boosterJobNorm = (activeBoost?.boosterJob || '').trim().toLowerCase();
+          if (
+            activeBoost &&
+            activeBoost.category === 'Crafting' &&
+            !activeBoost.boosterUsedSecondVoucher &&
+            boosterJobNorm === jobNameNormalized
+          ) {
             activeBoost.boosterUsedSecondVoucher = true;
             await saveBoostingRequestToTempData(activeBoost.boostRequestId, activeBoost);
           }
