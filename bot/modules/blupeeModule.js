@@ -76,6 +76,11 @@ function getRandomBlupeeImageUrl() {
   return candidate || BLUPEE_FALLBACK_IMAGE;
 }
 
+function generateBlupeeSessionId() {
+  const rand = Math.floor(100000 + Math.random() * 900000);
+  return `B${rand}`;
+}
+
 async function getOrCreateDailyScheduleDoc() {
   const now = new Date();
   const key = utcDateKey(now);
@@ -377,7 +382,7 @@ function buildTableEntries() {
       weight: 7,
       item: 'BLUPEE_OUTCOME:miss',
       flavor:
-        'You hold out a rupee like bait. The Blupee nods respectfully, steals your dignity, and disappears in sparkles.',
+        'You hold out a carrot like bait. The Blupee sniffs it, judges your strategy, and disappears in sparkles.',
       thumbnailImage: thumbs[1]
     },
     {
@@ -462,10 +467,12 @@ function buildBlupeeEmbed({ outcome, flavorBody, extraFooter, inventoryNote, act
   const safeActor = (actorName || '').trim();
   const header = safeActor ? `**${safeActor}** tried to catch the Blupee!` : 'You attempt to catch a Blupee!';
   const flavorLine = (flavorBody || '').trim();
-  let description = `${header}\n${flavorLine}`;
-  if (rollLine) description += `\n${rollLine}`;
-  if (extraFooter) description += `\n${extraFooter}`;
-  if (inventoryNote) description += `\n${inventoryNote}`;
+  const sections = [header];
+  if (flavorLine) sections.push(flavorLine);
+  if (rollLine) sections.push(rollLine);
+  if (extraFooter) sections.push(extraFooter);
+  if (inventoryNote) sections.push(inventoryNote);
+  const description = sections.join('\n\n');
 
   const embed = new EmbedBuilder()
     .setColor(0x5865f2)
@@ -502,6 +509,8 @@ async function rollBlupee(interaction, character) {
   const userId = interaction.user.id;
   const stateKey = getBlupeeStateKey(interaction);
   const actorName = character?.name || character?.characterName || null;
+  const actorLabel = String(actorName || character?.characterID || character?._id || '').trim();
+  const actorKey = actorLabel.toLowerCase();
 
   if (!canUseBlupeeHere(interaction)) {
     return interaction.editReply({
@@ -519,12 +528,34 @@ async function rollBlupee(interaction, character) {
   }
 
   const participantState = { ...(spawnDoc.data?.participantState || {}) };
+  const participantCharacterMap = { ...(spawnDoc.data?.participantCharacterMap || {}) };
+  const spawnSessionId = spawnDoc.data?.sessionId || null;
   const prev = participantState[userId];
   if (prev === 'mud') {
     return interaction.editReply({
       content:
         '❌ You slipped in mud last time — **no more rolling for you this round**. Try again after the next Blupee spawn!'
     });
+  }
+  if (!actorLabel) {
+    return interaction.editReply({
+      content: '❌ Could not resolve your character for this Blupee roll. Please try again.'
+    });
+  }
+  const lockedCharacter = participantCharacterMap[userId];
+  if (lockedCharacter && String(lockedCharacter).trim().toLowerCase() !== actorKey) {
+    return interaction.editReply({
+      content:
+        `❌ You already used **${lockedCharacter}** for Blupee session **${spawnSessionId || 'current'}**. You must keep using the same character until this spawn ends.`
+    });
+  }
+  if (!lockedCharacter) {
+    participantCharacterMap[userId] = actorLabel;
+    await TempData.findOneAndUpdate(
+      { type: 'blupeeSpawn', key: stateKey },
+      { $set: { 'data.participantCharacterMap': participantCharacterMap } },
+      { upsert: false }
+    );
   }
 
   let rollResult;
@@ -601,6 +632,9 @@ async function rollBlupee(interaction, character) {
       });
       inventoryParts = ['⚠️ Blupee was caught, but token/rupee reward update failed. A mod should adjust your rewards manually.'];
     }
+    if (spawnSessionId) {
+      inventoryParts.push(`🧾 **Session:** \`${spawnSessionId}\``);
+    }
 
     await deleteSpawnAnnouncementMessage(interaction.client, stateKey, deleted.data?.messageId);
 
@@ -628,6 +662,7 @@ function getBlupeeStateKeyForDiscordChannel(channel) {
 async function postBlupeeSpawn(channel) {
   const imageUrl = getRandomBlupeeImageUrl();
   const stateKey = getBlupeeStateKeyForDiscordChannel(channel);
+  const sessionId = generateBlupeeSessionId();
 
   const embed = new EmbedBuilder()
     .setColor(0x5865f2)
@@ -650,27 +685,30 @@ async function postBlupeeSpawn(channel) {
         key: stateKey,
         expiresAt,
         data: {
+          sessionId,
           messageId: msg.id,
           virtual: false,
-          participantState: {}
+          participantState: {},
+          participantCharacterMap: {}
         }
       }
     },
     { upsert: true }
   );
 
-  return { message: msg, stateKey };
+  return { message: msg, stateKey, sessionId };
 }
 
 async function getBlupeeStatusSnapshot(stateKey) {
   const doc = await TempData.findByTypeAndKey('blupeeSpawn', stateKey);
   if (!doc) {
-    return { active: false, virtual: false, messageId: null };
+    return { active: false, virtual: false, messageId: null, sessionId: null };
   }
   return {
     active: true,
     virtual: !!doc.data?.virtual,
-    messageId: doc.data?.messageId || null
+    messageId: doc.data?.messageId || null,
+    sessionId: doc.data?.sessionId || null
   };
 }
 

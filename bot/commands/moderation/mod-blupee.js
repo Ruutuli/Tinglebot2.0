@@ -53,9 +53,9 @@ async function execute(interaction) {
       }
 
       try {
-        const { message, stateKey } = await postBlupeeSpawn(target);
+        const { message, stateKey, sessionId } = await postBlupeeSpawn(target);
         return interaction.editReply({
-          content: `✅ Blupee spawned in ${target} (${stateKey}). [Jump to message](${message.url})`
+          content: `✅ Blupee spawned in ${target} (${stateKey}) · session \`${sessionId}\`. [Jump to message](${message.url})`
         });
       } catch (err) {
         handleInteractionError(err, 'mod-blupee.js', {
@@ -82,7 +82,7 @@ async function execute(interaction) {
         `**State key (this context):** \`${stateKey}\``,
         `**Active spawn doc:** ${snap.active ? 'yes' : 'no'}`,
         snap.active
-          ? `**Spawn:** message \`${snap.messageId || 'virtual'}\` · virtual: ${snap.virtual ? 'yes' : 'no'}`
+          ? `**Spawn:** session \`${snap.sessionId || 'unknown'}\` · message \`${snap.messageId || 'virtual'}\` · virtual: ${snap.virtual ? 'yes' : 'no'}`
           : '**Spawn:** none'
       ];
       return interaction.editReply({ content: lines.join('\n') });
