@@ -202,7 +202,7 @@ export async function POST(
       ((await import("@/models/RelicModel.js")) as unknown as { default: Model<unknown> }).default;
     const unappraised = await Relic.findOne({
       $and: [
-        relicOwnerMatchQuery({ _id: character._id, name: character.name }),
+        relicOwnerMatchQuery({ _id: character._id, name: characterName }),
         { appraised: false, deteriorated: false },
       ],
     });
