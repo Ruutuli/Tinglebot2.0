@@ -189,7 +189,7 @@ module.exports = {
       } else if (subcommand === 'theycame-roll') {
         await this.handleRoll(interaction);
       } else if (subcommand === 'blupee') {
-        const { connectToTinglebot, fetchCharacterByNameAndUserId } = require('@/database/db');
+        const { connectToTinglebot, fetchAnyCharacterByNameAndUserId } = require('@/database/db');
         const { ensureBlupeeTable, rollBlupee } = require('../../modules/blupeeModule');
         await connectToTinglebot();
         const sessionId = interaction.options.getString('id');
@@ -207,10 +207,10 @@ module.exports = {
             ephemeral: true
           });
         }
-        const character = await fetchCharacterByNameAndUserId(characterName, userId);
+        const character = await fetchAnyCharacterByNameAndUserId(characterName, userId);
         if (!character) {
           return await interaction.reply({
-            content: `❌ Character '${characterName}' not found or does not belong to you.`,
+            content: `❌ Character '${characterName}' not found in your regular or mod characters.`,
             ephemeral: true
           });
         }

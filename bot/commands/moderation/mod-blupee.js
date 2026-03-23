@@ -74,10 +74,10 @@ async function execute(interaction) {
       }
 
       try {
-        const { message, stateKey, sessionId } = await postBlupeeSpawn(target, { forcedVillage });
+        const { message, stateKey, sessionId, threadId } = await postBlupeeSpawn(target, { forcedVillage });
         const villageSuffix = forcedVillage ? ` · village **${forcedVillage}**` : '';
         return interaction.editReply({
-          content: `✅ Blupee spawned in ${target} (${stateKey})${villageSuffix} · session \`${sessionId}\`. [Jump to message](${message.url})`
+          content: `✅ Blupee spawned in ${target} (${stateKey})${villageSuffix} · session \`${sessionId}\`${threadId ? ` · thread \`${threadId}\`` : ''}. [Jump to message](${message.url})`
         });
       } catch (err) {
         handleInteractionError(err, 'mod-blupee.js', {

@@ -6,6 +6,7 @@ const { EmbedBuilder } = require('discord.js');
 const TableRoll = require('@/models/TableRollModel');
 const TempData = require('@/models/TempDataModel');
 const User = require('@/models/UserModel');
+const ModCharacter = require('@/models/ModCharacterModel');
 const TokenTransaction = require('@/models/TokenTransactionModel');
 const { connectToTinglebot } = require('@/database/db');
 const { getMinigameCommandId } = require('../embeds/embeds');
@@ -16,6 +17,10 @@ const BLUPEE_TABLE_NAME = 'blupee';
 const TEST_CHANNEL_ID = '1391812848099004578';
 const SYSTEM_CREATOR = 'blupee-system';
 const BLUPEE_CATCH_TOKEN_REWARD = 25;
+// Mods get a small near-miss upgrade to keep catch rare.
+// With totalWeight=100 and base catch only at ticket=100 (1%), upgrading ticket=99 with 25%
+// makes overall catch chance ~1% + 0.25% = 1.25% (about 25% more likely).
+const BLUPEE_MOD_NEAR_MISS_UPGRADE_PROB = 0.25;
 /** How long a Blupee “round” stays active (Mongo TTL + roll eligibility). */
 const BLUPEE_SPAWN_DURATION_MS = 15 * 60 * 1000;
 /** Auto-spawn waves per UTC day during April (Easter event). */
@@ -195,11 +200,9 @@ async function incrementBlupeeRupeeTally(userId) {
         type: 'blupeeRupeeTally',
         key,
         expiresAt: nextYearStart,
-        data: {
-          userId,
-          seasonKey,
-          count: 0
-        }
+        'data.userId': userId,
+        'data.seasonKey': seasonKey,
+        // Do not set data.count on insert; $inc updates it safely and avoids Mongo path conflicts.
       }
     },
     { upsert: true, new: true }
@@ -494,12 +497,24 @@ function buildBlupeeEmbed({ outcome, flavorBody, extraFooter, inventoryNote, act
   return embed;
 }
 
-function buildBlupeeRollLine(rollResult) {
+function buildBlupeeRollLine(rollResult, outcome = null, ticketOverride = null) {
   const rollValue = Number(rollResult?.rollValue);
   const totalWeight = Number(rollResult?.table?.totalWeight);
-  if (!Number.isFinite(rollValue) || !Number.isFinite(totalWeight) || totalWeight <= 0) return null;
-  const ticket = Math.max(1, Math.min(totalWeight, Math.floor(rollValue) + 1));
-  return `🎲 **Roll:** ${ticket} / ${totalWeight}`;
+  if (!Number.isFinite(totalWeight) || totalWeight <= 0) return null;
+
+  const baseTicket = Number.isFinite(rollValue)
+    ? Math.max(1, Math.min(totalWeight, Math.floor(rollValue) + 1))
+    : 1;
+  const ticket = ticketOverride != null ? ticketOverride : baseTicket;
+  const resultLabel =
+    outcome === 'catch'
+      ? 'Catch!'
+      : outcome === 'mud'
+        ? 'Mud!'
+        : outcome === 'miss'
+          ? 'Miss!'
+          : 'Result';
+  return `🎲 **Roll:** ${ticket} / ${totalWeight}\n📌 **Result:** ${resultLabel}`;
 }
 
 /** Remove the spawn announcement message after a catch (best-effort). */
@@ -544,6 +559,9 @@ async function rollBlupee(interaction, character, requestedSessionId) {
   const sessionLine = spawnSessionId ? `🧾 **Session ID:** \`${spawnSessionId}\`` : null;
   const activeVillage = String(spawnDoc.data?.village || getBlupeeVillageFromStateKey(stateKey) || '').trim() || null;
   const characterVillage = String(character?.currentVillage || character?.homeVillage || '').trim();
+  // Bonus and village validation bypasses should apply ONLY to real mod characters
+  // that exist in the modcharacters collection.
+  const isModCharacter = Boolean(character?._id && await ModCharacter.exists({ _id: character._id }));
   const requestedId = String(requestedSessionId || '').trim();
   if (!requestedId) {
     return interaction.editReply({
@@ -556,19 +574,50 @@ async function rollBlupee(interaction, character, requestedSessionId) {
         `❌ Session ID mismatch. Active Blupee session here is **${spawnSessionId || 'unknown'}**. Use ${getBlupeeCommandMention()} with \`id: ${spawnSessionId || 'BXXXXXX'}\`.`
     });
   }
-  if (activeVillage) {
+  if (activeVillage && !isModCharacter) {
     if (!characterVillage || characterVillage.toLowerCase() !== activeVillage.toLowerCase()) {
+      const lockedCharacter = participantCharacterMap[userId];
+      if (lockedCharacter && String(lockedCharacter).trim().toLowerCase() !== actorKey) {
+        const lockEmbed = new EmbedBuilder()
+          .setColor(0xff4d4f)
+          .setTitle('❌ Character Locked For This Blupee Session')
+          .setDescription(
+            `You already used **${lockedCharacter}** for Blupee session **${spawnSessionId || 'current'}**.\n\nYou must keep using the same character until this spawn ends.`
+          )
+          .setTimestamp()
+          .setFooter({ text: 'Blupee' });
+
+        return interaction.editReply({
+          embeds: [lockEmbed]
+        });
+      }
+
+      const villageLockEmbed = new EmbedBuilder()
+        .setColor(0xff4d4f)
+        .setTitle('❌ Wrong Village For This Blupee Session')
+        .setDescription(
+          `**${actorName || 'That character'}** is currently in **${characterVillage || 'Unknown'}**.\nThis Blupee session is active in **${activeVillage}**.\n\nMove the character to **${activeVillage}** first, then try again.`
+        )
+        .setTimestamp()
+        .setFooter({ text: 'Blupee' });
       return interaction.editReply({
-        content:
-          `❌ **${actorName || 'That character'}** is not currently in **${activeVillage}**. Move them there before attempting this Blupee session.`
+        embeds: [villageLockEmbed]
       });
     }
   }
   const prev = participantState[userId];
   if (prev === 'mud') {
+    const mudLockEmbed = new EmbedBuilder()
+      .setColor(0xff4d4f)
+      .setTitle('🛑 Mudged — No More Rolls This Spawn')
+      .setDescription(
+        `You slipped in mud last time.\n\nNo more rolling for you this round.\nTry again after the next Blupee spawn!`
+      )
+      .setTimestamp()
+      .setFooter({ text: 'Blupee' });
+
     return interaction.editReply({
-      content:
-        '❌ You slipped in mud last time — **no more rolling for you this round**. Try again after the next Blupee spawn!'
+      embeds: [mudLockEmbed]
     });
   }
   if (!actorLabel) {
@@ -613,9 +662,39 @@ async function rollBlupee(interaction, character, requestedSessionId) {
   }
 
   const entry = rollResult.result;
-  const outcome = parseOutcome(entry.item);
-  const flavorBody = entry.flavor || '';
-  const rollLine = buildBlupeeRollLine(rollResult);
+  let outcome = parseOutcome(entry.item);
+  let flavorBody = entry.flavor || '';
+  const totalWeight = Number(rollResult?.table?.totalWeight);
+  const baseRollValue = Number(rollResult?.rollValue);
+  const baseTicket = Number.isFinite(baseRollValue)
+    ? Math.max(1, Math.min(totalWeight, Math.floor(baseRollValue) + 1))
+    : 1;
+
+  let effectiveTicket = baseTicket;
+  // Mods have a small near-miss upgrade so catching stays mostly rare.
+  // Example with totalWeight=100: base catch occurs at ticket=100 (1%).
+  // Upgrading ticket=99 with 25% probability adds ~0.25% more catches (=~25% more likely).
+  if (isModCharacter && baseTicket === totalWeight - 1) {
+    if (Math.random() < BLUPEE_MOD_NEAR_MISS_UPGRADE_PROB) {
+      effectiveTicket = totalWeight;
+    }
+  }
+
+  // Only a 100 effective ticket catches the Blupee.
+  const finalOutcome =
+    effectiveTicket === totalWeight
+      ? 'catch'
+      : outcome === 'mud'
+        ? 'mud'
+        : 'miss';
+
+  if (isModCharacter && finalOutcome === 'catch' && outcome !== 'catch') {
+    flavorBody =
+      "You surge forward with uncanny timing and snatch the Blupee before it can blink. POOF — it's gone, but it left rewards behind!";
+  }
+
+  outcome = finalOutcome;
+  let rollLine = buildBlupeeRollLine(rollResult, outcome, effectiveTicket);
 
   if (outcome === 'miss') {
     const embed = buildBlupeeEmbed({
@@ -663,6 +742,7 @@ async function rollBlupee(interaction, character, requestedSessionId) {
     }
 
     let inventoryParts = [];
+    let rewardsApplied = true;
     try {
       const tokenReward = await awardBlupeeCatchTokens(userId);
       const tally = await incrementBlupeeRupeeTally(userId);
@@ -671,16 +751,51 @@ async function rollBlupee(interaction, character, requestedSessionId) {
         `✅ **+1 Blupee rupee** added to your internal tally. You now have **${tally.total}** for season **${tally.seasonKey}**.`
       );
     } catch (tallyErr) {
+      rewardsApplied = false;
       handleInteractionError(tallyErr, 'blupeeModule.js', {
         commandName: 'blupee catch rewards',
         userId
       });
-      inventoryParts = ['⚠️ Blupee was caught, but token/rupee reward update failed. A mod should adjust your rewards manually.'];
+      inventoryParts = ['⚠️ Reward update failed, so this catch was not finalized. The Blupee remains active — please try again.'];
     }
+
+    if (!rewardsApplied) {
+      // Restore the spawn so a failed reward write does not consume the event.
+      await TempData.findOneAndUpdate(
+        { type: 'blupeeSpawn', key: stateKey },
+        {
+          $set: {
+            type: 'blupeeSpawn',
+            key: stateKey,
+            expiresAt: deleted.expiresAt || new Date(Date.now() + BLUPEE_SPAWN_DURATION_MS),
+            data: deleted.data || {
+              sessionId: spawnSessionId,
+              messageId: null,
+              virtual: false,
+              participantState: {},
+              participantCharacterMap: {}
+            }
+          }
+        },
+        { upsert: true }
+      );
+
+      const failEmbed = buildBlupeeEmbed({
+        outcome: 'miss',
+        flavorBody: 'The Blupee slips free while the reward ledger glitches.',
+        extraFooter: `try again! ${getBlupeeCommandMention()}`,
+        inventoryNote: inventoryParts.join('\n'),
+        actorName,
+        rollLine,
+        actorIconUrl,
+        sessionLine
+      });
+      return interaction.editReply({ embeds: [failEmbed] });
+    }
+
     if (spawnSessionId) {
       inventoryParts.push(`🧾 **Session:** \`${spawnSessionId}\``);
     }
-
     await deleteSpawnAnnouncementMessage(interaction.client, stateKey, deleted.data?.messageId);
 
     const embed = buildBlupeeEmbed({
@@ -718,13 +833,26 @@ async function postBlupeeSpawn(channel, options = {}) {
     .setColor(0x5865f2)
     .setTitle('✨ A Blupee appears!')
     .setDescription(
-      `A glowing creature darts through the town hall… Quick — try to catch it!\n\n${locationLine}\n🧾 **Session ID:** \`${sessionId}\`\nUse ${getBlupeeCommandMention()} with:\n\`id: ${sessionId}\`\n\`charactername: <your character>\`\n\n**First successful catch ends this spawn for everyone** (or it despawns after **15 minutes** if nobody catches it).`
+      `✨ A Blupee has been spotted in **${villageName || 'this area'}**! Quick — try to catch it!\n\n${locationLine}\n🧾 **Session ID:** \`${sessionId}\`\nUse ${getBlupeeCommandMention()} with:\n\`id: ${sessionId}\`\n\`charactername: <your character>\`\n\n**First successful catch ends this spawn for everyone** (or it despawns after **15 minutes** if nobody catches it).`
     )
     .setImage(imageUrl || BLUPEE_FALLBACK_IMAGE)
     .setFooter({ text: 'Despawns in 15 minutes · Blupee event' })
     .setTimestamp();
 
   const msg = await channel.send({ embeds: [embed] });
+  let thread = null;
+  try {
+    if (typeof msg.startThread === 'function') {
+      thread = await msg.startThread({
+        name: `Blupee ${villageName || '—'} (${sessionId})`,
+        autoArchiveDuration: 60,
+        reason: 'Blupee session thread'
+      });
+    }
+  } catch (e) {
+    logger.warn('BLUPEE', `Failed to start Blupee thread for session ${sessionId}: ${e.message || e}`);
+  }
+  const noticeChannel = thread || channel;
 
   const expiresAt = new Date(Date.now() + BLUPEE_SPAWN_DURATION_MS);
   await TempData.findOneAndUpdate(
@@ -736,6 +864,7 @@ async function postBlupeeSpawn(channel, options = {}) {
         expiresAt,
         data: {
           sessionId,
+          threadId: thread?.id || null,
           village: villageName,
           messageId: msg.id,
           virtual: false,
@@ -747,7 +876,9 @@ async function postBlupeeSpawn(channel, options = {}) {
     { upsert: true }
   );
 
-  return { message: msg, stateKey, sessionId };
+  scheduleBlupeeTimeoutNotice(noticeChannel, stateKey, sessionId);
+
+  return { message: msg, stateKey, sessionId, threadId: thread?.id || null };
 }
 
 async function getBlupeeStatusSnapshot(stateKey) {
@@ -761,6 +892,35 @@ async function getBlupeeStatusSnapshot(stateKey) {
     messageId: doc.data?.messageId || null,
     sessionId: doc.data?.sessionId || null
   };
+}
+
+function scheduleBlupeeTimeoutNotice(channel, stateKey, sessionId) {
+  if (!channel) return;
+  setTimeout(async () => {
+    try {
+      // Only announce timeout if this exact spawn session is still active.
+      const timedOut = await TempData.findOneAndDelete({
+        type: 'blupeeSpawn',
+        key: stateKey,
+        'data.sessionId': sessionId
+      });
+      if (!timedOut) return;
+
+      const liveChannel = await channel.client.channels.fetch(channel.id).catch(() => null);
+      if (!liveChannel?.isTextBased()) return;
+
+      const timeoutEmbed = new EmbedBuilder()
+        .setColor(0xff4d4f)
+        .setTitle('💨 The Blupee Ran Off!')
+        .setDescription(`Blupee session **${sessionId}** has ended — it's over!!`)
+        .setTimestamp()
+        .setFooter({ text: 'Blupee' });
+
+      await liveChannel.send({ embeds: [timeoutEmbed] }).catch(() => {});
+    } catch (err) {
+      logger.warn('BLUPEE', `Timeout notice failed for session ${sessionId}: ${err.message}`);
+    }
+  }, BLUPEE_SPAWN_DURATION_MS);
 }
 
 module.exports = {
