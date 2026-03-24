@@ -114,14 +114,24 @@ const initializeReactionHandler = (client) => {
         reaction.message.channel.id === IMPLEMENTATION_TRACK_CHANNEL_ID &&
         isCheckmark
       ) {
-        await reaction.message.reply('The mod team has implemented this.');
+        const implementedEmbed = new EmbedBuilder()
+          .setColor(0x57F287) // green
+          .setTitle('Implemented')
+          .setDescription(
+            'This has been implemented by the mod team.\n\nThank you for the suggestion and feedback.'
+          );
+        await reaction.message.reply({ embeds: [implementedEmbed] });
       } else if (
         reaction.message.channel.id === IMPLEMENTATION_TRACK_CHANNEL_ID &&
         isX
       ) {
-        await reaction.message.reply(
-          'I am not implementing this.'
-        );
+        const notImplementedEmbed = new EmbedBuilder()
+          .setColor(0xED4245) // red
+          .setTitle('Not Implementing')
+          .setDescription(
+            'This will not be implemented at this time.\n\nIf you would like to understand the reasoning, feel free to reach out to the mod team.'
+          );
+        await reaction.message.reply({ embeds: [notImplementedEmbed] });
       } else if (reaction.message.channel.id === BOT_REPORTS_CHANNEL_ID && isCheckmark) {
         const bugFixedEmbed = new EmbedBuilder()
           .setColor(0x57F287) // green

@@ -334,10 +334,10 @@ function CharacterRelationshipsModal({
     incoming?: Relationship;
   }): Relationship | null => {
     if (relData.outgoing?.userId === user?.id) {
-      return relData.outgoing;
+      return relData.outgoing ?? null;
     }
     if (relData.incoming?.userId === user?.id) {
-      return relData.incoming;
+      return relData.incoming ?? null;
     }
     return null;
   }, [user?.id]);
