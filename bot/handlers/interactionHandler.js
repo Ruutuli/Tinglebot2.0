@@ -14,7 +14,7 @@ const { handleComponentInteraction } = require('../handlers/componentHandler');
 const { handleItemLookupInteraction } = require('../handlers/itemLookupHandler');
 
 const BOT_REPORTS_CHANNEL_ID = '1379974822506795030';
-const IMPLEMENTATION_TRACK_MESSAGE_ID = '1381442926667763773';
+const IMPLEMENTATION_TRACK_CHANNEL_ID = '1381442926667763773';
 
 
 // ============================================================================
@@ -111,18 +111,16 @@ const initializeReactionHandler = (client) => {
       const isCheckmark = reaction.emoji.name === '✅' || reaction.emoji.name === '☑️' || reaction.emoji.name === '✔️' ||
         reaction.emoji.id === '854499720797618207';
       if (
-        reaction.message.channel.id === BOT_REPORTS_CHANNEL_ID &&
-        reaction.message.id === IMPLEMENTATION_TRACK_MESSAGE_ID &&
+        reaction.message.channel.id === IMPLEMENTATION_TRACK_CHANNEL_ID &&
         isCheckmark
       ) {
-        await reaction.message.reply('This has been implemented.');
+        await reaction.message.reply('The mod team has implemented this.');
       } else if (
-        reaction.message.channel.id === BOT_REPORTS_CHANNEL_ID &&
-        reaction.message.id === IMPLEMENTATION_TRACK_MESSAGE_ID &&
+        reaction.message.channel.id === IMPLEMENTATION_TRACK_CHANNEL_ID &&
         isX
       ) {
         await reaction.message.reply(
-          'The mod team has decided not to implement this. If you would like to know why, feel free to ask.'
+          'I am not implementing this.'
         );
       } else if (reaction.message.channel.id === BOT_REPORTS_CHANNEL_ID && isCheckmark) {
         const bugFixedEmbed = new EmbedBuilder()
