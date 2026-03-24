@@ -38,6 +38,11 @@ const relationshipSchema = new mongoose.Schema({
     maxlength: 1000,
     default: ''
   },
+  isPinned: {
+    type: Boolean,
+    default: false,
+    index: true
+  },
 
 }, {
   timestamps: true,

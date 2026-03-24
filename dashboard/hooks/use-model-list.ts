@@ -35,7 +35,7 @@ const FETCH_ERROR_ITEM_NAMES: Record<ModelListResource, string> = {
 };
 
 const FILTER_LABELS: Record<ModelListResource, FilterKeyConfig> = {
-  characters: { race: "Race", village: "Village", job: "Job" },
+  characters: { race: "Race", village: "Village", job: "Job", owner: "Owner" },
   items: { 
     category: "Category", 
     type: "Type",
@@ -110,9 +110,9 @@ function buildFilterGroups(
       const label = labels[key] ?? key;
       const selected = filters[key] ?? [];
       
-      // Add "All" option for race, village, and job
+      // Add "All" option for core character filters.
       const options: FilterOption[] = [];
-      if (key === "race" || key === "village" || key === "job") {
+      if (key === "race" || key === "village" || key === "job" || key === "owner") {
         const allActive = selected.length === 0;
         options.push({
           id: `all-${key}`,
@@ -770,7 +770,7 @@ export function useModelList<T>(
       return;
     }
     
-    // Handle "All" options for race, village, job
+    // Handle "All" options for race, village, job, owner
     if (optionId.startsWith("all-")) {
       setFilters((prev) => {
         const nextFilters = { ...prev };

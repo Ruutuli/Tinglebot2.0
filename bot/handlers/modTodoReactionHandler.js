@@ -24,9 +24,180 @@ const COMPLETE_EMOJI = '⭕';
 // Default due time (12 hours from now)
 const DEFAULT_DUE_HOURS = 12;
 
+const AUTO_ASSIGNMENT_RULES = [
+    {
+        discordId: '635948726686580747',
+        memberName: 'Fern',
+        keywords: [
+            'admin discord',
+            'admin inbox',
+            'admin messages',
+            'suggestion box',
+            'suggestions',
+            'suggestion review',
+            'new member management',
+            'new members',
+            'onboarding',
+            'member onboarding',
+            'npc management',
+            'npc',
+            'npcs',
+            'help wanted npc',
+            'website management',
+            'website',
+            'site update',
+            'member quests review',
+            'member quest review',
+            'member events review'
+        ]
+    },
+    {
+        discordId: '308795936530759680',
+        memberName: 'Reaver',
+        keywords: [
+            'website management',
+            'website',
+            'site update',
+            'quests',
+            'quest',
+            'quest posting',
+            'quest planning',
+            'member lore',
+            'lore review',
+            'npc management',
+            'npc',
+            'npcs',
+            'accepting reservations',
+            'reservations',
+            'mechanic management',
+            'balancing',
+            'balance',
+            'game balance',
+            'lore management',
+            'lore'
+        ]
+    },
+    {
+        discordId: '211219306137124865',
+        memberName: 'Ruu',
+        keywords: [
+            'member quests review',
+            'member quest review',
+            'member events review',
+            'accepting intros',
+            'intros',
+            'introductions',
+            'activity check',
+            'inactivity check',
+            'lore management',
+            'lore',
+            'bot management',
+            'bot',
+            'bot update',
+            'bot bug',
+            'discord management',
+            'discord',
+            'server management'
+        ]
+    },
+    {
+        discordId: '271107732289880064',
+        memberName: 'Mata',
+        keywords: [
+            'mod meeting minutes',
+            'meeting notes',
+            'accepting reservations',
+            'reservations',
+            'accepting applications',
+            'applications',
+            'application review',
+            'quests',
+            'quest',
+            'accepting intros',
+            'intros',
+            'introductions',
+            'faqs management',
+            'faq management',
+            'faq'
+        ]
+    },
+    {
+        discordId: '126088204016156672',
+        memberName: 'Toki',
+        keywords: [
+            'trello management',
+            'trello',
+            'kanban',
+            'board management',
+            'faqs management',
+            'faq management',
+            'faq',
+            'mechanic management',
+            'balancing',
+            'balance',
+            'game balance',
+            'discord management',
+            'discord',
+            'server management',
+            'graphics creation',
+            'graphics',
+            'art',
+            'design',
+            'new member management',
+            'new members',
+            'onboarding',
+            'accepting applications',
+            'applications',
+            'application review'
+        ]
+    }
+];
+
+const MEMBER_NAME_ALIASES = {
+    '635948726686580747': ['fern'],
+    '308795936530759680': ['reaver'],
+    '211219306137124865': ['ruu'],
+    '271107732289880064': ['mata'],
+    '126088204016156672': ['toki']
+};
+
 // ============================================================================
 // ------------------- Helper Functions -------------------
 // ============================================================================
+
+function normalizeForMatching(input) {
+    return String(input || '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+}
+
+function getAutoAssignedRuleKeys(text) {
+    const normalizedText = normalizeForMatching(text);
+    if (!normalizedText) return { discordIds: [], names: [] };
+
+    const names = new Set();
+    const discordIds = new Set();
+    for (const rule of AUTO_ASSIGNMENT_RULES) {
+        const matched = rule.keywords.some((keyword) =>
+            normalizedText.includes(normalizeForMatching(keyword))
+        );
+        if (matched) {
+            names.add(rule.memberName.toLowerCase());
+            discordIds.add(rule.discordId);
+        }
+    }
+
+    for (const rule of AUTO_ASSIGNMENT_RULES) {
+        const aliases = MEMBER_NAME_ALIASES[rule.discordId] || [rule.memberName.toLowerCase()];
+        const hasNameMention = aliases.some((alias) =>
+            normalizedText.includes(normalizeForMatching(alias))
+        );
+        if (hasNameMention) {
+            names.add(rule.memberName.toLowerCase());
+            discordIds.add(rule.discordId);
+        }
+    }
+
+    return { discordIds: [...discordIds], names: [...names] };
+}
 
 /**
  * Check if a channel is in the monitored category or is a monitored channel
@@ -283,6 +454,54 @@ function createTaskDescription(message) {
     return description;
 }
 
+async function resolveAutoAssignees(message, guild, fallbackUserInfo) {
+    const taskText = `${createTaskTitle(message)} ${createTaskDescription(message)}`;
+    const matched = getAutoAssignedRuleKeys(taskText);
+    if (matched.discordIds.length === 0 && matched.names.length === 0) {
+        return [fallbackUserInfo];
+    }
+
+    let members;
+    try {
+        members = await guild.members.fetch();
+    } catch {
+        return [fallbackUserInfo];
+    }
+
+    const assignees = [];
+    for (const [, member] of members) {
+        const discordId = member.user?.id;
+        if (!discordId) continue;
+
+        if (matched.discordIds.includes(discordId)) {
+            assignees.push({
+                discordId: member.user.id,
+                username: member.displayName || member.user.username,
+                avatar: member.user.displayAvatarURL({ format: 'png', size: 128 })
+            });
+            continue;
+        }
+
+        const displayName = normalizeForMatching(member.displayName || member.user?.username || '');
+        const username = normalizeForMatching(member.user?.username || '');
+        if (!matched.names.includes(displayName) && !matched.names.includes(username)) {
+            continue;
+        }
+
+        assignees.push({
+            discordId: member.user.id,
+            username: member.displayName || member.user.username,
+            avatar: member.user.displayAvatarURL({ format: 'png', size: 128 })
+        });
+    }
+
+    if (assignees.length === 0) {
+        return [fallbackUserInfo];
+    }
+
+    return assignees;
+}
+
 /**
  * Send a confirmation reply to the channel
  */
@@ -336,8 +555,9 @@ async function handlePinReaction(reaction, user, client) {
         return;
     }
     
-    // Get user info for creator and initial assignee
+    // Get user info for creator and fallback assignee
     const userInfo = await getUserInfo(user, guild);
+    const assignees = await resolveAutoAssignees(message, guild, userInfo);
     
     // Calculate due date (12 hours from now)
     const dueDate = new Date();
@@ -353,7 +573,7 @@ async function handlePinReaction(reaction, user, client) {
         column: 'todo',
         priority: 'medium',
         dueDate: dueDate,
-        assignees: [userInfo],
+        assignees: assignees,
         createdBy: userInfo,
         isRepeating: false,
         repeatConfig: null,
@@ -381,7 +601,7 @@ async function handlePinReaction(reaction, user, client) {
     await sendConfirmation(
         message,
         `📌 **Task created!**\n` +
-        `Assigned to: **${userInfo.username}**\n` +
+        `Assigned to: **${assignees.map((a) => a.username).join(', ')}**\n` +
         `Due: ${dueDateStr}\n\n` +
         `React with 📌 to also be assigned.\n` +
         `React with ⭕ when complete.`

@@ -8,6 +8,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { connect } from "@/lib/db";
 import { getSession, isAdminUser } from "@/lib/session";
 import { isModeratorUser } from "@/lib/moderator";
+import { discordApiRequest } from "@/lib/discord";
 import { logger } from "@/utils/logger";
 
 const COLUMNS = ["repeating", "todo", "in_progress", "pending", "done"] as const;
@@ -55,6 +56,234 @@ interface TaskInput {
   } | null;
   checklist?: ChecklistItem[];
   comments?: CommentInput[];
+}
+
+interface GuildMember {
+  user?: {
+    id: string;
+    username: string;
+    global_name?: string;
+    avatar?: string;
+  };
+  roles: string[];
+}
+
+interface AssignmentRule {
+  discordId: string;
+  memberName: string;
+  keywords: string[];
+}
+
+const AUTO_ASSIGNMENT_RULES: AssignmentRule[] = [
+  {
+    discordId: "635948726686580747",
+    memberName: "Fern",
+    keywords: [
+      "admin discord",
+      "admin inbox",
+      "admin messages",
+      "suggestion box",
+      "suggestions",
+      "suggestion review",
+      "new member management",
+      "new members",
+      "onboarding",
+      "member onboarding",
+      "npc management",
+      "npc",
+      "npcs",
+      "help wanted npc",
+      "website management",
+      "website",
+      "site update",
+      "member quests review",
+      "member quest review",
+      "member events review",
+    ],
+  },
+  {
+    discordId: "308795936530759680",
+    memberName: "Reaver",
+    keywords: [
+      "website management",
+      "website",
+      "site update",
+      "quests",
+      "quest",
+      "quest posting",
+      "quest planning",
+      "member lore",
+      "lore review",
+      "npc management",
+      "npc",
+      "npcs",
+      "accepting reservations",
+      "reservations",
+      "mechanic management",
+      "balancing",
+      "balance",
+      "game balance",
+      "lore management",
+      "lore",
+    ],
+  },
+  {
+    discordId: "211219306137124865",
+    memberName: "Ruu",
+    keywords: [
+      "member quests review",
+      "member quest review",
+      "member events review",
+      "accepting intros",
+      "intros",
+      "introductions",
+      "activity check",
+      "inactivity check",
+      "lore management",
+      "lore",
+      "bot management",
+      "bot",
+      "bot update",
+      "bot bug",
+      "discord management",
+      "discord",
+      "server management",
+    ],
+  },
+  {
+    discordId: "271107732289880064",
+    memberName: "Mata",
+    keywords: [
+      "mod meeting minutes",
+      "meeting notes",
+      "accepting reservations",
+      "reservations",
+      "accepting applications",
+      "applications",
+      "application review",
+      "quests",
+      "quest",
+      "accepting intros",
+      "intros",
+      "introductions",
+      "faqs management",
+      "faq management",
+      "faq",
+    ],
+  },
+  {
+    discordId: "126088204016156672",
+    memberName: "Toki",
+    keywords: [
+      "trello management",
+      "trello",
+      "kanban",
+      "board management",
+      "faqs management",
+      "faq management",
+      "faq",
+      "mechanic management",
+      "balancing",
+      "balance",
+      "game balance",
+      "discord management",
+      "discord",
+      "server management",
+      "graphics creation",
+      "graphics",
+      "art",
+      "design",
+      "new member management",
+      "new members",
+      "onboarding",
+      "accepting applications",
+      "applications",
+      "application review",
+    ],
+  },
+];
+
+const MEMBER_NAME_ALIASES: Record<string, string[]> = {
+  "635948726686580747": ["fern"],
+  "308795936530759680": ["reaver"],
+  "211219306137124865": ["ruu"],
+  "271107732289880064": ["mata"],
+  "126088204016156672": ["toki"],
+};
+
+function normalizeForMatching(input: string): string {
+  return input.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+}
+
+function getAutoAssignedRuleKeys(text: string): { discordIds: string[]; names: string[] } {
+  const normalizedText = normalizeForMatching(text);
+  if (!normalizedText) return { discordIds: [], names: [] };
+
+  const names = new Set<string>();
+  const discordIds = new Set<string>();
+  for (const rule of AUTO_ASSIGNMENT_RULES) {
+    if (rule.keywords.some((keyword) => normalizedText.includes(normalizeForMatching(keyword)))) {
+      names.add(rule.memberName.toLowerCase());
+      discordIds.add(rule.discordId);
+    }
+  }
+
+  // Allow explicit name mentions in task text (e.g., "Fern + Reaver")
+  for (const rule of AUTO_ASSIGNMENT_RULES) {
+    const aliases = MEMBER_NAME_ALIASES[rule.discordId] ?? [rule.memberName.toLowerCase()];
+    const hasNameMention = aliases.some((alias) =>
+      normalizedText.includes(normalizeForMatching(alias))
+    );
+    if (hasNameMention) {
+      names.add(rule.memberName.toLowerCase());
+      discordIds.add(rule.discordId);
+    }
+  }
+
+  return { discordIds: [...discordIds], names: [...names] };
+}
+
+async function fetchAssignableMods(): Promise<Assignee[]> {
+  const guildId = process.env.GUILD_ID;
+  if (!guildId) return [];
+
+  const roleIds = [process.env.MOD_ROLE_ID, process.env.ADMIN_ROLE_ID].filter(Boolean) as string[];
+  if (roleIds.length === 0) return [];
+
+  const members = await discordApiRequest<GuildMember[]>(`/guilds/${guildId}/members?limit=1000`);
+  if (!members) return [];
+
+  const mods: Assignee[] = [];
+  for (const member of members) {
+    if (!member.user) continue;
+    const hasRole = roleIds.some((roleId) => member.roles.includes(roleId));
+    if (!hasRole) continue;
+
+    mods.push({
+      discordId: member.user.id,
+      username: member.user.global_name || member.user.username,
+      avatar: member.user.avatar
+        ? `https://cdn.discordapp.com/avatars/${member.user.id}/${member.user.avatar}.png`
+        : null,
+    });
+  }
+
+  return mods;
+}
+
+async function resolveAutoAssignees(title: string, description: string): Promise<Assignee[]> {
+  const { discordIds, names } = getAutoAssignedRuleKeys(`${title} ${description}`);
+  if (discordIds.length === 0 && names.length === 0) return [];
+
+  const availableMods = await fetchAssignableMods();
+  if (availableMods.length === 0) return [];
+
+  return availableMods.filter((mod) => {
+    if (discordIds.includes(mod.discordId)) return true;
+    // Name fallback if IDs are unavailable for some reason.
+    return names.includes(normalizeForMatching(mod.username));
+  }
+  );
 }
 
 async function canAccessTasks(userId: string): Promise<boolean> {
@@ -184,7 +413,7 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    const assignees: Assignee[] = [];
+    let assignees: Assignee[] = [];
     if (Array.isArray(body.assignees) && body.assignees.length > 0) {
       for (const a of body.assignees) {
         if (a && typeof a.discordId === "string" && typeof a.username === "string") {
@@ -196,12 +425,17 @@ export async function POST(req: NextRequest) {
         }
       }
     } else {
-      // Auto-assign to the creator if no assignees provided
-      assignees.push({
-        discordId: user.id,
-        username: user.username ?? "Unknown",
-        avatar: user.avatar ?? null,
-      });
+      const autoAssignees = await resolveAutoAssignees(title, description);
+      if (autoAssignees.length > 0) {
+        assignees = autoAssignees;
+      } else {
+        // Fallback: assign to the creator when no routing rule matches
+        assignees = [{
+          discordId: user.id,
+          username: user.username ?? "Unknown",
+          avatar: user.avatar ?? null,
+        }];
+      }
     }
 
     const isRepeating = Boolean(body.isRepeating);

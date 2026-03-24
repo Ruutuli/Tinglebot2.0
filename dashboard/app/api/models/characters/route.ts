@@ -87,6 +87,7 @@ export async function GET(req: NextRequest) {
     const races = getFilterParamMultiple(params, "race");
     const villages = getFilterParamMultiple(params, "village");
     const jobs = getFilterParamMultiple(params, "job");
+    const owners = getFilterParamMultiple(params, "owner");
     const sortBy = params.get("sortBy") || "name";
     const isModCharacterParam = getFilterParamMultiple(params, "isModCharacter");
 
@@ -135,6 +136,9 @@ export async function GET(req: NextRequest) {
         filter.$or = jobFilter.$or;
       }
     }
+    if (owners.length) {
+      filter.userId = { $in: owners };
+    }
 
     // Build mod character filter (same filters as regular characters)
     const modFilter: FilterQuery<unknown> = {};
@@ -177,6 +181,9 @@ export async function GET(req: NextRequest) {
       } else {
         modFilter.$or = jobFilter.$or;
       }
+    }
+    if (owners.length) {
+      modFilter.userId = { $in: owners };
     }
 
     const sortConfig = SORT_MAP[sortBy] || SORT_MAP.name;
@@ -315,6 +322,18 @@ export async function GET(req: NextRequest) {
     ];
     const usernames = await fetchDiscordUsernames(userIds);
 
+    const [regularOwnerIds, modOwnerIds] = await Promise.all([
+      Character.distinct("userId", { status: "accepted" }),
+      ModCharacter?.collection?.name ? ModCharacter.distinct("userId", {}) : Promise.resolve([]),
+    ]);
+    const ownerOpts = Array.from(
+      new Set(
+        [...regularOwnerIds, ...modOwnerIds].filter(
+          (v): v is string => typeof v === "string" && v.length > 0
+        )
+      )
+    ).sort();
+
     const dataWithUsernames: CharacterListItem[] = pageData.map((c) => ({
       ...c,
       username: c.userId ? usernames[c.userId] : undefined,
@@ -324,6 +343,7 @@ export async function GET(req: NextRequest) {
       race: raceOpts.sort(),
       village: villageOpts.sort(),
       job: jobOpts.sort(),
+      owner: ownerOpts,
     };
 
     const response = NextResponse.json(
