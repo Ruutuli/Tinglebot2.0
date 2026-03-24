@@ -7,7 +7,7 @@ import {
   buildListResponse,
   buildSearchRegex,
 } from "@/lib/api-utils";
-import { fetchDiscordUsernames } from "@/lib/discord";
+import { discordApiRequest, fetchDiscordUsernames } from "@/lib/discord";
 import { logger } from "@/utils/logger";
 import { RACES, ALL_JOBS, MOD_JOBS } from "@/data/characterData";
 import type { FilterQuery, PipelineStage } from "mongoose";
@@ -31,6 +31,8 @@ const SORT_MAP: Record<string, SortConfig> = {
   "stamina-desc": { field: "maxStamina", order: -1, useSecondarySort: true },
   age: { field: "age", order: 1, useSecondarySort: true },
   "age-desc": { field: "age", order: -1, useSecondarySort: true },
+  owner: { field: "userId", order: 1, useSecondarySort: true },
+  "owner-desc": { field: "userId", order: -1, useSecondarySort: true },
 };
 
 type CharacterListItem = {
@@ -41,10 +43,53 @@ type CharacterListItem = {
   [k: string]: unknown;
 };
 
+type UserNameDoc = {
+  discordId?: string;
+  username?: string;
+};
+
 type CharactersFacetResult = {
   data: CharacterListItem[];
   total: Array<{ count: number }>;
 };
+
+type DiscordGuildMember = {
+  nick?: string | null;
+  user?: {
+    id?: string;
+    username?: string;
+    global_name?: string | null;
+  };
+};
+
+async function fetchGuildDisplayNames(userIds: string[]): Promise<Record<string, string>> {
+  const guildId = process.env.GUILD_ID;
+  if (!guildId || !userIds.length) return {};
+
+  const out: Record<string, string> = {};
+  await Promise.all(
+    userIds.map(async (userId) => {
+      try {
+        const member = await discordApiRequest<DiscordGuildMember>(
+          `guilds/${guildId}/members/${userId}`,
+          "GET"
+        );
+        if (!member) return;
+        const displayName =
+          (typeof member.nick === "string" && member.nick.trim()) ||
+          (typeof member.user?.global_name === "string" &&
+            member.user.global_name.trim()) ||
+          (typeof member.user?.username === "string" &&
+            member.user.username.trim()) ||
+          "";
+        if (displayName) out[userId] = displayName;
+      } catch {
+        // Ignore and let other name sources handle fallbacks.
+      }
+    })
+  );
+  return out;
+}
 
 function getIsModConstraint(values: string[]): boolean | null {
   if (values.length === 0) return null;
@@ -73,10 +118,12 @@ export async function GET(req: NextRequest) {
     await connect();
     const CharacterModule = await import("@/models/CharacterModel.js");
     const ModCharacterModule = await import("@/models/ModCharacterModel.js");
+    const UserModule = await import("@/models/UserModel.js");
     // Handle both ESM default export and CommonJS module.exports
     const Character = CharacterModule.default || CharacterModule;
     // For CommonJS modules, the entire module is the export
     const ModCharacter = ModCharacterModule.default || ModCharacterModule;
+    const User = UserModule.default || UserModule;
     
     if (!ModCharacter) {
       logger.error("api/models/characters", "ModCharacter model not found");
@@ -320,7 +367,21 @@ export async function GET(req: NextRequest) {
     const userIds = [
       ...new Set(pageData.map((c) => c.userId).filter((v): v is string => typeof v === "string" && v.length > 0)),
     ];
-    const usernames = await fetchDiscordUsernames(userIds);
+    const [usernames, userNameDocsRaw] = await Promise.all([
+      fetchDiscordUsernames(userIds),
+      userIds.length
+        ? User.find({ discordId: { $in: userIds } })
+            .select("discordId username")
+            .lean()
+        : Promise.resolve([]),
+    ]);
+    const userNameDocs = userNameDocsRaw as UserNameDoc[];
+    const dbUsernames: Record<string, string> = {};
+    userNameDocs.forEach((doc) => {
+      const id = typeof doc.discordId === "string" ? doc.discordId : "";
+      const name = typeof doc.username === "string" ? doc.username.trim() : "";
+      if (id && name) dbUsernames[id] = name;
+    });
 
     const [regularOwnerIds, modOwnerIds] = await Promise.all([
       Character.distinct("userId", { status: "accepted" }),
@@ -333,17 +394,63 @@ export async function GET(req: NextRequest) {
         )
       )
     ).sort();
+    const [ownerUsernames, ownerNameDocsRaw] = await Promise.all([
+      fetchDiscordUsernames(ownerOpts),
+      ownerOpts.length
+        ? User.find({ discordId: { $in: ownerOpts } })
+            .select("discordId username")
+            .lean()
+        : Promise.resolve([]),
+    ]);
+    const ownerNameDocs = ownerNameDocsRaw as UserNameDoc[];
+    const ownerDbUsernames: Record<string, string> = {};
+    ownerNameDocs.forEach((doc) => {
+      const id = typeof doc.discordId === "string" ? doc.discordId : "";
+      const name = typeof doc.username === "string" ? doc.username.trim() : "";
+      if (id && name) ownerDbUsernames[id] = name;
+    });
+    const unresolvedOwnerIds = ownerOpts.filter(
+      (ownerId) =>
+        !ownerUsernames[ownerId] &&
+        !ownerDbUsernames[ownerId]
+    );
+    const guildOwnerNames = await fetchGuildDisplayNames(unresolvedOwnerIds);
+    const ownerFilterValues = ownerOpts
+      .map((ownerId) => {
+        const rawDisplayName =
+          ownerUsernames[ownerId] ??
+          ownerDbUsernames[ownerId] ??
+          guildOwnerNames[ownerId];
+        const displayName =
+          typeof rawDisplayName === "string" ? rawDisplayName.trim() : "";
+        if (!displayName) return null;
+        return { ownerId, displayName };
+      })
+      .filter(
+        (entry): entry is { ownerId: string; displayName: string } =>
+          entry !== null
+      )
+      .sort((a, b) => a.displayName.localeCompare(b.displayName))
+      .map(({ ownerId, displayName }) => `${ownerId}::${displayName}`);
 
+    const unresolvedPageIds = userIds.filter(
+      (id) => !usernames[id] && !dbUsernames[id]
+    );
+    const guildPageNames = await fetchGuildDisplayNames(unresolvedPageIds);
     const dataWithUsernames: CharacterListItem[] = pageData.map((c) => ({
       ...c,
-      username: c.userId ? usernames[c.userId] : undefined,
+      username: c.userId
+        ? usernames[c.userId] ??
+          dbUsernames[c.userId] ??
+          guildPageNames[c.userId]
+        : undefined,
     }));
 
     const filterOptions: Record<string, (string | number)[]> = {
       race: raceOpts.sort(),
       village: villageOpts.sort(),
       job: jobOpts.sort(),
-      owner: ownerOpts,
+      owner: ownerFilterValues,
     };
 
     const response = NextResponse.json(

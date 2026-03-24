@@ -288,7 +288,7 @@ export async function PUT(req: NextRequest) {
     }
 
     const body = await req.json();
-    const { relationshipId, relationshipTypes, notes } = body;
+    const { relationshipId, relationshipTypes, notes, isPinned } = body;
 
     // Validation
     if (!relationshipId) {
@@ -298,28 +298,62 @@ export async function PUT(req: NextRequest) {
       );
     }
 
-    if (!relationshipTypes || !Array.isArray(relationshipTypes) || relationshipTypes.length === 0) {
-      return NextResponse.json(
-        { error: "At least one relationship type must be selected" },
-        { status: 400 }
-      );
-    }
+    const updatePayload: {
+      relationshipTypes?: string[];
+      notes?: string;
+      isPinned?: boolean;
+    } = {};
 
-    // Validate relationship types
-    const validTypes = ['LOVERS', 'CRUSH', 'CLOSE_FRIEND', 'FRIEND', 'ACQUAINTANCE', 'DISLIKE', 'HATE', 'NEUTRAL', 'FAMILY', 'RIVAL', 'ADMIRE', 'OTHER'];
-    for (const type of relationshipTypes) {
-      if (!validTypes.includes(type)) {
+    // Validate relationship types if provided
+    if (relationshipTypes !== undefined) {
+      if (!Array.isArray(relationshipTypes) || relationshipTypes.length === 0) {
         return NextResponse.json(
-          { error: `Invalid relationship type: ${type}` },
+          { error: "At least one relationship type must be selected" },
           { status: 400 }
         );
       }
+
+      const validTypes = ['LOVERS', 'CRUSH', 'CLOSE_FRIEND', 'FRIEND', 'ACQUAINTANCE', 'DISLIKE', 'HATE', 'NEUTRAL', 'FAMILY', 'RIVAL', 'ADMIRE', 'OTHER'];
+      for (const type of relationshipTypes) {
+        if (!validTypes.includes(type)) {
+          return NextResponse.json(
+            { error: `Invalid relationship type: ${type}` },
+            { status: 400 }
+          );
+        }
+      }
+      updatePayload.relationshipTypes = relationshipTypes;
     }
 
-    // Validate notes length
-    if (notes && typeof notes === 'string' && notes.length > 1000) {
+    // Validate notes length if provided
+    if (notes !== undefined) {
+      if (notes && typeof notes === 'string' && notes.length > 1000) {
+        return NextResponse.json(
+          { error: "Notes cannot exceed 1000 characters" },
+          { status: 400 }
+        );
+      }
+      updatePayload.notes = notes || '';
+    }
+
+    // Validate pin toggle if provided
+    if (isPinned !== undefined) {
+      if (typeof isPinned !== "boolean") {
+        return NextResponse.json(
+          { error: "isPinned must be a boolean" },
+          { status: 400 }
+        );
+      }
+      updatePayload.isPinned = isPinned;
+    }
+
+    if (
+      updatePayload.relationshipTypes === undefined &&
+      updatePayload.notes === undefined &&
+      updatePayload.isPinned === undefined
+    ) {
       return NextResponse.json(
-        { error: "Notes cannot exceed 1000 characters" },
+        { error: "No valid fields provided for update" },
         { status: 400 }
       );
     }
@@ -344,8 +378,7 @@ export async function PUT(req: NextRequest) {
         userId: user.id,
       },
       {
-        relationshipTypes,
-        notes: notes || '',
+        ...updatePayload,
       },
       {
         new: true,
@@ -371,6 +404,7 @@ export async function PUT(req: NextRequest) {
         targetCharacterName: updatedRelationship.targetCharacterName,
         relationshipTypes: updatedRelationship.relationshipTypes,
         notes: updatedRelationship.notes,
+        isPinned: updatedRelationship.isPinned,
         createdAt: updatedRelationship.createdAt,
         updatedAt: updatedRelationship.updatedAt,
       },

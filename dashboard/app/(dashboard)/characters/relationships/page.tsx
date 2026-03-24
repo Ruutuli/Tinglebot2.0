@@ -49,6 +49,7 @@ type Relationship = {
   targetCharacterName: string;
   relationshipTypes: RelationshipType[];
   notes?: string;
+  isPinned?: boolean;
   createdAt?: string;
   updatedAt?: string;
 };
@@ -218,8 +219,10 @@ function CharacterRelationshipsModal({
     setIncomingRelationships(initialIncomingRelationships);
   }, [initialOutgoingRelationships, initialIncomingRelationships]);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [pinUpdatingId, setPinUpdatingId] = useState<string | null>(null);
   const [deleteError, setDeleteError] = useState<string | null>(null);
   const [deleteSuccess, setDeleteSuccess] = useState<string | null>(null);
+  const [activeVillageFilter, setActiveVillageFilter] = useState<"all" | "rudania" | "inariko" | "vhintl">("all");
 
   const handleDelete = useCallback(async (relationshipId: string, characterName: string, targetName: string) => {
     // Confirmation dialog
@@ -279,6 +282,8 @@ function CharacterRelationshipsModal({
     const map = new Map<string, {
       targetChar: CharacterRef | null;
       targetName: string;
+      targetVillage: string;
+      targetVillageKey: string;
       outgoing?: Relationship;
       incoming?: Relationship;
     }>();
@@ -291,9 +296,12 @@ function CharacterRelationshipsModal({
       const targetChar = getCharacter(rel.targetCharacterId);
       
       if (!map.has(targetId)) {
+        const village = targetChar?.homeVillage || targetChar?.currentVillage || "";
         map.set(targetId, {
           targetChar,
           targetName: rel.targetCharacterName,
+          targetVillage: village,
+          targetVillageKey: village.toLowerCase(),
         });
       }
       map.get(targetId)!.outgoing = rel;
@@ -307,9 +315,12 @@ function CharacterRelationshipsModal({
       const sourceChar = getCharacter(rel.characterId);
       
       if (!map.has(sourceId)) {
+        const village = sourceChar?.homeVillage || sourceChar?.currentVillage || "";
         map.set(sourceId, {
           targetChar: sourceChar,
           targetName: rel.characterName,
+          targetVillage: village,
+          targetVillageKey: village.toLowerCase(),
         });
       }
       map.get(sourceId)!.incoming = rel;
@@ -317,6 +328,97 @@ function CharacterRelationshipsModal({
 
     return Array.from(map.values());
   }, [outgoingRelationships, incomingRelationships]);
+
+  const getEditableRelationship = useCallback((relData: {
+    outgoing?: Relationship;
+    incoming?: Relationship;
+  }): Relationship | null => {
+    if (relData.outgoing?.userId === user?.id) {
+      return relData.outgoing;
+    }
+    if (relData.incoming?.userId === user?.id) {
+      return relData.incoming;
+    }
+    return null;
+  }, [user?.id]);
+
+  const handleTogglePin = useCallback(async (relationship: Relationship) => {
+    const nextPinnedState = !Boolean(relationship.isPinned);
+    setPinUpdatingId(relationship._id);
+
+    // Optimistic update in local state for snappy UX
+    setOutgoingRelationships((prev) =>
+      prev.map((rel) => rel._id === relationship._id ? { ...rel, isPinned: nextPinnedState } : rel)
+    );
+    setIncomingRelationships((prev) =>
+      prev.map((rel) => rel._id === relationship._id ? { ...rel, isPinned: nextPinnedState } : rel)
+    );
+
+    try {
+      const res = await fetch("/api/characters/relationships", {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          relationshipId: relationship._id,
+          isPinned: nextPinnedState,
+        }),
+      });
+
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.error || "Failed to update pin state");
+      }
+
+      // Ensure state uses API-confirmed value if returned
+      const persistedPinned = Boolean(data?.relationship?.isPinned ?? nextPinnedState);
+      setOutgoingRelationships((prev) =>
+        prev.map((rel) => rel._id === relationship._id ? { ...rel, isPinned: persistedPinned } : rel)
+      );
+      setIncomingRelationships((prev) =>
+        prev.map((rel) => rel._id === relationship._id ? { ...rel, isPinned: persistedPinned } : rel)
+      );
+    } catch (err) {
+      // Revert optimistic update on error
+      setOutgoingRelationships((prev) =>
+        prev.map((rel) => rel._id === relationship._id ? { ...rel, isPinned: !nextPinnedState } : rel)
+      );
+      setIncomingRelationships((prev) =>
+        prev.map((rel) => rel._id === relationship._id ? { ...rel, isPinned: !nextPinnedState } : rel)
+      );
+      setDeleteError(err instanceof Error ? err.message : "Failed to update pin state");
+    } finally {
+      setPinUpdatingId(null);
+    }
+  }, []);
+
+  const filteredAndSortedRelationshipMap = useMemo(() => {
+    const normalizedVillage = (value: string): "rudania" | "inariko" | "vhintl" | "other" => {
+      const v = value.toLowerCase();
+      if (v.includes("rudania")) return "rudania";
+      if (v.includes("inariko") || v.includes("inarika")) return "inariko";
+      if (v.includes("vhintl") || v.includes("vhintli")) return "vhintl";
+      return "other";
+    };
+
+    const filtered = relationshipMap.filter((rel) => {
+      if (activeVillageFilter === "all") return true;
+      return normalizedVillage(rel.targetVillageKey) === activeVillageFilter;
+    });
+
+    return [...filtered].sort((a, b) => {
+      const editableA = getEditableRelationship(a);
+      const editableB = getEditableRelationship(b);
+      const aPinned = editableA?.isPinned ? 1 : 0;
+      const bPinned = editableB?.isPinned ? 1 : 0;
+      if (aPinned !== bPinned) {
+        return bPinned - aPinned;
+      }
+
+      return a.targetName.localeCompare(b.targetName);
+    });
+  }, [relationshipMap, getEditableRelationship, activeVillageFilter]);
 
   const totalRelationships = relationshipMap.length;
 
@@ -353,6 +455,37 @@ function CharacterRelationshipsModal({
         </div>
       ) : (
         <div className="space-y-5">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+            <p className="text-xs sm:text-sm text-[var(--botw-pale)] opacity-80">
+              Showing {filteredAndSortedRelationshipMap.length} of {totalRelationships} relationship pair{totalRelationships === 1 ? "" : "s"}
+            </p>
+            <div className="flex items-center gap-2 flex-wrap text-xs sm:text-sm text-[var(--botw-pale)]">
+              <span className="font-semibold text-[var(--totk-light-green)]">Village:</span>
+              {[
+                { id: "all", label: "All" },
+                { id: "rudania", label: "Rudania" },
+                { id: "inariko", label: "Inariko" },
+                { id: "vhintl", label: "Vhintl" },
+              ].map((option) => {
+                const isActive = activeVillageFilter === option.id;
+                return (
+                  <button
+                    key={option.id}
+                    type="button"
+                    onClick={() => setActiveVillageFilter(option.id as "all" | "rudania" | "inariko" | "vhintl")}
+                    className={`rounded-md border px-2.5 py-1 font-semibold transition-colors ${
+                      isActive
+                        ? "border-[var(--totk-light-green)] bg-[var(--totk-light-green)]/20 text-[var(--totk-light-green)]"
+                        : "border-[var(--totk-dark-ocher)] text-[var(--botw-pale)] hover:border-[var(--totk-light-green)]/70 hover:text-[var(--totk-light-green)]"
+                    }`}
+                  >
+                    {option.label}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
           {/* Delete Success Message */}
           {deleteSuccess && (
             <div className="mb-4 rounded-lg border-2 border-[var(--totk-light-green)] bg-[var(--botw-warm-black)]/90 p-4">
@@ -389,12 +522,15 @@ function CharacterRelationshipsModal({
             </div>
           )}
 
-          {relationshipMap.map((relData, index) => {
+          {filteredAndSortedRelationshipMap.map((relData, index) => {
             const targetChar = relData.targetChar;
             const targetIconUrl = targetChar?.icon ? normalizeImageUrl(targetChar.icon) : "/ankle_icon.png";
             const targetVillage = targetChar?.homeVillage || targetChar?.currentVillage || "";
             const targetVillageCrestIcon = targetVillage ? getVillageCrestIcon(targetVillage) : null;
             const targetSlug = createSlug(relData.targetName);
+            const editableRelationship = getEditableRelationship(relData);
+            const isPinned = Boolean(editableRelationship?.isPinned);
+            const isPinUpdating = editableRelationship ? pinUpdatingId === editableRelationship._id : false;
 
             return (
               <div
@@ -434,6 +570,23 @@ function CharacterRelationshipsModal({
                       )}
                     </div>
                   </Link>
+                  {editableRelationship && (
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        void handleTogglePin(editableRelationship);
+                      }}
+                      disabled={isPinUpdating}
+                      className={`sm:ml-auto rounded-md border-2 p-2 min-h-[44px] min-w-[44px] flex items-center justify-center transition-colors ${
+                        isPinned
+                          ? "border-[var(--totk-light-ocher)] bg-[var(--totk-light-ocher)]/20 text-[var(--totk-light-ocher)]"
+                          : "border-[var(--totk-dark-ocher)]/60 bg-[var(--botw-warm-black)]/80 text-[var(--totk-grey-200)] hover:text-[var(--totk-light-ocher)] hover:border-[var(--totk-light-ocher)]/60"
+                      } disabled:opacity-50 disabled:cursor-not-allowed`}
+                      title={isPinned ? "Unpin relationship pair" : "Pin relationship pair"}
+                    >
+                      <i className={`fa-solid ${isPinUpdating ? "fa-spinner fa-spin" : "fa-star"}`} />
+                    </button>
+                  )}
                 </div>
 
                 {/* My character feels this way */}

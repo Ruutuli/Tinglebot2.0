@@ -317,9 +317,11 @@ export function CharacterCard({ character }: { character: Character }) {
                   {capitalize(character.race)} • {capitalize(character.job)}
                 </p>
                 <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
-                  <span className="rounded-md bg-[var(--botw-blue)] px-2.5 py-1 text-xs font-medium text-white shadow-sm">
-                    @{character.username ?? character.userId}
-                  </span>
+                  {character.username && character.username.trim().length > 0 && (
+                    <span className="rounded-md bg-[var(--botw-blue)] px-2.5 py-1 text-xs font-medium text-white shadow-sm">
+                      @{character.username.trim()}
+                    </span>
+                  )}
                   {character.blighted && (
                     <span className="rounded-md border border-[var(--blight-border)]/60 bg-[var(--blight-border)]/20 px-2.5 py-1 text-xs font-medium text-[var(--blight-border)] shadow-sm">
                       Blighted

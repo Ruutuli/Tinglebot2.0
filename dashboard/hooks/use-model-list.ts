@@ -124,9 +124,16 @@ function buildFilterGroups(
       
       // Add regular options
       values.forEach((v) => {
-        const id = String(v);
+        const rawValue = String(v);
+        let id = rawValue;
+        let optionValue: string | number = v;
         let labelVal: string;
-        if (typeof v === "number" && (key === "rarity" || key === "tier")) {
+        if (key === "owner") {
+          const [ownerId, ownerDisplay] = rawValue.split("::");
+          id = ownerId || rawValue;
+          optionValue = id;
+          labelVal = ownerDisplay || ownerId || rawValue;
+        } else if (typeof v === "number" && (key === "rarity" || key === "tier")) {
           labelVal = key === "tier" ? `Tier ${v}` : `Rarity ${v}`;
         } else if (key === "isActive") {
           labelVal = String(v) === "true" ? "Active" : "Inactive";
@@ -150,8 +157,10 @@ function buildFilterGroups(
         options.push({
           id,
           label: labelVal,
-          value: v,
-          active: selected.includes(v as string | number),
+          value: optionValue,
+          active: key === "owner"
+            ? selected.includes(id)
+            : selected.includes(v as string | number),
         });
       });
       
@@ -242,6 +251,18 @@ function buildFilterGroups(
           label: "Age (Least)",
           value: "age",
           active: sortBy === "age",
+        },
+        {
+          id: "owner",
+          label: "Owner (A-Z)",
+          value: "owner",
+          active: sortBy === "owner",
+        },
+        {
+          id: "owner-desc",
+          label: "Owner (Z-A)",
+          value: "owner-desc",
+          active: sortBy === "owner-desc",
         },
       ],
     });
