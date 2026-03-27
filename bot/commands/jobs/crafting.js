@@ -45,6 +45,26 @@ const { createCraftingEmbed } = require('../../embeds/embeds.js');
 // ------------------- Models and Constants -------------------
 const generalCategories = require('@/models/GeneralItemCategories');
 
+/** Ephemeral defer cannot become public; delete the thinking message and post in channel so others can see booster voucher errors. */
+async function sendPublicCraftingRefundReply(interaction, voucherEmbed) {
+  try {
+    await interaction.deleteReply();
+  } catch (_) {}
+  const payload = {
+    content: '⚠️ **Materials have been refunded.**',
+    embeds: [voucherEmbed],
+  };
+  try {
+    if (interaction.channel && typeof interaction.channel.send === 'function') {
+      await interaction.channel.send(payload);
+      return;
+    }
+  } catch (_) {
+    /* channel send failed (permissions, etc.) */
+  }
+  await interaction.followUp({ ...payload, flags: [MessageFlags.Ephemeral] });
+}
+
 // ============================================================================
 // ------------------- CRAFTING COMMAND HANDLER -------------------
 // Main handler for the /crafting command.
@@ -616,7 +636,8 @@ module.exports = {
             for (const mat of materialsUsed) {
               await addItemInventoryDatabase(character._id, mat.itemName, mat.quantity, interaction, 'Crafting Refund - Booster Must Use Second Voucher');
             }
-            return interaction.editReply({ embeds: [voucherEmbed], content: '⚠️ **Materials have been refunded.**', flags: [MessageFlags.Ephemeral] });
+            await sendPublicCraftingRefundReply(interaction, voucherEmbed);
+            return;
           }
         }
       }
@@ -646,7 +667,8 @@ module.exports = {
             for (const mat of materialsUsed) {
               await addItemInventoryDatabase(character._id, mat.itemName, mat.quantity, interaction, 'Crafting Refund - Entertainer Second Voucher');
             }
-            return interaction.editReply({ embeds: [voucherEmbed], content: '⚠️ **Materials have been refunded.**', flags: [MessageFlags.Ephemeral] });
+            await sendPublicCraftingRefundReply(interaction, voucherEmbed);
+            return;
           }
         }
       }

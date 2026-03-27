@@ -80,25 +80,94 @@ The new system adds a **resolution layer**, not a replacement.
 | File | Purpose |
 |------|---------|
 | `docs/elixir-type-mapping.json` | Maps each `ItemModel.type[]` value (e.g. `Creature`, `Monster`) to an **ingredientRole** for mixing: critter, monsterPart, optionalFood, gear, etc. |
-| `docs/elixir-ingredient-labels.json` | **Sparse** map: `itemName` → `effectFamily` and/or `element`. **Organic materials only** — live critters (`Creature`), body parts / slime / bone / tails / wings (`Monster`), and monster-derived fluids or extracts. **Excluded** from this file: ancient tech (cores, gears, screws… use `type: Monster` in data but no label here), minerals (`Like Like Stone`), cloth (`Gibdo Bandage`). `Poe Soul` is labeled `element: undead` (exception). Omitted names → no label. No `notes`, no all-null rows. |
+| `docs/elixir-ingredient-labels.json` | **Sparse** map. **Rule:** **`Creature`** rows use **`effectFamily` only** (boost / elixir family). **`Monster`** rows use **`element` only** (fire, ice, undead, …). Never mix both keys on one item. Organic scope and exclusions unchanged. Omitted names → no label. |
 
-**Custom vocabulary (Tinglebot — resolver must define behavior):**
+### Standard reference: `effectFamily` (critters)
 
-| Key | Values | Meaning |
-|-----|--------|--------|
-| `effectFamily` | `extract` | `Monster Extract`: **catalyst** / potency bump where recipes allow. |
-| `effectFamily` | `fairy` | Fairy / Mock Fairy: **fairy-tonic** style outcomes (healing/special). |
-| `effectFamily` | `bright`, `sticky` | Light- and slip-control brew lines. |
-| `element` | `light` | Blessed Butterfly — pairs with `bright` for light-themed mixes. |
-| `element` | `undead` | Gibdo bone/guts/wing, `Spider's Eye`, **`Poe Soul`** — blight- or curse-themed modifiers. (Skull items stay unlabeled.) |
+Used on **`Creature`** items in `elixir-ingredient-labels.json`. Each value is the **primary effect class** a critter contributes when mixing. Behavior below matches `ELIXIR_EFFECTS` / `elixirModule.js` where a row exists; unimplemented families are **mixer targets** until wired into `ELIXIR_EFFECTS`.
 
-Canon-aligned families (`mighty`, `chilly`, `electro`, …) should stay aligned with `ELIXIR_EFFECTS` / `elixirModule.js` where those elixirs exist.
+| `effectFamily` | Role | What it does (Tinglebot) |
+|------------------|------|---------------------------|
+| `chilly` | Resistance / weather | Less damage from water-tagged threats; helps vs blight-rain-style penalties (`waterResistance`, `blightResistance`). |
+| `spicy` | Cold resistance | Less damage from ice/cold enemies; expedition **cold** hazard protection when rules allow. |
+| `fireproof` | Heat / fire resistance | Less damage from fire enemies; expedition **heat** hazard protection when rules allow. |
+| `electro` | Shock resistance | Less damage from electric enemies; expedition **thunder** hazard protection when rules allow. |
+| `enduring` | Stamina pool | Temporary extra stamina chunk until consumed on stamina activities. |
+| `energizing` | Stamina restore | Stamina recovery when the elixir fires (instant or on gather/loot/craft per rules). |
+| `hasty` | Speed / travel | Faster travel, rush bonuses, fewer bad travel rolls where implemented. |
+| `hearty` | Vitality | Healing and/or temporary extra hearts until consumed on damage/combat. |
+| `mighty` | Offense | Attack boost for combat / help wanted / raid / loot. |
+| `tough` | Defense | Defense boost for the same combat loop. |
+| `sneaky` | Stealth | Stealth and flee bonuses on gather, loot, travel. |
+| `fairy` | Special recovery | Fairy-tonic style outcomes (strong heal / special rules) — define in resolver; not a standard resistance line. |
+| `bright` | Light / exploration | Dark-area / night / cave bonuses, trap stumble reduction — **define in resolver**; no `ELIXIR_EFFECTS` entry yet. |
+| `sticky` | Traction | Rain / ice / slip penalties on travel or climb checks — **define in resolver**; no `ELIXIR_EFFECTS` entry yet. |
+
+### Standard reference: `element` (monster parts)
+
+Used on **`Monster`** items only. Tags **material affinity** for parts (jelly color, elemental wings/tails, etc.); the mixer uses this to bias resistance output or potency, not to replace `effectFamily` on critters.
+
+| `element` | Role | What it does (Tinglebot) |
+|-----------|------|---------------------------|
+| `fire` | Fire affinity | Biases fire-themed outputs; pairs with fireproof/spicy lines; colored **Red** jelly / fire keese / fire lizalfos tail. |
+| `ice` | Ice / cold affinity | Biases ice/cold outputs; **White** jelly, ice keese, icy lizalfos tail, **Freezard Water**. |
+| `electric` | Shock affinity | Biases electric outputs; **Yellow** jelly, electric keese, yellow lizalfos tail. |
+| `undead` | Gloom / curse | Blight-adjacent or curse-themed modifiers; **Gibdo** parts, `Spider's Eye`, **`Poe Soul`**. |
+
+---
+
+### What actually runs in the bot (decision: ingredients vs buff)
+
+There are **two different things** — do not confuse them:
+
+| Layer | Data | When it matters |
+|-------|------|-----------------|
+| **Ingredient tags** | `docs/elixir-ingredient-labels.json` (`effectFamily` on critters, `element` on parts) | **Mixer only (not built yet).** Tags do **not** read into `character.buff` by themselves. |
+| **Active elixir buff** | `character.buff` + `ELIXIR_EFFECTS` in `bot/modules/elixirModule.js` | **Live today.** Set when someone uses an elixir item (`/item`, crafting, shops). Loot, travel, explore, combat, help wanted, raid, flee, etc. call `getActiveBuffEffects(character)`. |
+
+**`element` on monster parts:** The game does **not** apply these labels during combat or travel yet. They exist so the **mixer** can choose an output elixir (e.g. red jelly biases fire-themed results). The **output elixir** then behaves like any other elixir and fills `buff.effects` from `ELIXIR_EFFECTS`.
+
+**`effectFamily` on critters:** Same story until mixing exists — the **named elixir items** (Mighty Elixir, Chilly Elixir, …) are what actually set `buff.type` and the numbers below.
+
+---
+
+### Runtime buff effects (`character.buff.effects`) — what each stat does in code
+
+Values come from `ELIXIR_EFFECTS` when the elixir is applied (often `1.5` for resistances, `1` for boosts, etc.). Code reads **`getActiveBuffEffects`** (`elixirModule.js`).
+
+| `buff.effects` field | Tied elixir families (`buff.type`) | What it does in the bot |
+|----------------------|-------------------------------------|-------------------------|
+| `attackBoost` | `mighty` | Added to attack in `buffModule.calculateAttackBuff` → used in encounter / loot combat resolution. |
+| `defenseBoost` | `tough` | Added to defense in `calculateDefenseBuff`, then defense is **×1.5** (floor) for success weighting. |
+| `electricResistance` | `electro` | If the attacker is electric-type (`encounterModule.calculateDamage` + monster `element` / name), mitigates damage by a **percentage**: `reduction = min(0.95, stat × 0.5)`; dealt damage = `base × (1 − reduction)`. Same cap/coefficient for all elemental resists below. |
+| `fireResistance` | `fireproof` | Same **percentage** mitigation for **fire**-type attackers. **Does not** affect blight rain infection (only `blightResistance` does). |
+| `coldResistance` | `spicy` | Same for **ice**-type attackers; `ice` damage type aliases to cold resistance in `buffModule.getDamageResistance`. |
+| `waterResistance` | `chilly` | Same for **water**-type attackers in `encounterModule`. |
+| `blightResistance` | `chilly` | In **blight rain** (travel, gather, loot, help wanted, etc.), lowers blight infection chance **−30% per point** of stat in those paths (values clamped); fire resistance is not part of this. |
+| `speedBoost` | `hasty` | **Explore:** added to the d100-style roll in `rngModule.calculateFinalValue`. **Travel:** `calculateSpeedBuff` adds to speed when consumed on travel. |
+| `stealthBoost` | `sneaky` | **Explore:** added to the same roll in `calculateFinalValue` (with speed). **Gather/loot:** stealth calculations in `buffModule` / `loot` flows. |
+| `fleeBoost` | `sneaky` | **Flee:** `rngModule.attemptFlee` adds **`fleeBoost × 15%`** to base flee chance (capped). |
+| `staminaBoost` | `enduring` | Extra max/current stamina until the buff is consumed (see `consumeElixirBuff` / stamina activities). |
+| `staminaRecovery` | `energizing` | Stamina restore; consumed on gather / loot / crafting per `shouldConsumeElixir`. |
+| `extraHearts` | `hearty` | Temporary hearts buffer until consumed on combat-style activities. |
+
+**Consumption:** `shouldConsumeElixir(character, activity, context)` in `elixirModule.js` decides **when** the buff is used up (e.g. matching monster element for resists, `travel` for hasty, combat for mighty). If activity does not match, the buff can stay active.
+
+---
+
+### Ingredient labels → future mixer → same runtime
+
+When mixing is implemented:
+
+1. Critter **`effectFamily`** + part **`element`** + rarity resolve to **one output elixir item name** (or failure).
+2. That item must already exist in the DB and in `ELIXIR_EFFECTS` so `/item` behavior stays unchanged.
+3. **`bright`**, **`sticky`**, **`fairy`:** not in `ELIXIR_EFFECTS` yet — add effects + `CharacterModel.buff.effects` fields (if needed) before they do anything in combat/travel.
 
 **Resolver order (recommended):**
 
 1. Load the item from DB/export.
 2. Derive **ingredientRole** from `type` using `elixir-type-mapping.json`.
-3. If `itemName` exists in `elixir-ingredient-labels.json`, overlay **effectFamily** and/or **element** keys that are present.
+3. If `itemName` exists in `elixir-ingredient-labels.json`, read **critter → `effectFamily`**, **monster part → `element`** for the mixer only.
 4. Otherwise, neutral parts use **itemRarity** only; gear may still use `ItemModel.element` when relevant.
 
 New fields on `ItemModel` are optional later; the sidecar JSON keeps mixing data versioned next to exports.
@@ -110,14 +179,17 @@ Run against current `docs/tinglebot.items.json` (763 items):
 | Pool | In export | In `elixir-ingredient-labels.json` | Notes |
 |------|-----------|-------------------------------------|--------|
 | **Creature** (`type` includes `Creature`) | 39 | 38 | **Insect Parts** has no row — generic mixed bundle; resolver should not infer one `effectFamily`. |
-| **Monster** (`type` includes `Monster`) | 64 | 16 | **Sparse by design:** neutral horns/fangs/guts (no element) use **`itemRarity`** only. |
+| **Monster** (`type` includes `Monster`) | 64 | 15 | **Sparse by design:** neutral horns/fangs/guts (no element) use **`itemRarity`** only. |
 
-**Monster names with no label (expected):**
+**Mixer rules (hard reject):**
 
-- **Ancient line (6):** `Ancient Core`, `Ancient Gear`, `Ancient Screw`, `Ancient Shaft`, `Ancient Spring`, `Giant Ancient Core` — `type: Monster` in export; no `effectFamily` here (not “organic elixir critter” tags).
-- **Non-organic (2):** `Gibdo Bandage`, `Like Like Stone` — excluded from this file.
-- **Cooked / meal (5):** `Monster Cake`, `Monster Curry`, `Monster Rice Balls`, `Monster Soup`, `Monster Stew` — food, not mixer ingredients unless you add a rule later.
-- **Neutral organic parts (34):** e.g. `Bokoblin Horn`, `Chuchu Jelly`, `Golden Skull`, `Keese Wing`, `Lizalfos Tail`, `Octo Balloon`, `Stal Skull`, … — no `element` / no special family; potency from rarity in code. (Undead-tagged items without skulls: `Spider's Eye`, `Poe Soul`, plus Gibdo parts.)
+- **Ancient materials** cannot be used: `Ancient Core`, `Ancient Gear`, `Ancient Screw`, `Ancient Shaft`, `Ancient Spring`, `Giant Ancient Core`.
+- **Cooked food** (`Monster` type meals) cannot be used: `Monster Cake`, `Monster Curry`, `Monster Rice Balls`, `Monster Soup`, `Monster Stew`.
+
+**Monster names with no label (expected) — other cases:**
+
+- **Non-organic (2):** `Gibdo Bandage`, `Like Like Stone` — excluded from `elixir-ingredient-labels.json` and not valid mixer inputs.
+- **Neutral organic parts (~35):** e.g. `Bokoblin Horn`, `Chuchu Jelly`, `Golden Skull`, `Keese Wing`, `Lizalfos Tail`, `Monster Extract`, `Octo Balloon`, `Stal Skull`, … — valid ingredients when rules allow; no `element` in labels → potency from **`itemRarity`** in code. (Undead-tagged: `Spider's Eye`, `Poe Soul`, Gibdo parts.)
 
 Every key in `elixir-ingredient-labels.json` matches an `itemName` in the export (no typos).
 

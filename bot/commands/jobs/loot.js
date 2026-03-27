@@ -413,10 +413,6 @@ module.exports = {
             infectionChance -= (buffEffects.blightResistance * 0.3); // Each level reduces by 30%
             logger.info('BLIGHT', `🧪 Blight resistance buff applied - infection chance now ${infectionChance}`);
           }
-       if (buffEffects && buffEffects.fireResistance > 0) {
-         infectionChance -= (buffEffects.fireResistance * 0.05); // Each level reduces by 5%
-         logger.info('BLIGHT', `🧪 Fire resistance buff applied - infection chance reduced`);
-       }
        
        // Consume elixirs after applying their effects
        if (shouldConsumeElixir(character, 'loot', { blightRain: true })) {
@@ -456,11 +452,11 @@ module.exports = {
        } else {
          let safeMsg = "<:blight_eye:805576955725611058> **Blight Rain!**\n\n";
          
-         if (buffEffects && (buffEffects.blightResistance > 0 || buffEffects.fireResistance > 0)) {
+         if (buffEffects && buffEffects.blightResistance > 0) {
            safeMsg += `◈ Your character **${character.name}** braved the blight rain and managed to avoid infection thanks to their elixir buffs! ◈\n`;
            safeMsg += "The protective effects of your elixir kept you safe from the blight.";
            
-           // Consume chilly or fireproof elixirs after use
+           // Consume chilly elixir after use
            if (shouldConsumeElixir(character, 'loot', { blightRain: true })) {
              consumeElixirBuff(character);
              // Update character in database

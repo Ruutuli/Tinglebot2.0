@@ -2768,17 +2768,21 @@ async function continueCraftingProcess(interaction, character, materialsUsed, co
     if (continueData.teacherStaminaContribution > 0 && freshCharacter.boostedBy) {
       const boosterCharacter = await fetchCharacterByName(freshCharacter.boostedBy);
       const needsTeacherSecondVoucher = boosterCharacter && isBoosterUsingVoucherForJob(boosterCharacter, 'Teacher');
-      if (needsTeacherSecondVoucher) {
-        const activeBoost = await retrieveBoostingRequestFromTempDataByCharacter(freshCharacter.name);
-        if (!activeBoost || !activeBoost.boosterUsedSecondVoucher) {
-          const voucherError = getJobVoucherErrorMessage('BOOSTER_MUST_USE_SECOND_VOUCHER_FIRST', { boosterName: freshCharacter.boostedBy || 'Teacher', targetName: freshCharacter.name });
-          for (const mat of materialsUsed) {
-            await addItemInventoryDatabase(freshCharacter._id, mat.itemName, mat.quantity, interaction, 'Crafting Refund - Booster Must Use Second Voucher');
+        if (needsTeacherSecondVoucher) {
+          const activeBoost = await retrieveBoostingRequestFromTempDataByCharacter(freshCharacter.name);
+          if (!activeBoost || !activeBoost.boosterUsedSecondVoucher) {
+            const voucherError = getJobVoucherErrorMessage('BOOSTER_MUST_USE_SECOND_VOUCHER_FIRST', { boosterName: freshCharacter.boostedBy || 'Teacher', targetName: freshCharacter.name });
+            for (const mat of materialsUsed) {
+              await addItemInventoryDatabase(freshCharacter._id, mat.itemName, mat.quantity, interaction, 'Crafting Refund - Booster Must Use Second Voucher');
+            }
+            return interaction.followUp({
+              embeds: [voucherError.embed.setImage('https://storage.googleapis.com/tinglebot/Graphics/border.png')],
+              content: '⚠️ **Materials have been refunded.**',
+              ephemeral: false
+            });
           }
-          return interaction.followUp({ embeds: [voucherError.embed], content: '⚠️ **Materials have been refunded.**', flags: [MessageFlags.Ephemeral] });
         }
       }
-    }
 
     // ------------------- Entertainer Crafting: Booster must have used 2nd voucher if not native Entertainer (Song of Double Time) -------------------
     if (freshCharacter.boostedBy) {
@@ -2804,7 +2808,7 @@ async function continueCraftingProcess(interaction, character, materialsUsed, co
           return interaction.followUp({
             embeds: [voucherError.embed.setImage('https://storage.googleapis.com/tinglebot/Graphics/border.png')],
             content: '⚠️ **Materials have been refunded.**',
-            flags: [MessageFlags.Ephemeral]
+            ephemeral: false
           });
         }
       }

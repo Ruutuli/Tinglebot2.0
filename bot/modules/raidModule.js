@@ -613,9 +613,6 @@ async function joinRaid(character, raidId, options = {}) {
         if (buffEffects && buffEffects.blightResistance > 0) {
           infectionChance -= (buffEffects.blightResistance * 0.3); // Each level reduces by 30%
         }
-        if (buffEffects && buffEffects.fireResistance > 0) {
-          infectionChance -= (buffEffects.fireResistance * 0.05); // Each level reduces by 5%
-        }
         
         // Consume elixirs after applying their effects
         if (shouldConsumeElixir(character, 'raid', { blightRain: true })) {

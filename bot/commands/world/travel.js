@@ -358,10 +358,6 @@ module.exports = {
             infectionChance -= (buffEffects.blightResistance * 0.1); // Each level reduces by 10%
             console.log(`[travel.js]: 🧪 Blight resistance: ${infectionChance} chance`);
           }
-          if (buffEffects && buffEffects.fireResistance > 0) {
-            infectionChance -= (buffEffects.fireResistance * 0.05); // Each level reduces by 5%
-            console.log(`[travel.js]: 🧪 Fire resistance: ${infectionChance - (buffEffects.fireResistance * 0.05)} chance`);
-          }
           
           // Consume elixirs after applying their effects
           if (shouldConsumeElixir(character, 'travel', { blightRain: true })) {
@@ -430,11 +426,11 @@ module.exports = {
           } else {
             let safeMsg = "<:blight_eye:805576955725611058> **Blight Rain!**\n\n";
             
-            if (buffEffects && (buffEffects.blightResistance > 0 || buffEffects.fireResistance > 0)) {
+            if (buffEffects && buffEffects.blightResistance > 0) {
               safeMsg += `◈ Your character **${character.name}** braved the blight rain and managed to avoid infection thanks to their elixir buffs! ◈\n`;
               safeMsg += "The protective effects of your elixir kept you safe from the blight.";
               
-              // Consume chilly or fireproof elixirs after use
+              // Consume chilly elixir after use (blight resistance only; fireproof does not affect blight)
               if (shouldConsumeElixir(character, 'travel', { blightRain: true })) {
                 consumeElixirBuff(character);
                 // Update character in database
@@ -1090,10 +1086,6 @@ async function processTravelDay(day, context) {
             infectionChance -= (buffEffects.blightResistance * 0.1); // Each level reduces by 10%
             console.log(`[travel.js]: 🧪 Starting village blight resistance: ${infectionChance} chance`);
           }
-          if (buffEffects && buffEffects.fireResistance > 0) {
-            infectionChance -= (buffEffects.fireResistance * 0.05); // Each level reduces by 5%
-            console.log(`[travel.js]: 🧪 Starting village fire resistance: ${infectionChance - (buffEffects.fireResistance * 0.05)} chance`);
-          }
           
           // Consume elixirs after applying their effects
           if (shouldConsumeElixir(character, 'travel', { blightRain: true })) {
@@ -1161,11 +1153,11 @@ async function processTravelDay(day, context) {
           } else {
             let safeMsg = "<:blight_eye:805576955725611058> **Blight Rain at Departure!**\n\n";
             
-            if (buffEffects && (buffEffects.blightResistance > 0 || buffEffects.fireResistance > 0)) {
+            if (buffEffects && buffEffects.blightResistance > 0) {
               safeMsg += `◈ Your character **${character.name}** departed from ${capitalizeFirstLetter(startingVillage)} during blight rain and managed to avoid infection thanks to their elixir buffs! ◈\n`;
               safeMsg += "The protective effects of your elixir kept you safe from the blight.";
               
-              // Consume chilly or fireproof elixirs after use
+              // Consume chilly elixir after use
               if (shouldConsumeElixir(character, 'travel', { blightRain: true })) {
                 consumeElixirBuff(character);
                 // Update character in database

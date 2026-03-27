@@ -1581,10 +1581,6 @@ async function handleMonsterHunt(interaction, questId, characterName) {
         infectionChance -= (buffEffects.blightResistance * 0.3); // Each level reduces by 30%
         console.log(`[helpWanted.js]: 🧪 Blight resistance buff applied - Infection chance reduced from 0.75 to ${infectionChance}`);
       }
-      if (buffEffects && buffEffects.fireResistance > 0) {
-        infectionChance -= (buffEffects.fireResistance * 0.05); // Each level reduces by 5%
-        console.log(`[helpWanted.js]: 🧪 Fire resistance buff applied - Infection chance reduced from ${infectionChance} to ${infectionChance - (buffEffects.fireResistance * 0.05)}`);
-      }
       
       // Consume elixirs after applying their effects
       if (shouldConsumeElixir(character, 'helpWanted', { blightRain: true })) {
@@ -1623,11 +1619,11 @@ async function handleMonsterHunt(interaction, questId, characterName) {
       } else {
         blightRainMessage = "<:blight_eye:805576955725611058> **Blight Rain!**\n\n";
         
-        if (buffEffects && (buffEffects.blightResistance > 0 || buffEffects.fireResistance > 0)) {
+        if (buffEffects && buffEffects.blightResistance > 0) {
           blightRainMessage += `◈ Your character **${character.name}** braved the blight rain and managed to avoid infection thanks to their elixir buffs! ◈\n`;
           blightRainMessage += "The protective effects of your elixir kept you safe from the blight.";
           
-          // Consume chilly or fireproof elixirs after use
+          // Consume chilly elixir after use (blight resistance only; fireproof does not affect blight)
           if (shouldConsumeElixir(character, 'helpWanted', { blightRain: true })) {
             consumeElixirBuff(character);
             // Update character in database
@@ -2202,10 +2198,6 @@ module.exports = {
               infectionChance -= (buffEffects.blightResistance * 0.3); // Each level reduces by 30%
               console.log(`[helpWanted.js]: 🧪 Blight resistance buff applied - Infection chance reduced from 0.75 to ${infectionChance}`);
             }
-            if (buffEffects && buffEffects.fireResistance > 0) {
-              infectionChance -= (buffEffects.fireResistance * 0.05); // Each level reduces by 5%
-              console.log(`[helpWanted.js]: 🧪 Fire resistance buff applied - Infection chance reduced from ${infectionChance} to ${infectionChance - (buffEffects.fireResistance * 0.05)}`);
-            }
             
             // Consume elixirs after applying their effects
             if (shouldConsumeElixir(character, 'helpWanted', { blightRain: true })) {
@@ -2244,11 +2236,11 @@ module.exports = {
             } else {
               blightRainMessage = "<:blight_eye:805576955725611058> **Blight Rain!**\n\n";
               
-              if (buffEffects && (buffEffects.blightResistance > 0 || buffEffects.fireResistance > 0)) {
+              if (buffEffects && buffEffects.blightResistance > 0) {
                 blightRainMessage += `◈ Your character **${character.name}** braved the blight rain and managed to avoid infection thanks to their elixir buffs! ◈\n`;
                 blightRainMessage += "The protective effects of your elixir kept you safe from the blight.";
                 
-                // Consume chilly or fireproof elixirs after use
+                // Consume chilly elixir after use (blight resistance only; fireproof does not affect blight)
                 if (shouldConsumeElixir(character, 'helpWanted', { blightRain: true })) {
                   consumeElixirBuff(character);
                   // Update character in database

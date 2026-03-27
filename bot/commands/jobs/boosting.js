@@ -41,7 +41,6 @@ const {
 
 const BOOST_DURATION = 24 * 60 * 60 * 1000; // 24 hours in milliseconds
 const REQUEST_EXPIRATION = 48 * 60 * 60 * 1000; // 48 hours in milliseconds
-const TESTING_CHANNEL_ID = '1391812848099004578';
 const BOOSTING_ACCEPT_COMMAND_MENTION = '</boosting accept:1433351189185171456>';
 const BOOSTING_CANCEL_COMMAND_MENTION = '</boosting cancel:1429961744716927038>';
 
@@ -459,17 +458,16 @@ async function validateActiveBoost(targetCharacter) {
 }
 
 /**
- * Validates village compatibility between characters
+ * Validates village compatibility between characters (same village required in all channels).
  */
-function validateVillageCompatibility(targetCharacter, boosterCharacter, isTestingChannel) {
+function validateVillageCompatibility(targetCharacter, boosterCharacter) {
  // Get village names with null safety
  const targetVillage = targetCharacter?.currentVillage?.toLowerCase()?.trim() || '';
  const boosterVillage = boosterCharacter?.currentVillage?.toLowerCase()?.trim() || '';
  
- // Log for debugging cross-village issues
- logger.info('BOOST', `Village validation: target ${targetCharacter?.name} in "${targetVillage}", booster ${boosterCharacter?.name} in "${boosterVillage}", testing: ${isTestingChannel}`);
+ logger.info('BOOST', `Village validation: target ${targetCharacter?.name} in "${targetVillage}", booster ${boosterCharacter?.name} in "${boosterVillage}"`);
  
- if (!isTestingChannel && (!targetVillage || !boosterVillage)) {
+ if (!targetVillage || !boosterVillage) {
    logger.warn('BOOST', `Village data missing - target: "${targetVillage}", booster: "${boosterVillage}"`);
    return {
      valid: false,
@@ -477,7 +475,7 @@ function validateVillageCompatibility(targetCharacter, boosterCharacter, isTesti
    };
  }
  
- if (targetVillage !== boosterVillage && !isTestingChannel) {
+ if (targetVillage !== boosterVillage) {
    return {
      valid: false,
      error: `❌ **Village Mismatch**\n\n**${targetCharacter.name}** is in **${targetCharacter.currentVillage || 'Unknown'}** but **${boosterCharacter.name}** is in **${boosterCharacter.currentVillage || 'Unknown'}**. Both characters must be in the same village.\n\n💡 **Travel Tip:** Use </travel:1379850586987430009> to travel between villages and access characters in different locations!`
@@ -512,7 +510,7 @@ function createBoostRequestData(targetCharacter, boosterCharacter, category, vil
    boosterJob: boosterJob,
    boostEffect: `${boost.name} — ${boost.description}`,
    requestedByIcon: targetCharacter.icon,
-   boosterIcon: boosterCharacter.icon
+   boosterIcon: boosterCharacter.icon,
  };
 }
 
@@ -1012,13 +1010,11 @@ async function handleBoostRequest(interaction) {
  }
 
  // Validate village compatibility (re-fetch so currentVillage is fresh from DB)
- const isTestingChannel = interaction.channelId === TESTING_CHANNEL_ID || interaction.channel?.parentId === TESTING_CHANNEL_ID;
  const targetForVillage = await fetchCharacterByName(targetCharacter.name);
  const boosterForVillage = await fetchCharacterByName(boosterCharacter.name);
  const villageValidation = validateVillageCompatibility(
   targetForVillage || targetCharacter,
-  boosterForVillage || boosterCharacter,
-  isTestingChannel
+  boosterForVillage || boosterCharacter
  );
  if (!villageValidation.valid) {
   logger.debug('BOOST', '[Validation] Village mismatch detected during boost request.');
@@ -1184,11 +1180,9 @@ async function handleBoostAccept(interaction) {
  const targetCharacterForAccept = await fetchCharacterByName(requestData.targetCharacter);
  const boosterForVillageAccept = await fetchCharacterByName(booster.name);
  if (targetCharacterForAccept) {
-  const isTestingChannel = interaction.channelId === TESTING_CHANNEL_ID || interaction.channel?.parentId === TESTING_CHANNEL_ID;
   const villageValidation = validateVillageCompatibility(
    targetCharacterForAccept,
-   boosterForVillageAccept || booster,
-   isTestingChannel
+   boosterForVillageAccept || booster
   );
   if (!villageValidation.valid) {
    logger.debug('BOOST', '[Accept] Village mismatch - characters no longer in same village.');

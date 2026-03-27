@@ -156,8 +156,8 @@ function getDamageResistance(character, damageType) {
       break;
     case 'fire':
       resistance = buffEffects?.fireResistance || 0;
-      // Consume fireproof elixir after use
-      if (resistance > 0 && shouldConsumeElixir(character, 'travel', { blightRain: true })) {
+      // Heat / fire travel (not blight rain)
+      if (resistance > 0 && shouldConsumeElixir(character, 'travel')) {
         consumeElixirBuff(character);
       } else if (character.buff?.active) {
         // Log when elixir is not used due to conditions not met

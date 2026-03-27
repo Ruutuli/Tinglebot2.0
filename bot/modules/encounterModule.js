@@ -38,6 +38,17 @@ function logBattleDetails(tier, characterName, monsterName, roll, damage, monste
     // Battle logging removed for cleaner output
 }
 
+// ------------------- Elemental resistance (percentage of damage ignored) -------------------
+// resistanceStat scales with elixir tier (e.g. 1.5 base, 2.0 stronger). Same formula as docs/elixir-mixing.
+const MAX_ELEMENTAL_DAMAGE_REDUCTION = 0.95;
+const ELEMENTAL_RESISTANCE_COEFFICIENT = 0.5; // stat 1.5 => 75% damage reduction
+
+function applyElementalResistancePercent(baseDamage, resistanceStat) {
+    if (!resistanceStat || resistanceStat <= 0 || baseDamage <= 0) return baseDamage;
+    const reductionPercent = Math.min(MAX_ELEMENTAL_DAMAGE_REDUCTION, resistanceStat * ELEMENTAL_RESISTANCE_COEFFICIENT);
+    return baseDamage * (1 - reductionPercent);
+}
+
 // ------------------- Calculate Damage Function -------------------
 // Calculates damage with resistance considerations for elemental enemies
 function calculateDamage(attacker, defender) {
@@ -77,10 +88,9 @@ function calculateDamage(attacker, defender) {
             
             // Check if monster is electric type and character has electric resistance
             if (hasElement(attacker, 'electric') && buffEffects && buffEffects.electricResistance > 0) {
-                // Electric resistance reduces damage by 50% per level
-                const resistanceReduction = buffEffects.electricResistance * 0.5;
-                baseDamage = Math.max(0, baseDamage - resistanceReduction);
-                console.log(`[encounterModule.js]: ⚡ Electric resistance: damage reduced to ${baseDamage} hearts`);
+                const before = baseDamage;
+                baseDamage = applyElementalResistancePercent(baseDamage, buffEffects.electricResistance);
+                console.log(`[encounterModule.js]: ⚡ Electric resistance: damage ${before} → ${baseDamage} hearts (${(100 * (1 - baseDamage / before)).toFixed(0)}% reduction)`);
                 
                 // Consume electro elixir after use
                 const { shouldConsumeElixir, consumeElixirBuff } = require('./elixirModule');
@@ -93,10 +103,9 @@ function calculateDamage(attacker, defender) {
             
             // Check if monster is fire type and character has fire resistance
             if (hasElement(attacker, 'fire') && buffEffects && buffEffects.fireResistance > 0) {
-                // Fire resistance reduces damage by 50% per level
-                const resistanceReduction = buffEffects.fireResistance * 0.5;
-                baseDamage = Math.max(0, baseDamage - resistanceReduction);
-                console.log(`[encounterModule.js]: 🔥 Fire resistance: damage reduced to ${baseDamage} hearts`);
+                const before = baseDamage;
+                baseDamage = applyElementalResistancePercent(baseDamage, buffEffects.fireResistance);
+                console.log(`[encounterModule.js]: 🔥 Fire resistance: damage ${before} → ${baseDamage} hearts`);
                 
                 // Consume fireproof elixir after use
                 const { shouldConsumeElixir, consumeElixirBuff } = require('./elixirModule');
@@ -109,10 +118,9 @@ function calculateDamage(attacker, defender) {
             
             // Check if monster is ice type and character has cold resistance (Spicy Elixir)
             if (hasElement(attacker, 'ice') && buffEffects && buffEffects.coldResistance > 0) {
-                // Cold resistance reduces damage by 50% per level
-                const resistanceReduction = buffEffects.coldResistance * 0.5;
-                baseDamage = Math.max(0, baseDamage - resistanceReduction);
-                console.log(`[encounterModule.js]: ❄️ Cold resistance: damage reduced to ${baseDamage} hearts`);
+                const before = baseDamage;
+                baseDamage = applyElementalResistancePercent(baseDamage, buffEffects.coldResistance);
+                console.log(`[encounterModule.js]: ❄️ Cold resistance: damage ${before} → ${baseDamage} hearts`);
                 
                 // Consume spicy elixir after use
                 const { shouldConsumeElixir, consumeElixirBuff } = require('./elixirModule');
@@ -125,10 +133,9 @@ function calculateDamage(attacker, defender) {
             
             // Check if monster is water type and character has water resistance (Chilly Elixir)
             if (hasElement(attacker, 'water') && buffEffects && buffEffects.waterResistance > 0) {
-                // Water resistance reduces damage by 50% per level
-                const resistanceReduction = buffEffects.waterResistance * 0.5;
-                baseDamage = Math.max(0, baseDamage - resistanceReduction);
-                console.log(`[encounterModule.js]: 💧 Water resistance: damage reduced to ${baseDamage} hearts`);
+                const before = baseDamage;
+                baseDamage = applyElementalResistancePercent(baseDamage, buffEffects.waterResistance);
+                console.log(`[encounterModule.js]: 💧 Water resistance: damage ${before} → ${baseDamage} hearts`);
                 
                 // Consume chilly elixir after use
                 const { shouldConsumeElixir, consumeElixirBuff } = require('./elixirModule');
