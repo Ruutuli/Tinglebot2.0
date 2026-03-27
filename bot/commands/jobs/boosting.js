@@ -33,6 +33,7 @@ const {
   scheduleSpecialWeather,
   getNextPeriodBounds,
   findWeatherForPeriod,
+  SONG_OF_STORMS_SPECIAL_ALLOWLIST,
 } = require('@/services/weatherService');
 // ============================================================================
 // ------------------- Constants and Configuration -------------------
@@ -65,20 +66,6 @@ const BOOST_CATEGORIES = [
 // Re-enabled: Song of Storms uses weatherService scheduled posting. Set false to disable quickly if issues arise.
 const SONG_OF_STORMS_ENABLED = true;
 const SONG_OF_STORMS_VILLAGES = ['Rudania', 'Inariko', 'Vhintl'];
-// Lightning Storm excluded by design (in weatherData.specials but not choosable for Song of Storms).
-const SONG_OF_STORMS_SPECIAL_WEATHER = [
-  "Avalanche",
-  "Blight Rain",
-  "Drought",
-  "Fairy Circle",
-  "Flood",
-  "Flower Bloom",
-  "Jubilee",
-  "Meteor Shower",
-  "Muggy",
-  "Rock Slide",
-];
-
 const WEATHER_EMBED_COLORS = {
  Rudania: 0xd7342a,
  Inariko: 0x277ecd,
@@ -2634,7 +2621,7 @@ async function executeSongOfStorms(interaction, options) {
 
 const resolvedVillage = providedVillage ? resolveVillageName(providedVillage) : null;
 const selectedVillage = resolvedVillage || SONG_OF_STORMS_VILLAGES[Math.floor(Math.random() * SONG_OF_STORMS_VILLAGES.length)];
-const selectedWeather = SONG_OF_STORMS_SPECIAL_WEATHER[Math.floor(Math.random() * SONG_OF_STORMS_SPECIAL_WEATHER.length)];
+const selectedWeather = SONG_OF_STORMS_SPECIAL_ALLOWLIST[Math.floor(Math.random() * SONG_OF_STORMS_SPECIAL_ALLOWLIST.length)];
 const manualSelection = Boolean(resolvedVillage);
 
  try {
@@ -2703,9 +2690,13 @@ const selectionFieldValue = manualSelection
    await recipient.save();
   }
 
+  const appliedSpecial =
+   scheduleResult?.resolvedSpecialLabel ||
+   scheduleResult?.weather?.special?.label ||
+   selectedWeather;
   logger.info(
    'BOOST',
-  `🎵 Song of Storms triggered by ${entertainer?.name || 'Unknown'}${recipient ? ` for ${recipient.name}` : ''}: ${selectedWeather} in ${selectedVillage}${manualSelection ? ' (manual selection)' : ''}`
+  `🎵 Song of Storms triggered by ${entertainer?.name || 'Unknown'}${recipient ? ` for ${recipient.name}` : ''}: ${appliedSpecial} in ${selectedVillage}${manualSelection ? ' (manual selection)' : ''}`
   );
  } catch (error) {
   if (error.code === 'SPECIAL_WEATHER_ALREADY_SET') {

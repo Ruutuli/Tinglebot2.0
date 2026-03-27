@@ -101,6 +101,20 @@ const BANNER_PATHS = {
   ]
 };
 
+// Song of Storms: labels that may be scheduled (Lightning Storm excluded in boosting by design).
+const SONG_OF_STORMS_SPECIAL_ALLOWLIST = [
+  'Avalanche',
+  'Blight Rain',
+  'Drought',
+  'Fairy Circle',
+  'Flood',
+  'Flower Bloom',
+  'Jubilee',
+  'Meteor Shower',
+  'Muggy',
+  'Rock Slide'
+];
+
 const OVERLAY_MAPPING = {
   'Rain': 'rain',
   'Light Rain': 'rain',
@@ -1199,6 +1213,166 @@ function hasGuaranteedSpecial(weatherDoc) {
     existingSpecialProbability.toLowerCase().includes('guaranteed');
 }
 
+function getSeasonInfoForVillageAndSeason(village, seasonLower) {
+  const lookupSeason = seasonLower.toLowerCase() === 'fall' ? 'autumn' : seasonLower.toLowerCase();
+  const seasonKey = capitalizeFirstLetter(lookupSeason);
+  const villageData = seasonsData[village];
+  if (!villageData || !villageData.seasons[seasonKey]) {
+    return null;
+  }
+  return { seasonKey, seasonInfo: villageData.seasons[seasonKey] };
+}
+
+function precipitationLabelValidForEnvironment(precipLabel, simTemp, simWind) {
+  const precipObj = precipitations.find((p) => p.label === precipLabel);
+  if (!precipObj || !precipObj.conditions) return true;
+  const { temperature: tempConds, wind: windConds } = precipObj.conditions;
+  if (tempConds && !tempConds.includes('any')) {
+    if (!tempConds.every((cond) => checkNumericCondition(simTemp, cond))) return false;
+  }
+  if (windConds && !windConds.includes('any')) {
+    if (!windConds.every((cond) => checkNumericCondition(simWind, cond))) return false;
+  }
+  return true;
+}
+
+function specialLabelMatchesBaseline(
+  seasonInfo,
+  specialLabel,
+  simTemp,
+  simWind,
+  precipLabel,
+  previousWeather
+) {
+  if (!seasonInfo.Special.includes(specialLabel)) return false;
+  if (specialLabel === 'Blight Rain' && previousWeather?.special?.label === 'Blight Rain') {
+    return false;
+  }
+  const specialObj = specials.find((s) => s.label === specialLabel);
+  if (!specialObj || !specialObj.conditions) return true;
+  const { temperature: tempConds, wind: windConds, precipitation: precipConds } = specialObj.conditions;
+  if (tempConds && !tempConds.includes('any')) {
+    if (!tempConds.every((cond) => checkNumericCondition(simTemp, cond))) return false;
+  }
+  if (windConds && !windConds.includes('any')) {
+    if (!windConds.every((cond) => checkNumericCondition(simWind, cond))) return false;
+  }
+  if (precipConds && !precipConds.includes('any')) {
+    if (!precipConds.some((cond) => precipitationMatches(precipLabel, cond))) return false;
+  }
+  return true;
+}
+
+function collectCompatibleBaselineTriples(seasonInfo, specialLabel, previousWeather) {
+  const triples = [];
+  for (const temperatureLabel of seasonInfo.Temperature) {
+    const simTemp = parseFahrenheit(temperatureLabel);
+    for (const windLabel of seasonInfo.Wind) {
+      const simWind = parseWind(windLabel);
+      for (const precipitationLabel of seasonInfo.Precipitation) {
+        if (!precipitationLabelValidForEnvironment(precipitationLabel, simTemp, simWind)) continue;
+        if (
+          specialLabelMatchesBaseline(
+            seasonInfo,
+            specialLabel,
+            simTemp,
+            simWind,
+            precipitationLabel,
+            previousWeather
+          )
+        ) {
+          triples.push({ temperatureLabel, windLabel, precipitationLabel });
+        }
+      }
+    }
+  }
+  return triples;
+}
+
+function collectFeasibleSongOfStormsSpecials(seasonInfo, allowlist, previousWeather) {
+  const feasible = [];
+  for (const label of allowlist) {
+    if (!seasonInfo.Special.includes(label)) continue;
+    const triples = collectCompatibleBaselineTriples(seasonInfo, label, previousWeather);
+    if (triples.length > 0) feasible.push(label);
+  }
+  return feasible;
+}
+
+function pickRandomAlignedBaselineTriple(seasonInfo, specialLabel, previousWeather) {
+  const triples = collectCompatibleBaselineTriples(seasonInfo, specialLabel, previousWeather);
+  if (!triples.length) return null;
+  return triples[Math.floor(Math.random() * triples.length)];
+}
+
+function buildWeatherFieldsFromLabels(
+  temperatureLabel,
+  windLabel,
+  precipitationLabel,
+  seasonInfo,
+  weightModifiers
+) {
+  const tempProbability = calculateCandidateProbability(
+    seasonInfo.Temperature,
+    temperatureWeights,
+    temperatureLabel,
+    weightModifiers.temperature || {}
+  );
+  const windProbability = calculateCandidateProbability(seasonInfo.Wind, windWeights, windLabel, weightModifiers.wind);
+  const precipProbability = calculateCandidateProbability(
+    seasonInfo.Precipitation,
+    precipitationWeights,
+    precipitationLabel,
+    weightModifiers.precipitation || {}
+  );
+  return {
+    temperature: {
+      label: temperatureLabel,
+      emoji: temperatures.find((t) => t.label === temperatureLabel)?.emoji || '🌡️',
+      probability: `${tempProbability.toFixed(1)}%`
+    },
+    wind: {
+      label: windLabel,
+      emoji: winds.find((w) => w.label === windLabel)?.emoji || '💨',
+      probability: `${windProbability.toFixed(1)}%`
+    },
+    precipitation: {
+      label: precipitationLabel,
+      emoji: precipitations.find((p) => p.label === precipitationLabel)?.emoji || '🌧️',
+      probability: `${precipProbability.toFixed(1)}%`
+    }
+  };
+}
+
+function alignWeatherDocBaselineToSpecial(
+  weatherDoc,
+  seasonInfo,
+  village,
+  seasonForPeriod,
+  resolvedSpecialLabel,
+  previousWeather
+) {
+  const lookupSeason = seasonForPeriod.toLowerCase() === 'fall' ? 'autumn' : seasonForPeriod.toLowerCase();
+  const seasonKey = capitalizeFirstLetter(lookupSeason);
+  const weightModifiers = weatherWeightModifiers[village]?.[seasonKey] || {};
+  const triple = pickRandomAlignedBaselineTriple(seasonInfo, resolvedSpecialLabel, previousWeather);
+  if (!triple) {
+    throw new Error(
+      `Could not align baseline weather for ${resolvedSpecialLabel} (no valid temperature/wind/precipitation combination).`
+    );
+  }
+  const fields = buildWeatherFieldsFromLabels(
+    triple.temperatureLabel,
+    triple.windLabel,
+    triple.precipitationLabel,
+    seasonInfo,
+    weightModifiers
+  );
+  weatherDoc.temperature = fields.temperature;
+  weatherDoc.wind = fields.wind;
+  weatherDoc.precipitation = fields.precipitation;
+}
+
 // ------------------- Schedule Guaranteed Special Weather ------------------
 // Schedules guaranteed special weather for the next period -
 async function scheduleSpecialWeather(village, specialLabel, options = {}) {
@@ -1225,6 +1399,44 @@ async function scheduleSpecialWeather(village, specialLabel, options = {}) {
     const now = new Date();
     const { startUTC: startOfNextPeriodUTC, endUTC: endOfNextPeriodUTC } = getNextPeriodBounds(now);
 
+    const seasonForPeriod = getCurrentSeason(startOfNextPeriodUTC);
+    const seasonBundle = getSeasonInfoForVillageAndSeason(normalizedVillage, seasonForPeriod);
+    if (!seasonBundle) {
+      throw new Error(`No season data for ${normalizedVillage} in ${seasonForPeriod}.`);
+    }
+    const { seasonInfo } = seasonBundle;
+
+    let previousWeather = {};
+    try {
+      const history = await Weather.getRecentWeather(normalizedVillage, 3);
+      previousWeather = history[0] || {};
+    } catch (e) {
+      previousWeather = {};
+    }
+
+    const allowlist = options.songOfStormsAllowlist || SONG_OF_STORMS_SPECIAL_ALLOWLIST;
+    const feasible = collectFeasibleSongOfStormsSpecials(seasonInfo, allowlist, previousWeather);
+    if (feasible.length === 0) {
+      throw new Error(
+        `No Song of Storms special weather is feasible for ${normalizedVillage} in ${seasonBundle.seasonKey} (season constraints or consecutive Blight Rain).`
+      );
+    }
+
+    const requestedMatches = feasible.some(
+      (l) => l.toLowerCase() === specialEntry.label.toLowerCase()
+    );
+    const resolvedSpecialLabel = requestedMatches
+      ? specialEntry.label
+      : feasible[Math.floor(Math.random() * feasible.length)];
+
+    if (!requestedMatches) {
+      console.info(
+        `[weatherService.js] Song of Storms: requested "${specialEntry.label}" is not feasible for ${normalizedVillage} ${seasonBundle.seasonKey}; using "${resolvedSpecialLabel}".`
+      );
+    }
+
+    const resolvedEntry = specials.find((s) => s.label === resolvedSpecialLabel);
+
     // Find or create weather document for next period
     let weatherDoc = await findWeatherForPeriod(
       normalizedVillage,
@@ -1232,8 +1444,6 @@ async function scheduleSpecialWeather(village, specialLabel, options = {}) {
       endOfNextPeriodUTC,
       { exclusiveEnd: true, onlyPosted: false }
     );
-
-    const seasonForPeriod = getCurrentSeason(startOfNextPeriodUTC);
 
     if (!weatherDoc) {
       // Double-check for existing weather to prevent race conditions
@@ -1322,10 +1532,18 @@ async function scheduleSpecialWeather(village, specialLabel, options = {}) {
       );
     }
 
-    // Set special weather
+    alignWeatherDocBaselineToSpecial(
+      weatherDoc,
+      seasonInfo,
+      normalizedVillage,
+      seasonForPeriod,
+      resolvedSpecialLabel,
+      previousWeather
+    );
+
     weatherDoc.special = {
-      label: specialEntry.label,
-      emoji: specialEntry.emoji,
+      label: resolvedEntry.label,
+      emoji: resolvedEntry.emoji,
       probability: 'Guaranteed (Song of Storms)'
     };
 
@@ -1338,7 +1556,8 @@ async function scheduleSpecialWeather(village, specialLabel, options = {}) {
     return {
       weather: serializedWeather,
       startOfPeriod: startOfNextPeriodUTC,
-      endOfPeriod: endOfNextPeriodUTC
+      endOfPeriod: endOfNextPeriodUTC,
+      resolvedSpecialLabel
     };
   } catch (error) {
     console.error('[weatherService.js]: ❌ Error scheduling special weather:', error);
@@ -1537,6 +1756,7 @@ module.exports = {
   parseFahrenheit,
   parseWind,
   scheduleSpecialWeather,
+  SONG_OF_STORMS_SPECIAL_ALLOWLIST,
 
   // Weather damage calculation
   calculateWeatherDamage

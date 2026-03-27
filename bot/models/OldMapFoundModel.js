@@ -1,5 +1,6 @@
 // ============================================================================
-// OldMapFound Model - Stores old maps found during exploration (outside inventory)
+// OldMapFound Model - Stores old maps found during exploration (outside character inventory).
+// "Map #N" lines may exist in the items catalog for display/loot weights; addItemInventoryDatabase routes them here instead of inventories DB.
 // ============================================================================
 // Maps are stored here instead of the Item/inventory system to avoid polluting
 // the item database and random loot tables. Can be surfaced in inventory view later.

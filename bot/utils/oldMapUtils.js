@@ -30,6 +30,31 @@ function normalizeCharacterRef(characterRef) {
 }
 
 /**
+ * Recognize old-map loot lines from the items collection (e.g. "Map #12") for routing to OldMapFound, not inventory.
+ * @param {string} itemName
+ * @returns {number|null} map number 1–46, or null
+ */
+function normalizeOldMapItemNameString(itemName) {
+  if (itemName == null || typeof itemName !== 'string') return '';
+  return String(itemName)
+    .replace(/[\uFEFF\u200B\u200C\u200D]/g, '')
+    .replace(/\u00a0/g, ' ')
+    .replace(/\uFF03/g, '#')
+    .trim()
+    .replace(/\s+/g, ' ');
+}
+
+function parseOldMapNumberFromItemName(itemName) {
+  if (!itemName || typeof itemName !== 'string') return null;
+  const normalized = normalizeOldMapItemNameString(itemName);
+  const m = normalized.match(/^Map\s*#\s*(\d+)$/i);
+  if (!m) return null;
+  const n = parseInt(m[1], 10);
+  if (Number.isNaN(n) || n < 1 || n > 46) return null;
+  return n;
+}
+
+/**
  * Add an old map to a character's collection.
  * Assigns a short mapId (e.g. M12345).
  * @param {string} characterName - Character who found the map
@@ -267,6 +292,8 @@ async function getCharacterOldMapsWithDetails(characterRef) {
 }
 
 module.exports = {
+  normalizeOldMapItemNameString,
+  parseOldMapNumberFromItemName,
   addOldMapToCharacter,
   findOldMapByIdOrMapId,
   hasOldMap,

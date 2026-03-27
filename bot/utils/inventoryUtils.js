@@ -5,6 +5,8 @@
 
 const { handleError } = require("./globalErrorHandler");
 const logger = require("./logger");
+const { parseOldMapNumberFromItemName, addOldMapToCharacter } = require("./oldMapUtils");
+const { getRandomOldMap } = require("../data/oldMaps.js");
 // Google Sheets functionality removed
 const generalCategories = require("../models/GeneralItemCategories");
 const { v4: uuidv4 } = require('uuid');
@@ -176,6 +178,36 @@ async function syncToInventoryDatabase(character, item, interaction) {
       return;
     }
 
+    // Old maps must live in OldMapFound only — sync must not insert Map #N / "Old Map" into inventories DB.
+    const mapNumForSync = parseOldMapNumberFromItemName(itemNameForQuery);
+    if (mapNumForSync != null) {
+      const q = Math.max(1, Math.floor(Number(quantity)));
+      logger.info('INVENTORY', `syncToInventoryDatabase: "${itemNameForQuery}" → OldMapFound (not inventory), qty=${q}`);
+      for (let i = 0; i < q; i++) {
+        const doc = await addOldMapToCharacter(
+          { _id: character._id, userId: character.userId, name: character.name },
+          mapNumForSync,
+          String(item.obtain !== undefined ? item.obtain : 'Manual Sync').slice(0, 200)
+        );
+        if (!doc) throw new Error(`Could not save old map ${itemNameForQuery} to map collection`);
+      }
+      return;
+    }
+    if (/^old map$/i.test(itemNameForQuery)) {
+      const q = Math.max(1, Math.floor(Number(quantity)));
+      logger.info('INVENTORY', `syncToInventoryDatabase: generic "Old Map" → OldMapFound (random #), qty=${q}`);
+      for (let i = 0; i < q; i++) {
+        const pick = getRandomOldMap();
+        const doc = await addOldMapToCharacter(
+          { _id: character._id, userId: character.userId, name: character.name },
+          pick.number,
+          String(item.obtain !== undefined ? item.obtain : 'Manual Sync').slice(0, 200)
+        );
+        if (!doc) throw new Error('Could not save old map to map collection');
+      }
+      return;
+    }
+
     // ---- Addition (quantity > 0): find one existing (case-insensitive), $inc or insert ----
     const existingItem = await inventoryCollection.findOne({
       characterId: character._id,
@@ -281,6 +313,25 @@ async function addItemInventoryDatabase(characterId, itemName, quantity, interac
     if (!character) {
       throw new Error(`Character with ID ${characterId} not found`);
     }
+
+    const oldMapNumber = parseOldMapNumberFromItemName(itemName);
+    if (oldMapNumber != null) {
+      const q = Math.max(1, Math.floor(Number(quantity)));
+      logger.info('INVENTORY', `Old map "${itemName}" → OldMapFound (not character inventory), qty=${q}, obtain=${obtain || ''}`);
+      for (let i = 0; i < q; i++) {
+        const doc = await addOldMapToCharacter(
+          { _id: character._id, userId: character.userId, name: character.name },
+          oldMapNumber,
+          String(obtain || '').slice(0, 200)
+        );
+        if (!doc) {
+          throw new Error(`Could not save old map ${itemName} to map collection`);
+        }
+      }
+      logger.success('INVENTORY', `Saved ${q} old map row(s) to oldMapsFound for ${character.name}`);
+      return true;
+    }
+
     logger.info('INVENTORY', `📦 Processing inventory for ${character.name}`);
 
     const inventoriesConnection = await dbFunctions.connectToInventories();
@@ -638,6 +689,34 @@ const addItemsToDatabase = async (character, items, interaction) => {
     for (const item of items) {
       const qty = typeof item.quantity === 'number' && !isNaN(item.quantity) ? item.quantity : 0;
       if (qty <= 0) continue;
+
+      const rawName = String(item.itemName || '').trim();
+      const mapNumBatch = parseOldMapNumberFromItemName(rawName);
+      if (mapNumBatch != null) {
+        logger.info('INVENTORY', `addItemsToDatabase: "${rawName}" → OldMapFound (×${qty})`);
+        for (let i = 0; i < qty; i++) {
+          const doc = await addOldMapToCharacter(
+            { _id: character._id, userId: character.userId, name: character.name },
+            mapNumBatch,
+            'Batch add'
+          );
+          if (!doc) throw new Error(`Could not save old map ${rawName} to map collection`);
+        }
+        continue;
+      }
+      if (/^old map$/i.test(rawName)) {
+        logger.info('INVENTORY', `addItemsToDatabase: generic "Old Map" → OldMapFound (×${qty})`);
+        for (let i = 0; i < qty; i++) {
+          const pick = getRandomOldMap();
+          const doc = await addOldMapToCharacter(
+            { _id: character._id, userId: character.userId, name: character.name },
+            pick.number,
+            'Batch add'
+          );
+          if (!doc) throw new Error('Could not save old map to map collection');
+        }
+        continue;
+      }
 
       const itemName = String(item.itemName).trim().toLowerCase();
       const existingItem = await inventoryCollection.findOne({
