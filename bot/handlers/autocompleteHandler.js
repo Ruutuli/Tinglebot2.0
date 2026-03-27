@@ -1014,6 +1014,16 @@ async function handleAutocompleteInternal(interaction, commandName, focusedOptio
                 }
                 const maps = await getCharacterOldMapsWithDetails(ownerRef);
                 const unappraised = maps.filter(m => !m.appraised);
+                const ownerRefLabel =
+                  typeof ownerRef === 'string'
+                    ? `string:${ownerRef}`
+                    : `obj:_id=${ownerRef?._id} name=${ownerRef?.name}`;
+                if (unappraised.length === 0) {
+                  logger.info(
+                    'OLD_MAP',
+                    `autocomplete map_id: no unappraised maps userId=${interaction.user.id} characterName=${characterName} ownerRef=${ownerRefLabel} totalMaps=${maps.length}`
+                  );
+                }
                 const focusedValue = (focusedOption?.value || "").toString().toLowerCase();
                 const choices = unappraised
                   .map(m => {

@@ -19,6 +19,7 @@ const { sendDiscordDM } = require('@/utils/notificationService.js');
 const OldMapFound = require('@/models/OldMapFoundModel.js');
 const MapAppraisalRequest = require('@/models/MapAppraisalRequestModel.js');
 const ModCharacter = require('@/models/ModCharacterModel.js');
+const logger = require('@/utils/logger.js');
 
 function normalizeVillage(v) {
   return (v || '').trim().toLowerCase();
@@ -95,6 +96,10 @@ module.exports = {
           return interaction.editReply({ content: '❌ You must own that character.' });
         }
         const maps = await getCharacterOldMapsWithDetails({ _id: char._id, userId: char.userId, name: char.name });
+        logger.info(
+          'OLD_MAP',
+          `/map list userId=${interaction.user.id} characterId=${char._id} characterName=${char.name} mapCount=${maps.length}`
+        );
         if (maps.length === 0) {
           const emptyEmbed = new EmbedBuilder()
             .setTitle(`🗺️ Old maps — ${characterName}`)
@@ -145,11 +150,19 @@ module.exports = {
           await ModCharacter.findOne({ name: new RegExp(`^${characterName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'i') })
             .then(m => m && String(m.userId) === interaction.user.id ? m : null);
         if (!char) {
+          logger.info(
+            'OLD_MAP',
+            `/map appraisal-request: character not found or not owned userId=${interaction.user.id} characterName=${characterName} mapIdRaw=${JSON.stringify(mapIdStr)}`
+          );
           return interaction.editReply({ content: '❌ You must own the character who owns the map.' });
         }
 
         const mapDoc = await findOldMapByIdOrMapId(mapIdStr);
         if (!mapDoc) {
+          logger.info(
+            'OLD_MAP',
+            `/map appraisal-request: mapDoc not found userId=${interaction.user.id} characterId=${char._id} characterName=${char.name} mapIdRaw=${JSON.stringify(mapIdStr)} len=${mapIdStr ? String(mapIdStr).length : 0}`
+          );
           return interaction.editReply({ content: '❌ Map not found. Use a map ID (e.g. M12345) from `/map list`.' });
         }
         const mapOwnerCharacterId = mapDoc.characterId ? String(mapDoc.characterId) : '';
@@ -158,8 +171,16 @@ module.exports = {
         const ownerByLegacyName =
           !mapOwnerCharacterId && String(mapDoc.characterName || '').toLowerCase() === String(char.name || '').toLowerCase();
         if (!ownerById && !ownerByLegacyName) {
+          logger.info(
+            'OLD_MAP',
+            `/map appraisal-request: ownership mismatch userId=${interaction.user.id} requesterCharacterId=${requesterCharacterId} requesterName=${char.name} mapDoc._id=${mapDoc._id} mapDoc.mapId=${mapDoc.mapId || '—'} mapOwnerCharacterId=${mapOwnerCharacterId || 'empty'} mapDoc.characterName=${mapDoc.characterName || '—'} ownerById=${ownerById} ownerByLegacyName=${ownerByLegacyName}`
+          );
           return interaction.editReply({ content: '❌ That map does not belong to this character.' });
         }
+        logger.info(
+          'OLD_MAP',
+          `/map appraisal-request ok userId=${interaction.user.id} characterId=${requesterCharacterId} mapId=${mapDoc.mapId || '—'} oldMapFoundId=${mapDoc._id} appraiser=${appraiser}`
+        );
         if (mapDoc.appraised) {
           return interaction.editReply({ content: '❌ This map has already been appraised.' });
         }

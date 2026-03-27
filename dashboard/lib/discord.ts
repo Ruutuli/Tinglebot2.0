@@ -35,7 +35,7 @@ export function discordCdnAvatarUrl(
 export function normalizeModTaskDiscordAvatars<T extends {
   assignees?: Array<{ avatar?: string | null }>;
   completedBy?: { avatar?: string | null } | null;
-  comments?: Array<{ author?: { avatar?: string | null } }>;
+  comments?: Array<{ author?: { avatar?: string | null } | null }>;
 }>(task: T): T {
   const out = { ...task } as T;
   if (out.assignees?.length) {

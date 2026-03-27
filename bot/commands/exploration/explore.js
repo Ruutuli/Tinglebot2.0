@@ -5485,6 +5485,17 @@ module.exports = {
           chosenMapOldMap.number,
           location
          );
+         if (savedOldMapDoc) {
+          logger.info(
+           "OLD_MAP",
+           `[explore.js] old_map roll persisted expedition=${expeditionId} mapId=${savedOldMapDoc.mapId} _id=${savedOldMapDoc._id} characterId=${character._id} characterName=${character.name} userId=${character.userId} mapNumber=${chosenMapOldMap.number}`
+          );
+         } else {
+          logger.warn(
+           "OLD_MAP",
+           `[explore.js] old_map roll addOldMapToCharacter returned null expedition=${expeditionId} character=${character?.name} mapNumber=${chosenMapOldMap?.number}`
+          );
+         }
         } catch (err) {
          logger.error(
           "EXPLORE",
@@ -5949,6 +5960,17 @@ module.exports = {
              chosenMap.number,
              location
             );
+            if (ruinsSavedMapDoc) {
+             logger.info(
+              "OLD_MAP",
+              `[explore.js] ruins old_map persisted expedition=${expeditionId} mapId=${ruinsSavedMapDoc.mapId} _id=${ruinsSavedMapDoc._id} characterId=${ruinsCharacter._id} characterName=${ruinsCharacter.name} userId=${ruinsCharacter.userId} mapNumber=${chosenMap.number}`
+             );
+            } else {
+             logger.warn(
+              "OLD_MAP",
+              `[explore.js] ruins addOldMapToCharacter returned null expedition=${expeditionId} character=${ruinsCharacter?.name} mapNumber=${chosenMap?.number}`
+             );
+            }
            } catch (err) {
             logger.error(
              "EXPLORE",

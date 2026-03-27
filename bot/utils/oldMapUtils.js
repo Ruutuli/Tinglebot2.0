@@ -4,6 +4,7 @@
 
 const OldMapFound = require('../models/OldMapFoundModel.js');
 const { generateUniqueId } = require('./uniqueIdUtils.js');
+const logger = require('./logger.js');
 
 function asObjectIdString(value) {
   if (!value) return '';
@@ -38,6 +39,10 @@ function normalizeCharacterRef(characterRef) {
 async function addOldMapToCharacter(characterRef, mapNumber, locationFound = '') {
   const normalized = normalizeCharacterRef(characterRef);
   if (!normalized || typeof mapNumber !== 'number' || mapNumber < 1 || mapNumber > 46) {
+    logger.warn(
+      'OLD_MAP',
+      `addOldMapToCharacter skipped: invalid ref or mapNumber ref=${JSON.stringify(characterRef)} mapNumber=${mapNumber}`
+    );
     return null;
   }
 
@@ -53,7 +58,12 @@ async function addOldMapToCharacter(characterRef, mapNumber, locationFound = '')
   for (let attempt = 1; attempt <= MAX_MAP_ID_RETRIES; attempt += 1) {
     try {
       const mapId = generateUniqueId('M');
-      return await OldMapFound.create({ ...basePayload, mapId });
+      const doc = await OldMapFound.create({ ...basePayload, mapId });
+      logger.info(
+        'OLD_MAP',
+        `oldMapsFound created mapId=${doc.mapId} _id=${doc._id} characterId=${doc.characterId || 'null'} characterName=${doc.characterName} ownerUserId=${doc.ownerUserId || ''} mapNumber=${doc.mapNumber} location=${String(locationFound || '').slice(0, 80)}`
+      );
+      return doc;
     } catch (error) {
       const duplicateMapId = error?.code === 11000 && String(error?.message || '').includes('mapId');
       if (duplicateMapId && attempt < MAX_MAP_ID_RETRIES) continue;
@@ -69,12 +79,21 @@ async function addOldMapToCharacter(characterRef, mapNumber, locationFound = '')
  * @returns {Promise<import('mongoose').Document|null>}
  */
 async function findOldMapByIdOrMapId(idOrMapId) {
-  if (!idOrMapId || typeof idOrMapId !== 'string') return null;
-  const str = idOrMapId.trim();
-  if (/^[0-9a-fA-F]{24}$/.test(str)) {
-    return await OldMapFound.findById(str);
+  if (!idOrMapId || typeof idOrMapId !== 'string') {
+    logger.info('OLD_MAP', `findOldMapByIdOrMapId: invalid input type=${typeof idOrMapId}`);
+    return null;
   }
-  return await OldMapFound.findOne({ mapId: str });
+  const str = idOrMapId.trim();
+  const byMongoId = /^[0-9a-fA-F]{24}$/.test(str);
+  const doc = byMongoId ? await OldMapFound.findById(str) : await OldMapFound.findOne({ mapId: str });
+  logger.info(
+    'OLD_MAP',
+    `findOldMapByIdOrMapId: by=${byMongoId ? 'mongoId' : 'mapId'} query=${str.slice(0, 32)}${str.length > 32 ? '…' : ''} found=${!!doc}` +
+      (doc
+        ? ` _id=${doc._id} mapId=${doc.mapId || '—'} characterId=${doc.characterId || 'null'} characterName=${doc.characterName || '—'} appraised=${!!doc.appraised}`
+        : '')
+  );
+  return doc;
 }
 
 const charNameRegex = (name) =>
@@ -221,10 +240,19 @@ async function getCharacterOldMaps(characterRef) {
 async function getCharacterOldMapsWithDetails(characterRef) {
   if (!characterRef) return [];
   const ownerMatch = resolveOwnerMatch(characterRef);
-  if (!ownerMatch) return [];
+  if (!ownerMatch) {
+    logger.info('OLD_MAP', `getCharacterOldMapsWithDetails: no ownerMatch for ref=${typeof characterRef === 'string' ? characterRef : JSON.stringify({ id: characterRef?._id, name: characterRef?.name })}`);
+    return [];
+  }
   const docs = await OldMapFound.find(ownerMatch)
     .sort({ foundAt: 1 })
     .lean();
+  if (docs.length === 0) {
+    logger.info(
+      'OLD_MAP',
+      `getCharacterOldMapsWithDetails: no rows matchKeys=${Object.keys(ownerMatch).join(',')}`
+    );
+  }
   return docs.map((d) => ({
     _id: d._id,
     mapId: d.mapId || '',
