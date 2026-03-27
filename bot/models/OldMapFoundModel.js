@@ -10,6 +10,8 @@ const { Schema } = mongoose;
 
 const OldMapFoundSchema = new Schema({
   mapId: { type: String, default: '' },                   // Short display ID (e.g. M12345).
+  characterId: { type: Schema.Types.ObjectId, ref: 'Character', default: null, index: true },
+  ownerUserId: { type: String, default: '', index: true },
   characterName: { type: String, required: true, index: true },
   mapNumber: { type: Number, required: true, min: 1, max: 46 },
   foundAt: { type: Date, default: Date.now },
@@ -22,6 +24,8 @@ const OldMapFoundSchema = new Schema({
 }, { collection: 'oldMapsFound' });
 
 OldMapFoundSchema.index({ characterName: 1, mapNumber: 1 });
+OldMapFoundSchema.index({ characterId: 1, foundAt: 1 });
+OldMapFoundSchema.index({ characterId: 1, mapNumber: 1 });
 OldMapFoundSchema.index({ mapId: 1 }, { unique: true, sparse: true });
 
 module.exports = mongoose.model('OldMapFound', OldMapFoundSchema);

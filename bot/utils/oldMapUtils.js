@@ -5,6 +5,29 @@
 const OldMapFound = require('../models/OldMapFoundModel.js');
 const { generateUniqueId } = require('./uniqueIdUtils.js');
 
+function asObjectIdString(value) {
+  if (!value) return '';
+  try {
+    return value.toString();
+  } catch (_) {
+    return '';
+  }
+}
+
+function normalizeCharacterRef(characterRef) {
+  if (!characterRef) return null;
+  if (typeof characterRef === 'string') {
+    const characterName = characterRef.trim();
+    return characterName ? { characterName, characterId: '', ownerUserId: '' } : null;
+  }
+
+  const characterName = String(characterRef.characterName || characterRef.name || '').trim();
+  const characterId = asObjectIdString(characterRef.characterId || characterRef._id);
+  const ownerUserId = String(characterRef.ownerUserId || characterRef.userId || '').trim();
+  if (!characterName && !characterId) return null;
+  return { characterName, characterId, ownerUserId };
+}
+
 /**
  * Add an old map to a character's collection.
  * Assigns a short mapId (e.g. M12345).
@@ -12,18 +35,32 @@ const { generateUniqueId } = require('./uniqueIdUtils.js');
  * @param {number} mapNumber - Map number (1-46)
  * @param {string} [locationFound] - Optional location string (e.g. "H8 Q2")
  */
-async function addOldMapToCharacter(characterName, mapNumber, locationFound = '') {
-  if (!characterName || typeof mapNumber !== 'number' || mapNumber < 1 || mapNumber > 46) {
+async function addOldMapToCharacter(characterRef, mapNumber, locationFound = '') {
+  const normalized = normalizeCharacterRef(characterRef);
+  if (!normalized || typeof mapNumber !== 'number' || mapNumber < 1 || mapNumber > 46) {
     return null;
   }
-  const mapId = generateUniqueId('M');
-  const doc = await OldMapFound.create({
-    mapId,
-    characterName: String(characterName).trim(),
+
+  const basePayload = {
+    characterName: normalized.characterName || '',
+    characterId: normalized.characterId || null,
+    ownerUserId: normalized.ownerUserId || '',
     mapNumber,
     locationFound: String(locationFound || '').trim(),
-  });
-  return doc;
+  };
+
+  const MAX_MAP_ID_RETRIES = 8;
+  for (let attempt = 1; attempt <= MAX_MAP_ID_RETRIES; attempt += 1) {
+    try {
+      const mapId = generateUniqueId('M');
+      return await OldMapFound.create({ ...basePayload, mapId });
+    } catch (error) {
+      const duplicateMapId = error?.code === 11000 && String(error?.message || '').includes('mapId');
+      if (duplicateMapId && attempt < MAX_MAP_ID_RETRIES) continue;
+      throw error;
+    }
+  }
+  return null;
 }
 
 /**
@@ -43,16 +80,35 @@ async function findOldMapByIdOrMapId(idOrMapId) {
 const charNameRegex = (name) =>
   new RegExp(`^${String(name).trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'i');
 
+function resolveOwnerMatch(characterRef) {
+  const normalized = normalizeCharacterRef(characterRef);
+  if (!normalized) return null;
+  if (normalized.characterId && normalized.characterName) {
+    return {
+      $or: [
+        { characterId: normalized.characterId },
+        { characterId: null, characterName: charNameRegex(normalized.characterName) },
+      ],
+    };
+  }
+  if (normalized.characterId) {
+    return { characterId: normalized.characterId };
+  }
+  return { characterName: charNameRegex(normalized.characterName) };
+}
+
 /**
  * Check if a character has at least one of the given map number.
  * @param {string} characterName - Character to check
  * @param {number} mapNumber - Map number (1-46)
  * @returns {Promise<boolean>}
  */
-async function hasOldMap(characterName, mapNumber) {
-  if (!characterName || typeof mapNumber !== 'number') return false;
+async function hasOldMap(characterRef, mapNumber) {
+  if (!characterRef || typeof mapNumber !== 'number') return false;
+  const ownerMatch = resolveOwnerMatch(characterRef);
+  if (!ownerMatch) return false;
   const count = await OldMapFound.countDocuments({
-    characterName: charNameRegex(characterName),
+    ...ownerMatch,
     mapNumber,
   });
   return count > 0;
@@ -65,10 +121,12 @@ async function hasOldMap(characterName, mapNumber) {
  * @param {number} mapNumber - Map number (1-46)
  * @returns {Promise<boolean>}
  */
-async function hasAppraisedOldMap(characterName, mapNumber) {
-  if (!characterName || typeof mapNumber !== 'number') return false;
+async function hasAppraisedOldMap(characterRef, mapNumber) {
+  if (!characterRef || typeof mapNumber !== 'number') return false;
+  const ownerMatch = resolveOwnerMatch(characterRef);
+  if (!ownerMatch) return false;
   const count = await OldMapFound.countDocuments({
-    characterName: charNameRegex(characterName),
+    ...ownerMatch,
     mapNumber,
     appraised: true,
   });
@@ -82,10 +140,12 @@ async function hasAppraisedOldMap(characterName, mapNumber) {
  * @param {number} mapNumber - Map number (1-46)
  * @returns {Promise<boolean>}
  */
-async function hasAppraisedUnexpiredOldMap(characterName, mapNumber) {
-  if (!characterName || typeof mapNumber !== 'number') return false;
+async function hasAppraisedUnexpiredOldMap(characterRef, mapNumber) {
+  if (!characterRef || typeof mapNumber !== 'number') return false;
+  const ownerMatch = resolveOwnerMatch(characterRef);
+  if (!ownerMatch) return false;
   const count = await OldMapFound.countDocuments({
-    characterName: charNameRegex(characterName),
+    ...ownerMatch,
     mapNumber,
     appraised: true,
     redeemedAt: null,
@@ -100,10 +160,12 @@ async function hasAppraisedUnexpiredOldMap(characterName, mapNumber) {
  * @param {number} mapNumber - Map number (1-46)
  * @returns {Promise<boolean>}
  */
-async function hasAppraisedRedeemedOldMap(characterName, mapNumber) {
-  if (!characterName || typeof mapNumber !== 'number') return false;
+async function hasAppraisedRedeemedOldMap(characterRef, mapNumber) {
+  if (!characterRef || typeof mapNumber !== 'number') return false;
+  const ownerMatch = resolveOwnerMatch(characterRef);
+  if (!ownerMatch) return false;
   const count = await OldMapFound.countDocuments({
-    characterName: charNameRegex(characterName),
+    ...ownerMatch,
     mapNumber,
     appraised: true,
     redeemedAt: { $ne: null },
@@ -118,10 +180,12 @@ async function hasAppraisedRedeemedOldMap(characterName, mapNumber) {
  * @param {number} mapNumber - Map number (1-46)
  * @returns {Promise<import('mongoose').Document|null>}
  */
-async function findAndRedeemOldMap(characterName, mapNumber) {
-  if (!characterName || typeof mapNumber !== 'number') return null;
+async function findAndRedeemOldMap(characterRef, mapNumber) {
+  if (!characterRef || typeof mapNumber !== 'number') return null;
+  const ownerMatch = resolveOwnerMatch(characterRef);
+  if (!ownerMatch) return null;
   const doc = await OldMapFound.findOne({
-    characterName: charNameRegex(characterName),
+    ...ownerMatch,
     mapNumber,
     appraised: true,
     redeemedAt: null,
@@ -137,10 +201,12 @@ async function findAndRedeemOldMap(characterName, mapNumber) {
  * @param {string} characterName - Character to check
  * @returns {Promise<Array<{mapNumber: number, quantity: number}>>}
  */
-async function getCharacterOldMaps(characterName) {
-  if (!characterName) return [];
+async function getCharacterOldMaps(characterRef) {
+  if (!characterRef) return [];
+  const ownerMatch = resolveOwnerMatch(characterRef);
+  if (!ownerMatch) return [];
   const docs = await OldMapFound.aggregate([
-    { $match: { characterName: charNameRegex(characterName) } },
+    { $match: ownerMatch },
     { $group: { _id: '$mapNumber', quantity: { $sum: 1 } } },
     { $sort: { _id: 1 } },
   ]);
@@ -152,14 +218,18 @@ async function getCharacterOldMaps(characterName) {
  * @param {string} characterName - Character to check
  * @returns {Promise<Array<{_id: import('mongoose').Types.ObjectId, mapId: string, mapNumber: number, appraised: boolean, redeemedAt: Date|null, foundAt: Date, locationFound: string}>>}
  */
-async function getCharacterOldMapsWithDetails(characterName) {
-  if (!characterName) return [];
-  const docs = await OldMapFound.find({ characterName: charNameRegex(characterName) })
+async function getCharacterOldMapsWithDetails(characterRef) {
+  if (!characterRef) return [];
+  const ownerMatch = resolveOwnerMatch(characterRef);
+  if (!ownerMatch) return [];
+  const docs = await OldMapFound.find(ownerMatch)
     .sort({ foundAt: 1 })
     .lean();
   return docs.map((d) => ({
     _id: d._id,
     mapId: d.mapId || '',
+    characterId: d.characterId || null,
+    ownerUserId: d.ownerUserId || '',
     mapNumber: d.mapNumber,
     appraised: !!d.appraised,
     redeemedAt: d.redeemedAt || null,

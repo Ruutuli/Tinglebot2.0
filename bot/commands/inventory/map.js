@@ -94,7 +94,7 @@ module.exports = {
         if (!char) {
           return interaction.editReply({ content: '❌ You must own that character.' });
         }
-        const maps = await getCharacterOldMapsWithDetails(characterName);
+        const maps = await getCharacterOldMapsWithDetails({ _id: char._id, userId: char.userId, name: char.name });
         if (maps.length === 0) {
           const emptyEmbed = new EmbedBuilder()
             .setTitle(`🗺️ Old maps — ${characterName}`)
@@ -152,7 +152,12 @@ module.exports = {
         if (!mapDoc) {
           return interaction.editReply({ content: '❌ Map not found. Use a map ID (e.g. M12345) from `/map list`.' });
         }
-        if (String(mapDoc.characterName).toLowerCase() !== characterName.toLowerCase()) {
+        const mapOwnerCharacterId = mapDoc.characterId ? String(mapDoc.characterId) : '';
+        const requesterCharacterId = char?._id ? String(char._id) : '';
+        const ownerById = mapOwnerCharacterId && requesterCharacterId && mapOwnerCharacterId === requesterCharacterId;
+        const ownerByLegacyName =
+          !mapOwnerCharacterId && String(mapDoc.characterName || '').toLowerCase() === String(char.name || '').toLowerCase();
+        if (!ownerById && !ownerByLegacyName) {
           return interaction.editReply({ content: '❌ That map does not belong to this character.' });
         }
         if (mapDoc.appraised) {

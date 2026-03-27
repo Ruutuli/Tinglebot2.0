@@ -5480,21 +5480,31 @@ module.exports = {
        chosenMapOldMap = getRandomOldMap();
        if (!false) {
         try {
-         savedOldMapDoc = await addOldMapToCharacter(character.name, chosenMapOldMap.number, location);
+         savedOldMapDoc = await addOldMapToCharacter(
+          { _id: character._id, userId: character.userId, name: character.name },
+          chosenMapOldMap.number,
+          location
+         );
         } catch (err) {
+         logger.error(
+          "EXPLORE",
+          `[explore.js]❌ old_map_save_failed expedition=${expeditionId} character=${character?.name || "?"} map=${chosenMapOldMap?.number || "?"} location=${location} error=${err?.message || err}`
+         );
          handleInteractionError(err, interaction, { source: "explore.js old_map" });
         }
        }
-       // Add old map to gatheredItems for dashboard display
-       if (!party.gatheredItems) party.gatheredItems = [];
-       party.gatheredItems.push({
-        characterId: character._id,
-        characterName: character.name,
-        itemName: chosenMapOldMap ? `Map #${chosenMapOldMap.number}` : "Old Map",
-        quantity: 1,
-        emoji: "🗺️",
-       });
-       party.markModified("gatheredItems");
+       // Add old map to gatheredItems for dashboard display only if persistence succeeded.
+       if (savedOldMapDoc) {
+        if (!party.gatheredItems) party.gatheredItems = [];
+        party.gatheredItems.push({
+         characterId: character._id,
+         characterName: character.name,
+         itemName: chosenMapOldMap ? `Map #${chosenMapOldMap.number}` : "Old Map",
+         quantity: 1,
+         emoji: "🗺️",
+        });
+        party.markModified("gatheredItems");
+       }
        const mapIdStr = savedOldMapDoc?.mapId ? `\`${savedOldMapDoc.mapId}\`` : "—";
        // DM only the party member who found the map, not the whole party
        const finderUserId = party.characters[characterIndex]?.userId || interaction.user?.id;
@@ -5513,7 +5523,7 @@ module.exports = {
         .setColor(0x2ecc71)
         .setFooter({ text: "Roots of the Wild • Old Maps" });
        const client = interaction.client;
-       if (client) {
+       if (client && savedOldMapDoc) {
         failedNotifyEmbed = dmEmbed;
         for (const uid of mapDmUserIds) {
          try {
@@ -5640,9 +5650,13 @@ module.exports = {
         "**Yes** — Open the chest (1 item per party member, relics possible).\n" +
         `**No** — Continue exploring with </explore roll:${getExploreCommandId()}>.`;
       } else if (outcomeType === "old_map") {
-       const mapInfo = chosenMapOldMap
-        ? `**${character.name}** found **Map #${chosenMapOldMap.number}** in **${location}**!\n\nThe script is faded and hard to read—you'll need to take it to the Inariko Library to get it deciphered.\n\n**Saved to ${character.name}'s map collection.**`
-        : `**${character.name}** found an old map in **${location}**!\n\nThe script is faded and hard to read—you'll need to take it to the Inariko Library to get it deciphered.\n\n**Saved to ${character.name}'s map collection.**`;
+       const mapInfo = savedOldMapDoc
+        ? (chosenMapOldMap
+           ? `**${character.name}** found **Map #${chosenMapOldMap.number}** in **${location}**!\n\nThe script is faded and hard to read—you'll need to take it to the Inariko Library to get it deciphered.\n\n**Saved to ${character.name}'s map collection.**`
+           : `**${character.name}** found an old map in **${location}**!\n\nThe script is faded and hard to read—you'll need to take it to the Inariko Library to get it deciphered.\n\n**Saved to ${character.name}'s map collection.**`)
+        : (chosenMapOldMap
+           ? `**${character.name}** found **Map #${chosenMapOldMap.number}** in **${location}**!\n\nThe script is faded and hard to read, but there was a storage issue and it was **not saved** to their map collection. Please report this in bot reports with expedition ID \`${expeditionId}\`.`
+           : `**${character.name}** found an old map in **${location}**!\n\nThere was a storage issue and it was **not saved** to their map collection. Please report this in bot reports with expedition ID \`${expeditionId}\`.`);
        title = `🗺️ **Expedition: Old map found!**`;
        description =
         mapInfo + `\n\nFind out more [here](${OLD_MAPS_LINK}).\n\n↳ **Continue** ➾ See **Commands** below to take your turn.`;
@@ -5930,27 +5944,51 @@ module.exports = {
           let ruinsSavedMapDoc = null;
           if (!false) {
            try {
-            ruinsSavedMapDoc = await addOldMapToCharacter(ruinsCharacter.name, chosenMap.number, location);
+            ruinsSavedMapDoc = await addOldMapToCharacter(
+             { _id: ruinsCharacter._id, userId: ruinsCharacter.userId, name: ruinsCharacter.name },
+             chosenMap.number,
+             location
+            );
            } catch (err) {
+            logger.error(
+             "EXPLORE",
+             `[explore.js]❌ ruins_old_map_save_failed expedition=${expeditionId} character=${ruinsCharacter?.name || "?"} map=${chosenMap?.number || "?"} location=${location} error=${err?.message || err}`
+            );
             handleInteractionError(err, i, { source: "explore.js ruins old_map" });
            }
           }
-          // Add old map to gatheredItems for dashboard display
-          if (!freshParty.gatheredItems) freshParty.gatheredItems = [];
-          freshParty.gatheredItems.push({
-           characterId: ruinsCharacter._id,
-           characterName: ruinsCharacter.name,
-           itemName: `Map #${chosenMap.number}`,
-           quantity: 1,
-           emoji: "🗺️",
-          });
-          freshParty.markModified("gatheredItems");
+          // Add old map to gatheredItems for dashboard display only if persistence succeeded.
+          if (ruinsSavedMapDoc) {
+           if (!freshParty.gatheredItems) freshParty.gatheredItems = [];
+           freshParty.gatheredItems.push({
+            characterId: ruinsCharacter._id,
+            characterName: ruinsCharacter.name,
+            itemName: `Map #${chosenMap.number}`,
+            quantity: 1,
+            emoji: "🗺️",
+           });
+           freshParty.markModified("gatheredItems");
+          }
           const ruinsMapIdStr = ruinsSavedMapDoc?.mapId ? ` Map ID: \`${ruinsSavedMapDoc.mapId}\`.` : "";
-          resultDescription = summaryLine + `**${ruinsCharacter.name}** found **Map #${chosenMap.number}** in the ruins! The script is faded and hard to read—take it to the Inariko Library to get it deciphered.\n\n**Saved to ${ruinsCharacter.name}'s map collection.**${ruinsMapIdStr} Find out more about maps [here](${OLD_MAPS_LINK}).\n\n↳ **Continue** ➾ </explore roll:${getExploreCommandId()}> — id: \`${expeditionId}\` charactername: **${nextCharacter?.name ?? "—"}**`;
-          progressMsg += `Found Map #${chosenMap.number}; saved to map collection. Take to Inariko Library to decipher.`;
+          resultDescription = ruinsSavedMapDoc
+           ? summaryLine + `**${ruinsCharacter.name}** found **Map #${chosenMap.number}** in the ruins! The script is faded and hard to read—take it to the Inariko Library to get it deciphered.\n\n**Saved to ${ruinsCharacter.name}'s map collection.**${ruinsMapIdStr} Find out more about maps [here](${OLD_MAPS_LINK}).\n\n↳ **Continue** ➾ </explore roll:${getExploreCommandId()}> — id: \`${expeditionId}\` charactername: **${nextCharacter?.name ?? "—"}**`
+           : summaryLine + `**${ruinsCharacter.name}** found **Map #${chosenMap.number}** in the ruins! The script is faded and hard to read, but there was a storage issue and it was **not saved** to their map collection. Please report this in bot reports with expedition ID \`${expeditionId}\`.\n\nFind out more about maps [here](${OLD_MAPS_LINK}).\n\n↳ **Continue** ➾ </explore roll:${getExploreCommandId()}> — id: \`${expeditionId}\` charactername: **${nextCharacter?.name ?? "—"}**`;
+          progressMsg += ruinsSavedMapDoc
+           ? `Found Map #${chosenMap.number}; saved to map collection. Take to Inariko Library to decipher.`
+           : `Found Map #${chosenMap.number}; map persistence failed (not saved).`;
           lootForLog = { itemName: `Map #${chosenMap.number}`, emoji: "" };
           pushProgressLog(freshParty, ruinsCharacter.name, "ruins_explored", progressMsg, lootForLog, ruinsCostsForLog);
-          pushProgressLog(freshParty, ruinsCharacter.name, "old_map", `Found Map #${chosenMap.number} in ruins in ${location}; take to Inariko Library to decipher.`, lootForLog, undefined, new Date());
+          pushProgressLog(
+           freshParty,
+           ruinsCharacter.name,
+           "old_map",
+           ruinsSavedMapDoc
+            ? `Found Map #${chosenMap.number} in ruins in ${location}; take to Inariko Library to decipher.`
+            : `Found Map #${chosenMap.number} in ruins in ${location}; map was not saved due to persistence error.`,
+           lootForLog,
+           undefined,
+           new Date()
+          );
           // DM only the party member who found the map, not the whole party
           const ruinsFinderUserId = freshParty.characters[ruinsCharIndex]?.userId || i.user?.id;
           const ruinsMapDmUserIds = ruinsFinderUserId ? [ruinsFinderUserId] : [];
@@ -5969,7 +6007,7 @@ module.exports = {
            .setColor(0x2ecc71)
            .setFooter({ text: "Roots of the Wild • Old Maps" });
           const client = i.client;
-          if (client) {
+          if (client && ruinsSavedMapDoc) {
            ruinsFailedNotifyEmbed = dmEmbed;
            for (const uid of ruinsMapDmUserIds) {
             try {
@@ -8050,12 +8088,16 @@ module.exports = {
       const whoHasUnexpiredMap = [];
       try {
         for (const pc of party.characters) {
-          const hasIt = await hasAppraisedUnexpiredOldMap(pc.name, quadWithMap.oldMapNumber);
-          if (hasIt) whoHasUnexpiredMap.push(pc.name);
+          const hasIt = await hasAppraisedUnexpiredOldMap({ _id: pc._id, name: pc.name, userId: pc.userId }, quadWithMap.oldMapNumber);
+          if (hasIt) whoHasUnexpiredMap.push(pc);
         }
         if (whoHasUnexpiredMap.length > 0) {
-          const mapOwnerName = whoHasUnexpiredMap[0];
-          const redeemed = await findAndRedeemOldMap(mapOwnerName, quadWithMap.oldMapNumber);
+          const mapOwnerCharRef = whoHasUnexpiredMap[0];
+          const mapOwnerName = mapOwnerCharRef?.name || "Unknown";
+          const redeemed = await findAndRedeemOldMap(
+            { _id: mapOwnerCharRef?._id, name: mapOwnerCharRef?.name, userId: mapOwnerCharRef?.userId },
+            quadWithMap.oldMapNumber
+          );
           if (redeemed) {
             if (leadsTo === "chest") {
               const chestResult = await grantExplorationChestLootToParty(party, locationMove, interaction);
@@ -8131,8 +8173,8 @@ module.exports = {
           // Only mention "map location" if someone in the party has this map but hasn't appraised it yet
           const whoHasMapUnappraised = [];
           for (const pc of party.characters) {
-            const hasMap = await hasOldMap(pc.name, quadWithMap.oldMapNumber);
-            const hasAppraised = await hasAppraisedOldMap(pc.name, quadWithMap.oldMapNumber);
+            const hasMap = await hasOldMap({ _id: pc._id, name: pc.name, userId: pc.userId }, quadWithMap.oldMapNumber);
+            const hasAppraised = await hasAppraisedOldMap({ _id: pc._id, name: pc.name, userId: pc.userId }, quadWithMap.oldMapNumber);
             if (hasMap && !hasAppraised) whoHasMapUnappraised.push(pc.name);
           }
           if (whoHasMapUnappraised.length > 0) {

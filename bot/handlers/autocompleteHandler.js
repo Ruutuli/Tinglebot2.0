@@ -1002,7 +1002,17 @@ async function handleAutocompleteInternal(interaction, commandName, focusedOptio
                   break;
                 }
                 const { getCharacterOldMapsWithDetails } = require('@/utils/oldMapUtils.js');
-                const maps = await getCharacterOldMapsWithDetails(characterName);
+                let ownerRef = characterName;
+                const ownedCharacter = await fetchCharacterByNameAndUserId(characterName, interaction.user.id);
+                if (ownedCharacter) {
+                  ownerRef = { _id: ownedCharacter._id, userId: ownedCharacter.userId, name: ownedCharacter.name };
+                } else {
+                  const modCharacter = getModCharacterByName(characterName);
+                  if (modCharacter && String(modCharacter.userId) === String(interaction.user.id)) {
+                    ownerRef = { _id: modCharacter._id, userId: modCharacter.userId, name: modCharacter.name };
+                  }
+                }
+                const maps = await getCharacterOldMapsWithDetails(ownerRef);
                 const unappraised = maps.filter(m => !m.appraised);
                 const focusedValue = (focusedOption?.value || "").toString().toLowerCase();
                 const choices = unappraised

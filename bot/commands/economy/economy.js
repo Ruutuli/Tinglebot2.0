@@ -109,6 +109,11 @@ function isSpiritOrb(itemName) {
   return itemName.toLowerCase() === 'spirit orb';
 }
 
+function isOldMapItem(itemName) {
+  const normalized = String(itemName || '').trim();
+  return /^map #\d+$/i.test(normalized) || /^old map$/i.test(normalized);
+}
+
 module.exports = {
  data: new SlashCommandBuilder()
   .setName("economy")
@@ -449,6 +454,27 @@ for (const { name } of cleanedItems) {
         color: 0xFF0000, // Red color
         title: '❌ Spirit Orb Protection',
         description: 'Spirit Orbs cannot be gifted. They are sacred items that can only be used by their original owner.',
+        image: {
+          url: 'https://storage.googleapis.com/tinglebot/Graphics/border.png'
+        },
+        footer: {
+          text: 'Item Protection'
+        }
+      }],
+      ephemeral: true,
+    });
+    return;
+  }
+}
+
+// ------------------- Prevent gifting Old Maps -------------------
+for (const { name } of cleanedItems) {
+  if (isOldMapItem(name)) {
+    await interaction.editReply({
+      embeds: [{
+        color: 0xFF0000, // Red color
+        title: '❌ Old Map Protection',
+        description: 'Old Maps are bound to the character who found them and cannot be gifted or transferred.',
         image: {
           url: 'https://storage.googleapis.com/tinglebot/Graphics/border.png'
         },
@@ -2060,6 +2086,27 @@ for (const { quantity } of cleanedItems) {
         },
         footer: {
           text: 'Quantity Validation'
+        }
+      }],
+      ephemeral: true,
+    });
+    return;
+  }
+}
+
+// ------------------- Prevent transferring Old Maps -------------------
+for (const { name } of cleanedItems) {
+  if (isOldMapItem(name)) {
+    await interaction.editReply({
+      embeds: [{
+        color: 0xFF0000, // Red color
+        title: '❌ Old Map Protection',
+        description: 'Old Maps are bound to the character who found them and cannot be transferred.',
+        image: {
+          url: 'https://storage.googleapis.com/tinglebot/Graphics/border.png'
+        },
+        footer: {
+          text: 'Item Protection'
         }
       }],
       ephemeral: true,

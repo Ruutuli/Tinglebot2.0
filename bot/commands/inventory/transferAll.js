@@ -10,6 +10,11 @@ const { syncToInventoryDatabase } = require('@/utils/inventoryUtils');
 const { checkInventorySync } = require('@/utils/characterUtils');
 const logger = require('@/utils/logger');
 
+function isOldMapItem(itemName) {
+  const normalized = String(itemName || '').trim();
+  return /^map #\d+$/i.test(normalized) || /^old map$/i.test(normalized);
+}
+
 // ============================================================================
 // ------------------- Command Definition -------------------
 // ============================================================================
@@ -107,6 +112,26 @@ module.exports = {
       if (!inventoryItems.length) {
         return await interaction.editReply({
           content: `❌ No items found in ${fromChar.name}'s inventory to transfer.`,
+          ephemeral: true
+        });
+      }
+
+      // Old maps are character-bound and cannot be moved by bulk transfer.
+      const blockedMapItems = inventoryItems
+        .filter((item) => isOldMapItem(item.itemName))
+        .map((item) => item.itemName);
+      if (blockedMapItems.length > 0) {
+        const uniqueBlocked = [...new Set(blockedMapItems)];
+        return await interaction.editReply({
+          embeds: [
+            new EmbedBuilder()
+              .setColor('#FF0000')
+              .setTitle('❌ Transfer Blocked: Character-Bound Maps')
+              .setDescription(
+                `Old Maps are bound to the character who found them and cannot be transferred.\n\nBlocked item(s): ${uniqueBlocked.map((name) => `\`${name}\``).join(', ')}`
+              )
+              .setFooter({ text: 'Map Protection' })
+          ],
           ephemeral: true
         });
       }
