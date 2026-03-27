@@ -88,7 +88,7 @@ Used on **`Creature`** items in `elixir-ingredient-labels.json`. Each value is t
 
 | `effectFamily` | Role | What it does (Tinglebot) |
 |------------------|------|---------------------------|
-| `chilly` | Resistance / weather | Less damage from water-tagged threats; helps vs blight-rain-style penalties (`waterResistance`, `blightResistance`). |
+| `chilly` | Resistance / weather | Less damage from water-tagged threats (`waterResistance` only — not blight). |
 | `spicy` | Cold resistance | Less damage from ice/cold enemies; expedition **cold** hazard protection when rules allow. |
 | `fireproof` | Heat / fire resistance | Less damage from fire enemies; expedition **heat** hazard protection when rules allow. |
 | `electro` | Shock resistance | Less damage from electric enemies; expedition **thunder** hazard protection when rules allow. |
@@ -100,7 +100,7 @@ Used on **`Creature`** items in `elixir-ingredient-labels.json`. Each value is t
 | `tough` | Defense | Defense boost for the same combat loop. |
 | `sneaky` | Stealth | Stealth and flee bonuses on gather, loot, travel. |
 | `fairy` | Special recovery | Fairy-tonic style outcomes (strong heal / special rules) — define in resolver; not a standard resistance line. |
-| `bright` | Light / exploration | Dark-area / night / cave bonuses, trap stumble reduction — **define in resolver**; no `ELIXIR_EFFECTS` entry yet. |
+| `bright` | Light / blight protection | **`blightResistance`** for blight-rain infection reduction; plus dark-area / night / cave bonuses, trap stumble reduction — **define in resolver**; no `ELIXIR_EFFECTS` entry yet. |
 | `sticky` | Traction | Rain / ice / slip penalties on travel or climb checks — **define in resolver**; no `ELIXIR_EFFECTS` entry yet. |
 
 ### Standard reference: `element` (monster parts)
@@ -143,7 +143,7 @@ Values come from `ELIXIR_EFFECTS` when the elixir is applied (often `1.5` for re
 | `fireResistance` | `fireproof` | Same **percentage** mitigation for **fire**-type attackers. **Does not** affect blight rain infection (only `blightResistance` does). |
 | `coldResistance` | `spicy` | Same for **ice**-type attackers; `ice` damage type aliases to cold resistance in `buffModule.getDamageResistance`. |
 | `waterResistance` | `chilly` | Same for **water**-type attackers in `encounterModule`. |
-| `blightResistance` | `chilly` | In **blight rain** (travel, gather, loot, help wanted, etc.), lowers blight infection chance **−30% per point** of stat in those paths (values clamped); fire resistance is not part of this. |
+| `blightResistance` | `chilly` | In **blight rain**, lowers infection chance by **`stat × 0.1`** in `travel.js` and **`stat × 0.3`** in gather, loot, help wanted, raids, etc. (then clamped). Fire resistance does not affect blight. |
 | `speedBoost` | `hasty` | **Explore:** added to the d100-style roll in `rngModule.calculateFinalValue`. **Travel:** `calculateSpeedBuff` adds to speed when consumed on travel. |
 | `stealthBoost` | `sneaky` | **Explore:** added to the same roll in `calculateFinalValue` (with speed). **Gather/loot:** stealth calculations in `buffModule` / `loot` flows. |
 | `fleeBoost` | `sneaky` | **Flee:** `rngModule.attemptFlee` adds **`fleeBoost × 15%`** to base flee chance (capped). |
