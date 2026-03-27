@@ -3868,6 +3868,15 @@ const createBoostAppliedEmbed = (boostData) => {
       inline: false
     });
   }
+  // Entertainer Crafting (Song of Double Time): non-native Entertainers need a second voucher before the extra item applies
+  if (boostData.entertainerCraftingNeedsSecondVoucher) {
+    appliedFields.push({
+      name: '📌 **Note**',
+      value:
+        '> **Song of Double Time** only works if the booster is acting as an Entertainer when the target crafts. If your **permanent job is not Entertainer**, you must use a **second Job Voucher** via `/item` (Job Voucher, job **Entertainer**) **before** the boosted character crafts — accepting this boost already used your first voucher.',
+      inline: false
+    });
+  }
 
   const embed = new EmbedBuilder()
     .setTitle(`⚡ Boost Applied: ${boostData.boostName || 'Unknown Boost'}`)

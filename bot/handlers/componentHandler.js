@@ -2788,10 +2788,12 @@ async function continueCraftingProcess(interaction, character, materialsUsed, co
         activeBoost &&
         activeBoost.category === 'Crafting' &&
         (activeBoost.boosterJob || '').trim().toLowerCase() === 'entertainer';
-      if (isEntertainerCraftingBoost) {
-        const needsEntertainerSecondVoucher =
-          boosterCharacter && isBoosterUsingVoucherForJob(boosterCharacter, 'Entertainer');
-        if (needsEntertainerSecondVoucher && !activeBoost.boosterUsedSecondVoucher) {
+      if (isEntertainerCraftingBoost && boosterCharacter) {
+        const boosterIsNativeEntertainer =
+          (boosterCharacter.job || '').trim().toLowerCase() === 'entertainer';
+        const boosterIsCurrentlyEntertainer =
+          getEffectiveJob(boosterCharacter).trim().toLowerCase() === 'entertainer';
+        if (!boosterIsNativeEntertainer && !boosterIsCurrentlyEntertainer) {
           const voucherError = getJobVoucherErrorMessage('BOOSTER_ENTERTAINER_MUST_USE_SECOND_VOUCHER_FIRST', {
             boosterName: freshCharacter.boostedBy || 'Entertainer',
             targetName: freshCharacter.name

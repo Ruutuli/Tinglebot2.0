@@ -540,6 +540,17 @@ function createBoostRequestEmbedData(targetCharacter, boosterCharacter, category
 function createBoostAppliedEmbedData(booster, targetCharacter, requestData, boost) {
  const boosterJob = getEffectiveJob(booster);
  const staminaBefore = requestData.boosterStaminaBeforeDeduction ?? booster.currentStamina;
+  let entertainerCraftingNeedsSecondVoucher = requestData.entertainerCraftingNeedsSecondVoucher === true;
+  if (
+    requestData.entertainerCraftingNeedsSecondVoucher !== true &&
+    requestData.entertainerCraftingNeedsSecondVoucher !== false &&
+    booster
+  ) {
+    entertainerCraftingNeedsSecondVoucher =
+      requestData.category === 'Crafting' &&
+      String(requestData.boosterJob || '').trim().toLowerCase() === 'entertainer' &&
+      String(booster.job || '').trim().toLowerCase() !== 'entertainer';
+  }
  return {
    boostedBy: booster.name,
    boosterJob: boosterJob,
@@ -555,7 +566,8 @@ function createBoostAppliedEmbedData(booster, targetCharacter, requestData, boos
    boosterMaxStamina: booster.maxStamina,
    boosterMaxHearts: booster.maxHearts,
    boostRequestId: requestData.boostRequestId,
-   status: requestData.status || 'accepted'
+   status: requestData.status || 'accepted',
+   entertainerCraftingNeedsSecondVoucher
  };
 }
 
@@ -1295,6 +1307,12 @@ async function handleBoostAccept(interaction) {
   requestData.boosterOwnerId = booster.userId; // Store booster's Discord user ID for fulfillment pings
   requestData.requestedByIcon = (await fetchCharacterByName(requestData.targetCharacter))?.icon;
   requestData.boosterIcon = booster.icon;
+
+  // Song of Double Time: permanent job must be Entertainer OR booster uses a second voucher before craft
+  requestData.entertainerCraftingNeedsSecondVoucher =
+    requestData.category === 'Crafting' &&
+    boosterJob === 'Entertainer' &&
+    String(booster.job || '').trim().toLowerCase() !== 'entertainer';
 
  // Update the target character's boostedBy field
  const targetCharacter = await fetchCharacterByName(requestData.targetCharacter);

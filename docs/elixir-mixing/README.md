@@ -80,7 +80,19 @@ The new system adds a **resolution layer**, not a replacement.
 | File | Purpose |
 |------|---------|
 | `docs/elixir-type-mapping.json` | Maps each `ItemModel.type[]` value (e.g. `Creature`, `Monster`) to an **ingredientRole** for mixing: critter, monsterPart, optionalFood, gear, etc. |
-| `docs/elixir-ingredient-labels.json` | **Sparse** map: only canon critters (effect class) and elemental monster parts (colored jelly / elemental keese wing / elemental lizalfos tail). Omitted `itemName` → no label; use **itemRarity** for neutral part potency. Each entry has `effectFamily` and/or `element` only when set—no `notes`, no all-null rows. |
+| `docs/elixir-ingredient-labels.json` | **Sparse** map: `itemName` → `effectFamily` and/or `element`. **Organic materials only** — live critters (`Creature`), body parts / slime / bone / tails / wings (`Monster`), and monster-derived fluids or extracts. **Excluded** from this file: ancient tech (cores, gears, screws… use `type: Monster` in data but no label here), minerals (`Like Like Stone`), cloth (`Gibdo Bandage`). `Poe Soul` is labeled `element: undead` (exception). Omitted names → no label. No `notes`, no all-null rows. |
+
+**Custom vocabulary (Tinglebot — resolver must define behavior):**
+
+| Key | Values | Meaning |
+|-----|--------|--------|
+| `effectFamily` | `extract` | `Monster Extract`: **catalyst** / potency bump where recipes allow. |
+| `effectFamily` | `fairy` | Fairy / Mock Fairy: **fairy-tonic** style outcomes (healing/special). |
+| `effectFamily` | `bright`, `sticky` | Light- and slip-control brew lines. |
+| `element` | `light` | Blessed Butterfly — pairs with `bright` for light-themed mixes. |
+| `element` | `undead` | Gibdo bone/guts/wing, `Spider's Eye`, **`Poe Soul`** — blight- or curse-themed modifiers. (Skull items stay unlabeled.) |
+
+Canon-aligned families (`mighty`, `chilly`, `electro`, …) should stay aligned with `ELIXIR_EFFECTS` / `elixirModule.js` where those elixirs exist.
 
 **Resolver order (recommended):**
 
@@ -90,6 +102,24 @@ The new system adds a **resolution layer**, not a replacement.
 4. Otherwise, neutral parts use **itemRarity** only; gear may still use `ItemModel.element` when relevant.
 
 New fields on `ItemModel` are optional later; the sidecar JSON keeps mixing data versioned next to exports.
+
+### Coverage check (`tinglebot.items.json` export)
+
+Run against current `docs/tinglebot.items.json` (763 items):
+
+| Pool | In export | In `elixir-ingredient-labels.json` | Notes |
+|------|-----------|-------------------------------------|--------|
+| **Creature** (`type` includes `Creature`) | 39 | 38 | **Insect Parts** has no row — generic mixed bundle; resolver should not infer one `effectFamily`. |
+| **Monster** (`type` includes `Monster`) | 64 | 16 | **Sparse by design:** neutral horns/fangs/guts (no element) use **`itemRarity`** only. |
+
+**Monster names with no label (expected):**
+
+- **Ancient line (6):** `Ancient Core`, `Ancient Gear`, `Ancient Screw`, `Ancient Shaft`, `Ancient Spring`, `Giant Ancient Core` — `type: Monster` in export; no `effectFamily` here (not “organic elixir critter” tags).
+- **Non-organic (2):** `Gibdo Bandage`, `Like Like Stone` — excluded from this file.
+- **Cooked / meal (5):** `Monster Cake`, `Monster Curry`, `Monster Rice Balls`, `Monster Soup`, `Monster Stew` — food, not mixer ingredients unless you add a rule later.
+- **Neutral organic parts (34):** e.g. `Bokoblin Horn`, `Chuchu Jelly`, `Golden Skull`, `Keese Wing`, `Lizalfos Tail`, `Octo Balloon`, `Stal Skull`, … — no `element` / no special family; potency from rarity in code. (Undead-tagged items without skulls: `Spider's Eye`, `Poe Soul`, plus Gibdo parts.)
+
+Every key in `elixir-ingredient-labels.json` matches an `itemName` in the export (no typos).
 
 ---
 
