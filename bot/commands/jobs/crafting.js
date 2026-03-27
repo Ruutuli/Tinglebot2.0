@@ -25,7 +25,7 @@ const { getJobPerk, isVillageExclusiveJob } = require('../../modules/jobsModule'
 const { validateJobVoucher, activateJobVoucher, fetchJobVoucherItem, deactivateJobVoucher, getJobVoucherErrorMessage } = require('../../modules/jobVoucherModule');
 const { capitalizeWords, formatDateTime } = require('../../modules/formattingModule');
 const { applyCraftingBoost, applyCraftingStaminaBoost, applyCraftingMaterialBoost, applyCraftingQuantityBoost } = require('../../modules/boostIntegration');
-const { clearBoostAfterUse, getEffectiveJob, retrieveBoostingRequestFromTempDataByCharacter } = require('./boosting');
+const { clearBoostAfterUse, getEffectiveJob, isBoosterUsingVoucherForJob, retrieveBoostingRequestFromTempDataByCharacter } = require('./boosting');
 const { info, success, error } = require('@/utils/logger');
 
 // ------------------- Utility Functions -------------------
@@ -607,8 +607,8 @@ module.exports = {
       if (teacherStaminaContribution > 0 && freshCharacter.boostedBy) {
         const { fetchCharacterByName } = require('@/database/db');
         const boosterCharacter = await fetchCharacterByName(freshCharacter.boostedBy);
-        const isBoosterNativeTeacher = boosterCharacter && boosterCharacter.job === 'Teacher' && !boosterCharacter.jobVoucher;
-        if (!isBoosterNativeTeacher) {
+        const needsTeacherSecondVoucher = boosterCharacter && isBoosterUsingVoucherForJob(boosterCharacter, 'Teacher');
+        if (needsTeacherSecondVoucher) {
           const activeBoost = await retrieveBoostingRequestFromTempDataByCharacter(freshCharacter.name);
           if (!activeBoost || !activeBoost.boosterUsedSecondVoucher) {
             const voucherError = getJobVoucherErrorMessage('BOOSTER_MUST_USE_SECOND_VOUCHER_FIRST', { boosterName: freshCharacter.boostedBy || 'Teacher', targetName: freshCharacter.name });
@@ -631,9 +631,9 @@ module.exports = {
           activeBoost.category === 'Crafting' &&
           (activeBoost.boosterJob || '').trim().toLowerCase() === 'entertainer';
         if (isEntertainerCraftingBoost) {
-          const isBoosterNativeEntertainer =
-            boosterCharacter && boosterCharacter.job === 'Entertainer' && !boosterCharacter.jobVoucher;
-          if (!isBoosterNativeEntertainer && !activeBoost.boosterUsedSecondVoucher) {
+          const needsEntertainerSecondVoucher =
+            boosterCharacter && isBoosterUsingVoucherForJob(boosterCharacter, 'Entertainer');
+          if (needsEntertainerSecondVoucher && !activeBoost.boosterUsedSecondVoucher) {
             const voucherError = getJobVoucherErrorMessage('BOOSTER_ENTERTAINER_MUST_USE_SECOND_VOUCHER_FIRST', {
               boosterName: freshCharacter.boostedBy || 'Entertainer',
               targetName: freshCharacter.name

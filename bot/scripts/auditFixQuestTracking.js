@@ -81,6 +81,13 @@ function toNonNegInt(value) {
   return Math.max(0, Math.floor(n));
 }
 
+function isHardGroupMemeCompletion(completion) {
+  if (!completion || typeof completion !== "object") return false;
+  if (completion.slotOnlyTurnIn === true) return true;
+  const title = String(completion.questTitle || "").toLowerCase();
+  return title.includes("group art meme (hard)");
+}
+
 function defaultQuestTracking() {
   return {
     bot: { completed: 0, pending: 0, pendingSlotOnly: 0 },
@@ -297,6 +304,25 @@ function applyFixesToUser(userDoc) {
   }
 
   const actualUnique = countUniqueQuestCompletions(q.completions);
+
+  // Backfill hard meme completions that were recorded before slotOnlyTurnIn was consistently persisted.
+  // This is needed so orb-eligible pending does not incorrectly include hard meme credits.
+  const completionList = Array.isArray(q.completions) ? q.completions : [];
+  const slotOnlyDetected = completionList.filter((c) => isHardGroupMemeCompletion(c)).length;
+  if (slotOnlyDetected > 0) {
+    let backfilledFlags = 0;
+    completionList.forEach((completion) => {
+      if (isHardGroupMemeCompletion(completion) && completion.slotOnlyTurnIn !== true) {
+        completion.slotOnlyTurnIn = true;
+        backfilledFlags += 1;
+      }
+    });
+    if (backfilledFlags > 0) {
+      changes.push(`fix: backfill slotOnlyTurnIn (+${backfilledFlags})`);
+      changed = true;
+    }
+  }
+
   const hasSlotOnlyTracking =
     toNonNegInt(q.bot.pendingSlotOnly) > 0 ||
     (Array.isArray(q.completions) && q.completions.some((c) => c && c.slotOnlyTurnIn === true));
@@ -313,6 +339,34 @@ function applyFixesToUser(userDoc) {
     q.bot.pending = q.bot.completed;
     changes.push(`fix: bot pending 0 → ${q.bot.completed} (= bot.completed)`);
     changed = true;
+  }
+
+  // If we have a complete in-memory completion history for this user, normalize split pools:
+  // - q.bot.pending: orb-eligible
+  // - q.bot.pendingSlotOnly: hard meme slot-only
+  // Avoid this when history is clearly truncated (bot.completed > actualUnique).
+  if (slotOnlyDetected > 0 && q.bot.completed <= actualUnique && actualUnique > 0) {
+    const nonSlotDetected = Math.max(0, actualUnique - slotOnlyDetected);
+    const consumedFromBot = Array.isArray(q.turnIns?.history)
+      ? q.turnIns.history.reduce((sum, e) => sum + toNonNegInt(e?.fromBot), 0)
+      : 0;
+    const consumedFromBotSlotOnly = Array.isArray(q.turnIns?.history)
+      ? q.turnIns.history.reduce((sum, e) => sum + toNonNegInt(e?.fromBotSlotOnly), 0)
+      : 0;
+    const expectedBotPending = Math.max(0, nonSlotDetected - consumedFromBot);
+    const expectedSlotOnlyPending = Math.max(0, slotOnlyDetected - consumedFromBotSlotOnly);
+
+    if (
+      toNonNegInt(q.bot.pending) !== expectedBotPending ||
+      toNonNegInt(q.bot.pendingSlotOnly) !== expectedSlotOnlyPending
+    ) {
+      q.bot.pending = expectedBotPending;
+      q.bot.pendingSlotOnly = expectedSlotOnlyPending;
+      changes.push(
+        `fix: rebalance pending pools (orb=${expectedBotPending}, slotOnly=${expectedSlotOnlyPending})`
+      );
+      changed = true;
+    }
   }
 
   const warnings = [];

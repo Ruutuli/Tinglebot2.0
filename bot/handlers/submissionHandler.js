@@ -392,8 +392,13 @@ async function handleSubmissionCompletion(interaction) {
       tokenIncrease: entry.tokenIncrease
     }));
 
+    const breakdownSynced =
+      finalTokenAmount !== totalTokens
+        ? { ...breakdown, tokensPerPerson: finalTokenAmount, finalTotal: finalTokenAmount }
+        : breakdown;
+
     submissionData.finalTokenAmount = finalTokenAmount;
-    submissionData.tokenCalculation = breakdown;
+    submissionData.tokenCalculation = breakdownSynced;
     submissionData.updatedAt = new Date();
     if (boostEffects.length > 0) {
       submissionData.boostEffects = boostEffects;

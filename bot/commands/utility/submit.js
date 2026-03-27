@@ -688,6 +688,23 @@ module.exports = {
           tokenIncrease: entry.tokenIncrease
         }));
 
+        let writingBreakdown = tokenCalculation.breakdown;
+        if (finalTokenAmount !== tokenCalculation.tokensPerPerson) {
+          const baseCalc = tokenCalculation.breakdown.calculation || '';
+          const updatedCalc = baseCalc.includes('Research Stipend')
+            ? baseCalc
+            : baseCalc.replace(
+                `= ${tokenCalculation.tokensPerPerson} tokens per person`,
+                `= ${finalTokenAmount} tokens per person (Research Stipend 1.5×)`
+              );
+          writingBreakdown = {
+            ...tokenCalculation.breakdown,
+            tokensPerPerson: finalTokenAmount,
+            finalTotal: finalTokenAmount,
+            calculation: updatedCalc
+          };
+        }
+
         // Create a unique submission ID and save to database
         const submissionId = generateUniqueId('W');
         const submissionData = {
@@ -699,7 +716,7 @@ module.exports = {
           title,
           wordCount,
           finalTokenAmount,
-          tokenCalculation: tokenCalculation.breakdown,
+          tokenCalculation: writingBreakdown,
           link,
           description,
           questEvent: questId,

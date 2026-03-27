@@ -682,6 +682,12 @@ function getEffectiveJob(character) {
     return (character.jobVoucher && character.jobVoucherJob) ? character.jobVoucherJob : character.job;
 }
 
+/**
+ * Ballad of the Goddess (Entertainer passive token bonus) runs only when this module
+ * distributes rewards: Quest model quests completed via processQuestCompletion (e.g. RP
+ * tracking, timers, mod hooks). Help Wanted / submission-only quest completion in
+ * helpWantedModule does not call processQuestCompletion — no automatic Entertainer bonus there.
+ */
 async function buildQuestRewardContext(quest, participants = []) {
     const context = {};
     context.entertainerBonus = await detectEntertainerBonus(participants);
@@ -1687,7 +1693,16 @@ async function processArtQuestCompletionFromSubmission(submissionData, userId) {
         }
         
         // Find the quest
-        const quest = await findQuestSafely(questID);
+        let quest;
+        try {
+            quest = await findQuestSafely(questID);
+        } catch (questError) {
+            if (questError.message && questError.message.includes('Quest not found:')) {
+                console.log(`[questRewardModule.js] ⚠️ Submission references missing quest ${questID}. Skipping quest completion processing.`);
+                return { success: false, reason: 'Quest not found', questMissing: true };
+            }
+            throw questError;
+        }
         
         // Get participant before checking quest status
         const participant = quest.getParticipant(userId);
@@ -1777,7 +1792,16 @@ async function processWritingQuestCompletionFromSubmission(submissionData, userI
         }
         
         // Find the quest
-        const quest = await findQuestSafely(questID);
+        let quest;
+        try {
+            quest = await findQuestSafely(questID);
+        } catch (questError) {
+            if (questError.message && questError.message.includes('Quest not found:')) {
+                console.log(`[questRewardModule.js] ⚠️ Submission references missing quest ${questID}. Skipping quest completion processing.`);
+                return { success: false, reason: 'Quest not found', questMissing: true };
+            }
+            throw questError;
+        }
         
         // Get participant before checking quest status
         const participant = quest.getParticipant(userId);

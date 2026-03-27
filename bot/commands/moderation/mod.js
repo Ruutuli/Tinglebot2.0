@@ -2035,16 +2035,16 @@ async function handleApprove(interaction) {
         return interaction.editReply({ content: `⚠️ Submission with ID \`${submissionId}\` not found.`, ephemeral: true });
       }
   
-    const { userId, collab, category = 'art', finalTokenAmount, title, messageUrl } = submission;
+    const { userId, collab, finalTokenAmount, title, messageUrl } = submission;
     
-    // Get tokensPerPerson from tokenCalculation breakdown if available
-    // Otherwise, use finalTokenAmount (for backward compatibility with old submissions)
-    let tokensPerPerson = finalTokenAmount;
-    if (submission.tokenCalculation && typeof submission.tokenCalculation === 'object') {
-      tokensPerPerson = submission.tokenCalculation.tokensPerPerson || 
-                        submission.tokenCalculation.finalTotal || 
-                        finalTokenAmount;
-    }
+    // finalTokenAmount is the canonical post-boost per-person total (Scholar Research Stipend, Teacher art, etc.).
+    // Prefer it over tokenCalculation for payout; fall back only if legacy submission lacks finalTokenAmount.
+    const tokensPerPerson =
+      finalTokenAmount != null
+        ? finalTokenAmount
+        : (submission.tokenCalculation?.tokensPerPerson ??
+            submission.tokenCalculation?.finalTotal ??
+            0);
   
     if (!messageUrl) {
       return interaction.editReply({ 

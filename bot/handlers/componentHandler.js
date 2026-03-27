@@ -2739,6 +2739,7 @@ async function continueCraftingProcess(interaction, character, materialsUsed, co
     const { 
       clearBoostAfterUse, 
       getEffectiveJob, 
+      isBoosterUsingVoucherForJob,
       retrieveBoostingRequestFromTempDataByCharacter 
     } = require('../commands/jobs/boosting');
     const { 
@@ -2766,8 +2767,8 @@ async function continueCraftingProcess(interaction, character, materialsUsed, co
     // ------------------- Teacher Stamina: Booster must have manually used 2nd voucher (only if Teacher via voucher) -------------------
     if (continueData.teacherStaminaContribution > 0 && freshCharacter.boostedBy) {
       const boosterCharacter = await fetchCharacterByName(freshCharacter.boostedBy);
-      const isBoosterNativeTeacher = boosterCharacter && boosterCharacter.job === 'Teacher' && !boosterCharacter.jobVoucher;
-      if (!isBoosterNativeTeacher) {
+      const needsTeacherSecondVoucher = boosterCharacter && isBoosterUsingVoucherForJob(boosterCharacter, 'Teacher');
+      if (needsTeacherSecondVoucher) {
         const activeBoost = await retrieveBoostingRequestFromTempDataByCharacter(freshCharacter.name);
         if (!activeBoost || !activeBoost.boosterUsedSecondVoucher) {
           const voucherError = getJobVoucherErrorMessage('BOOSTER_MUST_USE_SECOND_VOUCHER_FIRST', { boosterName: freshCharacter.boostedBy || 'Teacher', targetName: freshCharacter.name });
@@ -2788,9 +2789,9 @@ async function continueCraftingProcess(interaction, character, materialsUsed, co
         activeBoost.category === 'Crafting' &&
         (activeBoost.boosterJob || '').trim().toLowerCase() === 'entertainer';
       if (isEntertainerCraftingBoost) {
-        const isBoosterNativeEntertainer =
-          boosterCharacter && boosterCharacter.job === 'Entertainer' && !boosterCharacter.jobVoucher;
-        if (!isBoosterNativeEntertainer && !activeBoost.boosterUsedSecondVoucher) {
+        const needsEntertainerSecondVoucher =
+          boosterCharacter && isBoosterUsingVoucherForJob(boosterCharacter, 'Entertainer');
+        if (needsEntertainerSecondVoucher && !activeBoost.boosterUsedSecondVoucher) {
           const voucherError = getJobVoucherErrorMessage('BOOSTER_ENTERTAINER_MUST_USE_SECOND_VOUCHER_FIRST', {
             boosterName: freshCharacter.boostedBy || 'Entertainer',
             targetName: freshCharacter.name

@@ -3427,7 +3427,9 @@ async function checkSubmissionApproval(messageUrl, client) {
 }
 
 // ------------------- Function: completeQuestFromSubmission -------------------
-// Completes a quest when a mod approves an art/writing submission (immediately upon approval)
+// Completes a quest when a mod approves an art/writing submission (immediately upon approval).
+// Note: Entertainer "Ballad of the Goddess" passive tokens are handled in questRewardModule
+// for Quest-model RP flows only; Help Wanted completions here do not invoke that path.
 async function completeQuestFromSubmission(quest, submissionData, client) {
   try {
     // Resolve completing character from first tagged character (so dashboard and character bio show completion)

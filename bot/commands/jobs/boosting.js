@@ -62,9 +62,8 @@ const BOOST_CATEGORIES = [
   { name: "Traveling", value: "Traveling" }
 ];
 
-// Disabled due to timing/weather cycle bugs. Before re-enabling: set to true and verify weather
-// service day-boundary logic and Song of Storms scheduled weather posting work correctly.
-const SONG_OF_STORMS_ENABLED = false;
+// Re-enabled: Song of Storms uses weatherService scheduled posting. Set false to disable quickly if issues arise.
+const SONG_OF_STORMS_ENABLED = true;
 const SONG_OF_STORMS_VILLAGES = ['Rudania', 'Inariko', 'Vhintl'];
 // Lightning Storm excluded by design (in weatherData.specials but not choosable for Song of Storms).
 const SONG_OF_STORMS_SPECIAL_WEATHER = [
@@ -226,6 +225,19 @@ function formatBoostCategoryName(category) {
  */
 function getEffectiveJob(character) {
   return (character.jobVoucher && character.jobVoucherJob) ? character.jobVoucherJob : character.job;
+}
+
+/**
+ * True when the booster is temporarily that job only via voucher (permanent job differs).
+ * Used so unrelated vouchers (e.g. Cook on a native Entertainer) do not require a "second" boost voucher.
+ */
+function isBoosterUsingVoucherForJob(boosterCharacter, jobName) {
+  if (!boosterCharacter || !jobName || typeof jobName !== 'string') return false;
+  if (!boosterCharacter.jobVoucher || !boosterCharacter.jobVoucherJob || !boosterCharacter.job) return false;
+  const voucherJob = boosterCharacter.jobVoucherJob.trim().toLowerCase();
+  const permanentJob = boosterCharacter.job.trim().toLowerCase();
+  const target = jobName.trim().toLowerCase();
+  return voucherJob === target && permanentJob !== target;
 }
 
 /**
@@ -470,9 +482,12 @@ function validateVillageCompatibility(targetCharacter, boosterCharacter, isTesti
  // Log for debugging cross-village issues
  logger.info('BOOST', `Village validation: target ${targetCharacter?.name} in "${targetVillage}", booster ${boosterCharacter?.name} in "${boosterVillage}", testing: ${isTestingChannel}`);
  
- // If either village is empty, that's a data issue - warn but allow (safer to err on side of allowing)
- if (!targetVillage || !boosterVillage) {
+ if (!isTestingChannel && (!targetVillage || !boosterVillage)) {
    logger.warn('BOOST', `Village data missing - target: "${targetVillage}", booster: "${boosterVillage}"`);
+   return {
+     valid: false,
+     error: `❌ **Village data missing**\n\nBoth characters must have a **current village** set in the database before requesting or accepting a boost.\n\n• **${targetCharacter.name}:** ${targetCharacter.currentVillage || '_(not set)_'}\n• **${boosterCharacter.name}:** ${boosterCharacter.currentVillage || '_(not set)_'}\n\n💡 Use </travel:1379850586987430009> so your character is in a village, or ask staff if the sheet is out of sync.`
+   };
  }
  
  if (targetVillage !== boosterVillage && !isTestingChannel) {
@@ -2950,6 +2965,7 @@ async function clearBoostAfterUse(character, options = {}) {
 // ============================================================================
 
 module.exports.getEffectiveJob = getEffectiveJob;
+module.exports.isBoosterUsingVoucherForJob = isBoosterUsingVoucherForJob;
 module.exports.isBoostActive = isBoostActive;
 module.exports.getActiveBoostEffect = getActiveBoostEffect;
 module.exports.getRemainingBoostTime = getRemainingBoostTime;

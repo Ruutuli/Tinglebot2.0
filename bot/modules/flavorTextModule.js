@@ -1008,9 +1008,9 @@ const BOOST_FLAVOR_MESSAGES = {
       "🔍 Shared effort knocks up to 3 stamina off your personal cost while the Teacher covers the gap."
     ],
     Looting: [
-      "🎓 Combat Insight adds a studied flourish—loot rolls climb by up to 20% after the lecture.",
-      "📚 Weak-point diagrams pay off, nudging the loot check up by a solid fifth.",
-      "🔍 Tactical notes sharpen your timing so the loot value surges by twenty percent."
+      "🎓 Combat Insight adds a studied flourish—loot rolls climb by up to ~20% after the lecture (rounded).",
+      "📚 Weak-point diagrams pay off, nudging the loot check up by about a fifth.",
+      "🔍 Tactical notes sharpen your timing so the loot value surges by roughly twenty percent."
     ],
     Tokens: [
       "🎓 Critique & Composition turns sketches into showcases—visual submissions pay 50% more tokens.",
