@@ -74,6 +74,20 @@ interface AssignmentRule {
   keywords: string[];
 }
 
+/**
+ * Substring match on task title + description; keep in sync with
+ * `bot/handlers/modTodoReactionHandler.js`.
+ *
+ * Duty roster (primary) — tune keywords when duties change:
+ * - Fern: Admin Discord, Monthly Updates, NPC Management, Suggestion Box, New Member Management.
+ * - Reaver: Website Management, Quests, Member Lore, Lore Management, Reservations (shared).
+ * - Ruu: Member Quests Review, Accepting Intros, Bot Management.
+ * - Mata: Mod Meeting Minutes, Accepting Applications, Reservations (shared), Quests/Intros (shared).
+ * - Toki: FAQs, Graphics, Mechanics & Balancing, Activity Check, Discord Management.
+ *
+ * Overlapping keywords are intentional (shared threads, backups, or joint review). Multiple
+ * rules can match one task; assignees are every mod whose keywords hit and who has mod role.
+ */
 const AUTO_ASSIGNMENT_RULES: AssignmentRule[] = [
   {
     discordId: "635948726686580747",
@@ -96,6 +110,8 @@ const AUTO_ASSIGNMENT_RULES: AssignmentRule[] = [
       "website management",
       "website",
       "site update",
+      "page",
+      "rootsofthewild",
       "member quests review",
       "member quest review",
       "member events review",
@@ -108,6 +124,8 @@ const AUTO_ASSIGNMENT_RULES: AssignmentRule[] = [
       "website management",
       "website",
       "site update",
+      "page",
+      "rootsofthewild",
       "quests",
       "quest",
       "quest posting",
@@ -146,7 +164,7 @@ const AUTO_ASSIGNMENT_RULES: AssignmentRule[] = [
       "bot update",
       "bot bug",
       "discord management",
-      "discord",
+      "discord server",
       "server management",
     ],
   },
@@ -187,7 +205,7 @@ const AUTO_ASSIGNMENT_RULES: AssignmentRule[] = [
       "balance",
       "game balance",
       "discord management",
-      "discord",
+      "discord server",
       "server management",
       "graphics creation",
       "graphics",
