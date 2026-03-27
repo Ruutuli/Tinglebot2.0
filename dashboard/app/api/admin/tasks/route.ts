@@ -8,7 +8,11 @@ import { NextRequest, NextResponse } from "next/server";
 import { connect } from "@/lib/db";
 import { getSession, isAdminUser } from "@/lib/session";
 import { isModeratorUser } from "@/lib/moderator";
-import { discordApiRequest } from "@/lib/discord";
+import {
+  discordApiRequest,
+  discordCdnAvatarUrl,
+  normalizeModTaskDiscordAvatars,
+} from "@/lib/discord";
 import { logger } from "@/utils/logger";
 
 const COLUMNS = ["repeating", "todo", "in_progress", "pending", "done"] as const;
@@ -280,9 +284,7 @@ async function fetchAssignableMods(): Promise<Assignee[]> {
     mods.push({
       discordId: member.user.id,
       username: member.user.global_name || member.user.username,
-      avatar: member.user.avatar
-        ? `https://cdn.discordapp.com/avatars/${member.user.id}/${member.user.avatar}.png`
-        : null,
+      avatar: discordCdnAvatarUrl(member.user.id, member.user.avatar ?? null),
     });
   }
 
@@ -346,11 +348,13 @@ export async function GET(req: NextRequest) {
       query["assignees.discordId"] = assignee;
     }
 
-    const tasks = await ModTask.find(query)
+    const tasksRaw = await ModTask.find(query)
       .sort({ column: 1, order: 1, createdAt: -1 })
       .lean();
 
-    // Group tasks by column
+    const tasks = tasksRaw.map((t) => normalizeModTaskDiscordAvatars(t));
+
+    // Group tasks by column (after normalizing Discord avatar URLs for animated profiles)
     const grouped: Record<Column, typeof tasks> = {
       repeating: [],
       todo: [],
@@ -539,7 +543,10 @@ export async function POST(req: NextRequest) {
     const task = new ModTask(taskData);
     await task.save();
 
-    return NextResponse.json(task.toObject(), { status: 201 });
+    return NextResponse.json(
+      normalizeModTaskDiscordAvatars(task.toObject()),
+      { status: 201 }
+    );
   } catch (e) {
     logger.error("api/admin/tasks POST", e instanceof Error ? e.message : String(e));
     return NextResponse.json(

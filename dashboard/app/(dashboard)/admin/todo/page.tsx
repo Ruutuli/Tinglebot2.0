@@ -131,6 +131,12 @@ function toDiscordAppUrl(url: string | null | undefined): string {
   return url.replace(/^https:\/\/discord\.com/, "discord://discord.com");
 }
 
+/** Animated Discord avatars (hash prefix a_) must use .gif; .png 404s in the browser. */
+function discordAvatarUrlFromHash(userId: string, avatarHash: string): string {
+  const ext = avatarHash.startsWith("a_") ? "gif" : "png";
+  return `https://cdn.discordapp.com/avatars/${userId}/${avatarHash}.${ext}`;
+}
+
 function getTaskPermalink(taskId: string): string {
   if (typeof window === "undefined") return `/admin/todo?task=${encodeURIComponent(taskId)}`;
   return `${window.location.origin}/admin/todo?task=${encodeURIComponent(taskId)}`;
@@ -2054,7 +2060,7 @@ function AdminTodoPageContent() {
             id: user.id, 
             username: user.username, 
             avatar: user.avatar 
-              ? `https://cdn.discordapp.com/avatars/${user.id}/${user.avatar}.png`
+              ? discordAvatarUrlFromHash(user.id, user.avatar)
               : undefined 
           } : null}
           onClose={handleCloseModal}

@@ -6,7 +6,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getSession, isAdminUser } from "@/lib/session";
 import { isModeratorUser } from "@/lib/moderator";
-import { discordApiRequest } from "@/lib/discord";
+import { discordApiRequest, discordCdnAvatarUrl } from "@/lib/discord";
 import { logger } from "@/utils/logger";
 
 interface GuildMember {
@@ -93,9 +93,7 @@ export async function GET(req: NextRequest) {
         mods.push({
           discordId: member.user.id,
           username: member.user.global_name || member.user.username,
-          avatar: member.user.avatar
-            ? `https://cdn.discordapp.com/avatars/${member.user.id}/${member.user.avatar}.png`
-            : null,
+          avatar: discordCdnAvatarUrl(member.user.id, member.user.avatar ?? null),
         });
       }
     }

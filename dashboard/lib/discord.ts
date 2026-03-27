@@ -6,6 +6,64 @@
 
 const DISCORD_API_BASE = "https://discord.com/api/v10";
 
+/**
+ * Discord animated avatars use a hash prefixed with "a_" and must be served as .gif.
+ * Building .../a_xxx.png returns 404; browsers then show broken assignee images on the tasks UI.
+ */
+export function normalizeDiscordCdnAvatarUrl(url: string | null | undefined): string | null {
+  if (!url) return null;
+  const m = url.match(
+    /^(https:\/\/cdn\.discordapp\.com\/avatars\/\d+\/)(a_[^./]+)\.png(\?[^#]*)?$/
+  );
+  if (m) return `${m[1]}${m[2]}.gif${m[3] ?? ""}`;
+  return url;
+}
+
+export function discordCdnAvatarUrl(
+  userId: string,
+  avatarHash: string | null | undefined
+): string | null {
+  if (!avatarHash) return null;
+  if (avatarHash.startsWith("http://") || avatarHash.startsWith("https://")) {
+    return normalizeDiscordCdnAvatarUrl(avatarHash);
+  }
+  const ext = avatarHash.startsWith("a_") ? "gif" : "png";
+  return `https://cdn.discordapp.com/avatars/${userId}/${avatarHash}.${ext}`;
+}
+
+/** Fix stored .png URLs for animated avatars on task payloads from the API. */
+export function normalizeModTaskDiscordAvatars<T extends {
+  assignees?: Array<{ avatar?: string | null }>;
+  completedBy?: { avatar?: string | null } | null;
+  comments?: Array<{ author?: { avatar?: string | null } }>;
+}>(task: T): T {
+  const out = { ...task } as T;
+  if (out.assignees?.length) {
+    out.assignees = out.assignees.map((a) => ({
+      ...a,
+      avatar: normalizeDiscordCdnAvatarUrl(a.avatar ?? null),
+    }));
+  }
+  if (out.completedBy) {
+    out.completedBy = {
+      ...out.completedBy,
+      avatar: normalizeDiscordCdnAvatarUrl(out.completedBy.avatar ?? null),
+    };
+  }
+  if (out.comments?.length) {
+    out.comments = out.comments.map((c) => ({
+      ...c,
+      author: c.author
+        ? {
+            ...c.author,
+            avatar: normalizeDiscordCdnAvatarUrl(c.author.avatar ?? null),
+          }
+        : c.author,
+    }));
+  }
+  return out;
+}
+
 // Cache for userHasGuildRole results to avoid rate limiting
 const roleCheckCache = new Map<string, { hasRole: boolean; expiresAt: number }>();
 const ROLE_CHECK_CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes

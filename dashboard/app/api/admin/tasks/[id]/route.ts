@@ -11,7 +11,11 @@ import { connect } from "@/lib/db";
 import { getSession, isAdminUser } from "@/lib/session";
 import { isModeratorUser } from "@/lib/moderator";
 import { logger } from "@/utils/logger";
-import { discordApiRequest } from "@/lib/discord";
+import {
+  discordApiRequest,
+  discordCdnAvatarUrl,
+  normalizeModTaskDiscordAvatars,
+} from "@/lib/discord";
 
 const COLUMNS = ["repeating", "todo", "in_progress", "pending", "done"] as const;
 const PRIORITIES = ["low", "medium", "high", "urgent"] as const;
@@ -92,17 +96,6 @@ function calculateNextDue(frequency: Frequency, fromDate: Date = new Date()): Da
 }
 
 /**
- * Build a Discord CDN avatar URL from user ID and avatar hash
- */
-function buildAvatarUrl(userId: string, avatarHash: string | null): string | undefined {
-  if (!avatarHash) return undefined;
-  if (avatarHash.startsWith("http://") || avatarHash.startsWith("https://")) {
-    return avatarHash;
-  }
-  return `https://cdn.discordapp.com/avatars/${userId}/${avatarHash}.png`;
-}
-
-/**
  * Send a comment to Discord - either as a reply to the original message,
  * or as a standalone message in the fallback channel
  */
@@ -117,7 +110,8 @@ async function postCommentToDiscord(
     const baseUrl = (process.env.NEXT_PUBLIC_APP_URL || "https://tinglebot.xyz").replace(/\/$/, "");
     const taskUrl = `${baseUrl}/admin/todo?task=${taskId}`;
 
-    const avatarUrl = buildAvatarUrl(comment.author.discordId, comment.author.avatar ?? null);
+    const avatarUrl =
+      discordCdnAvatarUrl(comment.author.discordId, comment.author.avatar ?? null) ?? undefined;
 
     const embed = {
       title: `📋 ${taskTitle}`,
@@ -182,7 +176,7 @@ async function postChecklistUpdateToDiscord(
       ? Math.round((checklistProgress.done / checklistProgress.total) * 100) 
       : 0;
 
-    const avatarUrl = buildAvatarUrl(userId, userAvatar);
+    const avatarUrl = discordCdnAvatarUrl(userId, userAvatar) ?? undefined;
 
     const embed = {
       title: `📋 ${taskTitle}`,
@@ -265,7 +259,7 @@ export async function GET(
       return NextResponse.json({ error: "Task not found" }, { status: 404 });
     }
 
-    return NextResponse.json(task);
+    return NextResponse.json(normalizeModTaskDiscordAvatars(task));
   } catch (e) {
     logger.error("api/admin/tasks/[id] GET", e instanceof Error ? e.message : String(e));
     return NextResponse.json(
@@ -607,8 +601,8 @@ export async function PUT(
       }
 
       return NextResponse.json({
-        task: updatedTask,
-        newTask: newTask.toObject(),
+        task: updatedTask ? normalizeModTaskDiscordAvatars(updatedTask) : updatedTask,
+        newTask: normalizeModTaskDiscordAvatars(newTask.toObject()),
         message: "Repeating task completed and new instance created",
       });
     }
@@ -654,7 +648,9 @@ export async function PUT(
       }
     }
 
-    return NextResponse.json(updatedTask);
+    return NextResponse.json(
+      updatedTask ? normalizeModTaskDiscordAvatars(updatedTask) : updatedTask
+    );
   } catch (e) {
     logger.error("api/admin/tasks/[id] PUT", e instanceof Error ? e.message : String(e));
     return NextResponse.json(
