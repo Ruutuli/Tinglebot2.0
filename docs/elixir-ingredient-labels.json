@@ -1,0 +1,31 @@
+{
+  "version": 1,
+  "labels": {
+    "Bladed Rhino Beetle": { "effectFamily": "mighty" },
+    "Cold Darner": { "effectFamily": "chilly" },
+    "Electric Darner": { "effectFamily": "electro", "element": "electric" },
+    "Energetic Rhino Beetle": { "effectFamily": "energizing" },
+    "Fireproof Lizard": { "effectFamily": "fireproof", "element": "fire" },
+    "Hearty Lizard": { "effectFamily": "hearty" },
+    "Hightail Lizard": { "effectFamily": "hasty" },
+    "Hot-Footed Frog": { "effectFamily": "hasty" },
+    "Restless Cricket": { "effectFamily": "energizing" },
+    "Rugged Rhino Beetle": { "effectFamily": "tough" },
+    "Smotherwing Butterfly": { "effectFamily": "fireproof", "element": "fire" },
+    "Summerwing Butterfly": { "effectFamily": "spicy" },
+    "Sunset Firefly": { "effectFamily": "sneaky" },
+    "Thunderwing Butterfly": { "effectFamily": "electro", "element": "electric" },
+    "Tireless Frog": { "effectFamily": "enduring" },
+    "Warm Darner": { "effectFamily": "spicy" },
+    "Winterwing Butterfly": { "effectFamily": "chilly" },
+    "Red Chuchu Jelly": { "element": "fire" },
+    "White Chuchu Jelly": { "element": "ice" },
+    "Yellow Chuchu Jelly": { "element": "electric" },
+    "Electric Keese Wing": { "element": "electric" },
+    "Fire Keese Wing": { "element": "fire" },
+    "Ice Keese Wing": { "element": "ice" },
+    "Icy Lizalfos Tail": { "element": "ice" },
+    "Red Lizalfos Tail": { "element": "fire" },
+    "Yellow Lizalfos Tail": { "element": "electric" }
+  }
+}

@@ -1,0 +1,162 @@
+{
+  "$comment": "Maps ItemModel.type[] values to elixir-mixing ingredientRole. Used with docs/elixir-ingredient-labels.json for itemName-specific effectFamily/element.",
+  "version": 1,
+  "typeToMixingRole": {
+    "Creature": {
+      "ingredientRole": "critter",
+      "effectFamilySource": "label",
+      "elementSource": "label",
+      "notes": "effectFamily and element come from elixir-ingredient-labels.json by itemName. Critters define which elixir family the brew trends toward."
+    },
+    "Monster": {
+      "ingredientRole": "monsterPart",
+      "effectFamilySource": "none",
+      "elementSource": "labelOrNeutral",
+      "notes": "Usually no effect family; contributes potency via itemRarity. Colored jellies / elemental wings use labels for element (fire, ice, electric)."
+    },
+    "Ancient Parts": {
+      "ingredientRole": "monsterPart",
+      "effectFamilySource": "none",
+      "elementSource": "none",
+      "notes": "Treat like high-tier monster parts for mix budget."
+    },
+    "Plant": {
+      "ingredientRole": "optionalFood",
+      "effectFamilySource": "none",
+      "elementSource": "none",
+      "notes": "Optional BotW-style food slot; can boost potency or be disallowed by recipe rules."
+    },
+    "Natural": {
+      "ingredientRole": "optionalMaterial",
+      "effectFamilySource": "none",
+      "elementSource": "none",
+      "notes": "Not a default elixir ingredient unless a recipe explicitly allows (e.g. special catalysts)."
+    },
+    "Fish": {
+      "ingredientRole": "optionalFood",
+      "effectFamilySource": "none",
+      "elementSource": "none",
+      "notes": "Optional food for cooking-style extensions; not required for core elixir resolution."
+    },
+    "Fruit": {
+      "ingredientRole": "optionalFood",
+      "effectFamilySource": "none",
+      "elementSource": "none",
+      "notes": "Optional food slot."
+    },
+    "Mushroom": {
+      "ingredientRole": "optionalFood",
+      "effectFamilySource": "none",
+      "elementSource": "none",
+      "notes": "Optional food slot."
+    },
+    "Meat": {
+      "ingredientRole": "optionalFood",
+      "effectFamilySource": "none",
+      "elementSource": "none",
+      "notes": "Optional food slot."
+    },
+    "Seafood": {
+      "ingredientRole": "optionalFood",
+      "effectFamilySource": "none",
+      "elementSource": "none",
+      "notes": "Optional food slot."
+    },
+    "Potion": {
+      "ingredientRole": "finishedElixir",
+      "effectFamilySource": "item",
+      "elementSource": "item",
+      "notes": "Crafted elixirs/potions; not an ingredient for mixing unless you allow transmutation."
+    },
+    "Ore": {
+      "ingredientRole": "notElixirIngredient",
+      "effectFamilySource": "none",
+      "elementSource": "none",
+      "notes": "Blacksmith / gear; exclude from default mixer."
+    },
+    "Exploration": {
+      "ingredientRole": "special",
+      "effectFamilySource": "none",
+      "elementSource": "none",
+      "notes": "Review per item."
+    },
+    "Special": {
+      "ingredientRole": "special",
+      "effectFamilySource": "label",
+      "elementSource": "label",
+      "notes": "Case-by-case; may need explicit allowlist for mixing."
+    },
+    "Inedible": {
+      "ingredientRole": "notElixirIngredient",
+      "effectFamilySource": "none",
+      "elementSource": "none",
+      "notes": "Exclude from cooking/mixing unless overridden."
+    },
+    "1h": {
+      "ingredientRole": "gear",
+      "effectFamilySource": "none",
+      "elementSource": "item.element",
+      "notes": "Weapons; not mixer ingredients."
+    },
+    "2h": {
+      "ingredientRole": "gear",
+      "effectFamilySource": "none",
+      "elementSource": "item.element",
+      "notes": "Weapons; not mixer ingredients."
+    },
+    "Head": {
+      "ingredientRole": "gear",
+      "effectFamilySource": "none",
+      "elementSource": "item.element",
+      "notes": "Armor; not mixer ingredients."
+    },
+    "Legs": {
+      "ingredientRole": "gear",
+      "effectFamilySource": "none",
+      "elementSource": "item.element",
+      "notes": "Armor; not mixer ingredients."
+    },
+    "Chest": {
+      "ingredientRole": "gear",
+      "effectFamilySource": "none",
+      "elementSource": "item.element",
+      "notes": "Armor; not mixer ingredients."
+    },
+    "Dairy": {
+      "ingredientRole": "optionalFood",
+      "effectFamilySource": "none",
+      "elementSource": "none",
+      "notes": "Cooking."
+    },
+    "Grain": {
+      "ingredientRole": "optionalFood",
+      "effectFamilySource": "none",
+      "elementSource": "none",
+      "notes": "Cooking."
+    },
+    "Fungi": {
+      "ingredientRole": "optionalFood",
+      "effectFamilySource": "none",
+      "elementSource": "none",
+      "notes": "Cooking."
+    },
+    "Protein": {
+      "ingredientRole": "optionalFood",
+      "effectFamilySource": "none",
+      "elementSource": "none",
+      "notes": "Cooking."
+    },
+    "Sweets": {
+      "ingredientRole": "optionalFood",
+      "effectFamilySource": "none",
+      "elementSource": "none",
+      "notes": "Cooking."
+    },
+    "Vegetable": {
+      "ingredientRole": "optionalFood",
+      "effectFamilySource": "none",
+      "elementSource": "none",
+      "notes": "Cooking."
+    }
+  }
+}

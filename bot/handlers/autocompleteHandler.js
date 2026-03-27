@@ -1477,6 +1477,15 @@ async function handleBoostingCharacterAutocomplete(interaction, focusedOption) {
  }
 }
 
+// ------------------- Boosting: effective job (matches commands/jobs/boosting.js getEffectiveJob) -------------------
+/**
+ * Job used for boost eligibility and labels — voucher job when active, else permanent job.
+ */
+function getEffectiveJobForBoost(character) {
+  if (!character) return null;
+  return (character.jobVoucher && character.jobVoucherJob) ? character.jobVoucherJob : character.job;
+}
+
 // ------------------- Boosting Request Character Autocomplete -------------------
 async function handleBoostingRequestCharacterAutocomplete(interaction, focusedOption) {
  try {
@@ -1513,15 +1522,25 @@ async function handleBoostingRequestBoosterAutocomplete(interaction, focusedOpti
    .map(job => job.job);
 
   const filteredCharacters = characters.filter((character) => {
-   return boostJobs.some(boostJob => 
-     boostJob.toLowerCase() === character.job.toLowerCase()
+   const effectiveJob = getEffectiveJobForBoost(character);
+   if (!effectiveJob) return false;
+   return boostJobs.some(boostJob =>
+     boostJob.toLowerCase() === String(effectiveJob).toLowerCase()
    );
   });
 
-  const choices = filteredCharacters.map((character) => ({
-   name: `${character.name} | ${capitalize(character.currentVillage)} | ${capitalize(character.job)}`,
-   value: character.name,
-  }));
+  const choices = filteredCharacters.map((character) => {
+   const effectiveJob = getEffectiveJobForBoost(character);
+   const jobDisplay =
+    character.jobVoucher && character.jobVoucherJob &&
+    String(character.job).trim().toLowerCase() !== String(character.jobVoucherJob).trim().toLowerCase()
+     ? `${capitalize(character.job)} → ${capitalize(effectiveJob)}`
+     : capitalize(effectiveJob);
+   return {
+    name: `${character.name} | ${capitalize(character.currentVillage)} | ${jobDisplay}`,
+    value: character.name,
+   };
+  });
 
   await respondWithFilteredChoices(interaction, focusedOption, choices);
  } catch (error) {
@@ -1559,17 +1578,27 @@ async function handleBoostingAcceptCharacterAutocomplete(interaction, focusedOpt
       .filter(job => job.perk === 'BOOST')
       .map(job => job.job);
 
-    filteredCharacters = allCharacters.filter((character) =>
-      boostJobs.some(boostJob => 
-        boostJob.toLowerCase() === character.job.toLowerCase()
-      )
-    );
+    filteredCharacters = allCharacters.filter((character) => {
+      const effectiveJob = getEffectiveJobForBoost(character);
+      if (!effectiveJob) return false;
+      return boostJobs.some(boostJob =>
+        boostJob.toLowerCase() === String(effectiveJob).toLowerCase()
+      );
+    });
   }
 
-  const choices = filteredCharacters.map((character) => ({
-   name: `${character.name} | ${capitalize(character.currentVillage)} | ${capitalize(character.job)}`,
-   value: character.name,
-  }));
+  const choices = filteredCharacters.map((character) => {
+   const effectiveJob = getEffectiveJobForBoost(character);
+   const jobDisplay =
+    character.jobVoucher && character.jobVoucherJob &&
+    String(character.job).trim().toLowerCase() !== String(character.jobVoucherJob).trim().toLowerCase()
+     ? `${capitalize(character.job)} → ${capitalize(effectiveJob)}`
+     : capitalize(effectiveJob);
+   return {
+    name: `${character.name} | ${capitalize(character.currentVillage)} | ${jobDisplay}`,
+    value: character.name,
+   };
+  });
 
   await respondWithFilteredChoices(interaction, focusedOption, choices);
  } catch (error) {
@@ -2128,7 +2157,8 @@ async function handleBoostingVillageAutocomplete(
    currentVillage = character?.currentVillage || null;
   }
 
-  const isScholarGathering = boosterCharacter?.job === 'Scholar' && category === 'Gathering';
+  const boosterEffectiveJob = boosterCharacter ? getEffectiveJobForBoost(boosterCharacter) : null;
+  const isScholarGathering = boosterEffectiveJob === 'Scholar' && category === 'Gathering';
   const allVillages = getAllVillages();
 
   const availableVillages =

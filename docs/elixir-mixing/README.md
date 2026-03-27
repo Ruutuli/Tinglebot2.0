@@ -73,6 +73,24 @@ Right now:
 
 The new system adds a **resolution layer**, not a replacement.
 
+### Item data: `type`, `effectFamily`, `element`
+
+`docs/tinglebot.items.json` is a large export (~763 items). Instead of editing every object by hand, use:
+
+| File | Purpose |
+|------|---------|
+| `docs/elixir-type-mapping.json` | Maps each `ItemModel.type[]` value (e.g. `Creature`, `Monster`) to an **ingredientRole** for mixing: critter, monsterPart, optionalFood, gear, etc. |
+| `docs/elixir-ingredient-labels.json` | **Sparse** map: only canon critters (effect class) and elemental monster parts (colored jelly / elemental keese wing / elemental lizalfos tail). Omitted `itemName` → no label; use **itemRarity** for neutral part potency. Each entry has `effectFamily` and/or `element` only when set—no `notes`, no all-null rows. |
+
+**Resolver order (recommended):**
+
+1. Load the item from DB/export.
+2. Derive **ingredientRole** from `type` using `elixir-type-mapping.json`.
+3. If `itemName` exists in `elixir-ingredient-labels.json`, overlay **effectFamily** and/or **element** keys that are present.
+4. Otherwise, neutral parts use **itemRarity** only; gear may still use `ItemModel.element` when relevant.
+
+New fields on `ItemModel` are optional later; the sidecar JSON keeps mixing data versioned next to exports.
+
 ---
 
 # 🎯 Design Goals
