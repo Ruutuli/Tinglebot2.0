@@ -631,8 +631,17 @@ module.exports = {
           activeBoost.category === 'Crafting' &&
           (activeBoost.boosterJob || '').trim().toLowerCase() === 'entertainer';
         if (isEntertainerCraftingBoost) {
+          // If the booster is not a native Entertainer, require them to actively switch into
+          // Entertainer via their second voucher before the Song of Double Time can apply.
+          const boosterPermanentJob = (boosterCharacter?.job || '').trim().toLowerCase();
+          const boosterEffectiveJob = boosterCharacter ? getEffectiveJob(boosterCharacter).trim().toLowerCase() : '';
+          const boosterIsNativeEntertainer = boosterPermanentJob === 'entertainer';
+          const boosterIsCurrentlyEntertainer = boosterEffectiveJob === 'entertainer';
           const needsEntertainerSecondVoucher =
-            boosterCharacter && isBoosterUsingVoucherForJob(boosterCharacter, 'Entertainer');
+            boosterCharacter &&
+            !boosterIsNativeEntertainer &&
+            !boosterIsCurrentlyEntertainer;
+
           if (needsEntertainerSecondVoucher && !activeBoost.boosterUsedSecondVoucher) {
             const voucherError = getJobVoucherErrorMessage('BOOSTER_ENTERTAINER_MUST_USE_SECOND_VOUCHER_FIRST', {
               boosterName: freshCharacter.boostedBy || 'Entertainer',
