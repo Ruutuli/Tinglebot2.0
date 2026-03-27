@@ -1107,6 +1107,15 @@ if (boosterOwnerId && interaction.channel) {
 }
 
 async function handleBoostAccept(interaction) {
+ // Acknowledge immediately to avoid "Unknown interaction" after long DB work.
+ await interaction.deferReply();
+ const respond = async (payload) => {
+  if (interaction.replied || interaction.deferred) {
+   return interaction.editReply(payload);
+  }
+  return interaction.reply(payload);
+ };
+
  const requestId = interaction.options.getString("requestid");
  const boosterName = interaction.options.getString("character");
  const userId = interaction.user.id;
@@ -1115,7 +1124,7 @@ async function handleBoostAccept(interaction) {
  
  if (!requestData) {
   logger.error('BOOST', `Invalid boost request ID "${requestId}"`);
-  await interaction.reply({
+  await respond({
    content: "Invalid request ID.",
    ephemeral: true,
   });
@@ -1125,7 +1134,7 @@ async function handleBoostAccept(interaction) {
  const currentTime = Date.now();
  if (requestData.expiresAt && currentTime > requestData.expiresAt) {
   logger.warn('BOOST', `Request "${requestId}" has expired`);
-  await interaction.reply({
+  await respond({
    content: "This boost request has expired. Boost requests are only valid for 24 hours.",
    ephemeral: true,
   });
@@ -1134,7 +1143,7 @@ async function handleBoostAccept(interaction) {
 
  if (requestData.status !== "pending") {
   logger.error('BOOST', `Boost request "${requestId}" is not pending (status: ${requestData.status})`);
-  await interaction.reply({
+  await respond({
    content: "This request has already been fulfilled or expired.",
    ephemeral: true,
   });
@@ -1145,7 +1154,7 @@ async function handleBoostAccept(interaction) {
  
  if (!booster) {
   logger.error('BOOST', `User does not own boosting character "${boosterName}"`);
-  await interaction.reply({
+  await respond({
    content: `You do not own the boosting character "${boosterName}".`,
    ephemeral: true,
   });
@@ -1154,7 +1163,7 @@ async function handleBoostAccept(interaction) {
 
  if (booster.name !== requestData.boostingCharacter) {
   logger.error('BOOST', `Mismatch in boosting character. Request designated for "${requestData.boostingCharacter}", but provided "${booster.name}"`);
-  await interaction.reply({
+  await respond({
    content: `This request was made for **${requestData.boostingCharacter}**, not **${booster.name}**.`,
    ephemeral: true,
   });
@@ -1165,7 +1174,7 @@ async function handleBoostAccept(interaction) {
  const boostEffectValidation = validateBoostEffect(boosterJob, requestData.category);
  if (!boostEffectValidation.valid) {
   logger.error('BOOST', boostEffectValidation.error);
-  await interaction.reply({
+  await respond({
    content: boostEffectValidation.error,
    ephemeral: true,
   });
@@ -1184,7 +1193,7 @@ async function handleBoostAccept(interaction) {
   );
   if (!villageValidation.valid) {
    logger.debug('BOOST', '[Accept] Village mismatch - characters no longer in same village.');
-   await interaction.reply({
+   await respond({
     content: villageValidation.error,
     ephemeral: true,
    });
@@ -1219,7 +1228,7 @@ async function handleBoostAccept(interaction) {
      return isJobMatch && isRegionMatch;
     });
     if (!availableItems || availableItems.length === 0) {
-     await interaction.reply({
+     await respond({
       content:
        `⚠️ **No items available to gather** in the target location (**${gatheringVillage}**) for **${targetCharacter.name}**'s job (**${job || 'unknown'}**) with this boost.\n\n` +
        "Neither the booster's stamina nor the character's daily gather roll will be used. Request or accept a boost when the character is in a village (or, for Scholar, a target village) that has gatherable items for their job.",
@@ -1245,7 +1254,7 @@ async function handleBoostAccept(interaction) {
  // Re-fetch booster character to ensure we have the latest stamina value (prevent race conditions)
  const freshBooster = await fetchCharacterByNameWithFallback(booster.name);
  if (!freshBooster) {
-  await interaction.reply({
+  await respond({
    content: `❌ Could not verify **${booster.name}**'s stamina. Please try again.`,
    ephemeral: true,
   });
@@ -1255,7 +1264,7 @@ async function handleBoostAccept(interaction) {
  // Pre-check: booster must have at least 1 stamina to provide a boost
  const available = Math.max(0, Number(freshBooster.currentStamina) || 0);
  if (available < 1) {
-  await interaction.reply({
+  await respond({
    content: `❌ **${freshBooster.name}** doesn't have enough stamina to provide this boost. They need at least 1 stamina to boost others. (Current: ${available} stamina)`,
    ephemeral: true,
   });
@@ -1269,7 +1278,7 @@ async function handleBoostAccept(interaction) {
  try {
   const staminaResult = await useStamina(freshBooster._id, 1);
   if (staminaResult.exhausted) {
-   await interaction.reply({
+   await respond({
     content: `❌ **${freshBooster.name}** doesn't have enough stamina to provide this boost. They need at least 1 stamina to boost others.`,
     ephemeral: true,
    });
@@ -1279,7 +1288,7 @@ async function handleBoostAccept(interaction) {
   booster.currentStamina = freshBooster.currentStamina - 1;
  } catch (error) {
   logger.error('BOOST', `Error deducting stamina from ${freshBooster.name}: ${error.message}`);
-  await interaction.reply({
+  await respond({
    content: `❌ Error processing stamina cost for **${freshBooster.name}**. Please try again.`,
    ephemeral: true,
   });
@@ -1343,7 +1352,7 @@ async function handleBoostAccept(interaction) {
   const embedData = createBoostAppliedEmbedData(booster, targetCharacter, requestData, boostEffectValidation.boost);
   const embed = createBoostAppliedEmbed(embedData);
 
- const sent = await interaction.reply({
+ await respond({
   content: `Boost accepted and is now active for 24 hours or until used!`,
   embeds: [embed],
  });

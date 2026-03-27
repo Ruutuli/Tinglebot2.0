@@ -355,15 +355,22 @@ function generateTokenBreakdown({
 
 // ------------------- Calculate Writing Tokens -------------------
 // Calculates tokens for writing submissions based on word count
+function calculateWritingBaseTokens(wordCount) {
+  if (wordCount >= 1000) {
+    return Math.round((wordCount * 0.1) + Math.pow(wordCount / 100, 1.75) - 6);
+  }
+  return Math.round(wordCount * 0.1);
+}
+
 function calculateWritingTokens(wordCount) {
-  return Math.round(wordCount / 100 * 10); // 10 tokens per 100 words
+  return calculateWritingBaseTokens(wordCount);
 }
 
 // ------------------- Calculate Writing Tokens with Collaboration -------------------
 // Calculates tokens for writing submissions with collaboration splitting
 // Only base tokens are split; quest bonus and collab bonus are given to each person
 function calculateWritingTokensWithCollab(wordCount, collab = null, questBonus = 0, collabBonus = 0) {
-  const baseTokens = Math.round(wordCount / 100 * 10); // 10 tokens per 100 words
+  const baseTokens = calculateWritingBaseTokens(wordCount);
   
   // Calculate tokens per person
   let tokensPerPerson = baseTokens;
@@ -394,7 +401,9 @@ function calculateWritingTokensWithCollab(wordCount, collab = null, questBonus =
     splitTokens: tokensPerPerson, // For backward compatibility
     breakdown: {
       wordCount,
-      tokensPerHundredWords: 10,
+      formula: wordCount >= 1000
+        ? 'base = round((words * 0.1) + ((words / 100)^1.75) - 6)'
+        : 'base = round(words * 0.1)',
       baseTokens,
       baseTokensPerPerson,
       questBonus,
@@ -407,6 +416,7 @@ function calculateWritingTokensWithCollab(wordCount, collab = null, questBonus =
         } else {
           parts.push(`${baseTokens} base`);
         }
+        parts.push(`(${wordCount} words)`);
         if (questBonus > 0) {
           parts.push(`+ ${questBonus} quest bonus (each)`);
         }

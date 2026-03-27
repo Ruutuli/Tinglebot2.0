@@ -902,6 +902,10 @@ function TaskModal({ task, isNew, defaultColumn, mods, currentUser, canEditAllCo
     }
   };
 
+  const removeAssignee = (discordId: string) => {
+    setAssignees((prev) => prev.filter((a) => a.discordId !== discordId));
+  };
+
   const toggleChecklistItem = (itemId: string) => {
     setChecklist((prev) =>
       prev.map((item) =>
@@ -1414,22 +1418,33 @@ function TaskModal({ task, isNew, defaultColumn, mods, currentUser, canEditAllCo
               )}
             </div>
 
-            {/* Assigned Members Display */}
+            {/* Assigned Members Display — X removes anyone (needed when they are no longer in the mod list) */}
             {assignees.length > 0 && (
               <div className="flex flex-wrap gap-1.5 sm:gap-1">
                 {assignees.map((a) => (
                   <div
                     key={a.discordId}
-                    className="h-10 w-10 overflow-hidden rounded-full border-2 border-[var(--botw-warm-black)] bg-[var(--totk-dark-ocher)] sm:h-8 sm:w-8"
+                    className="relative h-10 w-10 sm:h-8 sm:w-8"
                     title={a.username}
                   >
-                    {a.avatar ? (
-                      <img src={a.avatar} alt={a.username} className="h-full w-full object-cover" />
-                    ) : (
-                      <div className="flex h-full w-full items-center justify-center text-xs text-[var(--botw-pale)]">
-                        {a.username.charAt(0).toUpperCase()}
-                      </div>
-                    )}
+                    <div className="h-full w-full overflow-hidden rounded-full border-2 border-[var(--botw-warm-black)] bg-[var(--totk-dark-ocher)]">
+                      {a.avatar ? (
+                        <img src={a.avatar} alt={a.username} className="h-full w-full object-cover" />
+                      ) : (
+                        <div className="flex h-full w-full items-center justify-center text-xs text-[var(--botw-pale)]">
+                          {a.username.charAt(0).toUpperCase()}
+                        </div>
+                      )}
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => removeAssignee(a.discordId)}
+                      className="absolute -right-0.5 -top-0.5 flex h-4 w-4 items-center justify-center rounded-full border border-[var(--botw-warm-black)] bg-[#3d2a28] text-[10px] text-[var(--botw-pale)] hover:bg-[#5c3d3a] sm:h-3.5 sm:w-3.5 sm:text-[9px]"
+                      title={`Remove ${a.username}`}
+                      aria-label={`Remove ${a.username}`}
+                    >
+                      <i className="fa-solid fa-xmark" />
+                    </button>
                   </div>
                 ))}
               </div>

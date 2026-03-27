@@ -103,7 +103,7 @@ async function handleChannelMessage(message, channelId, handler) {
 // ------------------- sendErrorResponse ------------------
 // Standardized error response for interactions
 async function sendErrorResponse(interaction, error) {
-  const errorMessage = { content: 'There was an error while executing this command!', flags: [4096] };
+  const errorMessage = { content: 'There was an error while executing this command!', flags: 64 };
   try {
     if (interaction.replied || interaction.deferred) {
       await interaction.followUp(errorMessage);
@@ -111,6 +111,10 @@ async function sendErrorResponse(interaction, error) {
       await interaction.reply(errorMessage);
     }
   } catch (responseError) {
+    if (responseError.code === 10062 || responseError.code === 40060) {
+      logger.warn('COMMAND', '[index.js]⚠️ Skipping error response: interaction is no longer valid');
+      return;
+    }
     logger.error('COMMAND', `[index.js]❌ Failed to send error response: ${responseError.message}`);
     // Final fallback - send as regular message
     try {
