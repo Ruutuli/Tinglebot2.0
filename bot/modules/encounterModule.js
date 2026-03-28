@@ -107,7 +107,7 @@ function calculateDamage(attacker, defender) {
                 baseDamage = applyElementalResistancePercent(baseDamage, buffEffects.fireResistance);
                 console.log(`[encounterModule.js]: 🔥 Fire resistance: damage ${before} → ${baseDamage} hearts`);
                 
-                // Consume fireproof elixir after use
+                // Consume chilly elixir after use (fire resistance)
                 const { shouldConsumeElixir, consumeElixirBuff } = require('./elixirModule');
                 if (shouldConsumeElixir(defender, 'combat', { monster: attacker })) {
                     consumeElixirBuff(defender);

@@ -107,13 +107,13 @@ const characterSchema = new Schema({
   },
   buff: {
     active: { type: Boolean, default: false },
-    type: { type: String, default: null }, // 'chilly', 'electro', 'enduring', 'energizing', 'fireproof', 'hasty', 'hearty', 'mighty', 'sneaky', 'spicy', 'tough'
+    type: { type: String, default: null }, // 'chilly', 'electro', 'enduring', 'energizing', 'hasty', 'hearty', 'mighty', 'sneaky', 'spicy', 'tough' (legacy: 'fireproof' merged into chilly)
     effects: {
       blightResistance: { type: Number, default: 0 }, // Chilly Elixir
       electricResistance: { type: Number, default: 0 }, // Electro Elixir
       staminaBoost: { type: Number, default: 0 }, // Enduring Elixir
       staminaRecovery: { type: Number, default: 0 }, // Energizing Elixir
-      fireResistance: { type: Number, default: 0 }, // Fireproof Elixir
+      fireResistance: { type: Number, default: 0 }, // Chilly: heat + fire (one stat)
       speedBoost: { type: Number, default: 0 }, // Hasty Elixir
       extraHearts: { type: Number, default: 0 }, // Hearty Elixir
       attackBoost: { type: Number, default: 0 }, // Mighty Elixir

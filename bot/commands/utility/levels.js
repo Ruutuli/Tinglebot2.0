@@ -4,7 +4,7 @@ const User = require('@/models/UserModel');
 const Character = require('@/models/CharacterModel');
 const ModCharacter = require('@/models/ModCharacterModel');
 const { getUserLevelInfo, createProgressBar, getLeaderboard } = require('../../modules/levelingModule');
-const { getExploreCountFromParties } = require('../../modules/exploreModule');
+const { getExploreCountFromParties, resolveExploreStatCount } = require('../../modules/exploreModule');
 const { connectToTinglebot, updateTokenBalance } = require('@/database/db');
 
 module.exports = {
@@ -113,14 +113,14 @@ async function handleRank(interaction) {
     if (hasImportedFromMee6 && importedMee6Level) {
       statsValue += `\n📥 Imported from MEE6 (Level ${importedMee6Level})`;
     }
-    // Total explores across all of this user's characters (from character.exploreCount and/or party DB)
+    // Total explores across characters (party log count when available, else stored exploreCount)
     const chars = await Character.find({ userId: discordId }).select('_id exploreCount').lean();
     const modChars = await ModCharacter.find({ userId: discordId }).select('_id exploreCount').lean();
     let totalExplores = 0;
     for (const c of [...(chars || []), ...(modChars || [])]) {
       const stored = Number(c.exploreCount) || 0;
       const fromParties = await getExploreCountFromParties(c._id);
-      totalExplores += Math.max(stored, fromParties);
+      totalExplores += resolveExploreStatCount(stored, fromParties);
     }
     statsValue += `\n🗺️ **${totalExplores.toLocaleString()}** explores (across characters)`;
 

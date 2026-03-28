@@ -123,7 +123,8 @@ const userSchema = new mongoose.Schema({
       interactive: { type: Number, default: 0 },
       rp: { type: Number, default: 0 },
       artWriting: { type: Number, default: 0 },
-      other: { type: Number, default: 0 }
+      other: { type: Number, default: 0 },
+      meme: { type: Number, default: 0 }
     },
     completions: [
       {
@@ -492,7 +493,8 @@ function defaultQuestTracking() {
       interactive: 0,
       rp: 0,
       artWriting: 0,
-      other: 0
+      other: 0,
+      meme: 0
     },
     completions: [],
     turnIns: { totalSetsTurnedIn: 0, lastTurnedInAt: null, history: [] }
@@ -657,6 +659,8 @@ userSchema.methods.recordQuestCompletion = async function({
   if (questId) {
     existingCompletion = questTracking.completions.find(entry => entry.questId === questId);
     if (existingCompletion) {
+      const prevSlotOnly = existingCompletion.slotOnlyTurnIn === true;
+      const prevTypeKey = getQuestTypeKey(existingCompletion.questType);
       // Update existing completion
       existingCompletion.questType = questType;
       existingCompletion.questTitle = questTitle;
@@ -667,6 +671,10 @@ userSchema.methods.recordQuestCompletion = async function({
       existingCompletion.rewardSource = rewardSource;
       if (slotOnlyTurnIn === true) {
         existingCompletion.slotOnlyTurnIn = true;
+      }
+      if (!prevSlotOnly && slotOnlyTurnIn === true) {
+        questTracking.typeTotals[prevTypeKey] = Math.max(0, (questTracking.typeTotals[prevTypeKey] || 0) - 1);
+        questTracking.typeTotals.meme = (questTracking.typeTotals.meme || 0) + 1;
       }
       isNewCompletion = false;
     }
@@ -682,6 +690,8 @@ userSchema.methods.recordQuestCompletion = async function({
         new Date(entry.completedAt) >= recentDate
       );
       if (existingCompletion) {
+        const prevSlotOnly = existingCompletion.slotOnlyTurnIn === true;
+        const prevTypeKey = getQuestTypeKey(existingCompletion.questType);
         // Update existing completion even without questId match
         existingCompletion.questType = questType;
         existingCompletion.questTitle = questTitle;
@@ -692,6 +702,10 @@ userSchema.methods.recordQuestCompletion = async function({
         existingCompletion.rewardSource = rewardSource;
         if (slotOnlyTurnIn === true) {
           existingCompletion.slotOnlyTurnIn = true;
+        }
+        if (!prevSlotOnly && slotOnlyTurnIn === true) {
+          questTracking.typeTotals[prevTypeKey] = Math.max(0, (questTracking.typeTotals[prevTypeKey] || 0) - 1);
+          questTracking.typeTotals.meme = (questTracking.typeTotals.meme || 0) + 1;
         }
         // Try to set questId if we now have it
         if (questId) {
@@ -720,7 +734,11 @@ userSchema.methods.recordQuestCompletion = async function({
     } else {
       questTracking.bot.pending = (questTracking.bot.pending || 0) + 1;
     }
-    questTracking.typeTotals[typeKey] = (questTracking.typeTotals[typeKey] || 0) + 1;
+    if (slotOnlyTurnIn === true) {
+      questTracking.typeTotals.meme = (questTracking.typeTotals.meme || 0) + 1;
+    } else {
+      questTracking.typeTotals[typeKey] = (questTracking.typeTotals[typeKey] || 0) + 1;
+    }
   } else {
     const actualCompletions = countUniqueQuestCompletions(questTracking.completions);
     if (questTracking.bot.completed !== actualCompletions) {

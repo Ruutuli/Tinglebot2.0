@@ -1324,7 +1324,8 @@ async function processWaveTurn(character, waveId, interaction, waveData = null) 
         const { clearBoostAfterUse } = require('../commands/jobs/boosting.js');
         await clearBoostAfterUse(character, {
           client: interaction?.client,
-          context: 'wave turn'
+          context: 'wave turn',
+          excludeCategories: ['Healers']
         });
         console.log(`[waveModule.js]: 🎭 Boost cleared for ${character.name} after wave turn`);
       }

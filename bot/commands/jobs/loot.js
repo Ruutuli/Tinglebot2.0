@@ -134,7 +134,8 @@ async function updateCharacterLootTimestamp(character, shouldClearBoost = true, 
   await clearBoostAfterUse(character, {
     client: client,
     shouldClearBoost: shouldClearBoost,
-    context: 'looting'
+    context: 'looting',
+    ...(shouldClearBoost ? { excludeCategories: ['Healers'] } : {})
   });
   
   await character.save();
@@ -669,7 +670,8 @@ module.exports = {
        const { clearBoostAfterUse } = require('./boosting.js');
        await clearBoostAfterUse(character, {
          client: interaction.client,
-         context: 'looting (Blood Moon raid trigger)'
+         context: 'looting (Blood Moon raid trigger)',
+         excludeCategories: ['Healers']
        });
 
        // Deactivate Job Voucher AFTER successful raid trigger
@@ -842,7 +844,8 @@ async function handleBloodMoonRerolls(
     const { clearBoostAfterUse } = require('./boosting.js');
     await clearBoostAfterUse(character, {
       client: interaction.client,
-      context: 'looting (Blood Moon raid trigger reroll)'
+      context: 'looting (Blood Moon raid trigger reroll)',
+      excludeCategories: ['Healers']
     });
 
     // Deactivate Job Voucher AFTER successful raid trigger
@@ -1248,11 +1251,11 @@ async function processLootingLogic(
       
       // Log specific elixir effects that might help
       if (activeBuff.fireResistance > 0 && encounteredMonster.name.includes('Fire')) {
-        logger.info('ELIXIR', `🔥 Fireproof Elixir active: ${character.name} vs ${encounteredMonster.name} (+${activeBuff.fireResistance} fire res)`);
+        logger.info('ELIXIR', `🔥 Chilly Elixir active: ${character.name} vs ${encounteredMonster.name} (+${activeBuff.fireResistance} fire res)`);
         elixirBuffInfo = {
           helped: true,
-          elixirName: 'Fireproof Elixir',
-          elixirType: 'fireproof',
+          elixirName: 'Chilly Elixir',
+          elixirType: 'chilly',
           encounterType: 'fire',
           damageReduced: 0
         };
@@ -1330,17 +1333,20 @@ async function processLootingLogic(
     }
     
     if (shouldConsumeElixir(character, 'loot', { monster: encounteredMonster })) {
-      const consumedElixirType = character.buff.type;
+      const consumedElixirType =
+        character.buff.type === 'fireproof' ? 'chilly' : character.buff.type;
       
       logger.info('ELIXIR', `Elixir consumed for ${character.name} during encounter with ${encounteredMonster.name}`);
       
       // Log what the elixir protected against
-      if (consumedElixirType === 'fireproof' && encounteredMonster.name.includes('Fire')) {
-        logger.info('ELIXIR', `🔥 Fireproof Elixir protected ${character.name} from fire damage vs ${encounteredMonster.name}`);
+      if (consumedElixirType === 'chilly' && encounteredMonster.name.includes('Fire')) {
+        logger.info('ELIXIR', `🔥 Chilly Elixir protected ${character.name} from fire damage vs ${encounteredMonster.name}`);
       } else if (consumedElixirType === 'spicy' && encounteredMonster.name.includes('Ice')) {
         logger.info('ELIXIR', `❄️ Spicy Elixir protected ${character.name} from ice damage vs ${encounteredMonster.name}`);
       } else if (consumedElixirType === 'electro' && encounteredMonster.name.includes('Electric')) {
         logger.info('ELIXIR', `⚡ Electro Elixir protected ${character.name} from electric damage vs ${encounteredMonster.name}`);
+      } else if (consumedElixirType === 'chilly' && encounteredMonster.name.includes('Water')) {
+        logger.info('ELIXIR', `💧 Chilly Elixir protected ${character.name} from water damage vs ${encounteredMonster.name}`);
       } else if (consumedElixirType === 'chilly') {
         logger.info('ELIXIR', `🧿 Chilly Elixir protected ${character.name} from blight rain effects`);
       } else if (consumedElixirType === 'sneaky') {
@@ -1369,10 +1375,10 @@ async function processLootingLogic(
   if (elixirBuffInfo && elixirBuffInfo.helped && outcome.adjustedRandomValue) {
     const originalRoll = outcome.adjustedRandomValue;
     
-    if (elixirBuffInfo.encounterType === 'fire' && elixirBuffInfo.elixirType === 'fireproof') {
-      // Fireproof elixir provides 1.5x roll multiplier (higher roll = less damage)
+    if (elixirBuffInfo.encounterType === 'fire' && elixirBuffInfo.elixirType === 'chilly') {
+      // Chilly elixir provides 1.5x roll multiplier vs fire (higher roll = less damage)
       outcome.adjustedRandomValue = Math.min(100, Math.ceil(originalRoll * 1.5));
-      logger.info('ELIXIR', `🔥 Fireproof Elixir boosted roll from ${originalRoll} to ${outcome.adjustedRandomValue}`);
+      logger.info('ELIXIR', `🔥 Chilly Elixir boosted roll from ${originalRoll} to ${outcome.adjustedRandomValue}`);
       
       // Store original damage for comparison
       const originalDamage = outcome.hearts;
@@ -1391,7 +1397,7 @@ async function processLootingLogic(
         const damageReduced = originalDamage - boostedOutcome.hearts;
         elixirBuffInfo.damageReduced = damageReduced;
         outcome.hearts = boostedOutcome.hearts;
-        logger.info('ELIXIR', `🔥 Fireproof Elixir reduced damage from ${originalDamage} to ${outcome.hearts} (-${damageReduced})`);
+        logger.info('ELIXIR', `🔥 Chilly Elixir reduced damage from ${originalDamage} to ${outcome.hearts} (-${damageReduced})`);
       }
     } else if (elixirBuffInfo.encounterType === 'electric' && elixirBuffInfo.elixirType === 'electro') {
       // Electro elixir provides 1.5x roll multiplier (higher roll = less damage)

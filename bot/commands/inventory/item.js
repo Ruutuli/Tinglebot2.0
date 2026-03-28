@@ -1126,7 +1126,7 @@ module.exports = {
             effectFields.push({ name: '💚 Stamina Recovery', value: `+${buffEffects.staminaRecovery}`, inline: true });
           }
           if (buffEffects.fireResistance > 0) {
-            effectFields.push({ name: '🔥 Fire Resistance', value: `x${buffEffects.fireResistance}`, inline: true });
+            effectFields.push({ name: '🌡️ Heat & fire resistance', value: `x${buffEffects.fireResistance}`, inline: true });
           }
           if (buffEffects.speedBoost > 0) {
             effectFields.push({ name: '🏃 Speed Boost', value: `+${buffEffects.speedBoost}`, inline: true });

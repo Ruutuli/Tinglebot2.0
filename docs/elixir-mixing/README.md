@@ -1,663 +1,551 @@
-# 🧪 Elixir Mixing (Design)
+# Elixir mixing (design)
 
-This document outlines a **more robust elixir mixing system** for Tinglebot.
+Design for a **mixer command** that resolves ingredients into a real item, then uses the **existing** pipeline: `ELIXIR_EFFECTS` in `elixirModule.js`, `/item`, `character.buff`, `getActiveBuffEffects` elsewhere. No parallel buff math.
 
-It covers:
-- why mixing should exist in the bot
-- how it connects to current systems
-- how mixing should resolve outputs
-- a realistic implementation path
-
----
-
-# 📌 Why Mixing Belongs in the Bot
-
-Freeform mixing is messy in tabletop-style systems.
-
-People:
-- forget materials
-- mix things that shouldn’t work
-- expect different outcomes
-- require staff to constantly adjudicate
-
-The bot solves this cleanly:
-
-### What the bot enables
-
-- **Atomic inventory validation**
-  - Exact materials required
-  - All consumed in one transaction
-  - No partial or “oops I forgot”
-
-- **Deterministic outcomes**
-  - One centralized logic source (`ELIXIR_EFFECTS`-style)
-  - Same behavior across combat, travel, explore, etc.
-
-- **Clear feedback**
-  - “You are missing X”
-  - “These ingredients conflict”
-  - Optional preview of result
-
-- **Balance control**
-  - Adjust numbers globally
-  - No drift between systems
-
-Mixing is not just flavor. It connects:
-
-> gathering → crafting → buffs → jobs
+| Mode | Behavior |
+| --- | --- |
+| **Today** | **Fixed recipes** (e.g. Witch `crafting.js`) → one elixir item. |
+| **Future** | Optional resolver **before** consume; output must still be an item that exists in DB + `ELIXIR_EFFECTS`. |
 
 ---
 
-# 📦 Current Baseline (What Exists Right Now)
+## 1. Design guardrails (read first)
 
-These systems already work and should **not be replaced**, only extended:
-
-- `elixirModule.js`
-  - `ELIXIR_EFFECTS`
-  - consumption logic
-  - hazard helpers
-
-- `crafting.js`
-  - fixed recipe crafting (Witch)
-
-- `item.js`
-  - applying elixirs from inventory
-
-- `ItemModel.js`
-  - materials + item definitions
-
-### Important
-
-Right now:
-> mixing = fixed recipe → fixed elixir
-
-The new system adds a **resolution layer**, not a replacement.
-
-### Item data: `type`, `effectFamily`, `element`
-
-`docs/tinglebot.items.json` is a large export (~763 items). Instead of editing every object by hand, use:
-
-| File | Purpose |
-|------|---------|
-| `docs/elixir-type-mapping.json` | Maps each `ItemModel.type[]` value (e.g. `Creature`, `Monster`) to an **ingredientRole** for mixing: critter, monsterPart, optionalFood, gear, etc. |
-| `docs/elixir-ingredient-labels.json` | **Sparse** map. **Rule:** **`Creature`** rows use **`effectFamily` only** (boost / elixir family). **`Monster`** rows use **`element` only** (fire, ice, undead, …). Never mix both keys on one item. Organic scope and exclusions unchanged. Omitted names → no label. |
-
-### Standard reference: `effectFamily` (critters)
-
-Used on **`Creature`** items in `elixir-ingredient-labels.json`. Each value is the **primary effect class** a critter contributes when mixing. Behavior below matches `ELIXIR_EFFECTS` / `elixirModule.js` where a row exists; unimplemented families are **mixer targets** until wired into `ELIXIR_EFFECTS`.
-
-| `effectFamily` | Role | What it does (Tinglebot) |
-|------------------|------|---------------------------|
-| `chilly` | Resistance / weather | Less damage from water-tagged threats (`waterResistance` only — not blight). |
-| `spicy` | Cold resistance | Less damage from ice/cold enemies; expedition **cold** hazard protection when rules allow. |
-| `fireproof` | Heat / fire resistance | Less damage from fire enemies; expedition **heat** hazard protection when rules allow. |
-| `electro` | Shock resistance | Less damage from electric enemies; expedition **thunder** hazard protection when rules allow. |
-| `enduring` | Stamina pool | Temporary extra stamina chunk until consumed on stamina activities. |
-| `energizing` | Stamina restore | Stamina recovery when the elixir fires (instant or on gather/loot/craft per rules). |
-| `hasty` | Speed / travel | Faster travel, rush bonuses, fewer bad travel rolls where implemented. |
-| `hearty` | Vitality | Healing and/or temporary extra hearts until consumed on damage/combat. |
-| `mighty` | Offense | Attack boost for combat / help wanted / raid / loot. |
-| `tough` | Defense | Defense boost for the same combat loop. |
-| `sneaky` | Stealth | Stealth and flee bonuses on gather, loot, travel. |
-| `fairy` | Special recovery | Fairy-tonic style outcomes (strong heal / special rules) — define in resolver; not a standard resistance line. |
-| `bright` | Light / blight protection | **`blightResistance`** for blight-rain infection reduction; plus dark-area / night / cave bonuses, trap stumble reduction — **define in resolver**; no `ELIXIR_EFFECTS` entry yet. |
-| `sticky` | Traction | Rain / ice / slip penalties on travel or climb checks — **define in resolver**; no `ELIXIR_EFFECTS` entry yet. |
-
-### Standard reference: `element` (monster parts)
-
-Used on **`Monster`** items only. Tags **material affinity** for parts (jelly color, elemental wings/tails, etc.); the mixer uses this to bias resistance output or potency, not to replace `effectFamily` on critters.
-
-| `element` | Role | What it does (Tinglebot) |
-|-----------|------|---------------------------|
-| `fire` | Fire affinity | Biases fire-themed outputs; pairs with fireproof/spicy lines; colored **Red** jelly / fire keese / fire lizalfos tail. |
-| `ice` | Ice / cold affinity | Biases ice/cold outputs; **White** jelly, ice keese, icy lizalfos tail, **Freezard Water**. |
-| `electric` | Shock affinity | Biases electric outputs; **Yellow** jelly, electric keese, yellow lizalfos tail. |
-| `undead` | Gloom / curse | Blight-adjacent or curse-themed modifiers; **Gibdo** parts, `Spider's Eye`, **`Poe Soul`**. |
+- **`chilly`** is **only** fire/heat resistance (`fireResistance`). Do **not** fold **water** or **blight** back into Chilly in tables or prose.
+- **Water** mitigation → **Sticky** (`waterResistance`, `plusBoost`). **Blight** → **Bright** (`blightResistance`). If live code differs, fix code to match this doc.
+- **Hearts (HP):** **`extraHearts`**, **`recoverHearts`**, and any elixir heart outcomes use **whole full hearts only** — **no** ½, ¼, ⅓, or other fractional hearts. Store and display as **integers ≥ 0**.
+- **Stamina:** **5 chunks = 1 wheel.** Refill (`staminaRecovery`) and extra max (`staminaBoost`) are measured in **whole chunks only** — no fractional chunks. UI may show wheels as **chunks ÷ 5** for readability.
 
 ---
 
-### What actually runs in the bot (decision: ingredients vs buff)
+## 2. Sidecar data
 
-There are **two different things** — do not confuse them:
+| File | Role |
+| --- | --- |
+| `docs/elixir-type-mapping.json` | Maps `ItemModel.type[]` → **ingredientRole** (critter, monsterPart, optionalFood, …). Mixer uses **critter + monster part** only — ignore food roles for elixir mixing. |
+| `docs/elixir-ingredient-labels.json` | Sparse `itemName` → **`effectFamily`** (critters) or **`element`** (monster parts). **`none`** = neutral filler. **Critters + monster parts only** — no food plants/mushrooms/fish/meals. Never both keys on one row. **v4:** ~93 keys. Order: `effectFamily` groups (A–Z by family, then item name), then `element` groups (`electric` → `fire` → `ice` → `none` → `undead`, then item name). See `$comment` in the file. |
 
-| Layer | Data | When it matters |
-|-------|------|-----------------|
-| **Ingredient tags** | `docs/elixir-ingredient-labels.json` (`effectFamily` on critters, `element` on parts) | **Mixer only (not built yet).** Tags do **not** read into `character.buff` by themselves. |
-| **Active elixir buff** | `character.buff` + `ELIXIR_EFFECTS` in `bot/modules/elixirModule.js` | **Live today.** Set when someone uses an elixir item (`/item`, crafting, shops). Loot, travel, explore, combat, help wanted, raid, flee, etc. call `getActiveBuffEffects(character)`. |
-
-**`element` on monster parts:** The game does **not** apply these labels during combat or travel yet. They exist so the **mixer** can choose an output elixir (e.g. red jelly biases fire-themed results). The **output elixir** then behaves like any other elixir and fills `buff.effects` from `ELIXIR_EFFECTS`.
-
-**`effectFamily` on critters:** Same story until mixing exists — the **named elixir items** (Mighty Elixir, Chilly Elixir, …) are what actually set `buff.type` and the numbers below.
+**Item catalog:** [§7.2](#72-item-catalog-botw-contribution--target-itemrarity-design) lists every labeled **critter** and **monster part** with BotW-style effects and **target** `itemRarity` (what values *should* be in `tinglebot.items.json` — not a dump of current data).
 
 ---
 
-### Runtime buff effects (`character.buff.effects`) — what each stat does in code
+## 3. Recipes & economy
 
-Values come from `ELIXIR_EFFECTS` when the elixir is applied (often `1.5` for resistances, `1` for boosts, etc.). Code reads **`getActiveBuffEffects`** (`elixirModule.js`).
+### 3.1 Mixer (source of truth)
 
-| `buff.effects` field | Tied elixir families (`buff.type`) | What it does in the bot |
-|----------------------|-------------------------------------|-------------------------|
-| `attackBoost` | `mighty` | Added to attack in `buffModule.calculateAttackBuff` → used in encounter / loot combat resolution. |
-| `defenseBoost` | `tough` | Added to defense in `calculateDefenseBuff`, then defense is **×1.5** (floor) for success weighting. |
-| `electricResistance` | `electro` | If the attacker is electric-type (`encounterModule.calculateDamage` + monster `element` / name), mitigates damage by a **percentage**: `reduction = min(0.95, stat × 0.5)`; dealt damage = `base × (1 − reduction)`. Same cap/coefficient for all elemental resists below. |
-| `fireResistance` | `fireproof` | Same **percentage** mitigation for **fire**-type attackers. **Does not** affect blight rain infection (only `blightResistance` does). |
-| `coldResistance` | `spicy` | Same for **ice**-type attackers; `ice` damage type aliases to cold resistance in `buffModule.getDamageResistance`. |
-| `waterResistance` | `chilly` | Same for **water**-type attackers in `encounterModule`. |
-| `blightResistance` | `chilly` | In **blight rain**, lowers infection chance by **`stat × 0.1`** in `travel.js` and **`stat × 0.3`** in gather, loot, help wanted, raids, etc. (then clamped). Fire resistance does not affect blight. |
-| `speedBoost` | `hasty` | **Explore:** added to the d100-style roll in `rngModule.calculateFinalValue`. **Travel:** `calculateSpeedBuff` adds to speed when consumed on travel. |
-| `stealthBoost` | `sneaky` | **Explore:** added to the same roll in `calculateFinalValue` (with speed). **Gather/loot:** stealth calculations in `buffModule` / `loot` flows. |
-| `fleeBoost` | `sneaky` | **Flee:** `rngModule.attemptFlee` adds **`fleeBoost × 15%`** to base flee chance (capped). |
-| `staminaBoost` | `enduring` | Extra max/current stamina until the buff is consumed (see `consumeElixirBuff` / stamina activities). |
-| `staminaRecovery` | `energizing` | Stamina restore; consumed on gather / loot / crafting per `shouldConsumeElixir`. |
-| `extraHearts` | `hearty` | Temporary hearts buffer until consumed on combat-style activities. |
+**Two slots:** one **fixed critter** + **Monster part**. No OR lists — not the legacy Witch critter columns.
 
-**Consumption:** `shouldConsumeElixir(character, activity, context)` in `elixirModule.js` decides **when** the buff is used up (e.g. matching monster element for resists, `travel` for hasty, combat for mighty). If activity does not match, the buff can stay active.
+**How the fixed critter is chosen:** From `elixir-ingredient-labels.json`, same `effectFamily` as the output; pick the **most basic** option using **`itemRarity`** in `docs/tinglebot.items.json` (**1–10**, lower = more common). Align item rarities to **target** values in [§7.2](#72-item-catalog-botw-contribution--target-itemrarity-design) when tuning data.
 
----
+**Monster part:** Usually **`element`: `none`** (e.g. Chuchu Jelly, Bokoblin Horn). **Fireproof** uses a **fire**-aligned part (e.g. **Red Chuchu Jelly**) — see [§4.2 Element-only parts](#42-element-only-parts).
 
-### Ingredient labels → future mixer → same runtime
+**Slot rule (legacy + mixer):** **`Chuchu Jelly`** fills the neutral monster part slot — do **not** count “any part” + “Chuchu Jelly” as two slots. **Fireproof:** **`Red Chuchu Jelly`** is the part (fire-aligned), not a second jelly.
 
-When mixing is implemented:
+| Elixir | Ingredients |
+| --- | --- |
+| Bright Elixir | Deep Firefly + Monster part |
+| Chilly Elixir | Cold Darner + Monster part |
+| Electro Elixir | Electric Darner + Monster part |
+| Enduring Elixir | Tireless Frog + Monster part |
+| Energizing Elixir | Restless Cricket + Monster part |
+| Fireproof Elixir | Fireproof Lizard + Monster part |
+| Hasty Elixir | Hightail Lizard + Monster part |
+| Hearty Elixir | Hearty Lizard + Monster part |
+| Mighty Elixir | Bladed Rhino Beetle + Monster part |
+| Sneaky Elixir | Sunset Firefly + Monster part |
+| Spicy Elixir | Warm Darner + Monster part |
+| Sticky Elixir | Sticky Lizard + Monster part |
+| Tough Elixir | Rugged Rhino Beetle + Monster part |
 
-1. Critter **`effectFamily`** + part **`element`** + rarity resolve to **one output elixir item name** (or failure).
-2. That item must already exist in the DB and in `ELIXIR_EFFECTS` so `/item` behavior stays unchanged.
-3. **`bright`**, **`sticky`**, **`fairy`:** not in `ELIXIR_EFFECTS` yet — add effects + `CharacterModel.buff.effects` fields (if needed) before they do anything in combat/travel.
+**Tie-breaks (same target rarity):** If two critters share **`itemRarity`**, use a fixed order: Cold Darner before Winterwing; Electric Darner before Thunderwing; Warm Darner before Summerwing; Restless Cricket before Energetic Rhino Beetle; Sticky Lizard before Sticky Frog; **Bright** output uses **Deep Firefly** (not Blessed Butterfly); Hightail Lizard before Hot-Footed Frog. **Enduring:** only **Tireless Frog** is labeled in v4 JSON.
 
-**Resolver order (recommended):**
+**Not in table:** **Fairy Tonic** — **Fairy** + monster part (legacy DB materials). **No Fairy Dust** in this recipe.
 
-1. Load the item from DB/export.
-2. Derive **ingredientRole** from `type` using `elixir-type-mapping.json`.
-3. If `itemName` exists in `elixir-ingredient-labels.json`, read **critter → `effectFamily`**, **monster part → `element`** for the mixer only.
-4. Otherwise, neutral parts use **itemRarity** only; gear may still use `ItemModel.element` when relevant.
+### 3.2 Economy snapshot (`tinglebot.items.json`)
 
-New fields on `ItemModel` are optional later; the sidecar JSON keeps mixing data versioned next to exports.
+Numbers are **Witch-era** item defs. **Mixer baseline strength may be nerfed** — revisit buy/sell, **`modifierHearts`**, **`staminaRecovered`**, **`staminaToCraft`**, rarity when balance locks. **Buff math** = `ELIXIR_EFFECTS` + apply path — not duplicated here.
 
-### Coverage check (`tinglebot.items.json` export)
+† **`modifierHearts`** / **`staminaRecovered`** — rebalance with nerfed baseline. **`staminaToCraft`** stored as string in JSON. **`craftingJobs`:** **`["Witch"]`** today; add **`Mixer`** when the command ships.
 
-Run against current `docs/tinglebot.items.json` (763 items):
+| Item | Mixer base | Buy | Sell | Rarity | Hearts† | Stamina rec.† | Craft | `buff.type` |
+| --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | --- |
+| Chilly Elixir | Cold Darner + part | 750 | 190 | 5 | 0 | 0 | 4 | `chilly` |
+| Electro Elixir | Electric Darner + part | 750 | 190 | 5 | 0 | 0 | 3 | `electro` |
+| Enduring Elixir | Tireless Frog + part | 750 | 190 | 5 | 2 | 4 | 4 | `enduring` |
+| Energizing Elixir | Restless Cricket + part | 750 | 190 | 5 | 0 | 7 | 4 | `energizing` |
+| Fairy Tonic | Fairy + part | 1200 | 300 | 5 | 9999 | 0 | 4 | `fairy` |
+| Fireproof Elixir | Fireproof Lizard + part | 600 | 150 | 5 | 0 | 0 | 3 | `chilly` (heat/fire thread) |
+| Hasty Elixir | Hightail Lizard + part | 750 | 190 | 5 | 0 | 0 | 3 | `hasty` |
+| Hearty Elixir | Hearty Lizard + part | 750 | 190 | 5 | 20 | 0 | 3 | `hearty` |
+| Mighty Elixir | Bladed Rhino Beetle + part | 750 | 190 | 5 | 0 | 0 | 4 | `mighty` |
+| Sneaky Elixir | Sunset Firefly + part | 750 | 190 | 5 | 0 | 0 | 4 | `sneaky` |
+| Spicy Elixir | Warm Darner + part | 750 | 190 | 5 | 0 | 0 | 4 | `spicy` |
+| Tough Elixir | Rugged Rhino Beetle + part | 750 | 190 | 5 | 0 | 0 | 4 | `tough` |
+| Bright Elixir | Deep Firefly + part | — | — | — | — | — | — | `bright` |
+| Sticky Elixir | Sticky Lizard + part | — | — | — | — | — | — | `sticky` |
 
-| Pool | In export | In `elixir-ingredient-labels.json` | Notes |
-|------|-----------|-------------------------------------|--------|
-| **Creature** (`type` includes `Creature`) | 39 | 38 | **Insect Parts** has no row — generic mixed bundle; resolver should not infer one `effectFamily`. |
-| **Monster** (`type` includes `Monster`) | 64 | 15 | **Sparse by design:** neutral horns/fangs/guts (no element) use **`itemRarity`** only. |
+**Legacy Witch** (`crafting.js`): **OR** critters per row — **mixer does not use these lists**; it uses §3.1 only. **Sources:** Crafting · Witch. **Special weather** on these rows: none in export.
 
-**Mixer rules (hard reject):**
+| Elixir | Legacy critters (OR) |
+| --- | --- |
+| Chilly | Cold Darner, Winterwing Butterfly |
+| Electro | Electric Darner, Thunderwing Butterfly |
+| Enduring | Tireless Frog |
+| Energizing | Energetic Rhino Beetle, Restless Cricket |
+| Fairy Tonic | Fairy |
+| Fireproof | Fireproof Lizard |
+| Hasty | Hightail Lizard, Hot-Footed Frog |
+| Hearty | Hearty Lizard, Hearty Blueshell Snail |
+| Mighty | Bladed Rhino Beetle, Razorclaw Crab |
+| Sneaky | Sunset Firefly, Sneaky River Snail |
+| Spicy | Warm Darner, Summerwing Butterfly |
+| Tough | Rugged Rhino Beetle, Ironshell Crab |
 
-- **Ancient materials** cannot be used: `Ancient Core`, `Ancient Gear`, `Ancient Screw`, `Ancient Shaft`, `Ancient Spring`, `Giant Ancient Core`.
-- **Cooked food** (`Monster` type meals) cannot be used: `Monster Cake`, `Monster Curry`, `Monster Rice Balls`, `Monster Soup`, `Monster Stew`.
-
-**Monster names with no label (expected) — other cases:**
-
-- **Non-organic (2):** `Gibdo Bandage`, `Like Like Stone` — excluded from `elixir-ingredient-labels.json` and not valid mixer inputs.
-- **Neutral organic parts (~35):** e.g. `Bokoblin Horn`, `Chuchu Jelly`, `Golden Skull`, `Keese Wing`, `Lizalfos Tail`, `Monster Extract`, `Octo Balloon`, `Stal Skull`, … — valid ingredients when rules allow; no `element` in labels → potency from **`itemRarity`** in code. (Undead-tagged: `Spider's Eye`, `Poe Soul`, Gibdo parts.)
-
-Every key in `elixir-ingredient-labels.json` matches an `itemName` in the export (no typos).
-
----
-
-# 🎯 Design Goals
-
-### Predictable
-Players should be able to learn how mixing works without staff help.
-
-### Composable
-New materials should work automatically via tags, not new code everywhere.
-
-### Bounded
-- Conflicts are handled clearly
-- No accidental “god elixirs”
-- Failures are intentional
-
-### Integrated
-All results still go through:
-- `ELIXIR_EFFECTS`
-- normal item usage
+**Weather (resist elixirs):** base **25%** mitigation for matching hazard at baseline — see **Weather stacking** under §5. **Charges** replace duration — map from rarity/tier later.
 
 ---
 
-# 🧠 Mixing Model
+## 4. Ingredients & labels
 
-## Core Flow
+**Source of truth:** `docs/elixir-ingredient-labels.json` (`version` **4**). Add labels before the mixer trusts new items.
 
-1. Player selects ingredients
-2. System resolves outcome
-3. If valid → consume materials + stamina
-4. Grant **one** elixir item
+### 4.1 Rules
 
----
+- **`effectFamily`:** Named family (`chilly`, `mighty`, …) must **match** the output elixir. **`"none"`** = filler — any mix; steers **rarity/tier** only, not family. Example: **Electric Darner** cannot anchor **Chilly**.
+- **`element` (monster parts):** **`none`** = generic part, any elixir. **`fire` / `ice` / `electric` / `undead`** — only when they match that elixir’s **element thread** (see below). Example: **Yellow Chuchu Jelly** (`electric`) anchors **Electro**, not **Chilly**.
+- **`none` filler list:** Labeled from `tinglebot.items.json` (`Creature` / `Monster` / `Ancient Parts`), minus **excludes:** Ancient Core / Gear / Screw / Shaft / Spring / Giant Ancient Core; cooked **Monster** meals (Cake, Curry, Rice Balls, Soup, Stew); **Insect Parts** (bundle); **Gibdo Bandage**; **Like Like Stone**; **Freezard Water**. **Fairy Dust** — label when wired (`fairy` or `none`) if used elsewhere; **not** a Fairy Tonic ingredient here.
 
-## Resolution Approaches
+### 4.2 Element-only parts
 
-### A. Explicit Recipes (Safest)
+| `element` | Items | Use with output |
+| --- | --- | --- |
+| `fire` | Fire Keese Wing, Red Chuchu Jelly, Red Lizalfos Tail | `chilly` / Fireproof (`fireResistance`) |
+| `ice` | Ice Keese Wing, Icy Lizalfos Tail, White Chuchu Jelly | `spicy` |
+| `electric` | Electric Keese Wing, Yellow Chuchu Jelly, Yellow Lizalfos Tail | `electro` |
+| `undead` | Gibdo Bone, Gibdo Guts, Gibdo Wing, Poe Soul, Spider's Eye | `bright` |
+| `none` | Chuchu Jelly, Chuchu Egg, Bokoblin/Moblin/Lynel/… parts, Monster Horn/Claw/Extract, skulls, … — full list in JSON | **Any** (filler / rarity) |
 
-Each combo is defined:
+### 4.3 Fairy / Mock Fairy (cross-family additive)
 
-```
-inputs → output
-```
+Only mix where a critter’s **`effectFamily`** may **differ** from the output: **`Fairy`** or **`Mock Fairy`** as an **extra** on an otherwise-valid brew. Output family stays anchored by critter + part (e.g. Chilly + Mock Fairy → still **Chilly Elixir**, not Fairy Tonic unless the recipe is Fairy-first).
 
-Pros:
-- very easy to balance
-- no surprises
+On consume: that elixir’s **`buff.effects`** **plus** **`recoverHearts`** — refill **current** toward **real max** only (not `extraHearts`). **`recoverHearts`** uses **full hearts** only (§1). Example tuning: Mock Fairy **+1 full**, Fairy **+2 full** (exact numbers TBD in `ELIXIR_EFFECTS`). **At most one** of Fairy / Mock Fairy per brew. Implementation: special-case `effectFamily` **`fairy`** so it never **conflicts** when tagged as additive.
 
-Cons:
-- lots of maintenance
-- not flexible
+### 4.4 Allowed `effectFamily` critters by output
 
----
+**Mixer ingredients:** **Critters** (and **Fairy** / **Mock Fairy**) — no mushrooms, fish-as-food, plants, or meals. Crabs, snails, and insects are **critters** here, not “cooking food.”
 
-### B. Tag-Based (BotW Style)
+| Output (`buff.type`) | Allowed (`effectFamily` match) |
+| --- | --- |
+| `bright` | Blessed Butterfly, Deep Firefly, Starry Firefly |
+| `chilly` | Cold Darner, Eldin Roller, Fireproof Lizard, Smotherwing Butterfly, Volcanic Ladybug, Winterwing Butterfly |
+| `electro` | Electric Darner, Lanayru Ant, Thunderwing Butterfly |
+| `enduring` | Tireless Frog |
+| `energizing` | Bright-Eyed Crab, Energetic Rhino Beetle, Faron Grasshopper, Golden Insect, Restless Cricket |
+| `fairy` | Fairy, Mock Fairy |
+| `hasty` | Hightail Lizard, Hot-Footed Frog, Lizard Tail, Sand Cicada |
+| `hearty` | Hearty Blueshell Snail, Hearty Lizard |
+| `mighty` | Bladed Rhino Beetle, Deku Hornet, Hornet Larvae, Razorclaw Crab, Sky Stag Beetle, Woodland Rhino Beetle |
+| `sneaky` | Fabled Butterfly, Skyloft Mantis, Sneaky River Snail, Sunset Firefly |
+| `spicy` | Gerudo Dragonfly, Summerwing Butterfly, Warm Darner |
+| `sticky` | Sticky Frog, Sticky Lizard |
+| `tough` | Ironshell Crab, Rugged Rhino Beetle |
 
-Ingredients have tags:
+Plus **`effectFamily`: `"none"`** fillers per §4.1. **Additionally (any output):** Fairy, Mock Fairy — §4.3.
 
-```
-spicy, electro, hearty, etc
-```
-
-System:
-- collects tags
-- applies rules
-- resolves to an elixir
-
-Pros:
-- flexible
-- scalable
-
-Cons:
-- needs strong conflict rules
-
----
-
-### C. Hybrid (Recommended)
-
-- Tags determine **effect family**
-- Small override table handles edge cases
-
-This keeps flexibility without chaos.
+When JSON changes, refresh these tables (or generate from file in CI).
 
 ---
 
-# ⚖️ Suggested Rules
+## 5. `effectFamily` / `buff.type` → `buff.effects`
 
-- One **primary effect only**
-- Extra ingredients:
-  - increase potency
-  - reduce stamina cost
-  - extend duration
+Same string: mixer tag and `character.buff.type` when active. Shipped families match `ELIXIR_EFFECTS`. Combat resist: `reduction = min(0.95, stat × 0.5)` on matching elemental hits (`encounterModule.calculateDamage`).
 
-- Conflicts:
-  - fail → dubious
-  - OR pick dominant effect
-  - OR downgrade
+**Climate + combat (one stat per thread):** **Chilly** = heat + fire → **`fireResistance`** only. **Spicy** = cold + ice → **`coldResistance`**. **Sticky** = water → **`waterResistance`** + **`plusBoost`**. **Electric** = thunder + electric foes. Heat and fire share **`fireResistance`** (no separate `heatResistance`).
 
-- Element control:
-  - jelly (or equivalent) can influence outcome
+**Weather (design):** For matching hazard — hot (`chilly`), cold (`spicy`), thunder (`electro`), wet/rain (`sticky`) — base-tier elixir: **25%** less likely to suffer that weather’s harmful effects. Modifiers (extras, rarity, boosted stats) **increase** mitigation. **Separate** from combat elemental reduction unless you wire them together in code.
 
-- Optional:
-  - failure still gives a weak item instead of nothing
+**Weather stacking:** Let **W** = mitigation % on “bad outcome” rolls. **Base** valid resist elixir: **W = 25**. Extras add bonus; **sum then clamp**:
 
-- Witch job:
-  - still gate for full-strength elixirs
+- `W_total = min(W_cap, 25 + bonus_critters + bonus_neutral + bonus_elemental + bonus_stat)` — **W_cap = 70** (tunable). Above **25**, only **compatible** extras count (same mixing rules — no second `effectFamily` anchor).
+- **Extra same-family critters:** **+5%** each, **max +10%** from critters (two extras max in usual 3-critter cap).
+- **Neutral monster parts** (`element`: `none`): **+1% × `itemRarity`** per part (**1–10**). **Subtotal** from all neutral parts in one brew **capped at +20%**.
+- **Matching elemental part** (matches elixir thread): **+5%** once per brew (first matching part only).
+- **`buff.effects` resist (optional):** `bonus_stat = min(15, floor(10 × (stat − 1.0)))` — optional; omit if weather should depend only on ingredients + base 25.
 
----
+**Mechanic names** (for Description column): `combat`, `crafting`, `exploring`, `gathering`, `helpwantedquests`, `looting`, `raid`, `travel`
 
-# 🤖 Bot Responsibilities
+| Family | `buff.effects` | Description | Mechanics |
+| --- | --- | --- | --- |
+| `chilly` | `fireResistance` | Heat + fire damage: weather, fire-type enemies, ambient heat. | combat, exploring, travel |
+| `spicy` | `coldResistance` | Cold + ice-aligned harm. | combat, exploring, travel |
+| `electro` | `electricResistance` | Electric / thunder-aligned harm. | combat, exploring |
+| `enduring` | `staminaBoost` | Raises max stamina (temporary **chunks**; **5 chunks = 1 wheel**). | exploring, gathering, looting, travel |
+| `energizing` | `staminaRecovery` | Refills stamina (**chunks**; **5 chunks = 1 wheel**). | crafting, gathering, looting |
+| `hasty` | `speedBoost` | Speed-weighted checks; travel halving — see §6. | exploring, travel |
+| `hearty` | `extraHearts` | Temporary bonus max + current (**full hearts** only — integers). | combat, gathering, helpwantedquests, looting, raid |
+| `mighty` | `attackBoost` | Attack-weighted success. | combat, helpwantedquests, looting, raid |
+| `tough` | `defenseBoost` | Defense-weighted (×1.5 floor in `buffModule`). | combat, helpwantedquests, looting, raid |
+| `sneaky` | `stealthBoost`, `fleeBoost` | Stealth; flee odds. **Not** loot-job encounter rates. | exploring, gathering, looting, travel |
+| `fairy` | `recoverHearts` | Heal only — current toward **existing** max. Not temp hearts. | combat, gathering, helpwantedquests, looting, exploring, raid |
+| `bright` | `blightResistance` | Blight; light for hidden maze routes / dark areas. | exploring, gathering |
+| `sticky` | `waterResistance`, `plusBoost` | Water/wet/rain; **`plusBoost`** = extra yield (gather, loot, steal, optional craft) — not Sneaky rarity. | combat, crafting, exploring, gathering, looting |
 
-Mixer must:
+**Family notes**
 
-- load character + inventory
-- resolve outcome **before consuming anything**
-- validate all requirements
-- consume materials + stamina in one action
-- output exactly one item
-- ensure item exists in DB
-- log mixes for balancing
+- **Hearty vs Fairy:** `extraHearts` vs `recoverHearts` — different keys on purpose.
+- **Blight:** Only `bright` / `blightResistance` — not on Chilly. Infection + maze reveal (hidden passages, dark routing) — exact flags TBD.
+- **Sneaky vs Sticky:** Sneaky = stealth / fewer random encounters on roads, blood moons, exploration; **not** loot-job rates; flee should stay allowed where escape exists; **`fleeBoost`** in `rngModule.attemptFlee`. Sticky = **`waterResistance`** + **`plusBoost`** (volume), not stealth.
 
----
-
-# 🔧 Implementation
-
-## Command
-
-```
-/mix
-```
-or
-```
-/brew
-```
+**Consumption (deferred):** Charges / `shouldConsumeElixir` — define after Description + Mechanics are locked.
 
 ---
 
-## Module
+## 6. Base numbers & formulas
 
-```
-elixirMixingModule.js
-```
+`buff.effects` values = **base-tier** magnitudes (plain elixir). **Mixer:** extras raise stats via **`itemRarity`** aggregate (see §7), not a separate potency stat. **Hearty** base **`extraHearts` = 1** (one **full** heart). **Energizing** / **Enduring** base **`staminaRecovery` / `staminaBoost` = 1** (**one chunk**; **5 chunks = 1 wheel** per §1) — align `ELIXIR_EFFECTS` + consume paths.
 
-Returns:
+### Global formulas (live code)
 
-```
-{
-  outputItemName,
-  reason,
-  consumed
-}
-```
+| Topic | Rule | Where |
+| --- | --- | --- |
+| Weather (matching resist) | Base **25%**; grows with modifiers. Keys: heat → `fireResistance`, cold → `coldResistance`, thunder → `electricResistance`, wet → `waterResistance`. | Design — `weatherService` / explore / travel when wired |
+| Elemental hit damage | `1 − min(0.95, resistanceStat × 0.5)` | `encounterModule.applyElementalResistancePercent` |
+| Blight rain infection | Base **75%**; each `blightResistance` point **−10** pp, clamp **[10%, 95%]** | `travel.js` |
+| Flee | `min(0.95, 0.50 + failedFleeAttempts×0.05 + fleeBoost×0.15)` | `rngModule.attemptFlee` |
+| Attack | `finalAttack = baseAttack + attackBoost` (min **1**) | `buffModule.calculateAttackBuff` |
+| Defense | `floor((baseDefense + defenseBoost) × 1.5)` | `buffModule.calculateDefenseBuff` |
+| Speed | `baseSpeed + speedBoost` (min **1**) | `buffModule.calculateSpeedBuff` |
+| Stealth | `baseStealth + stealthBoost` (min **1**) | `buffModule.calculateStealthBuff` |
+| Travel (Hasty) | `speedBoost > 0` → days `= max(1, ceil(days/2))` | `travel.js` (`getTravelDuration`) |
 
----
+### Base `buff.effects` by family
 
-## Data Changes (Optional)
+| Family | Keys | Base | At base |
+| --- | --- | --- | --- |
+| `chilly` | `fireResistance` | **1.5** | **75%** less from matching fire hits; heat uses same stat. |
+| `spicy` | `coldResistance` | **1.5** | **75%** less from matching ice hits. |
+| `electro` | `electricResistance` | **1.5** | **75%** less from matching electric hits. |
+| `enduring` | `staminaBoost` | **1** | +**1 chunk** max (and matching current on apply); **5 chunks = 1 wheel** (`applyImmediateEffects`). |
+| `energizing` | `staminaRecovery` | **1** | +**1 chunk** on consume (capped); **5 chunks = 1 wheel**. |
+| `hasty` | `speedBoost` | **1** | Half travel days (min 1); +1 speed where used. |
+| `hearty` | `extraHearts` | **1** | +**1 full** temp max + current (integer hearts only). |
+| `mighty` | `attackBoost` | **1.5** | +1.5 attack in `calculateAttackBuff`. |
+| `tough` | `defenseBoost` | **1.5** | +1.5 defense, then ×1.5 floor. |
+| `sneaky` | `stealthBoost`, `fleeBoost` | **1**, **1** | +1 stealth; flee **+15%** (cap 95%). |
+| `fairy` | `recoverHearts` | **TBD** | Set when `ELIXIR_EFFECTS` ships. |
+| `bright` | `blightResistance` | **1** (proposed) | Example: infection **65%** at base before clamp. Maze **TBD**. |
+| `sticky` | `waterResistance`, `plusBoost` | **1.5**, **TBD** | Water: same resist formula. **`plusBoost`** yield — **TBD**. |
 
-Add tags to materials:
-
-```
-recipeTag: "spicy"
-```
-
----
-
-## Important Rule
-
-Do NOT duplicate buff logic.
-
-Everything must still flow through:
-- `ELIXIR_EFFECTS`
-- normal item usage
-
----
-
-# 🗺️ Roadmap
-
-### Phase 0 — Parity Check
-- Make sure all elixirs match definitions
+**Tier vs `itemRarity`:** see [§7.1](#71-rarity-targets-for-similar-outcomes-design).
 
 ---
 
-### Phase 1 — Recipe-Based Mixer
-- Recreate current crafting via mixer
-- proves system works
+## 7. Mixer strength: `itemRarity` (not BotW potency)
+
+Tinglebot does **not** store BotW **potency**. Strength comes from **`itemRarity`** **1–10** in `tinglebot.items.json`. Combine with an **aggregate rule** (sum, max, weighted — **TBD**) for effect tier.
+
+### 7.1 Rarity targets for similar outcomes (design)
+
+**`R_agg`** = aggregate score from ingredient **`itemRarity`** values (which ingredients count — anchor only, anchor + part, all non-filler — **TBD**). Values below are **minimum `R_agg`** to land in a **similar** outcome band to BotW-style **low / middle / high** once the aggregate rule is fixed. Tune when the mixer ships.
+
+**Plain Reference mix (sanity check):** Anchor critter + neutral `none` part is often **`itemRarity` sum ~4–6** (e.g. **Restless Cricket** **2** + **Chuchu Jelly** **2** → **4**; **Cold Darner** **3** + jelly **2** → **5**). That should stay **below** “middle” for stat/resist rows unless you boost with **extras** or **rarer** parts.
+
+#### Stat boosts & elemental resists
+
+**—** = no **high** tier for that row. **`R_agg`** targets below are **Tinglebot mixer design** (set `itemRarity` / aggregate to match).
+
+**\* row** = **new** for the mixer **or** **missing / not split** in live `ELIXIR_EFFECTS` yet (see last paragraph).
+
+| Similar outcome | `buff.effects` (family) | Base | Middle | High | Notes |
+| --- | --- | ---: | ---: | ---: | --- |
+| Attack Up | `attackBoost` (`mighty`) | 3 | 5 | 8 | `Mighty Elixir` |
+| Defense Up | `defenseBoost` (`tough`) | 3 | 5 | 8 | `Tough Elixir` |
+| Movement Speed | `speedBoost` (`hasty`) | 3 | 5 | 8 | `Hasty Elixir` |
+| Stealth / flee | `stealthBoost`, `fleeBoost` (`sneaky`) | 3 | 6 | 9 | `Sneaky Elixir` |
+| Flame Guard (fire combat) | `fireResistance` (`chilly`) | 3 | 6 | — | `Chilly Elixir` |
+| \* Heat (climate) | `fireResistance` (`chilly`) | 3 | 5 | — | \* Mixer-only second track (same stat); live code does not split heat vs fire |
+| Cold Resistance | `coldResistance` (`spicy`) | 3 | 6 | — | `Spicy Elixir` |
+| Shock Resistance | `electricResistance` (`electro`) | 4 | 6 | 8 | `Electro Elixir` |
+| \* Blight / Bright | `blightResistance` (`bright`) | 3 | 6 | 8 | \* No Bright elixir in `ELIXIR_EFFECTS` |
+| \* Sticky (water + yield) | `waterResistance`, `plusBoost` (`sticky`) | 3 | 5 | 8 | \* No Sticky elixir; **`plusBoost`** is new vs other rows |
+
+**Live `ELIXIR_EFFECTS`:** `Chilly Elixir` still bundles **`waterResistance`** and **`blightResistance`** with **`fireResistance`** — this doc’s design moves water → Sticky and blight → Bright ([§1](#1-design-guardrails-read-first)); update the module when you implement.
+
+#### Hearty — `extraHearts` (**full hearts only**)
+
+Maps **desired total bonus full hearts** (integers) from the elixir to **minimum `R_agg`**. No half/quarter hearts — see §1. Higher tiers assume **rare** critters, **extra** same-family ingredients, and/or **rare** monster parts — not just the baseline anchor + jelly.
+
+| Extra **full** hearts (outcome) | Min `R_agg` (design) |
+| --- | ---: |
+| 1 | 4 |
+| 2 | 5 |
+| 3 | 6 |
+| 4 | 8 |
+| 5 | 10 |
+
+#### Energizing — refill in **chunks** (**5 chunks = 1 wheel**)
+
+Cross-reference **chunks refilled** in **§7.4**. Outcomes are **integer chunks** only. **`R_agg`** bands are **design** targets for similar refill strength.
+
+| Chunks refilled (outcome) | Min `R_agg` (design) |
+| --- | ---: |
+| 1–3 | 1–4 |
+| 4–6 | 4–7 |
+| 7–10 | 7–9 |
+| 11–15 | 9–10 |
+
+*(Example: **5 chunks** = **1 wheel**; **15 chunks** max row ≈ **3 wheels** — cap **TBD**.)*
+
+#### Enduring — extra max in **chunks** (**5 chunks = 1 wheel**)
+
+Cross-reference **§7.5**. Bonus max stamina is **integer chunks** only.
+
+| Extra max chunks (outcome) | Min `R_agg` (design) |
+| --- | ---: |
+| 1–5 | 1–5 |
+| 6–10 | 5–8 |
+| 11–15 | 8–10 |
+
+#### Other families
+
+**`bright`**, **`sticky`**, **`fairy`** — tie **`R_agg`** to **`blightResistance`**, **`waterResistance` / `plusBoost`**, **`recoverHearts`** when those numbers are locked in `ELIXIR_EFFECTS` (no separate table yet).
 
 ---
 
-### Phase 2 — Tag System
-- Add tags to materials
-- allow simple mixes
+### 7.2 Item catalog: BotW contribution → target itemRarity (design)
+
+**Scope:** **Critters** + **monster parts** only — no mushrooms, fish fillets, plants, meat, or other cooking ingredients. **Target `itemRarity`** (**1–10**) is what **`tinglebot.items.json` should use** so mixer strength matches BotW-style tiers; it is **not** a snapshot of whatever is in the DB today (you can change items to match this column).
+
+**Critters** — BotW: critters set the elixir’s **effect type** (heat resist, shock, mighty, etc.); stronger critters raise **potency** toward higher tiers.
+
+| Item | `effectFamily` | BotW-style contribution (elixirs) | Target `itemRarity` |
+| --- | --- | --- | ---: |
+| Blessed Butterfly | `bright` | Bright / glow; blight-adjacent “light” critter | 3 |
+| Deep Firefly | `bright` | Strong bright effect; maze / dark (design) | 3 |
+| Starry Firefly | `bright` | Bright / glow | 3 |
+| Cold Darner | `chilly` | Chill / heat & fire resist thread | 3 |
+| Eldin Roller | `chilly` | Chill; hot-region critter | 2 |
+| Fireproof Lizard | `chilly` | Flame guard / heat (fire thread) | 3 |
+| Smotherwing Butterfly | `chilly` | Chill | 3 |
+| Volcanic Ladybug | `chilly` | Chill | 3 |
+| Winterwing Butterfly | `chilly` | Chill (stronger chilly critter than basic darner) | 4 |
+| Electric Darner | `electro` | Shock / electric resist | 2 |
+| Lanayru Ant | `electro` | Shock | 3 |
+| Thunderwing Butterfly | `electro` | Shock | 2 |
+| Tireless Frog | `enduring` | Enduring — extra max stamina (**chunks**; **5 = 1 wheel**) | 2 |
+| Bright-Eyed Crab | `energizing` | Energizing — mid **chunk** refill band | 3 |
+| Energetic Rhino Beetle | `energizing` | Energizing — strong **chunk** refill | 6 |
+| Faron Grasshopper | `energizing` | Energizing — mid **chunk** refill | 3 |
+| Golden Insect | `energizing` | Energizing — rare / strong refill (**chunks**) | 4 |
+| Restless Cricket | `energizing` | Energizing — lowest **chunk** refill band | 2 |
+| Fairy | `fairy` | Fairy tonic / full heal thread | 8 |
+| Mock Fairy | `fairy` | Fairy-like heal additive | 5 |
+| Hightail Lizard | `hasty` | Haste / speed | 2 |
+| Hot-Footed Frog | `hasty` | Haste / speed | 2 |
+| Lizard Tail | `hasty` | Haste / speed | 2 |
+| Sand Cicada | `hasty` | Haste / speed | 2 |
+| Hearty Blueshell Snail | `hearty` | Hearty — anchors **+3 full** `extraHearts` band (critter path) | 5 |
+| Hearty Lizard | `hearty` | Hearty — anchors **+4 full** `extraHearts` band | 6 |
+| Bladed Rhino Beetle | `mighty` | Mighty — attack up | 2 |
+| Deku Hornet | `mighty` | Mighty — attack up | 2 |
+| Hornet Larvae | `mighty` | Mighty — attack up | 2 |
+| Razorclaw Crab | `mighty` | Mighty — attack up | 3 |
+| Sky Stag Beetle | `mighty` | Mighty — stronger | 4 |
+| Woodland Rhino Beetle | `mighty` | Mighty — attack up | 3 |
+| Fabled Butterfly | `sneaky` | Sneaky / stealth | 3 |
+| Skyloft Mantis | `sneaky` | Sneaky / stealth | 3 |
+| Sneaky River Snail | `sneaky` | Sneaky / stealth | 3 |
+| Sunset Firefly | `sneaky` | Sneaky / stealth | 4 |
+| Gerudo Dragonfly | `spicy` | Spicy — cold resist | 3 |
+| Summerwing Butterfly | `spicy` | Spicy — cold resist | 2 |
+| Warm Darner | `spicy` | Spicy — cold resist | 2 |
+| Sticky Frog | `sticky` | Sticky — slip / water-adjacent | 4 |
+| Sticky Lizard | `sticky` | Sticky — slip / water-adjacent | 3 |
+| Ironshell Crab | `tough` | Tough — defense up | 3 |
+| Rugged Rhino Beetle | `tough` | Tough — defense up | 2 |
+
+**Monster parts** — BotW: parts mainly **extend duration** and add **element** (colored jellies, tails, wings); rare drops skew potency upward.
+
+| Item | `element` | BotW-style contribution (elixirs) | Target `itemRarity` |
+| --- | --- | --- | ---: |
+| Electric Keese Wing | `electric` | Electric / shock affinity | 3 |
+| Yellow Chuchu Jelly | `electric` | Electric element | 3 |
+| Yellow Lizalfos Tail | `electric` | Electric element | 3 |
+| Fire Keese Wing | `fire` | Fire / heat affinity | 3 |
+| Red Chuchu Jelly | `fire` | Fire element (Fireproof thread) | 3 |
+| Red Lizalfos Tail | `fire` | Fire element | 4 |
+| Ice Keese Wing | `ice` | Ice / cold affinity | 3 |
+| Icy Lizalfos Tail | `ice` | Ice element | 4 |
+| White Chuchu Jelly | `ice` | Ice element | 3 |
+| Gibdo Bone | `undead` | Undead / blight thread | 4 |
+| Gibdo Guts | `undead` | Undead / blight thread | 4 |
+| Gibdo Wing | `undead` | Undead / blight thread | 4 |
+| Poe Soul | `undead` | Undead / dark | 5 |
+| Spider's Eye | `undead` | Undead / blight | 4 |
+| Blin Bling | `none` | Generic monster part — duration | 2 |
+| Bokoblin Fang | `none` | Common part — duration | 2 |
+| Bokoblin Guts | `none` | Common part — duration | 2 |
+| Bokoblin Horn | `none` | Common part — duration | 2 |
+| Chuchu Egg | `none` | Neutral part — duration | 2 |
+| Chuchu Jelly | `none` | Neutral part — duration (baseline) | 2 |
+| Golden Skull | `none` | Monster part — mid | 3 |
+| Hinox Guts | `none` | Mid–high drop | 4 |
+| Hinox Toenail | `none` | Mid–high drop | 4 |
+| Hinox Tooth | `none` | Mid–high drop | 4 |
+| Horriblin Claw | `none` | Mid drop | 3 |
+| Horriblin Guts | `none` | Mid drop | 3 |
+| Horriblin Horn | `none` | Mid drop | 3 |
+| Keese Eyeball | `none` | Common part | 2 |
+| Keese Wing | `none` | Common part | 2 |
+| Lizalfos Horn | `none` | Mid part | 3 |
+| Lizalfos Tail | `none` | Mid part | 3 |
+| Lizalfos Talon | `none` | Mid part | 3 |
+| Lynel Guts | `none` | Rare drop | 6 |
+| Lynel Hoof | `none` | Rare drop | 6 |
+| Lynel Horn | `none` | Rare drop | 7 |
+| Moblin Fang | `none` | Mid part | 3 |
+| Moblin Guts | `none` | Mid part | 3 |
+| Moblin Horn | `none` | Mid part | 3 |
+| Molduga Fin | `none` | Very rare drop | 8 |
+| Molduga Guts | `none` | Very rare drop | 8 |
+| Monster Claw | `none` | Generic part | 2 |
+| Monster Horn | `none` | Generic part | 2 |
+| Octo Balloon | `none` | Common part | 2 |
+| Octorok Eyeball | `none` | Common part | 2 |
+| Octorok Tentacle | `none` | Common part | 2 |
+| Ornamental Skull | `none` | Mid part | 3 |
+| Rugged Horn | `none` | Mid part | 3 |
+| Serpent Fangs | `none` | Mid part | 3 |
+| Stal Skull | `none` | Common undead-adjacent part | 2 |
 
 ---
 
-### Phase 3 — Conflict + Tiers
-- add failure states
-- add potency scaling
-- add logging
+**Hearty / stamina tables below** use **full hearts** and **stamina chunks** only (**5 chunks = 1 wheel**). Map outcomes to **`itemRarity`** using §7.1 **`R_agg`** + §7.2 targets — **not** BotW cooking-only ingredients.
+
+### 7.3 Hearty — extra **full** hearts (critters-only path)
+
+Outcomes are **integer full hearts** only (§1). BotW’s “yellow heart” cooking tiers used many **food** ingredients; for **critters only**, **`Hearty Blueshell Snail`** and **`Hearty Lizard`** anchor the stronger hearty bands below. Use §7.2 target rarities + extras + **`R_agg`** (§7.1) for other totals.
+
+| Bonus full hearts (outcome) | Critters (anchor band) |
+| --- | --- |
+| +3 | Hearty Blueshell Snail |
+| +4 | Hearty Lizard |
+
+Lower/higher totals come from **`R_agg`** (extras + rarer parts), not from adding mushrooms/fish in the mixer.
+
+### 7.4 Energizing (`staminaRecovery`) — refill in **chunks**
+
+**Rule:** **`staminaRecovery`** grants **integer chunks** of green stamina refill only — **no fractional chunks.** **5 chunks = 1 wheel.** The **Wheels** column is **chunks ÷ 5** for display; the stored outcome is always **whole chunks**.
+
+| Tier (outcome) | Chunks refilled | Wheels (display only) |
+| ---: | ---: | --- |
+| 1 | 1 | ⅕ wheel |
+| 2 | 2 | ⅖ |
+| 3 | 3 | ⅗ |
+| 4 | 4 | ⅘ |
+| 5 | 5 | **1 wheel** |
+| 6 | 6 | 1 + ⅕ |
+| 7 | 7 | 1 + ⅖ |
+| 8 | 8 | 1 + ⅗ |
+| 9 | 9 | 1 + ⅘ |
+| 10 | 10 | **2 wheels** |
+| 11 | 11 | 2 + ⅕ |
+| 12 | 12 | 2 + ⅖ |
+| 13 | 13 | 2 + ⅗ |
+| 14 | 14 | 2 + ⅘ |
+| 15 | 15 | **3 wheels** |
+
+Tier index can match **chunks refilled** 1:1, or you map tier → chunks in code — either way the **grant** is an **integer chunk** count.
+
+**Critters:** **Restless Cricket** → low chunk bands, **Bright-Eyed Crab** / **Faron Grasshopper** → mid, **Golden Insect** → upper mid, **Energetic Rhino Beetle** → high — see §7.2. BotW also used **fish / mushrooms** for stamina; those are **out of scope** for the mixer.
+
+### 7.5 Enduring (`staminaBoost`) — extra max in **chunks**
+
+**Rule:** **`staminaBoost`** grants **integer chunks** of **bonus max** stamina only — **no fractional chunks.** **5 chunks = 1 wheel.** The **Wheels** column is **chunks ÷ 5** for display.
+
+| Tier (outcome) | Extra max chunks | Wheels (display only) |
+| ---: | ---: | --- |
+| 1 | 1 | ⅕ wheel |
+| 2 | 2 | ⅖ |
+| 3 | 3 | ⅗ |
+| 4 | 4 | ⅘ |
+| 5 | 5 | **1 wheel** |
+| 6 | 6 | 1 + ⅕ |
+| 7 | 7 | 1 + ⅖ |
+| 8 | 8 | 1 + ⅗ |
+| 9 | 9 | 1 + ⅘ |
+| 10 | 10 | **2 wheels** |
+| 11 | 11 | 2 + ⅕ |
+| 12 | 12 | 2 + ⅖ |
+| 13 | 13 | 2 + ⅗ |
+| 14 | 14 | 2 + ⅘ |
+| 15 | 15 | **3 wheels** |
+
+**Critters:** **`Tireless Frog`** is the labeled enduring critter (§7.2). BotW used **Endura Shroom** / **Endura Carrot** for higher tiers — **not** mixer ingredients; reach higher chunk totals via **`R_agg`** (rarer monster parts, extras).
 
 ---
 
-### Phase 4 — Discovery (Optional)
-- recipes found through gameplay
+## 8. Elements (combat + parts)
+
+Shared keys: `fire`, `ice`, `electric`, `water`, `earth`, `wind`, `undead`, `light`, `tech`, `none` — weapon vs monster (`ELEMENTAL_ADVANTAGES`, `getWeaponElement`, `getMonsterElement` in `elixirModule.js`).
+
+| Element | Strong vs | Weak to |
+| --- | --- | --- |
+| 🔥 `fire` | Ice, Wind | Water, Earth |
+| ❄️ `ice` | Water, Electric | Fire |
+| ⚡ `electric` | Water, Wind | Earth |
+| 💧 `water` | Fire, Earth | Electric, Ice |
+| 🌪️ `wind` | Earth, Undead | Fire, Electric |
+| 🌍 `earth` | Electric, Fire | Water, Wind |
+| 💀 `undead` | Ice, Water | Light, Fire, Wind |
+| ✨ `light` | Undead | — |
+| ⚙️ `tech` | Earth, Wind | Electric, Water |
+
+**Elixir resists (summary):** Already in §5 — `chilly`/`spicy`/`electro`/`sticky`/`bright`; earth/wind/light/tech have no full resist path in the combat helper yet.
+
+**`element` on parts:** Biases mixer; unlabeled parts stay neutral (strength from `itemRarity`). **Labeled today:** fire/ice/electric/undead jellies & tails. **Unlabeled:** water, earth, wind, light, tech (monsters can still have those via field/name).
+
+**Tags vs live buff:** JSON labels are mixer-only until the command exists. Live play: `character.buff` + `ELIXIR_EFFECTS`.
 
 ---
 
-# 🧪 Canon Reference (BotW / TotK)
+## 9. Label coverage (export)
 
-## Basic Rules
+Rough counts vs `tinglebot.items.json` (~763 items). **Mixer** uses only **critter + monster part** rows (~93 keys) — not cooking-only items.
 
-Elixirs require:
-- 1 critter
-- 1 monster part
-- optional extras
+| Pool | In export | Labeled |
+| --- | --- | --- |
+| Creature | 39 | 38 (no Insect Parts bundle) |
+| Monster | 64 | 15 `element` rows |
+| **Total keys in JSON** | | **~93** |
 
-Same-type ingredients:
-→ stronger / longer effects
-
----
-
-## Monster Part Tiers
-
-- Tier 1 → short duration
-- Tier 2 → medium
-- Tier 3 → long
-
-Critical success:
-→ +5:00 duration
+Hard rejects: Ancient cores/gears/screws/shaft/spring/giant core; cooked monster meals; Gibdo Bandage; Like Like Stone — see §4.1.
 
 ---
 
-## Core Elixirs
+## 10. Implementation & roadmap
 
-- Chilly → heat resist
-- Spicy → cold resist
-- Fireproof → flame guard
-- Electro → shock resist
-- Hasty → speed
-- Sneaky → stealth
-- Energizing → stamina restore
-- Enduring → extra stamina
-- Mighty → attack up
-- Tough → defense up
-- Hearty → extra hearts
+**Resolver flow:** Before consume → validate inventory → atomic consume → grant one DB item in `ELIXIR_EFFECTS`. `ingredientRole` → `effectFamily` / `element` → **`itemRarity`** rules. Hybrid resolver + small override table recommended; conflicts: fail, dominant tag, or downgrade.
 
----
+**Sketch:** `/mix` or `/brew` → e.g. `elixirMixingModule.js` → `{ outputItemName, reason, consumed }`; no duplicated buff math.
 
-## TotK Additions
+**BotW:** 1 critter + 1 part (+ extras); duplicates strengthen. **This bot:** “duration” → **charges** (rarity / part tier), not minutes.
 
-- Bright → light
-- Sticky → anti-slip
+| # | Phase |
+| --- | --- |
+| 0 | Parity: item defs ↔ `ELIXIR_EFFECTS` |
+| 1 | Recipe-based mixer (E2E proof) |
+| 2 | Tags + simple mixes |
+| 3 | Conflicts, rarity tuning, logging |
+| 4 | *(opt)* Hidden recipes |
 
----
+**Open decisions (condensed):** Tagging, min/max inputs, resolver tie-breakers, charges vs clock, one elixir slot / overwrite, economy on failed mix, consumption rules later, UX, analytics.
 
-# 🔄 Tinglebot Mapping
-
-Convert open-world effects into bot systems:
-
-- Chilly → heat hazard reduction
-- Spicy → cold hazard reduction
-- Fireproof → fire mitigation
-- Electro → electric mitigation
-- Hasty → faster travel / fewer ambushes
-- Sneaky → avoid encounters
-- Energizing → stamina restore
-- Enduring → extra stamina chunk
-- Mighty → attack bonus
-- Tough → defense bonus
-- Hearty → heal + buffer
-- Bright → dark area bonus
-- Sticky → rain/climb protection
+Roll out behind flags; tune from usage.
 
 ---
 
-# ⚙️ System Rules (Bot-Specific)
+## Related code
 
-- Only **one active elixir**
-- Resistance types are mutually exclusive
-- Consumption is **event-based**
-
-Optional:
-- fallback benefit if never triggered
-
-Always show:
-- what the buff does
-- when it triggers
-- what it affects
-
----
-
-# ⚖️ Mixing Balance
-
-## Potency Model
-
-- critter → effect type
-- monster part → duration/power
-- catalyst → modifier
-
----
-
-## Conflict Rules
-
-1. dominant tag wins
-2. equal conflict → failure/dubious
-3. compatible → upgraded version
-
----
-
-## Balance Lever
-
-Better mixes require:
-- rarer materials
-- higher stamina cost
-
----
-
-# 🚀 Rollout Plan
-
-1. launch with existing elixirs
-2. add new ones behind config flags
-3. track usage data
-4. adjust based on real behavior
-
----
-
-# ✅ Decide These First (Implementation Checklist)
-
-Before writing mixer code, lock these decisions so you do not rebalance everything twice.
-
-## 1) Item tagging model
-
-Decide exactly which fields every ingredient needs:
-
-- `effectFamily` (mighty, sneaky, spicy, etc.)
-- `ingredientRole` (critter, monsterPart, catalyst, optionalFood)
-- `tier` (use `itemRarity` first, unless you add explicit mix tier later)
-- `element` (fire, ice, electric, none)
-
-Recommended for current schema:
-
-- derive `ingredientRole` from `type` first (since `ItemModel` already has `type: string[]`)
-- only add a dedicated `ingredientRole` field if `type` becomes too ambiguous in real data
-
-Also decide where tags live:
-
-- in `ItemModel` directly, or
-- in a separate resolver map keyed by `itemName`
-
-## 2) Allowed input rules
-
-Define what a valid mix requires:
-
-- minimum 1 critter + 1 monster part?
-- max ingredients per mix (2, 3, 5)?
-- allow optional food or no?
-- can players include duplicate ingredients?
-
-## 3) Output resolution rules
-
-Pick one primary resolver path now:
-
-- fixed recipe table
-- tag resolver
-- hybrid (recommended)
-
-Then lock tie-breakers:
-
-- dominant family wins?
-- tied incompatible families = dubious/fail?
-- tied compatible families = stronger tier?
-
-## 4) Power formula
-
-Decide your balancing formula so outputs are predictable:
-
-- critter sets base effect
-- monster part tier adds potency/charge budget
-- catalyst modifies chance, potency, or charge count
-- hard caps per elixir family
-
-### Recommended conversion: duration -> charges
-
-Because Tinglebot elixirs are event-driven (not real-time), convert Zelda duration into **number of triggers**.
-
-- `charges` = how many matching actions the buff can affect before consumption
-- keep one active elixir buff; that buff can now have `charges > 1`
-- consume one charge each time the effect actually triggers
-
-Suggested starter model:
-
-- base charges from critter rarity:
-  - rarity 1-2 -> 1 charge
-  - rarity 3-4 -> 2 charges
-  - rarity 5+ -> 3 charges
-- monster part tier adds +0/+1 charges (cap at 3 or 4 to avoid runaway power)
-- rare catalyst can add +1 charge or +potency, but not both
-
-This keeps the current single-buff architecture while making "duration-like" value possible in bot gameplay.
-
-## 5) Consumption behavior
-
-Confirm this for every elixir family:
-
-- what exact event consumes it
-- whether it can expire without trigger (yes/no)
-- whether fallback value exists if never triggered
-
-## 6) Slot and stacking policy
-
-Lock stacking rules early:
-
-- one active elixir total (recommended)
-- resistance subgroup mutually exclusive (yes/no)
-- does using a new one always overwrite old one
-
-## 7) Economy + progression
-
-Choose your economy targets:
-
-- expected crafts per day/week
-- average stamina cost by tier
-- rarity gates for top-tier outcomes
-- whether failed mixes refund anything
-
-## 8) New TotK effects in bot terms
-
-Define these before adding content:
-
-- `Bright`: exactly which activities/conditions grant bonus
-- `Sticky`: which travel/weather penalties it cancels
-
-## 9) UX + command flow
-
-Decide player flow:
-
-- one-shot command (`/mix`) vs guided steps/buttons
-- show preview result before confirm (yes/no)
-- what failure messages must always appear
-
-## 10) Analytics and tuning loop
-
-Define metrics before launch:
-
-- mixes attempted vs successful
-- top recipes by guild
-- buff trigger rate (how often consumed)
-- underused and overused elixirs
-
-If these are tracked from day 1, balancing becomes fast and objective.
-
----
-
-# 📂 Related Files
-
-- `elixirModule.js`
-- `crafting.js`
-- `item.js`
-- `ItemModel.js`
-
----
-
-# 📝 Notes
-
-This is a working design doc.
-
-It will change as:
-- balance changes
-- systems expand
-- real usage reveals issues :contentReference[oaicite:0]{index=0}
+`bot/modules/elixirModule.js` · `bot/commands/jobs/crafting.js` · item apply path · `ItemModel.js`

@@ -2877,10 +2877,11 @@ async function handleBoostCancel(interaction) {
  * @param {Object} options.client - Discord client for embed updates (optional)
  * @param {boolean} options.shouldClearBoost - Whether to clear the boost (default: true)
  * @param {string} options.context - Context string for logging (optional)
+ * @param {string[]} options.excludeCategories - If the active boost's category is in this list, do not clear (e.g. ['Healers'] for combat/travel so only /heal consumes Healer boosts)
  * @returns {Promise<{success: boolean, cleared: boolean, error?: string}>}
  */
 async function clearBoostAfterUse(character, options = {}) {
-  const { client = null, shouldClearBoost = true, context = '' } = options;
+  const { client = null, shouldClearBoost = true, context = '', excludeCategories = [] } = options;
   
   if (!character) {
     logger.error('BOOST', `clearBoostAfterUse: Character is null or undefined${context ? ` (${context})` : ''}`);
@@ -2897,6 +2898,19 @@ async function clearBoostAfterUse(character, options = {}) {
   // Look up active boost by character name (TempData is source of truth; boostedBy can be out-of-sync)
   const activeBoost = await retrieveBoostingRequestFromTempDataByCharacter(character.name);
   if (!activeBoost && !character.boostedBy) {
+    return { success: true, cleared: false };
+  }
+
+  if (
+    excludeCategories.length > 0 &&
+    activeBoost &&
+    activeBoost.category &&
+    excludeCategories.includes(activeBoost.category)
+  ) {
+    logger.info(
+      'BOOST',
+      `Preserving ${activeBoost.category} boost for ${character.name}${context ? ` (${context})` : ''} — not consumed in this context`
+    );
     return { success: true, cleared: false };
   }
 

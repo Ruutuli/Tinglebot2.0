@@ -1042,7 +1042,8 @@ function QuestSection({ user }: { user: UserProfile }) {
   const questStats = useMemo(() => {
     const monthlyData = calculateQuestMonthlyData(completions);
     const weeklyData = calculateQuestWeeklyData(completions);
-    const typeData = calculateQuestTypeChartData(user.quests.typeTotals);
+    const displayTypeTotals = deriveQuestDisplayTypeTotals(completions, user.quests.typeTotals);
+    const typeData = calculateQuestTypeChartData(displayTypeTotals);
     const totalTokens = completions.reduce((sum, c) => sum + (c.tokensEarned || 0), 0);
     const avgPerMonth = monthlyData.length > 0 
       ? Math.round(monthlyData.reduce((sum, m) => sum + m.count, 0) / monthlyData.length * 10) / 10
@@ -1069,6 +1070,7 @@ function QuestSection({ user }: { user: UserProfile }) {
       monthlyData,
       weeklyData,
       typeData,
+      displayTypeTotals,
       totalTokens,
       avgPerMonth,
       thisMonth,
@@ -1133,7 +1135,7 @@ function QuestSection({ user }: { user: UserProfile }) {
             <Metric label="Avg/Month" value={questStats.avgPerMonth} accent="muted" />
           </div>
 
-          {Object.keys(user.quests.typeTotals).length > 0 && (
+          {Object.entries(questStats.displayTypeTotals).some(([, count]) => count > 0) && (
             <>
               <Divider />
               <div>
@@ -1141,16 +1143,23 @@ function QuestSection({ user }: { user: UserProfile }) {
                   By type
                 </p>
                 <div className="flex flex-wrap gap-2">
-                  {Object.entries(user.quests.typeTotals).map(([type, count]) => (
+                  {Object.entries(questStats.displayTypeTotals)
+                    .filter(([, count]) => count > 0)
+                    .map(([type, count]) => (
                     <Pill
                       key={type}
                       className="bg-[var(--totk-grey-400)]/50 text-[var(--botw-pale)]"
                     >
-                      {type.charAt(0).toUpperCase() + type.slice(1)}
+                      {formatQuestTypeLabel(type)}
                       <span className="ml-1.5 font-semibold text-[var(--totk-light-green)]">{count}</span>
                     </Pill>
                   ))}
                 </div>
+                {botCompleted > completions.length && (
+                  <p className="mt-2 text-[10px] leading-snug text-[var(--totk-grey-200)]">
+                    Counts reflect stored recent completions; if you have more than 25 bot completions, older ones are not included in this breakdown.
+                  </p>
+                )}
               </div>
             </>
           )}
@@ -1390,6 +1399,11 @@ function QuestSection({ user }: { user: UserProfile }) {
                     </div>
                   ))}
                 </div>
+                {botCompleted > completions.length && (
+                  <p className="mt-3 text-[10px] leading-snug text-[var(--totk-grey-200)] lg:col-span-2">
+                    Distribution uses the same recent completion list as &quot;By type&quot; above.
+                  </p>
+                )}
               </div>
             </SectionCard>
           )}
@@ -2875,11 +2889,75 @@ function calculateQuestWeeklyData(completions: QuestCompletion[]) {
     }));
 }
 
-function calculateQuestTypeChartData(typeTotals: UserProfile["quests"]["typeTotals"]) {
+/** Matches bot/scripts/auditFixQuestTracking.js — slot-only memes without the flag still count as memes. */
+function isHardGroupArtMemeCompletion(c: QuestCompletion): boolean {
+  if (c.slotOnlyTurnIn === true) return true;
+  const title = String(c.questTitle || "").toLowerCase();
+  return title.includes("group art meme (hard)");
+}
+
+function getQuestTypeKeyFromString(questType: string): keyof UserProfile["quests"]["typeTotals"] {
+  const normalized = questType.trim().toLowerCase();
+  if (normalized === "art") return "art";
+  if (normalized === "writing") return "writing";
+  if (normalized === "interactive") return "interactive";
+  if (normalized === "rp") return "rp";
+  if (normalized === "art / writing" || normalized === "art/writing") return "artWriting";
+  return "other";
+}
+
+/**
+ * Orb-eligible quests by quest type, plus Hard Group Art Meme under `meme` (not orb-eligible).
+ * Uses completion rows when present so the dashboard matches turn-in logic; falls back to stored typeTotals when empty.
+ */
+function deriveQuestDisplayTypeTotals(
+  completions: QuestCompletion[],
+  fallback: UserProfile["quests"]["typeTotals"]
+): Record<string, number> {
+  const base: Record<string, number> = {
+    art: 0,
+    writing: 0,
+    interactive: 0,
+    rp: 0,
+    artWriting: 0,
+    other: 0,
+    meme: 0,
+  };
+  if (!completions.length) {
+    return {
+      ...base,
+      art: fallback.art ?? 0,
+      writing: fallback.writing ?? 0,
+      interactive: fallback.interactive ?? 0,
+      rp: fallback.rp ?? 0,
+      artWriting: fallback.artWriting ?? 0,
+      other: fallback.other ?? 0,
+      meme: fallback.meme ?? 0,
+    };
+  }
+  const out = { ...base };
+  for (const c of completions) {
+    if (isHardGroupArtMemeCompletion(c)) {
+      out.meme += 1;
+    } else {
+      const k = getQuestTypeKeyFromString(c.questType || "");
+      out[k] = (out[k] || 0) + 1;
+    }
+  }
+  return out;
+}
+
+function formatQuestTypeLabel(typeKey: string): string {
+  if (typeKey === "meme") return "Meme (slot only)";
+  if (typeKey === "artWriting") return "Art / Writing";
+  return typeKey.charAt(0).toUpperCase() + typeKey.slice(1);
+}
+
+function calculateQuestTypeChartData(typeTotals: Record<string, number>) {
   return Object.entries(typeTotals)
     .filter(([, count]) => count > 0)
     .map(([name, value]) => ({
-      name: name.charAt(0).toUpperCase() + name.slice(1),
+      name: formatQuestTypeLabel(name),
       value,
     }))
     .sort((a, b) => b.value - a.value);

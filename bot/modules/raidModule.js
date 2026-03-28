@@ -1122,7 +1122,8 @@ async function processRaidTurn(character, raidId, interaction, raidData = null, 
             const { clearBoostAfterUse } = require('../commands/jobs/boosting.js');
             await clearBoostAfterUse(character, {
               client: interaction?.client,
-              context: 'raid turn'
+              context: 'raid turn',
+              excludeCategories: ['Healers']
             });
             logger.info('RAID', `[raidModule.js] 🎭 Boost cleared for ${character.name} after raid turn`);
           }

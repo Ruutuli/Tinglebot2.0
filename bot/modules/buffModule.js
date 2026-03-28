@@ -115,7 +115,7 @@ function calculateStealthBuff(character, baseStealth) {
 /**
  * Check if character has resistance to a specific damage type
  * @param {Object} character - Character object
- * @param {string} damageType - Type of damage ('heat', 'cold', 'electric', 'fire')
+ * @param {string} damageType - Type of damage ('heat' | 'fire' — same buff stat; 'cold', 'electric', …)
  * @returns {number} - Resistance value (0 if no resistance)
  */
 function getDamageResistance(character, damageType) {
@@ -154,9 +154,10 @@ function getDamageResistance(character, damageType) {
         console.log(`[buffModule.js]: 🧪 Elixir not used for ${character.name} - conditions not met. Active buff: ${character.buff.type}`);
       }
       break;
+    case 'heat':
     case 'fire':
+      // Single stat: hot-climate / ambient heat and fire-type damage (Chilly elixir)
       resistance = buffEffects?.fireResistance || 0;
-      // Heat / fire travel (not blight rain)
       if (resistance > 0 && shouldConsumeElixir(character, 'travel')) {
         consumeElixirBuff(character);
       } else if (character.buff?.active) {

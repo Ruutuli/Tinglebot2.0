@@ -95,6 +95,8 @@ export type QuestTypeTotals = {
   rp: number;
   artWriting: number;
   other: number;
+  /** Hard Group Art Meme — slot-only turn-in credits (not Spirit Orb) */
+  meme?: number;
 };
 
 export type QuestLegacy = {

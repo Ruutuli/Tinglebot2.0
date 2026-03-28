@@ -1,58 +1,282 @@
 {
-  "version": 1,
+  "version": 4,
+  "$comment": "Key order: effectFamily critters (by family A-Z, then item name), then element parts (electric, fire, ice, none, undead; then item name).",
   "labels": {
-    "Bladed Rhino Beetle": { "effectFamily": "mighty" },
-    "Blessed Butterfly": { "effectFamily": "bright" },
-    "Cold Darner": { "effectFamily": "chilly" },
-    "Deep Firefly": { "effectFamily": "bright" },
-    "Deku Hornet": { "effectFamily": "mighty" },
-    "Eldin Roller": { "effectFamily": "fireproof" },
-    "Electric Darner": { "effectFamily": "electro" },
-    "Electric Keese Wing": { "element": "electric" },
-    "Energetic Rhino Beetle": { "effectFamily": "energizing" },
-    "Fabled Butterfly": { "effectFamily": "sneaky" },
-    "Fairy": { "effectFamily": "fairy" },
-    "Faron Grasshopper": { "effectFamily": "energizing" },
-    "Fire Keese Wing": { "element": "fire" },
-    "Fireproof Lizard": { "effectFamily": "fireproof" },
-    "Freezard Water": { "element": "ice" },
-    "Gerudo Dragonfly": { "effectFamily": "spicy" },
-    "Gibdo Bone": { "element": "undead" },
-    "Gibdo Guts": { "element": "undead" },
-    "Gibdo Wing": { "element": "undead" },
-    "Golden Insect": { "effectFamily": "energizing" },
-    "Hearty Lizard": { "effectFamily": "hearty" },
-    "Hightail Lizard": { "effectFamily": "hasty" },
-    "Hornet Larvae": { "effectFamily": "mighty" },
-    "Hot-Footed Frog": { "effectFamily": "hasty" },
-    "Ice Keese Wing": { "element": "ice" },
-    "Icy Lizalfos Tail": { "element": "ice" },
-    "Lanayru Ant": { "effectFamily": "electro" },
-    "Lizard Tail": { "effectFamily": "hasty" },
-    "Mock Fairy": { "effectFamily": "fairy" },
-    "Poe Soul": { "element": "undead" },
-    "Red Chuchu Jelly": { "element": "fire" },
-    "Red Lizalfos Tail": { "element": "fire" },
-    "Restless Cricket": { "effectFamily": "energizing" },
-    "Rugged Rhino Beetle": { "effectFamily": "tough" },
-    "Sand Cicada": { "effectFamily": "hasty" },
-    "Sky Stag Beetle": { "effectFamily": "mighty" },
-    "Skyloft Mantis": { "effectFamily": "sneaky" },
-    "Smotherwing Butterfly": { "effectFamily": "fireproof" },
-    "Spider's Eye": { "element": "undead" },
-    "Starry Firefly": { "effectFamily": "bright" },
-    "Sticky Frog": { "effectFamily": "sticky" },
-    "Sticky Lizard": { "effectFamily": "sticky" },
-    "Summerwing Butterfly": { "effectFamily": "spicy" },
-    "Sunset Firefly": { "effectFamily": "sneaky" },
-    "Thunderwing Butterfly": { "effectFamily": "electro" },
-    "Tireless Frog": { "effectFamily": "enduring" },
-    "Volcanic Ladybug": { "effectFamily": "fireproof" },
-    "Warm Darner": { "effectFamily": "spicy" },
-    "White Chuchu Jelly": { "element": "ice" },
-    "Winterwing Butterfly": { "effectFamily": "chilly" },
-    "Woodland Rhino Beetle": { "effectFamily": "mighty" },
-    "Yellow Chuchu Jelly": { "element": "electric" },
-    "Yellow Lizalfos Tail": { "element": "electric" }
+    "Blessed Butterfly": {
+      "effectFamily": "bright"
+    },
+    "Deep Firefly": {
+      "effectFamily": "bright"
+    },
+    "Starry Firefly": {
+      "effectFamily": "bright"
+    },
+    "Cold Darner": {
+      "effectFamily": "chilly"
+    },
+    "Eldin Roller": {
+      "effectFamily": "chilly"
+    },
+    "Fireproof Lizard": {
+      "effectFamily": "chilly"
+    },
+    "Smotherwing Butterfly": {
+      "effectFamily": "chilly"
+    },
+    "Volcanic Ladybug": {
+      "effectFamily": "chilly"
+    },
+    "Winterwing Butterfly": {
+      "effectFamily": "chilly"
+    },
+    "Electric Darner": {
+      "effectFamily": "electro"
+    },
+    "Lanayru Ant": {
+      "effectFamily": "electro"
+    },
+    "Thunderwing Butterfly": {
+      "effectFamily": "electro"
+    },
+    "Tireless Frog": {
+      "effectFamily": "enduring"
+    },
+    "Bright-Eyed Crab": {
+      "effectFamily": "energizing"
+    },
+    "Energetic Rhino Beetle": {
+      "effectFamily": "energizing"
+    },
+    "Faron Grasshopper": {
+      "effectFamily": "energizing"
+    },
+    "Golden Insect": {
+      "effectFamily": "energizing"
+    },
+    "Restless Cricket": {
+      "effectFamily": "energizing"
+    },
+    "Fairy": {
+      "effectFamily": "fairy"
+    },
+    "Mock Fairy": {
+      "effectFamily": "fairy"
+    },
+    "Hightail Lizard": {
+      "effectFamily": "hasty"
+    },
+    "Hot-Footed Frog": {
+      "effectFamily": "hasty"
+    },
+    "Lizard Tail": {
+      "effectFamily": "hasty"
+    },
+    "Sand Cicada": {
+      "effectFamily": "hasty"
+    },
+    "Hearty Blueshell Snail": {
+      "effectFamily": "hearty"
+    },
+    "Hearty Lizard": {
+      "effectFamily": "hearty"
+    },
+    "Bladed Rhino Beetle": {
+      "effectFamily": "mighty"
+    },
+    "Deku Hornet": {
+      "effectFamily": "mighty"
+    },
+    "Hornet Larvae": {
+      "effectFamily": "mighty"
+    },
+    "Razorclaw Crab": {
+      "effectFamily": "mighty"
+    },
+    "Sky Stag Beetle": {
+      "effectFamily": "mighty"
+    },
+    "Woodland Rhino Beetle": {
+      "effectFamily": "mighty"
+    },
+    "Fabled Butterfly": {
+      "effectFamily": "sneaky"
+    },
+    "Skyloft Mantis": {
+      "effectFamily": "sneaky"
+    },
+    "Sneaky River Snail": {
+      "effectFamily": "sneaky"
+    },
+    "Sunset Firefly": {
+      "effectFamily": "sneaky"
+    },
+    "Gerudo Dragonfly": {
+      "effectFamily": "spicy"
+    },
+    "Summerwing Butterfly": {
+      "effectFamily": "spicy"
+    },
+    "Warm Darner": {
+      "effectFamily": "spicy"
+    },
+    "Sticky Frog": {
+      "effectFamily": "sticky"
+    },
+    "Sticky Lizard": {
+      "effectFamily": "sticky"
+    },
+    "Ironshell Crab": {
+      "effectFamily": "tough"
+    },
+    "Rugged Rhino Beetle": {
+      "effectFamily": "tough"
+    },
+    "Electric Keese Wing": {
+      "element": "electric"
+    },
+    "Yellow Chuchu Jelly": {
+      "element": "electric"
+    },
+    "Yellow Lizalfos Tail": {
+      "element": "electric"
+    },
+    "Fire Keese Wing": {
+      "element": "fire"
+    },
+    "Red Chuchu Jelly": {
+      "element": "fire"
+    },
+    "Red Lizalfos Tail": {
+      "element": "fire"
+    },
+    "Ice Keese Wing": {
+      "element": "ice"
+    },
+    "Icy Lizalfos Tail": {
+      "element": "ice"
+    },
+    "White Chuchu Jelly": {
+      "element": "ice"
+    },
+    "Blin Bling": {
+      "element": "none"
+    },
+    "Bokoblin Fang": {
+      "element": "none"
+    },
+    "Bokoblin Guts": {
+      "element": "none"
+    },
+    "Bokoblin Horn": {
+      "element": "none"
+    },
+    "Chuchu Egg": {
+      "element": "none"
+    },
+    "Chuchu Jelly": {
+      "element": "none"
+    },
+    "Golden Skull": {
+      "element": "none"
+    },
+    "Hinox Guts": {
+      "element": "none"
+    },
+    "Hinox Toenail": {
+      "element": "none"
+    },
+    "Hinox Tooth": {
+      "element": "none"
+    },
+    "Horriblin Claw": {
+      "element": "none"
+    },
+    "Horriblin Guts": {
+      "element": "none"
+    },
+    "Horriblin Horn": {
+      "element": "none"
+    },
+    "Keese Eyeball": {
+      "element": "none"
+    },
+    "Keese Wing": {
+      "element": "none"
+    },
+    "Lizalfos Horn": {
+      "element": "none"
+    },
+    "Lizalfos Tail": {
+      "element": "none"
+    },
+    "Lizalfos Talon": {
+      "element": "none"
+    },
+    "Lynel Guts": {
+      "element": "none"
+    },
+    "Lynel Hoof": {
+      "element": "none"
+    },
+    "Lynel Horn": {
+      "element": "none"
+    },
+    "Moblin Fang": {
+      "element": "none"
+    },
+    "Moblin Guts": {
+      "element": "none"
+    },
+    "Moblin Horn": {
+      "element": "none"
+    },
+    "Molduga Fin": {
+      "element": "none"
+    },
+    "Molduga Guts": {
+      "element": "none"
+    },
+    "Monster Claw": {
+      "element": "none"
+    },
+    "Monster Horn": {
+      "element": "none"
+    },
+    "Octo Balloon": {
+      "element": "none"
+    },
+    "Octorok Eyeball": {
+      "element": "none"
+    },
+    "Octorok Tentacle": {
+      "element": "none"
+    },
+    "Ornamental Skull": {
+      "element": "none"
+    },
+    "Rugged Horn": {
+      "element": "none"
+    },
+    "Serpent Fangs": {
+      "element": "none"
+    },
+    "Stal Skull": {
+      "element": "none"
+    },
+    "Gibdo Bone": {
+      "element": "undead"
+    },
+    "Gibdo Guts": {
+      "element": "undead"
+    },
+    "Gibdo Wing": {
+      "element": "undead"
+    },
+    "Poe Soul": {
+      "element": "undead"
+    },
+    "Spider's Eye": {
+      "element": "undead"
+    }
   }
 }

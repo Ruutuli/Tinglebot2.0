@@ -66,7 +66,7 @@ const { handleKO, healKoCharacter, useHearts } = require("../../modules/characte
 const { triggerRaid, endExplorationRaidAsRetreat, closeRaidsForExpedition, advanceRaidTurnOnItemUse, cancelRaidTurnSkip, scheduleRaidTurnSkip } = require("../../modules/raidModule.js");
 const { startWave, joinWave, advanceWaveTurnOnItemUse } = require("../../modules/waveModule.js");
 const MapModule = require('@/modules/mapModule.js');
-const { pushProgressLog, hasDiscoveriesInQuadrant, hasUnpinnedDiscoveriesInQuadrant, updateDiscoveryGrottoStatus, markGrottoCleared, applyExpeditionFailedState } = require("../../modules/exploreModule.js");
+const { pushProgressLog, hasDiscoveriesInQuadrant, hasUnpinnedDiscoveriesInQuadrant, shouldSkipDiscoveryCleanupEntry, addExpeditionPinKeysToReportedSet, updateDiscoveryGrottoStatus, markGrottoCleared, applyExpeditionFailedState } = require("../../modules/exploreModule.js");
 const { getElixirTypeByName, elixirCountersExplorationHazard, isHazardResistanceElixir } = require("../../modules/elixirModule.js");
 const { finalizeBlightApplication } = require("../../handlers/blightHandler.js");
 const { partyHasRelic, consumeBlightCandleUse, partyHasLensOfTruthRelic, characterHasRelic, relicOwnerMatchQuery } = require('@/utils/relicUtils.js');
@@ -5243,11 +5243,11 @@ module.exports = {
       appendExploreStat(`${new Date().toISOString()}\tfinal\t${outcomeType}\t${location}`);
      }
 
-     // Increment explore count for each party member (stats: how many explores this character has done)
-     const partyCharacterIds = (party.characters || []).map((pc) => pc?._id).filter(Boolean);
-     for (const charId of partyCharacterIds) {
-      Character.updateOne({ _id: charId }, { $inc: { exploreCount: 1 } }).catch((err) => logger.warn("EXPLORE", `[explore.js] exploreCount increment Character: ${err?.message || err}`));
-      ModCharacter.updateOne({ _id: charId }, { $inc: { exploreCount: 1 } }).catch((err) => logger.warn("EXPLORE", `[explore.js] exploreCount increment ModCharacter: ${err?.message || err}`));
+     // Increment explore count only for the character whose turn rolled (not the whole party)
+     const rollerId = character?._id;
+     if (rollerId) {
+      Character.updateOne({ _id: rollerId }, { $inc: { exploreCount: 1 } }).catch((err) => logger.warn("EXPLORE", `[explore.js] exploreCount increment Character: ${err?.message || err}`));
+      ModCharacter.updateOne({ _id: rollerId }, { $inc: { exploreCount: 1 } }).catch((err) => logger.warn("EXPLORE", `[explore.js] exploreCount increment ModCharacter: ${err?.message || err}`));
      }
 
      if (outcomeType === "explored") {
@@ -7969,9 +7969,10 @@ module.exports = {
      ? buildCostsForLog(movePayResult)
      : undefined;
 
-    // When leaving a square, clear reportable discoveries in that square that were NOT pinned (not in reportedDiscoveryKeys). Marked discoveries are kept.
+    // When leaving a square, clear reportable discoveries in that square that were NOT pinned (reportedDiscoveryKeys + dashboard Pin sourceDiscoveryKey). Marked discoveries are kept.
     const leavingSquare = String(currentSquare || "").trim().toUpperCase();
     const reportedSet = new Set(Array.isArray(party.reportedDiscoveryKeys) ? party.reportedDiscoveryKeys.filter((k) => typeof k === "string" && k.length > 0) : []);
+    await addExpeditionPinKeysToReportedSet(party, reportedSet);
     const GROTTO_CLEANUP_OUTCOMES = ["grotto", "grotto_found", "grotto_cleansed"];
     const isDiscoveryReportedForCleanup = (key, outcome, entrySquare, entryQuadrant) => {
      if (reportedSet.has(key)) return true;
@@ -7990,6 +7991,7 @@ module.exports = {
     if (leavingSquare && party.progressLog && Array.isArray(party.progressLog)) {
      party.progressLog = party.progressLog.filter((e) => {
       if (!DISCOVERY_CLEANUP_OUTCOMES.includes(e.outcome)) return true;
+      if (shouldSkipDiscoveryCleanupEntry(e)) return true;
       const m = LOC_IN_MESSAGE_RE.exec(e.message || "");
       if (!m || !m[1]) return true;
       const entrySquare = String(m[1]).trim().toUpperCase();
@@ -8370,7 +8372,7 @@ module.exports = {
       const isElixir = /elixir/i.test(carried.itemName || "");
       return interaction.editReply(
        isElixir
-        ? `**${carried.itemName}** is a buff elixir (resistance/stat boost), not a healing item. Only **Electro**, **Fireproof**, and **Spicy Elixir** can be used during an expedition to protect the party from hazards for the rest of the explore.`
+        ? `**${carried.itemName}** is a buff elixir (resistance/stat boost), not a healing item. Only **Electro**, **Chilly**, and **Spicy Elixir** can be used during an expedition to protect the party from hazards for the rest of the explore.`
         : "That item can only be used when securing the quadrant (e.g. Wood Bundle, Eldin Ore Bundle)."
       );
      }
@@ -8560,7 +8562,7 @@ module.exports = {
     await party.save(); // Persist pool + loadout + progress log in one place
 
     const hazardLabel = isHazardElixirUse && party.exploreElixir?.type
-     ? (party.exploreElixir.type === "electro" ? "thunder" : party.exploreElixir.type === "fireproof" ? "hot" : party.exploreElixir.type === "spicy" ? "cold" : "quadrant")
+        ? (party.exploreElixir.type === "electro" ? "thunder" : party.exploreElixir.type === "chilly" || party.exploreElixir.type === "fireproof" ? "hot" : party.exploreElixir.type === "spicy" ? "cold" : "quadrant")
      : "";
     const embedDescription = isHazardElixirUse
      ? `${character.name} used **${carried.itemName}**. The party is now protected against **${hazardLabel}** hazards for the rest of this expedition.`

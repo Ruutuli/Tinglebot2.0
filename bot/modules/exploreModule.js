@@ -24,6 +24,11 @@ const EXPLORE_ROLL_OUTCOMES = new Set([
     "raid", "ruin_rest", "hot_spring", "ko"
 ]);
 
+// Subset for per-character stats: same roll can log hot_spring and/or ruin_rest before the main outcome — count once.
+const EXPLORE_PRIMARY_STAT_OUTCOMES = new Set(EXPLORE_ROLL_OUTCOMES);
+EXPLORE_PRIMARY_STAT_OUTCOMES.delete("hot_spring");
+EXPLORE_PRIMARY_STAT_OUTCOMES.delete("ruin_rest");
+
 // Progress log outcomes that are "reportable" (can be pinned on dashboard). When leaving a square, unpinned ones are cleared.
 // Ruins: only "ruin_rest" (rest spot) is pinable; finding/skipping ruins does not require a pin.
 // Keep legacy outcomes for backward compatibility with older progress logs.
@@ -38,6 +43,39 @@ const DISCOVERY_CLEANUP_OUTCOMES = [
 // Location parsing used for discovery cleanup / reminders. Keep aligned with dashboard parsing (supports "in" and "at").
 const LOC_IN_MESSAGE_RE = /\s+(?:in|at)\s+([A-J](?:[1-9]|1[0-2]))\s+(Q[1-4])/i;
 
+// Stamina revisit lines (explore.js roll) — same outcome as pinable "Found a ruin rest spot" but not a separate map discovery.
+function isRuinRestRevisitMessage(message) {
+    return /Known ruin-rest spot\s+in\s+[A-J](?:[1-9]|1[0-2])\s+Q[1-4]/i.test(String(message || ""));
+}
+
+function shouldSkipDiscoveryCleanupEntry(e) {
+    if (!e) return false;
+    if (e.outcome === "ruin_rest" && isRuinRestRevisitMessage(e.message)) return true;
+    return false;
+}
+
+async function findExpeditionPinsLean(party) {
+    const partyIdNorm = party?.partyId ? String(party.partyId).trim() : "";
+    if (!partyIdNorm) return [];
+    try {
+        const pinQuery = { partyId: new RegExp(`^${escapeSquareIdForRegex(partyIdNorm)}$`, "i") };
+        return (await Pin.find(pinQuery).select("sourceDiscoveryKey").lean()) || [];
+    } catch (_) {
+        return [];
+    }
+}
+
+/** Merge dashboard Pin sourceDiscoveryKey values into a Set (e.g. party.reportedDiscoveryKeys + pins for square-leave cleanup). */
+async function addExpeditionPinKeysToReportedSet(party, reportedSet) {
+    if (!reportedSet) return;
+    const pins = await findExpeditionPinsLean(party);
+    for (const pin of pins) {
+        if (pin.sourceDiscoveryKey && typeof pin.sourceDiscoveryKey === "string") {
+            reportedSet.add(pin.sourceDiscoveryKey.trim());
+        }
+    }
+}
+
 // True if current quadrant has reportable discoveries that are not yet pinned (reportedDiscoveryKeys or Pin). Used for embed reminder.
 // Also checks Pin collection so discoveries pinned on the dashboard count even if party.reportedDiscoveryKeys wasn't updated yet.
 async function hasUnpinnedDiscoveriesInQuadrant(party) {
@@ -45,34 +83,25 @@ async function hasUnpinnedDiscoveriesInQuadrant(party) {
     const reportedSet = new Set(Array.isArray(party.reportedDiscoveryKeys) ? party.reportedDiscoveryKeys.filter((k) => typeof k === "string" && k.length > 0) : []);
     const currentSquare = String(party.square).trim().toUpperCase();
     const currentQuadrant = String(party.quadrant).trim().toUpperCase();
-    const partyIdNorm = party.partyId ? String(party.partyId).trim() : "";
     let quadrantHasPin = false;
-    if (partyIdNorm) {
-        try {
-            // Case-insensitive partyId match (dashboard URL may use different casing)
-            const pinQuery = { partyId: new RegExp(`^${escapeSquareIdForRegex(partyIdNorm)}$`, "i") };
-            const pins = await Pin.find(pinQuery).select("sourceDiscoveryKey").lean();
-            for (const pin of pins || []) {
-                if (pin.sourceDiscoveryKey && typeof pin.sourceDiscoveryKey === "string") {
-                    const k = pin.sourceDiscoveryKey.trim();
-                    reportedSet.add(k);
-                    // If this pin is for the current quadrant, remember so we can suppress reminder even if key format differs
-                    const parts = k.split("|");
-                    if (parts.length >= 3) {
-                        const pinSquare = String(parts[1] || "").trim().toUpperCase();
-                        const pinQuadrant = String(parts[2] || "").trim().toUpperCase();
-                        if (pinSquare === currentSquare && pinQuadrant === currentQuadrant) {
-                            quadrantHasPin = true;
-                        }
-                    }
+    const pins = await findExpeditionPinsLean(party);
+    for (const pin of pins) {
+        if (pin.sourceDiscoveryKey && typeof pin.sourceDiscoveryKey === "string") {
+            const k = pin.sourceDiscoveryKey.trim();
+            reportedSet.add(k);
+            const parts = k.split("|");
+            if (parts.length >= 3) {
+                const pinSquare = String(parts[1] || "").trim().toUpperCase();
+                const pinQuadrant = String(parts[2] || "").trim().toUpperCase();
+                if (pinSquare === currentSquare && pinQuadrant === currentQuadrant) {
+                    quadrantHasPin = true;
                 }
             }
-        } catch (_) {
-            // ignore pin lookup errors; fall back to reportedDiscoveryKeys only
         }
     }
     for (const e of party.progressLog) {
         if (!DISCOVERY_CLEANUP_OUTCOMES.includes(e.outcome)) continue;
+        if (shouldSkipDiscoveryCleanupEntry(e)) continue;
         const m = LOC_IN_MESSAGE_RE.exec(e.message || "");
         if (!m || !m[1] || !m[2]) continue;
         const entrySquare = String(m[1]).trim().toUpperCase();
@@ -436,11 +465,17 @@ async function handleExpeditionFailedFromWave(expeditionId, client) {
 }
 
 // ------------------- getExploreCountFromParties ------------------
-// Derives total explore count for a character from the party database (parties they were in, progressLog roll outcomes).
-// Use together with character.exploreCount: display max(exploreCount, getExploreCountFromParties) for backward compatibility.
+// Derives this character's explore rolls from party progressLog (acting character + primary outcomes only).
 async function getExploreCountFromParties(characterId) {
     if (!characterId) return 0;
     try {
+        let nameNorm = "";
+        const doc = await Character.findById(characterId).select("name").lean();
+        if (doc?.name) nameNorm = String(doc.name).trim().toLowerCase();
+        if (!nameNorm) {
+            const modDoc = await ModCharacter.findById(characterId).select("name").lean();
+            if (modDoc?.name) nameNorm = String(modDoc.name).trim().toLowerCase();
+        }
         const parties = await Party.find(
             { 'characters._id': characterId, status: { $in: ['started', 'completed', 'failed'] } },
             { progressLog: 1 }
@@ -449,7 +484,12 @@ async function getExploreCountFromParties(characterId) {
         for (const party of parties || []) {
             const log = party.progressLog || [];
             for (const entry of log) {
-                if (entry && EXPLORE_ROLL_OUTCOMES.has(entry.outcome)) total += 1;
+                if (!entry || !EXPLORE_PRIMARY_STAT_OUTCOMES.has(entry.outcome)) continue;
+                if (nameNorm) {
+                    const en = String(entry.characterName || "").trim().toLowerCase();
+                    if (en !== nameNorm) continue;
+                }
+                total += 1;
             }
         }
         return total;
@@ -457,6 +497,13 @@ async function getExploreCountFromParties(characterId) {
         handleError(err, 'exploreModule.js', { operation: 'getExploreCountFromParties', characterId });
         return 0;
     }
+}
+
+/** Prefer log-derived explores when party data exists; otherwise stored exploreCount (e.g. logs gone). */
+function resolveExploreStatCount(storedExploreCount, derivedFromPartyLogs) {
+    const s = Number(storedExploreCount) || 0;
+    const d = Number(derivedFromPartyLogs) || 0;
+    return d > 0 ? d : s;
 }
 
 module.exports = {
@@ -469,9 +516,12 @@ module.exports = {
     pushProgressLog,
     hasDiscoveriesInQuadrant,
     hasUnpinnedDiscoveriesInQuadrant,
+    shouldSkipDiscoveryCleanupEntry,
+    addExpeditionPinKeysToReportedSet,
     updateDiscoveryGrottoStatus,
     markGrottoCleared,
     applyExpeditionFailedState,
     handleExpeditionFailedFromWave,
-    getExploreCountFromParties
+    getExploreCountFromParties,
+    resolveExploreStatCount
 };

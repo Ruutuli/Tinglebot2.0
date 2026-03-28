@@ -455,8 +455,13 @@ const createGatherDebuffEmbed = (character) => {
 
 // ------------------- Function: createCharacterEmbed -------------------
 // Creates a detailed character information embed with all character stats and details
-const createCharacterEmbed = (character) => {
+// options.exploreDisplay — optional override for 🗺️ Explores (e.g. log-corrected count)
+const createCharacterEmbed = (character, options = {}) => {
  const settings = getCommonEmbedSettings(character);
+ const exploreShown =
+  options.exploreDisplay !== undefined && options.exploreDisplay !== null
+   ? Number(options.exploreDisplay) || 0
+   : (character.exploreCount ?? 0);
  const homeVillageEmoji = getVillageEmojiByName(character.homeVillage) || "";
  const currentVillageEmoji = getVillageEmojiByName(character.currentVillage) || "";
  const heightInFeetInches = character.height ? convertCmToFeetInches(character.height) : "N/A";
@@ -477,7 +482,7 @@ const createCharacterEmbed = (character) => {
    { name: "🎫 __Active Job Voucher__", value: character.jobVoucher && character.jobVoucherJob ? `> ${capitalizeWords(character.jobVoucherJob)}` : `> N/A`, inline: true },
    { name: "🔹 __Blighted__", value: `> ${character.blighted ? `Yes (Stage ${character.blightStage})` : "No"}`, inline: true },
    { name: "🔹 __Spirit Orbs__", value: `> ${character.spiritOrbs}`, inline: true },
-   { name: "🗺️ __Explores__", value: `> ${(character.exploreCount ?? 0).toLocaleString()}`, inline: true },
+   { name: "🗺️ __Explores__", value: `> ${exploreShown.toLocaleString()}`, inline: true },
    { name: "💥 __KO Status__", value: `> ${character.ko ? "True" : "False"}`, inline: true },
    { name: "📦 __Inventory__", value: `> [Inventory Link](${character.inventory})`, inline: false },
    { name: "🔗 __Application Link__", value: `> [Link](${character.appLink})`, inline: false }
@@ -2530,7 +2535,7 @@ if (boostInfo && boostInfo.boosterJob?.toLowerCase() === 'teacher' && boostInfo.
    let elixirHelpText = '';
    if (elixirBuffInfo.damageReduced > 0) {
      elixirHelpText += `\n\n🧪 **${elixirBuffInfo.elixirName} helped!** Took ${elixirBuffInfo.damageReduced} less damage because of elixir buff!`;
-   } else if (elixirBuffInfo.encounterType === 'fire' && elixirBuffInfo.elixirType === 'fireproof') {
+   } else if (elixirBuffInfo.encounterType === 'fire' && elixirBuffInfo.elixirType === 'chilly') {
      elixirHelpText += `\n\n🧪 **${elixirBuffInfo.elixirName} helped!** Fire resistance protected against fire monster!`;
    } else if (elixirBuffInfo.encounterType === 'electric' && elixirBuffInfo.elixirType === 'electro') {
      elixirHelpText += `\n\n🧪 **${elixirBuffInfo.elixirName} helped!** Electric resistance protected against electric monster!`;

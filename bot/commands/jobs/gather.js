@@ -470,7 +470,7 @@ module.exports = {
               blightRainMessage += `◈ Your character **${character.name}** braved the blight rain and managed to avoid infection thanks to their elixir buffs! ◈\n`;
               blightRainMessage += "The protective effects of your elixir kept you safe from the blight.";
               
-              // Consume chilly elixir after use (blight resistance only; fireproof does not affect blight)
+              // Consume chilly elixir after use (blight resistance)
               if (shouldConsumeElixir(character, 'gather', { blightRain: true })) {
                 consumeElixirBuff(character);
                 // Update character in database

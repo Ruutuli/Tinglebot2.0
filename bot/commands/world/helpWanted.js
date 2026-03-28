@@ -1418,14 +1418,15 @@ async function processMonsterEncounter(character, monsterName, heartsRemaining) 
   
   // Check if elixirs should be consumed based on the encounter
   if (shouldConsumeElixir(character, 'helpWanted', { monster: monster })) {
-    const consumedElixirType = character.buff.type;
+    const consumedElixirType =
+      character.buff.type === 'fireproof' ? 'chilly' : character.buff.type;
     
     console.log(`[helpWanted.js]: 🧪 ${consumedElixirType} elixir consumed for ${character.name} during help wanted encounter with ${monster.name}`);
     
     
     // Log what the elixir protected against
-    if (consumedElixirType === 'fireproof' && monster.name.includes('Fire')) {
-      console.log(`[helpWanted.js]: 🔥 Fireproof Elixir protected ${character.name} from fire damage during encounter with ${monster.name}`);
+    if (consumedElixirType === 'chilly' && monster.name.includes('Fire')) {
+      console.log(`[helpWanted.js]: 🔥 Chilly Elixir protected ${character.name} from fire damage during encounter with ${monster.name}`);
     } else if (consumedElixirType === 'spicy' && monster.name.includes('Ice')) {
       console.log(`[helpWanted.js]: ❄️ Spicy Elixir protected ${character.name} from ice damage during encounter with ${monster.name}`);
     } else if (consumedElixirType === 'electro' && monster.name.includes('Electric')) {
@@ -1623,7 +1624,7 @@ async function handleMonsterHunt(interaction, questId, characterName) {
           blightRainMessage += `◈ Your character **${character.name}** braved the blight rain and managed to avoid infection thanks to their elixir buffs! ◈\n`;
           blightRainMessage += "The protective effects of your elixir kept you safe from the blight.";
           
-          // Consume chilly elixir after use (blight resistance only; fireproof does not affect blight)
+          // Consume chilly elixir after use (blight resistance)
           if (shouldConsumeElixir(character, 'helpWanted', { blightRain: true })) {
             consumeElixirBuff(character);
             // Update character in database
@@ -1718,7 +1719,8 @@ async function handleMonsterHunt(interaction, questId, characterName) {
         const { clearBoostAfterUse } = require('../jobs/boosting.js');
         await clearBoostAfterUse(refreshedCharacter, {
           client: interaction?.client,
-          context: 'HWQ monster encounter'
+          context: 'HWQ monster encounter',
+          excludeCategories: ['Healers']
         });
         // Update character object reference
         Object.assign(character, refreshedCharacter.toObject ? refreshedCharacter.toObject() : refreshedCharacter);
@@ -2240,7 +2242,7 @@ module.exports = {
                 blightRainMessage += `◈ Your character **${character.name}** braved the blight rain and managed to avoid infection thanks to their elixir buffs! ◈\n`;
                 blightRainMessage += "The protective effects of your elixir kept you safe from the blight.";
                 
-                // Consume chilly elixir after use (blight resistance only; fireproof does not affect blight)
+                // Consume chilly elixir after use (blight resistance)
                 if (shouldConsumeElixir(character, 'helpWanted', { blightRain: true })) {
                   consumeElixirBuff(character);
                   // Update character in database
@@ -2284,7 +2286,8 @@ module.exports = {
         if (refreshedCharacter) {
           await clearBoostAfterUse(refreshedCharacter, {
             client: interaction.client,
-            context: 'helpwanted complete'
+            context: 'helpwanted complete',
+            excludeCategories: ['Healers']
           });
           if (refreshedCharacter.jobVoucher) {
             await deactivateJobVoucher(refreshedCharacter._id, { afterUse: true });

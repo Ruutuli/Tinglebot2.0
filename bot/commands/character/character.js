@@ -74,6 +74,7 @@ const {
  createCharacterGearEmbed,
  getCommonEmbedSettings,
 } = require("../../embeds/embeds.js");
+const { getExploreCountFromParties, resolveExploreStatCount } = require("../../modules/exploreModule.js");
 const {
  getMountEmoji,
  getMountThumbnail,
@@ -379,7 +380,9 @@ async function handleViewCharacter(interaction) {
 
   const settings = getCommonEmbedSettings(updatedCharacter);
 
-  const characterEmbed = createCharacterEmbed(updatedCharacter);
+  const derivedExplores = await getExploreCountFromParties(updatedCharacter._id);
+  const exploreDisplay = resolveExploreStatCount(updatedCharacter.exploreCount, derivedExplores);
+  const characterEmbed = createCharacterEmbed(updatedCharacter, { exploreDisplay });
 
   const itemNames = [
    updatedCharacter.gearWeapon?.name,

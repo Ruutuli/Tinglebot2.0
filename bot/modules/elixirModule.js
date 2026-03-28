@@ -10,8 +10,9 @@
 const ELIXIR_EFFECTS = {
   'Chilly Elixir': {
     type: 'chilly',
-    description: 'Provides resistance to water attacks and reduces blight rain infection chance',
+    description: 'Heat/fire resistance (one stat: hot climates, fire hazards, fire-type enemies); water resistance; blight resistance',
     effects: {
+      fireResistance: 1.5,
       waterResistance: 1.5,
       blightResistance: 1
     }
@@ -21,13 +22,6 @@ const ELIXIR_EFFECTS = {
     description: 'Provides resistance to cold attacks from ice enemies',
     effects: {
       coldResistance: 1.5
-    }
-  },
-  'Fireproof Elixir': {
-    type: 'fireproof',
-    description: 'Provides fire resistance against fire enemies',
-    effects: {
-      fireResistance: 1.5
     }
   },
   'Electro Elixir': {
@@ -119,7 +113,7 @@ const applyElixirBuff = (character, elixirName) => {
 // Applies immediate effects when elixir is consumed
 // Note: Most immediate effects are now handled by the database item consumption system
 const applyImmediateEffects = (character, elixirName) => {
-  const elixir = ELIXIR_EFFECTS[elixirName];
+  const elixir = ELIXIR_EFFECTS[resolveElixirItemName(elixirName)];
   
   switch (elixirName) {
     case 'Energizing Elixir':
@@ -166,16 +160,30 @@ const applyImmediateEffects = (character, elixirName) => {
 const shouldConsumeElixir = (character, activity, context = {}) => {
   if (!character.buff?.active) return false;
   
-  const buffType = character.buff.type;
-  
+  // Legacy DB buffs may still have type 'fireproof' (merged into chilly)
+  const buffType =
+    character.buff.type === 'fireproof' ? 'chilly' : character.buff.type;
+
   switch (buffType) {
     case 'chilly':
-      // Consume when encountering water/wet enemies
-      return activity === 'combat' && context.monster?.name?.includes('Water') ||
-             activity === 'helpWanted' && context.monster?.name?.includes('Water') ||
-             activity === 'raid' && context.monster?.name?.includes('Water') ||
-             activity === 'loot' && context.monster?.name?.includes('Water');
-      
+      // Blight rain protection (Chilly)
+      if (context.blightRain) {
+        return (
+          activity === 'loot' ||
+          activity === 'gather' ||
+          activity === 'travel' ||
+          activity === 'helpWanted' ||
+          activity === 'raid'
+        );
+      }
+      // Fire or water enemies (combined former Fireproof + Chilly combat use)
+      return (
+        (activity === 'combat' && monsterNameImpliesChillyConsume(context.monster)) ||
+        (activity === 'helpWanted' && monsterNameImpliesChillyConsume(context.monster)) ||
+        (activity === 'raid' && monsterNameImpliesChillyConsume(context.monster)) ||
+        (activity === 'loot' && monsterNameImpliesChillyConsume(context.monster))
+      );
+
     case 'electro':
       // Consume when encountering electric enemies
       return activity === 'combat' && context.monster?.name?.includes('Electric') ||
@@ -190,13 +198,6 @@ const shouldConsumeElixir = (character, activity, context = {}) => {
     case 'energizing':
       // Consume when performing physical actions
       return activity === 'gather' || activity === 'loot' || activity === 'crafting';
-      
-    case 'fireproof':
-      // Consume when encountering fire enemies
-      return activity === 'combat' && context.monster?.name?.includes('Fire') ||
-             activity === 'helpWanted' && context.monster?.name?.includes('Fire') ||
-             activity === 'raid' && context.monster?.name?.includes('Fire') ||
-             activity === 'loot' && context.monster?.name?.includes('Fire');
       
     case 'hasty':
       // Consume when moving or traveling
@@ -350,7 +351,7 @@ const calculateBuffedStats = (character) => {
 // ------------------- Get Elixir Info -------------------
 // Returns information about a specific elixir
 const getElixirInfo = (elixirName) => {
-  return ELIXIR_EFFECTS[elixirName] || null;
+  return ELIXIR_EFFECTS[resolveElixirItemName(elixirName)] || null;
 };
 
 // ------------------- Get All Elixir Types -------------------
@@ -400,16 +401,16 @@ const getMonsterElement = (monster) => {
 // Maps quadrant hazard names (thunder, hot, cold) to the elixir type that counters them.
 const EXPLORATION_HAZARD_TO_ELIXIR = {
   thunder: 'electro',
-  hot: 'fireproof',
+  hot: 'chilly',
   cold: 'spicy',
 };
 
 /** Elixirs that can be used during an expedition to protect the party from quadrant hazards for the rest of the explore. */
-const HAZARD_RESISTANCE_ELIXIRS = ['Electro Elixir', 'Fireproof Elixir', 'Spicy Elixir'];
+const HAZARD_RESISTANCE_ELIXIRS = ['Electro Elixir', 'Chilly Elixir', 'Spicy Elixir'];
 
 /** Get the internal elixir type (e.g. 'electro') from an elixir item name. */
 const getElixirTypeByName = (elixirName) => {
-  const entry = ELIXIR_EFFECTS[elixirName];
+  const entry = ELIXIR_EFFECTS[resolveElixirItemName(elixirName)];
   return entry ? entry.type : null;
 };
 
@@ -422,11 +423,12 @@ const elixirCountersExplorationHazard = (elixirType, hazard) => {
 
 /** True if this elixir can be used during explore to grant hazard protection for the whole expedition. */
 const isHazardResistanceElixir = (elixirName) => {
-  return HAZARD_RESISTANCE_ELIXIRS.includes(String(elixirName || '').trim());
+  const canonical = resolveElixirItemName(String(elixirName || '').trim());
+  return HAZARD_RESISTANCE_ELIXIRS.includes(canonical);
 };
 
 // ------------------- Get Resistance For Element -------------------
-// Maps element types to the resistance buff needed to counter them
+// Maps element types to the resistance buff needed to counter them (fire uses the same stat as ambient heat)
 const getResistanceForElement = (element) => {
   switch (element) {
     case 'fire': return 'fireResistance';
