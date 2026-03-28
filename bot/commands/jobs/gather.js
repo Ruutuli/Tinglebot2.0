@@ -41,6 +41,12 @@ const { handleInteractionError } = require('@/utils/globalErrorHandler.js');
 const { checkInventorySync } = require('@/utils/characterUtils');
 const { enforceJail } = require('@/utils/jailCheck');
 const { addItemInventoryDatabase } = require('@/utils/inventoryUtils.js');
+const {
+  isAprilFoolsEastern,
+  aprilFoolsMessageSuffix,
+  toAprilFoolsLootObject,
+  toAprilFoolsGatherItem,
+} = require('@/utils/aprilFoolsRoll.js');
 // Google Sheets functionality removed
 
 // ============================================================================
@@ -780,7 +786,10 @@ module.exports = {
 
                 if (entertainerBonusPool.length > 0) {
                   const bonusIndex = Math.floor(Math.random() * entertainerBonusPool.length);
-                  const bonusItem = entertainerBonusPool[bonusIndex];
+                  let bonusItem = entertainerBonusPool[bonusIndex];
+                  if (isAprilFoolsEastern()) {
+                    bonusItem = await toAprilFoolsGatherItem(bonusItem);
+                  }
 
                   await addItemInventoryDatabase(
                     character._id,
@@ -815,7 +824,11 @@ module.exports = {
             const items = await fetchItemsByMonster(encounteredMonster.name);
             const weightedItems = createWeightedItemList(items, adjustedRandomValue);
             if (weightedItems.length > 0) {
-              const lootedItem = await generateLootedItem(encounteredMonster, weightedItems);
+              let lootedItem = await generateLootedItem(encounteredMonster, weightedItems);
+              lootedItem = await toAprilFoolsLootObject(lootedItem);
+              if (isAprilFoolsEastern()) {
+                outcomeMessage += aprilFoolsMessageSuffix();
+              }
               await addItemInventoryDatabase(
                 character._id,
                 lootedItem.itemName,
@@ -1076,6 +1089,8 @@ module.exports = {
           });
           return;
         }
+
+        randomItem = await toAprilFoolsGatherItem(randomItem);
         
         const isFortuneTellerBoost = character.boostedBy && boosterCharacter && boosterCharacter.job?.toLowerCase() === 'fortune teller';
         logger.info('GATHER', `${isFortuneTellerBoost ? 'Fortune Teller' : 'Normal'} Weighted Selection - Name: "${randomItem.itemName}", Rarity: ${randomItem.itemRarity}, Weight: ${randomItem.weight || 1}`);
@@ -1124,6 +1139,11 @@ module.exports = {
         } else {
           logger.info('GATHER', `🏘️ Village Level 1: No quantity bonuses (base quantity: ${quantity})`);
         }
+
+        if (isAprilFoolsEastern()) {
+          quantity = 1;
+          villageBonusInfo = null;
+        }
         
         // Handle Entertainer bonus item: only items with entertainerItems === true
         // First use job+region pool; if empty, fall back to region-only (any job) so more jobs get a bonus
@@ -1147,6 +1167,9 @@ module.exports = {
             // Select a random entertainer item as bonus
             const bonusIndex = Math.floor(Math.random() * entertainerBonusPool.length);
             bonusItem = entertainerBonusPool[bonusIndex];
+            if (isAprilFoolsEastern()) {
+              bonusItem = await toAprilFoolsGatherItem(bonusItem);
+            }
           } else {
             // No entertainer items available in this region/job combination
             entertainerBonusUnavailable = true;
@@ -1197,6 +1220,10 @@ module.exports = {
         // Debug info removed to reduce log bloat
         
         const embed = await createGatherEmbed(character, randomItem, bonusItem, isDivineItemWithPriestBoost, boosterCharacter, scholarTargetVillage, villageBonusInfo, quantity);
+        if (isAprilFoolsEastern()) {
+          const prev = embed.data?.description || '';
+          embed.setDescription(prev + aprilFoolsMessageSuffix());
+        }
         
         // Include blight rain and lightning strike messages if present
         const messages = [];

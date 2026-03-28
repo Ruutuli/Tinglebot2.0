@@ -30,6 +30,7 @@ const { finalizeBlightApplication } = require('../../handlers/blightHandler');
 const { fetchItemsByMonster } = require('@/database/db');
 const { createWeightedItemList, calculateFinalValue } = require('../../modules/rngModule');
 const { addItemInventoryDatabase } = require('@/utils/inventoryUtils');
+const { isAprilFoolsEastern, aprilFoolsMessageSuffix, toAprilFoolsLootObject } = require('@/utils/aprilFoolsRoll.js');
 const { markGrottoCleared, pushProgressLog, restorePartyPoolOnGrottoExit } = require('../../modules/exploreModule');
 const { GROTTO_CLEARED_FLAVOR } = require('../../data/grottoTrials.js');
 // Google Sheets validation removed
@@ -1058,7 +1059,8 @@ async function handleRaidVictory(interaction, raidData, monster) {
           // Create weighted items based on this participant's damage performance
           const finalValue = Math.min(100, Math.max(1, participant.damage * 10));
           const weightedItems = createWeightedItemList(items, finalValue);
-          const lootedItem = await generateLootedItem(monster, weightedItems, participant.damage);
+          let lootedItem = await generateLootedItem(monster, weightedItems, participant.damage);
+          lootedItem = await toAprilFoolsLootObject(lootedItem);
 
           if (!lootedItem) {
             console.log(`[raid.js]: ⚠️ No lootable items found for ${participant.name}, skipping loot`);
@@ -1083,7 +1085,9 @@ async function handleRaidVictory(interaction, raidData, monster) {
               if (participant.damage >= 10) qualityIndicator = ' 🔥';
               else if (participant.damage >= 5) qualityIndicator = ' ⚡';
               else if (participant.damage >= 2) qualityIndicator = ' ✨';
-              lootResults.push(`**${character.name}**${qualityIndicator} got ${lootedItem.emoji || ''} **${lootedItem.itemName}** × ${lootedItem.quantity}!`);
+              let raidLootLine = `**${character.name}**${qualityIndicator} got ${lootedItem.emoji || ''} **${lootedItem.itemName}** × ${lootedItem.quantity}!`;
+              if (isAprilFoolsEastern()) raidLootLine += aprilFoolsMessageSuffix();
+              lootResults.push(raidLootLine);
             } catch (error) {
             console.error(`[raid.js]: ❌ Error processing loot for ${character.name}:`, error);
             console.error(`[raid.js]: 📊 Character details:`, {
@@ -1112,7 +1116,9 @@ async function handleRaidVictory(interaction, raidData, monster) {
               qualityIndicator = ' ✨'; // Low damage = sparkle emoji
             }
             
-            lootResults.push(`**${character.name}**${qualityIndicator} got ${lootedItem.emoji || ''} **${lootedItem.itemName}** × ${lootedItem.quantity}! *(inventory sync failed)*`);
+            let raidFailLine = `**${character.name}**${qualityIndicator} got ${lootedItem.emoji || ''} **${lootedItem.itemName}** × ${lootedItem.quantity}! *(inventory sync failed)*`;
+            if (isAprilFoolsEastern()) raidFailLine += aprilFoolsMessageSuffix();
+            lootResults.push(raidFailLine);
           }
         } else {
           // Character doesn't have valid inventory, but still show loot
@@ -1126,7 +1132,9 @@ async function handleRaidVictory(interaction, raidData, monster) {
             qualityIndicator = ' ✨'; // Low damage = sparkle emoji
           }
           
-          lootResults.push(`**${character.name}**${qualityIndicator} got ${lootedItem.emoji || ''} **${lootedItem.itemName}** × ${lootedItem.quantity}! *(no inventory link)*`);
+          let raidNoInv = `**${character.name}**${qualityIndicator} got ${lootedItem.emoji || ''} **${lootedItem.itemName}** × ${lootedItem.quantity}! *(no inventory link)*`;
+          if (isAprilFoolsEastern()) raidNoInv += aprilFoolsMessageSuffix();
+          lootResults.push(raidNoInv);
         }
         }
         

@@ -30,6 +30,12 @@ const { handleInteractionError } = require('@/utils/globalErrorHandler.js');
 // Google Sheets functionality removed
 const { addItemInventoryDatabase } = require('@/utils/inventoryUtils.js');
 const logger = require('@/utils/logger.js');
+const {
+  isAprilFoolsEastern,
+  aprilFoolsMessageSuffix,
+  toAprilFoolsLootArray,
+  fetchMockFairyRollPayload,
+} = require('@/utils/aprilFoolsRoll.js');
 const { isBloodMoonActive } = require("../../scripts/bloodmoon.js");
 const { checkInventorySync } = require('@/utils/characterUtils');
 const { enforceJail } = require('@/utils/jailCheck');
@@ -1703,6 +1709,10 @@ async function processLootingLogic(
   let lootedItems = null;
   if (outcome.canLoot && weightedItems.length > 0) {
    lootedItems = await generateLootedItem(encounteredMonster, weightedItems, character, villageLevel, adjustedRandomValue, items);
+   lootedItems = await toAprilFoolsLootArray(lootedItems);
+   if (isAprilFoolsEastern()) {
+     outcomeMessage += aprilFoolsMessageSuffix();
+   }
    const totalQuantity = lootedItems.reduce((sum, item) => sum + (item.quantity || 1), 0);
    logger.success('LOOT', `${character.name} looted: ${lootedItems.map(item => `${item.itemName} (x${item.quantity})`).join(', ')} (${lootedItems.length} item${lootedItems.length > 1 ? 's' : ''}, total qty: ${totalQuantity})`);
 
@@ -1745,20 +1755,31 @@ async function processLootingLogic(
       const chestDropChance = Math.random();
       if (chestDropChance < 0.25) { // 25% chance to get extra item
         const allItems = await fetchAllItems();
-        if (allItems && allItems.length > 0) {
-          // Select completely random item (like travel chest)
-          const randomItem = allItems[Math.floor(Math.random() * allItems.length)];
+        if ((allItems && allItems.length > 0) || isAprilFoolsEastern()) {
+          let chestName;
+          let itemEmoji;
+          if (isAprilFoolsEastern()) {
+            const p = await fetchMockFairyRollPayload();
+            chestName = p.itemName;
+            itemEmoji = p.emoji || '🧚';
+          } else {
+            const randomItem = allItems[Math.floor(Math.random() * allItems.length)];
+            chestName = randomItem.itemName;
+            itemEmoji = randomItem.emoji || '📦';
+          }
           try {
             await addItemInventoryDatabase(
               character._id,
-              randomItem.itemName,
+              chestName,
               1,
               interaction,
               "Looted"
             );
-            const itemEmoji = randomItem.emoji || '📦';
-            chestItemMessage = `\n🎁 **Found a chest!** Received ${itemEmoji} ${randomItem.itemName}!`;
-            logger.success('LOOT', `${character.name} found chest from Like Like: ${randomItem.itemName}`);
+            chestItemMessage = `\n🎁 **Found a chest!** Received ${itemEmoji} ${chestName}!`;
+            if (isAprilFoolsEastern()) {
+              chestItemMessage += aprilFoolsMessageSuffix();
+            }
+            logger.success('LOOT', `${character.name} found chest from Like Like: ${chestName}`);
           } catch (chestError) {
             logger.error('LOOT', `Failed to add chest item for ${character.name}: ${chestError.message}`);
           }

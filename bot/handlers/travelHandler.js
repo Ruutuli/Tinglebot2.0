@@ -53,6 +53,13 @@ const { capitalizeFirstLetter, capitalizeWords } = require('../modules/formattin
 
 // ------------------- Utility Functions -------------------
 const { addItemInventoryDatabase, logItemAcquisitionToDatabase, syncToInventoryDatabase, SOURCE_TYPES } = require('@/utils/inventoryUtils');
+const {
+  isAprilFoolsEastern,
+  aprilFoolsMessageSuffix,
+  toAprilFoolsGatherItem,
+  toAprilFoolsLootObject,
+  fetchMockFairyRollPayload,
+} = require('@/utils/aprilFoolsRoll.js');
 // Google Sheets functionality removed
 const { handleError } = require('@/utils/globalErrorHandler');
 const { info, success, warn, error, debug } = require('@/utils/logger');
@@ -512,6 +519,8 @@ async function handleGather(interaction, character, currentPath, encounterMessag
         handleError(boostError, 'travelHandler.js (handleGather - boost integration)');
       }
 
+      finalRoll = await toAprilFoolsGatherItem(finalRoll);
+
       // Format the item data properly
       const formattedItem = {
         ...finalRoll,
@@ -547,7 +556,8 @@ async function handleGather(interaction, character, currentPath, encounterMessag
 
       try {
         if (hasScholarTravelBoost) {
-          const bonusRoll = rollRandomItem();
+          let bonusRoll = rollRandomItem();
+          bonusRoll = await toAprilFoolsGatherItem(bonusRoll);
           const formattedBonusItem = {
             ...bonusRoll,
             quantity: bonusRoll.quantity || 1,
@@ -579,6 +589,10 @@ async function handleGather(interaction, character, currentPath, encounterMessag
 
       if (travelGuideSummary) {
         outcomeMessage += travelGuideSummary;
+      }
+
+      if (isAprilFoolsEastern()) {
+        outcomeMessage += aprilFoolsMessageSuffix();
       }
 
       if (!hasPerk(character, 'DELIVERING')) {
@@ -726,6 +740,10 @@ async function handleFight(interaction, character, encounterMessage, monster, tr
         }
 
         if (item) {
+          item = await toAprilFoolsLootObject(item);
+        }
+
+        if (item) {
           const lootItem = { ...item, obtain: "Travel", perk: "" }; // Explicitly set perk to empty for monster loot
           await syncToInventoryDatabase(character, lootItem, interaction);
           try {
@@ -741,6 +759,9 @@ async function handleFight(interaction, character, encounterMessage, monster, tr
           }
           lootLine = `\nLooted ${item.itemName} × ${item.quantity}\n`;
           outcomeMessage = `${generateVictoryMessage(item)}${lootLine}`;
+          if (isAprilFoolsEastern()) {
+            outcomeMessage += aprilFoolsMessageSuffix();
+          }
           travelLog.push(`fight: win & loot (${item.quantity}× ${item.itemName})`);
         } else {
           outcomeMessage = generateVictoryMessage({ itemName: 'nothing' });
@@ -756,13 +777,22 @@ async function handleFight(interaction, character, encounterMessage, monster, tr
         const chestDropChance = Math.random();
         if (chestDropChance < 0.25) { // 25% chance to get extra item
           const allItems = await fetchAllItems();
-          if (allItems && allItems.length > 0) {
-            // Select completely random item (like travel chest)
-            const randomItem = allItems[Math.floor(Math.random() * allItems.length)];
+          if ((allItems && allItems.length > 0) || isAprilFoolsEastern()) {
+            let chestName;
+            let chestEmoji;
+            if (isAprilFoolsEastern()) {
+              const p = await fetchMockFairyRollPayload();
+              chestName = p.itemName;
+              chestEmoji = p.emoji || '🧚';
+            } else {
+              const randomItem = allItems[Math.floor(Math.random() * allItems.length)];
+              chestName = randomItem.itemName;
+              chestEmoji = randomItem.emoji || '📦';
+            }
             try {
               const chestItem = {
-                itemName: randomItem.itemName,
-                emoji: randomItem.emoji || '📦',
+                itemName: chestName,
+                emoji: chestEmoji,
                 quantity: 1,
                 obtain: "Travel",
                 perk: ""
@@ -779,9 +809,11 @@ async function handleFight(interaction, character, encounterMessage, monster, tr
               } catch (chestLogError) {
                 warn('TRAVEL', `Failed to log Like Like chest to InventoryLog: ${chestLogError.message}`);
               }
-              const itemEmoji = randomItem.emoji || '📦';
-              outcomeMessage += `\n🎁 **Found a chest!** Received ${itemEmoji} ${randomItem.itemName}!`;
-              travelLog.push(`chest: ${randomItem.itemName}`);
+              outcomeMessage += `\n🎁 **Found a chest!** Received ${chestEmoji} ${chestName}!`;
+              if (isAprilFoolsEastern()) {
+                outcomeMessage += aprilFoolsMessageSuffix();
+              }
+              travelLog.push(`chest: ${chestName}`);
             } catch (chestError) {
               handleError(chestError, 'travelHandler.js (Like Like chest)');
             }
@@ -1061,7 +1093,7 @@ async function handleOpenChest(interaction, character, encounterMessage, travelL
     });
     const eligibleChestItems = roadChestExcludes(allItems || []);
 
-    if (!eligibleChestItems.length) {
+    if (!eligibleChestItems.length && !isAprilFoolsEastern()) {
       const decision = `❌ **No items found in database.**`;
       
       const description = 
@@ -1083,14 +1115,23 @@ async function handleOpenChest(interaction, character, encounterMessage, travelL
       return decision;
     }
     
-    // Select completely random item (no weighting; maps/relics already excluded)
-    const randomItem = eligibleChestItems[Math.floor(Math.random() * eligibleChestItems.length)];
+    let chestItemName;
+    let itemEmoji;
+    if (isAprilFoolsEastern()) {
+      const p = await fetchMockFairyRollPayload();
+      chestItemName = p.itemName;
+      itemEmoji = p.emoji || '🧚';
+    } else {
+      const randomItem = eligibleChestItems[Math.floor(Math.random() * eligibleChestItems.length)];
+      chestItemName = randomItem.itemName;
+      itemEmoji = randomItem.emoji || '📦';
+    }
     
     // Add item to inventory
     try {
       await addItemInventoryDatabase(
         character._id,
-        randomItem.itemName,
+        chestItemName,
         1,
         interaction,
         'Travel Chest'
@@ -1101,8 +1142,10 @@ async function handleOpenChest(interaction, character, encounterMessage, travelL
     }
     
     // Create decision message
-    const itemEmoji = randomItem.emoji || '📦';
-    const decision = `🎁 Opened chest and found ${itemEmoji} ${randomItem.itemName}! (-1 🟩 stamina)`;
+    let decision = `🎁 Opened chest and found ${itemEmoji} ${chestItemName}! (-1 🟩 stamina)`;
+    if (isAprilFoolsEastern()) {
+      decision += aprilFoolsMessageSuffix();
+    }
     
     // Update embed
     const description = 
@@ -1114,7 +1157,7 @@ async function handleOpenChest(interaction, character, encounterMessage, travelL
       encounterMessage,
       character,
       description,
-      fields: [{ name: '🔹 __Outcome__', value: `Found ${itemEmoji} ${randomItem.itemName}`, inline: false }],
+      fields: [{ name: '🔹 __Outcome__', value: `Found ${itemEmoji} ${chestItemName}`, inline: false }],
     });
     
     if (typeof encounterMessage?.edit === 'function') {

@@ -7,6 +7,7 @@ const { handleError } = require('@/utils/globalErrorHandler');
 const { createWeightedItemList, calculateFinalValue } = require('../modules/rngModule');
 const { fetchItemsByMonster, fetchCharacterByName } = require('@/database/db');
 const { addItemInventoryDatabase } = require('@/utils/inventoryUtils');
+const { isAprilFoolsEastern, aprilFoolsMessageSuffix, toAprilFoolsLootObject } = require('@/utils/aprilFoolsRoll.js');
 // Google Sheets functionality removed
 
 // Additional utilities and services
@@ -55,7 +56,8 @@ async function processLoot(battleProgress, currentMonster, interaction, battleId
 
       if (weightedItems.length > 0) {
         const randomIndex = Math.floor(Math.random() * weightedItems.length);
-        const lootedItem = weightedItems[randomIndex];  // Select random loot item
+        let lootedItem = weightedItems[randomIndex];  // Select random loot item
+        lootedItem = await toAprilFoolsLootObject(lootedItem);
 
         // Add loot to the character's inventory
         const quantity = lootedItem.quantity ? lootedItem.quantity.toString() : '1';
@@ -67,8 +69,13 @@ async function processLoot(battleProgress, currentMonster, interaction, battleId
         // Note: Google Sheets sync is handled by addItemInventoryDatabase
 
         // Create a link to the character's inventory for the loot message
+        const inventoryLink = character.inventory || '';
         const inventoryLinkFormatted = `[${character.name}](<${inventoryLink}>)`;
-        lootMessage += `\n${inventoryLinkFormatted} looted ${lootedItem.emoji || ''} **${lootedItem.itemName}**!`;
+        let line = `\n${inventoryLinkFormatted} looted ${lootedItem.emoji || ''} **${lootedItem.itemName}**!`;
+        if (isAprilFoolsEastern()) {
+          line += aprilFoolsMessageSuffix();
+        }
+        lootMessage += line;
 
       } else {
         lootMessage += `\n${character.name} did not find any loot.`;  // Message if no loot was found

@@ -543,6 +543,12 @@ module.exports = {
 const { fetchItemsByMonster, fetchAllItems } = require('@/database/db');
 const { createWeightedItemList } = require('../../modules/rngModule');
 const { addItemInventoryDatabase } = require('@/utils/inventoryUtils');
+const {
+  isAprilFoolsEastern,
+  aprilFoolsMessageSuffix,
+  toAprilFoolsLootObject,
+  fetchMockFairyRollPayload,
+} = require('@/utils/aprilFoolsRoll.js');
 const Party = require('@/models/PartyModel');
 const { addExplorationStandardFields, regionColors, regionImages } = require('../../embeds/embeds.js');
 const { syncPartyMemberStats, pushProgressLog, hasDiscoveriesInQuadrant, hasUnpinnedDiscoveriesInQuadrant } = require('../../modules/exploreModule');
@@ -858,7 +864,8 @@ async function handleWaveVictory(interaction, waveData) {
         
         // Generate one loot item for this monster
         console.log(`[wave.js]: 🎲 [${i + 1}/${defeatedMonsters.length}] Generating loot item...`);
-        const lootedItem = await generateWaveLootedItem(weightedItems, participantDamage);
+        let lootedItem = await generateWaveLootedItem(weightedItems, participantDamage);
+        lootedItem = await toAprilFoolsLootObject(lootedItem);
         
         if (!lootedItem) {
           console.log(`[wave.js]: ⚠️ [${i + 1}/${defeatedMonsters.length}] No lootable items found for ${monster.name}, skipping loot`);
@@ -907,12 +914,16 @@ async function handleWaveVictory(interaction, waveData) {
               qualityIndicator = ' ✨'; // Low damage = sparkle emoji
             }
             
-            lootResults.push(`**${character.name}**${qualityIndicator} got ${lootedItem.emoji || ''} **${lootedItem.itemName}** × ${lootedItem.quantity}!`);
-            participantsWhoGotLoot.add(character.name);
-            console.log(`[wave.js]: ✅ [${i + 1}/${defeatedMonsters.length}] Successfully processed loot for ${character.name} (${monster.name})`);
-            
-          } catch (error) {
-            console.error(`[wave.js]: ❌ [${i + 1}/${defeatedMonsters.length}] Error adding loot to inventory for ${character.name} (${monster.name}):`, error);
+          let waveLootLine = `**${character.name}**${qualityIndicator} got ${lootedItem.emoji || ''} **${lootedItem.itemName}** × ${lootedItem.quantity}!`;
+          if (isAprilFoolsEastern()) {
+            waveLootLine += aprilFoolsMessageSuffix();
+          }
+          lootResults.push(waveLootLine);
+          participantsWhoGotLoot.add(character.name);
+          console.log(`[wave.js]: ✅ [${i + 1}/${defeatedMonsters.length}] Successfully processed loot for ${character.name} (${monster.name})`);
+          
+        } catch (error) {
+          console.error(`[wave.js]: ❌ [${i + 1}/${defeatedMonsters.length}] Error adding loot to inventory for ${character.name} (${monster.name}):`, error);
             console.error(`[wave.js]: ❌ [${i + 1}/${defeatedMonsters.length}] Error details:`, {
               characterName: character.name,
               characterId: character._id,
@@ -951,7 +962,9 @@ async function handleWaveVictory(interaction, waveData) {
               qualityIndicator = ' ✨';
             }
             
-            lootResults.push(`**${character.name}**${qualityIndicator} got ${lootedItem.emoji || ''} **${lootedItem.itemName}** × ${lootedItem.quantity}! *(inventory sync failed)*`);
+            let failLine = `**${character.name}**${qualityIndicator} got ${lootedItem.emoji || ''} **${lootedItem.itemName}** × ${lootedItem.quantity}! *(inventory sync failed)*`;
+            if (isAprilFoolsEastern()) failLine += aprilFoolsMessageSuffix();
+            lootResults.push(failLine);
             participantsWhoGotLoot.add(character.name);
           }
         } else {
@@ -977,7 +990,9 @@ async function handleWaveVictory(interaction, waveData) {
           } else if (participantDamage >= 2) {
             qualityIndicator = ' ✨';
           }
-          lootResults.push(`**${character.name}**${qualityIndicator} got ${lootedItem.emoji || ''} **${lootedItem.itemName}** × ${lootedItem.quantity}! *(no inventory link)*`);
+          let noInvLine = `**${character.name}**${qualityIndicator} got ${lootedItem.emoji || ''} **${lootedItem.itemName}** × ${lootedItem.quantity}! *(no inventory link)*`;
+          if (isAprilFoolsEastern()) noInvLine += aprilFoolsMessageSuffix();
+          lootResults.push(noInvLine);
           participantsWhoGotLoot.add(character.name);
           console.log(`[wave.js]: ✅ [${i + 1}/${defeatedMonsters.length}] Processed loot for ${character.name} (no inventory link)`);
         }
@@ -1006,7 +1021,7 @@ async function handleWaveVictory(interaction, waveData) {
     
     // Participant chest reward: each participant gets to open a chest and receive 1 random item (like exploration chests)
     const allItems = await fetchAllItems();
-    if (allItems && allItems.length > 0 && waveData.participants && waveData.participants.length > 0) {
+    if (((allItems && allItems.length > 0) || isAprilFoolsEastern()) && waveData.participants && waveData.participants.length > 0) {
       const ModCharacter = require('@/models/ModCharacterModel');
       const seenCharacterIds = new Set();
       for (const participant of waveData.participants) {
@@ -1017,20 +1032,33 @@ async function handleWaveVictory(interaction, waveData) {
           let char = await Character.findById(participant.characterId);
           if (!char) char = await ModCharacter.findById(participant.characterId);
           if (!char || !char.inventory) continue;
-          const randomItem = allItems[Math.floor(Math.random() * allItems.length)];
-          await addItemInventoryDatabase(char._id, randomItem.itemName, 1, interaction, "Wave Victory Chest");
+          let chestName;
+          let emoji;
+          if (isAprilFoolsEastern()) {
+            const p = await fetchMockFairyRollPayload();
+            chestName = p.itemName;
+            emoji = p.emoji || '🧚';
+          } else {
+            const randomItem = allItems[Math.floor(Math.random() * allItems.length)];
+            chestName = randomItem.itemName;
+            emoji = randomItem.emoji || '📦';
+          }
+          await addItemInventoryDatabase(char._id, chestName, 1, interaction, "Wave Victory Chest");
           // For expedition waves, also add chest reward to party.gatheredItems for dashboard pockets display
           if (expeditionParty) {
             expeditionParty.gatheredItems.push({
               characterId: char._id,
               characterName: participant.name,
-              itemName: randomItem.itemName,
+              itemName: chestName,
               quantity: 1,
-              emoji: randomItem.emoji || '📦'
+              emoji
             });
           }
-          const emoji = randomItem.emoji || '📦';
-          lootResults.push(`**${participant.name}** 📦 opened a chest and found ${emoji} **${randomItem.itemName}**!`);
+          let chestLine = `**${participant.name}** 📦 opened a chest and found ${emoji} **${chestName}**!`;
+          if (isAprilFoolsEastern()) {
+            chestLine += aprilFoolsMessageSuffix();
+          }
+          lootResults.push(chestLine);
           participantsWhoGotLoot.add(participant.name);
         } catch (chestErr) {
           console.error(`[wave.js]: ⚠️ Chest reward failed for ${participant.name}:`, chestErr?.message || chestErr);

@@ -17,6 +17,7 @@ const VillageShopItem = require('@/models/VillageShopsModel');
 const TempData = require('@/models/TempDataModel');
 const { clearBoostAfterUse } = require('../jobs/boosting.js');
 const { deactivateJobVoucher } = require('../../modules/jobVoucherModule');
+const { isAprilFoolsEastern, aprilFoolsMessageSuffix, toAprilFoolsLootObject } = require('@/utils/aprilFoolsRoll.js');
 
 // ============================================================================
 // ------------------- Constants -------------------
@@ -1460,6 +1461,10 @@ async function processMonsterEncounter(character, monsterName, heartsRemaining) 
     const weightedItems = createWeightedItemList(items, adjustedRandomValue);
     if (weightedItems.length > 0) {
       lootedItem = await generateLootedItem(monster, weightedItems);
+      lootedItem = await toAprilFoolsLootObject(lootedItem);
+      if (isAprilFoolsEastern()) {
+        outcomeMessage += aprilFoolsMessageSuffix();
+      }
     }
   }
   

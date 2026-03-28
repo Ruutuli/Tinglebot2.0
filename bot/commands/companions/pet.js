@@ -39,6 +39,7 @@ const {
 // ------------------- Utility Functions -------------------
 // Helper utilities for inventory management, Google Sheets API interaction, and image uploads.
 const { addItemInventoryDatabase } = require('@/utils/inventoryUtils');
+const { isAprilFoolsEastern, aprilFoolsMessageSuffix, toAprilFoolsGatherItem } = require('@/utils/aprilFoolsRoll.js');
 // Google Sheets functionality removed
 const { uploadPetImage } = require('@/utils/uploadUtils');
 const { checkInventorySync } = require('@/utils/characterUtils');
@@ -930,8 +931,9 @@ module.exports = {
 
      // ------------------- Determine Random Item -------------------
      const weightedItems = createWeightedItemList(itemsBasedOnPerk);
-     const randomItem =
+     let randomItem =
       weightedItems[Math.floor(Math.random() * weightedItems.length)];
+     randomItem = await toAprilFoolsGatherItem(randomItem);
 
      // ------------------- Deduct Pet Roll and Update Database -------------------
      // Deduct the roll
@@ -957,12 +959,15 @@ module.exports = {
      // Note: Google Sheets sync is handled by addItemInventoryDatabase
 
      // ------------------- Build Roll Result Embed -------------------
-     const flavorTextMessage = getFlavorText(
+     let flavorTextMessage = getFlavorText(
       chosenRoll,
       pet.name,
       pet.species,
       randomItem.itemName
      );
+     if (isAprilFoolsEastern()) {
+      flavorTextMessage += aprilFoolsMessageSuffix();
+     }
 
      // ------------------- Determine Embed Color Based on Village -------------------
      const villageName =

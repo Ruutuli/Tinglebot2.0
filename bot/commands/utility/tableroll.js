@@ -9,6 +9,11 @@ const { connectToTinglebot, fetchCharacterByNameAndUserId, fetchItemByName } = r
 const TableRoll = require('@/models/TableRollModel');
 const Quest = require('@/models/QuestModel');
 const { addItemInventoryDatabase } = require('@/utils/inventoryUtils');
+const {
+  isAprilFoolsEastern,
+  getAprilFoolsFlavorLine,
+  fetchMockFairyRollPayload,
+} = require('@/utils/aprilFoolsRoll.js');
 // Google Sheets functionality removed
 const { DEFAULT_IMAGE_URL } = require('../../embeds/embeds.js');
 const { 
@@ -447,6 +452,17 @@ module.exports = {
         e.thumbnailImage === rolledThumbnail
       );
 
+      const hasItemGrant = Boolean(rolledItemName && rolledItemName.trim());
+      let displayItemName = rolledItemName;
+      let displayFlavor = rolledFlavor;
+      let inventoryItemName = rolledItemName;
+      if (isAprilFoolsEastern() && hasItemGrant) {
+        const p = await fetchMockFairyRollPayload();
+        displayItemName = p.itemName;
+        inventoryItemName = p.itemName;
+        displayFlavor = getAprilFoolsFlavorLine();
+      }
+
       // Build roll result string
       const rollResultString = `**🎲 d${totalEntries} → ${rolledIndex + 1}**`;
 
@@ -467,16 +483,17 @@ module.exports = {
       }
 
              // Add result fields with emojis
-       if (rolledItemName && rolledItemName.trim()) {
-         const itemEmoji = await getItemEmoji(rolledItemName);
+       if (hasItemGrant) {
+         const itemEmoji = await getItemEmoji(displayItemName);
          embed.addFields({
            name: '__🎁 Result__',
-           value: `> ${itemEmoji} **${rolledItemName}**`,
+           value: `> ${itemEmoji} **${displayItemName}**`,
            inline: false
          });
        }
        // Flavor text is required
-       if (!rolledFlavor || !rolledFlavor.trim()) {
+       const flavorForEmbed = isAprilFoolsEastern() && hasItemGrant ? displayFlavor : rolledFlavor;
+       if (!flavorForEmbed || !flavorForEmbed.trim()) {
          embed.addFields({
            name: '__⚠️ Warning__',
            value: `> No flavor text found for this roll. Please check your table configuration.`,
@@ -485,14 +502,14 @@ module.exports = {
        } else {
          embed.addFields({
            name: '__📝 Flavor__',
-           value: `> ${rolledFlavor}`,
+           value: `> ${flavorForEmbed}`,
            inline: false
          });
        }
        
        // Use item image from database as thumbnail if available
-       if (rolledItemName && rolledItemName.trim()) {
-         const itemImage = await getItemImage(rolledItemName);
+       if (hasItemGrant) {
+         const itemImage = await getItemImage(displayItemName);
          if (itemImage) {
            embed.setThumbnail(itemImage);
          } else if (rolledThumbnail && rolledThumbnail.trim()) {
@@ -514,12 +531,12 @@ module.exports = {
 
              // Add item to database and Google Sheets if it's a valid item
        let inventoryAdded = false;
-       if (rolledItemName && rolledItemName.trim()) {
+       if (hasItemGrant) {
          try {
            // Add to database
            await addItemInventoryDatabase(
              character._id,
-             rolledItemName,
+             inventoryItemName,
              1, // Quantity
              interaction,
              'Table Roll'
@@ -533,17 +550,17 @@ module.exports = {
              userId: interaction.user.id,
              characterName: character.name,
              tableName: tableName,
-             itemName: rolledItemName
+             itemName: inventoryItemName
            });
            // Continue with the roll display even if database/sheet addition fails
          }
        }
 
        // Add inventory confirmation to embed
-       if (inventoryAdded && rolledItemName && rolledItemName.trim()) {
+       if (inventoryAdded && hasItemGrant) {
          embed.addFields({
            name: '__✅ Inventory Updated__',
-           value: `> **${rolledItemName}** has been added to ${character.name}'s inventory!`,
+           value: `> **${displayItemName}** has been added to ${character.name}'s inventory!`,
            inline: false
          });
        }
