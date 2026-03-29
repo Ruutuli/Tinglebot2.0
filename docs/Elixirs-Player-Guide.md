@@ -10,6 +10,7 @@ This is for **players**, not coders. If something here disagrees with what the b
 2. **Drink** them with **`/item`** (pick your character and the elixir from the list).
 3. Many elixirs give you a **buff that stays until the right kind of activity “uses it up”** (not a real-world timer).
 4. **Stronger bottles** come in **Basic**, **Mid**, and **High** tiers — your inventory list shows which stack you are using.
+5. When **brewing**, ingredients are tagged with **effect family** (critters) and **element** (parts) so the bot knows what mixes; **rarity** plus **how many on-theme extras** you add drives the **tier** of the result — **more (good) stuff in the pot → better elixir**.
 
 ---
 
@@ -90,9 +91,44 @@ If the mixer lets you add **Fairy** or **Mock Fairy**, that can add a **small he
    - Optionally add **extras** (more parts or same-family critters, up to the limit the bot shows).
    - **Fairy / Mock Fairy** may be offered as an extra for a bit of heal-on-drink.
 4. **Cancel** anytime before completion — **no refund drama** because nothing was consumed yet.
-5. When it **completes**, you get the elixir in inventory (with a **tier** from how good your mix was: Basic / Mid / High).
+5. When it **completes**, you get the elixir in inventory with a **tier** (**Basic / Mid / High**) from the mixer math below.
 
 **Note:** **Chuchu Egg** is **not** a mixer ingredient — use **Chuchu Jelly** (and similar) instead.
+
+---
+
+## Labels, elements, and why the bot cares
+
+Mixer ingredients are not random loot with pretty names — in the database, items are tagged so the bot knows how they behave in the pot.
+
+| Kind of ingredient | What’s labeled | What it does for you |
+| --- | --- | --- |
+| **Critters** (bugs, lizards, fairies, etc.) | **Effect family** | Decides **which elixir line** you’re brewing toward (e.g. chilly, mighty, hearty). Wrong family → wrong bottle or the bot says no. |
+| **Monster parts** (horns, jellies, tails, etc.) | **Element** | Decides **which parts are allowed** for that brew. Many elixirs allow **neutral** parts; some need a **thread** element (e.g. fire for Chilly, ice for Spicy, electric for Electro, undead-adjacent for Bright). The bot only accepts parts whose **element** matches the rules for that elixir. |
+
+So: **family** on the critter + **element** on the part (when it matters) control **whether the mix is legal**. If something “should” work in BotW but fails here, it’s usually because that item row is missing the right **effect family** or **element** tag — that’s a staff/catalog thing, not something you can fix in Discord.
+
+---
+
+## Rarity, extra ingredients, and Basic / Mid / High
+
+**Every ingredient has a rarity** (a number, typically **1–10** on the item). The mixer uses **all** ingredients you put in the pot — base critter, base part, **and** optional extras — to decide how strong the **finished bottle** is.
+
+**Plain rules:**
+
+1. **Higher rarity = stronger contribution.** Your **best** single ingredient counts **extra** compared to the **average** of everything — so one amazing drop can carry a brew, but a pile of weak stuff drags the average down.
+2. **More valid ingredients usually means a better elixir**, because you add more rarity into the mix **and** you can unlock **synergy** (see below). You still have to follow the bot’s menus: you can’t throw random junk in; extras must be **allowed** (same-family critters, matching parts, or Fairy / Mock Fairy where offered).
+3. **Synergy (extras that match the theme):** optional extras that are **on-brand** for the brew — for example, **another critter from the same effect family**, or (on elixirs that use a **thread element**) **another part with that element** — add a **bonus** toward a higher tier. The bot counts those and folds them into the score.
+
+**Tier bands (after the bot combines rarity + synergy into one score from 1–10):**
+
+- **Basic** — low end of the scale  
+- **Mid** — middle band  
+- **High** — top band  
+
+You’ll see the tier on the crafted item; you don’t need to track the number yourself. **Fairy / Mock Fairy** extras also add **bonus heal when you drink** (separate from tier), as the brew message explains.
+
+You don’t need to do math by hand — just remember: **rarer parts, smart extras, and more on-theme ingredients → better bottles.**
 
 ---
 
@@ -103,6 +139,7 @@ If the mixer lets you add **Fairy** or **Mock Fairy**, that can add a **small he
 - Trying to chug **more than one elixir per `/item`** → set **quantity** to **1** for elixirs.
 - Expecting **Chilly** to help in **water** or **blight** — that’s **Sticky** / **Bright**, not Chilly.
 - Expecting **Bright** to replace **Chilly** for fire — **Chilly** is the heat/fire one.
+- Thinking **every** bug or horn counts in the mixer — only items the bot recognizes as labeled **critters** or **parts** count; if the bot rejects an item, it’s not set up as a mixer ingredient.
 
 ---
 
