@@ -39,6 +39,7 @@ const {
   ELIXIR_LEVEL_NAMES,
   parseElixirTierFromItemOption,
   isElixirItemName,
+  formatElixirStatDisplay,
 } = require('../../modules/elixirModule');
 
 // ------------------- Utility Functions -------------------
@@ -1047,44 +1048,40 @@ module.exports = {
           });
         }
 
-        // TEMPORARILY DISABLED: Check if character already has an active buff
-        // TODO: Re-implement proper elixir usage logic when ready
-        /*
-        if (character.buff?.active) {
-          // Get elixir info for display
-          const currentElixirInfo = getElixirInfo(character.buff.type);
-          const elixirName = Object.keys(ELIXIR_EFFECTS).find(key => 
-            ELIXIR_EFFECTS[key].type === character.buff.type
-          ) || character.buff.type;
-          
+        // Only one buff elixir active at a time. Instant elixirs (no lingering buff) may still be drunk.
+        const elixirInstantNoPersistentBuff =
+          item.itemName === 'Hearty Elixir' ||
+          item.itemName === 'Fairy Tonic' ||
+          item.itemName === 'Enduring Elixir';
+        if (character.buff?.active && !elixirInstantNoPersistentBuff) {
+          const rawType = character.buff.type;
+          const typeForLookup = rawType === 'fireproof' ? 'chilly' : rawType;
+          const elixirDisplayName =
+            Object.keys(ELIXIR_EFFECTS).find(
+              (key) => ELIXIR_EFFECTS[key].type === typeForLookup
+            ) || String(rawType || 'unknown');
+          const currentElixirInfo = getElixirInfo(elixirDisplayName);
           return void await interaction.editReply({
             embeds: [{
               color: 0x8B4513,
-              title: '❌ Active Buff Found',
-              description: `${character.name} already has an active buff and cannot use another elixir at this time.`,
+              title: '❌ Active elixir buff',
+              description: `${character.name} already has an active elixir buff and cannot drink another buff elixir until it is used up or cleared.`,
               fields: [
-                { 
-                  name: '🧪 Elixir Used', 
-                  value: `**${elixirName}**`, 
-                  inline: true 
-                },
-                { 
-                  name: '✨ Effect', 
-                  value: currentElixirInfo ? currentElixirInfo.description : 'Unknown effect', 
-                  inline: false 
-                }
+                { name: '🧪 Current buff', value: `**${elixirDisplayName}**`, inline: true },
+                ...(currentElixirInfo
+                  ? [{ name: '✨ Effect', value: currentElixirInfo.description, inline: false }]
+                  : []),
               ],
               image: {
                 url: 'https://storage.googleapis.com/tinglebot/Graphics/border.png'
               },
               footer: {
-                text: 'Please wait for your current buff to expire before using another elixir'
-              }
+                text: 'Hearty, Fairy Tonic, and Enduring can still be drunk while buffed (instant). Otherwise wait until your buff is consumed.',
+              },
             }],
-            ephemeral: true
+            ephemeral: true,
           });
         }
-        */
 
         // Store original values for display (moved to broader scope)
         const originalMaxHearts = character.maxHearts;
@@ -1215,13 +1212,6 @@ module.exports = {
         );
 
         // ------------------- Build and Send Elixir Embed -------------------
-        const fmtElixirEffectVal = (n) => {
-          const x = Number(n);
-          if (!Number.isFinite(x)) return String(n);
-          const r = Math.round(x * 100) / 100;
-          return Number.isInteger(r) ? String(r) : String(r);
-        };
-
         const isImmediateElixir =
           item.itemName === 'Hearty Elixir' ||
           item.itemName === 'Fairy Tonic' ||
@@ -1231,49 +1221,49 @@ module.exports = {
         const buffLines = [];
         if (buffEffects && Object.keys(buffEffects).length > 0) {
           if (buffEffects.blightResistance > 0) {
-            buffLines.push(`🧿 **Blight resistance** — ×${fmtElixirEffectVal(buffEffects.blightResistance)}`);
+            buffLines.push(`🧿 **Blight resistance** — ×${formatElixirStatDisplay(buffEffects.blightResistance)}`);
           }
           if (buffEffects.electricResistance > 0) {
-            buffLines.push(`⚡ **Electric resistance** — ×${fmtElixirEffectVal(buffEffects.electricResistance)}`);
+            buffLines.push(`⚡ **Electric resistance** — ×${formatElixirStatDisplay(buffEffects.electricResistance)}`);
           }
           if (buffEffects.staminaBoost > 0) {
-            buffLines.push(`🟩 **Stamina boost** — +${fmtElixirEffectVal(buffEffects.staminaBoost)}`);
+            buffLines.push(`🟩 **Stamina boost** — +${formatElixirStatDisplay(buffEffects.staminaBoost)}`);
           }
           if (buffEffects.staminaRecovery > 0) {
-            buffLines.push(`💚 **Stamina recovery** — +${fmtElixirEffectVal(buffEffects.staminaRecovery)}`);
+            buffLines.push(`💚 **Stamina recovery** — +${formatElixirStatDisplay(buffEffects.staminaRecovery)}`);
           }
           if (buffEffects.fireResistance > 0) {
-            buffLines.push(`🌡️ **Heat & fire resistance** — ×${fmtElixirEffectVal(buffEffects.fireResistance)}`);
+            buffLines.push(`🌡️ **Heat & fire resistance** — ×${formatElixirStatDisplay(buffEffects.fireResistance)}`);
           }
           if (buffEffects.waterResistance > 0) {
-            buffLines.push(`💧 **Water resistance** — ×${fmtElixirEffectVal(buffEffects.waterResistance)}`);
+            buffLines.push(`💧 **Water resistance** — ×${formatElixirStatDisplay(buffEffects.waterResistance)}`);
           }
           if (buffEffects.plusBoost > 0) {
-            buffLines.push(`✨ **Plus boost** — ×${fmtElixirEffectVal(buffEffects.plusBoost)}`);
+            buffLines.push(`✨ **Plus boost** — ×${formatElixirStatDisplay(buffEffects.plusBoost)}`);
           }
           if (buffEffects.speedBoost > 0) {
-            buffLines.push(`🏃 **Speed boost** — +${fmtElixirEffectVal(buffEffects.speedBoost)}`);
+            buffLines.push(`🏃 **Speed boost** — +${formatElixirStatDisplay(buffEffects.speedBoost)}`);
           }
           if (buffEffects.extraHearts > 0) {
-            buffLines.push(`❤️ **Extra hearts** — +${fmtElixirEffectVal(buffEffects.extraHearts)}`);
+            buffLines.push(`❤️ **Extra hearts** — +${formatElixirStatDisplay(buffEffects.extraHearts)}`);
           }
           if (buffEffects.attackBoost > 0) {
-            buffLines.push(`⚔️ **Attack** — ×${fmtElixirEffectVal(buffEffects.attackBoost)}`);
+            buffLines.push(`⚔️ **Attack** — ×${formatElixirStatDisplay(buffEffects.attackBoost)}`);
           }
           if (buffEffects.stealthBoost > 0) {
-            buffLines.push(`👻 **Stealth** — +${fmtElixirEffectVal(buffEffects.stealthBoost)}`);
+            buffLines.push(`👻 **Stealth** — +${formatElixirStatDisplay(buffEffects.stealthBoost)}`);
           }
           if (buffEffects.fleeBoost > 0) {
-            buffLines.push(`🏃‍♂️ **Flee** — +${fmtElixirEffectVal(buffEffects.fleeBoost)}`);
+            buffLines.push(`🏃‍♂️ **Flee** — +${formatElixirStatDisplay(buffEffects.fleeBoost)}`);
           }
           if (buffEffects.coldResistance > 0) {
-            buffLines.push(`❄️ **Cold resistance** — ×${fmtElixirEffectVal(buffEffects.coldResistance)}`);
+            buffLines.push(`❄️ **Cold resistance** — ×${formatElixirStatDisplay(buffEffects.coldResistance)}`);
           }
           if (buffEffects.iceEffectiveness > 0) {
-            buffLines.push(`🧊 **Ice effectiveness** — +${fmtElixirEffectVal(buffEffects.iceEffectiveness)}`);
+            buffLines.push(`🧊 **Ice effectiveness** — +${formatElixirStatDisplay(buffEffects.iceEffectiveness)}`);
           }
           if (buffEffects.defenseBoost > 0) {
-            buffLines.push(`🛡️ **Defense** — ×${fmtElixirEffectVal(buffEffects.defenseBoost)}`);
+            buffLines.push(`🛡️ **Defense** — ×${formatElixirStatDisplay(buffEffects.defenseBoost)}`);
           }
         }
 

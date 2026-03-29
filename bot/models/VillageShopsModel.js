@@ -115,6 +115,8 @@ const VillageShopItemSchema = new Schema({
   emoji: { type: String, default: '' },
   allJobs: { type: [String], default: ['None'] },
   stock: { type: Number, required: true },
+  /** Elixir inventory tier (1–3) for this shop row; null/omit for non-elixir items. Matches inventory `elixirLevel`. */
+  elixirLevel: { type: Number, default: null },
 }, { collection: 'villageShops', timestamps: true, strict: true }); // strict:true ensures only defined fields are saved
 
 // ------------------- Pre-validate hook to fix data type issues -------------------

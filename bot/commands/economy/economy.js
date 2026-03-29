@@ -69,6 +69,48 @@ const GIFT_ALLOWED_CHANNEL_IDS = [
   process.env.VHINTL_TOWNHALL
 ].filter(Boolean);
 
+const {
+  isElixirItemName,
+  normalizeElixirLevel,
+  parseElixirTierFromItemOption,
+} = require('../../modules/elixirModule');
+
+function stackModifierHeartsFromInventoryRow(row) {
+  return Math.max(0, Math.floor(Number(row?.modifierHearts) || 0));
+}
+
+/**
+ * Find shop stock row for buy/sell. Elixir rows are keyed by itemName + elixirLevel + modifierHearts (Fairy mix).
+ */
+async function findShopStockRow(baseName, isElixir, elixirLevel, modifierHearts) {
+  const nameQ = baseName.includes('+')
+    ? { itemName: baseName }
+    : { itemName: { $regex: new RegExp(`^${escapeRegExp(baseName)}$`, 'i') } };
+  if (!isElixir) {
+    return ShopStock.findOne({
+      ...nameQ,
+      stock: { $gt: 0 },
+      $or: [{ elixirLevel: null }, { elixirLevel: { $exists: false } }],
+    }).lean();
+  }
+  const lv = normalizeElixirLevel(elixirLevel ?? 1);
+  const mh = Math.max(0, Math.floor(Number(modifierHearts) || 0));
+  let row = await ShopStock.findOne({
+    ...nameQ,
+    stock: { $gt: 0 },
+    elixirLevel: lv,
+    modifierHearts: mh,
+  }).lean();
+  if (!row && lv === 1 && mh === 0) {
+    row = await ShopStock.findOne({
+      ...nameQ,
+      stock: { $gt: 0 },
+      elixirLevel: { $exists: false },
+    }).lean();
+  }
+  return row;
+}
+
 async function getItemEmoji(itemName) {
   try {
     let item;
@@ -1149,6 +1191,12 @@ async function handleShopBuy(interaction) {
       .replace(/\s*-\s*Stock:\s*\d+\s*$/i, '')
       .trim();
 
+    const tierParseBuy = parseElixirTierFromItemOption(itemName);
+    let baseItemNameBuy = itemName.trim();
+    if (tierParseBuy) {
+      baseItemNameBuy = tierParseBuy.baseName.trim();
+    }
+
     // ------------------- Validate Buy Quantity -------------------
     if (quantity <= 0) {
       await interaction.editReply({
@@ -1168,7 +1216,7 @@ async function handleShopBuy(interaction) {
       return;
     }
 
-    logger.info('ECONOMY', `Initiating purchase for ${characterName}: ${itemName} x${quantity}`);
+    logger.info('ECONOMY', `Initiating purchase for ${characterName}: ${baseItemNameBuy} x${quantity}`);
 
     // ------------------- Character Ownership Validation -------------------
     const character = await fetchCharacterByNameAndUserId(characterName, interaction.user.id);
@@ -1199,24 +1247,73 @@ async function handleShopBuy(interaction) {
     // (no longer required, but kept for compatibility)
     await checkInventorySync(character);
 
-    // ------------------- Validate Shop Item -------------------
-    let shopItem;
-    if (itemName.includes('+')) {
-      shopItem = await ShopStock.findOne({ 
-        itemName: itemName
-      }).lean();
+    // ------------------- Validate Item Details (before shop row — elixirs need tier key) -------------------
+    let itemDetails;
+    if (baseItemNameBuy.includes('+')) {
+      itemDetails = await ItemModel.findOne({
+        itemName: baseItemNameBuy,
+      })
+        .select('buyPrice sellPrice category type image craftingJobs itemRarity itemName')
+        .lean();
     } else {
-      shopItem = await ShopStock.findOne({ 
-        itemName: { $regex: new RegExp(`^${escapeRegExp(itemName)}$`, 'i') }
-      }).lean();
+      itemDetails = await ItemModel.findOne({
+        itemName: { $regex: new RegExp(`^${escapeRegExp(baseItemNameBuy)}$`, 'i') },
+      })
+        .select('buyPrice sellPrice category type image craftingJobs itemRarity itemName')
+        .lean();
     }
-    
+    if (!itemDetails) {
+     logger.error('ECONOMY', `Item details not found in database: ${baseItemNameBuy}`);
+     
+           // Try a partial search to see if there are similar items
+      const similarItems = await ItemModel.find({ 
+        itemName: { $regex: new RegExp(escapeRegExp(baseItemNameBuy), 'i') }
+      }).select("itemName buyPrice sellPrice").limit(5).lean();
+     
+     if (similarItems.length > 0) {
+       logger.debug('ECONOMY', `Similar items found: ${similarItems.map(item => item.itemName).join(', ')}`);
+     }
+     
+     return interaction.editReply("❌ Item details not found.");
+    }
+
+    const canonicalNameBuy = itemDetails.itemName;
+    const isElixirBuy = isElixirItemName(canonicalNameBuy);
+    let shopElixirLevelBuy = null;
+    let shopModifierHeartsBuy = null;
+    if (isElixirBuy) {
+      if (tierParseBuy) {
+        shopElixirLevelBuy = normalizeElixirLevel(tierParseBuy.elixirLevel);
+        shopModifierHeartsBuy =
+          tierParseBuy.modifierHearts != null
+            ? Math.max(0, Math.floor(tierParseBuy.modifierHearts))
+            : 0;
+      } else {
+        shopElixirLevelBuy = 1;
+        shopModifierHeartsBuy = 0;
+      }
+    }
+
+    const shopItem = await findShopStockRow(
+      canonicalNameBuy,
+      isElixirBuy,
+      shopElixirLevelBuy,
+      shopModifierHeartsBuy
+    );
+
     if (!shopItem) {
+      const tierLabel =
+        isElixirBuy && shopElixirLevelBuy != null
+          ? ['Basic', 'Mid', 'High'][normalizeElixirLevel(shopElixirLevelBuy) - 1] ||
+            String(shopElixirLevelBuy)
+          : '';
       return interaction.editReply({
         embeds: [{
-          color: 0xFF0000, // Red color
+          color: 0xFF0000,
           title: '❌ Item Not Available',
-          description: `Item "${itemName}" is not available in the shop.`,
+          description: isElixirBuy
+            ? `No shop stock for **${canonicalNameBuy}** (**${tierLabel}**${shopModifierHeartsBuy > 0 ? `, +${shopModifierHeartsBuy} Fairy mix` : ''}). Use shop autocomplete to pick the exact stack.`
+            : `Item "${canonicalNameBuy}" is not available in the shop.`,
           image: {
             url: 'https://storage.googleapis.com/tinglebot/Graphics/border.png'
           },
@@ -1230,10 +1327,10 @@ async function handleShopBuy(interaction) {
 
     const shopQuantity = parseInt(shopItem.stock, 10);
     if (isNaN(shopQuantity)) {
-      logger.error('ECONOMY', `Invalid stock quantity for item ${itemName}: ${shopItem.stock}`);
+      logger.error('ECONOMY', `Invalid stock quantity for item ${canonicalNameBuy}: ${shopItem.stock}`);
       return interaction.editReply({
         embeds: [{
-          color: 0xFF0000, // Red color
+          color: 0xFF0000,
           title: '❌ Invalid Stock',
           description: 'Shop item quantity is invalid. Please try again later.',
           image: {
@@ -1250,9 +1347,9 @@ async function handleShopBuy(interaction) {
     if (shopQuantity < quantity) {
       return interaction.editReply({
         embeds: [{
-          color: 0xFF0000, // Red color
+          color: 0xFF0000,
           title: '❌ Insufficient Stock',
-          description: `Not enough stock available. Only ${shopQuantity} ${itemName} remaining in the shop.`,
+          description: `Not enough stock available. Only ${shopQuantity} of this listing remain in the shop.`,
           image: {
             url: 'https://storage.googleapis.com/tinglebot/Graphics/border.png'
           },
@@ -1264,40 +1361,10 @@ async function handleShopBuy(interaction) {
       });
     }
 
-    // ------------------- Validate Item Details -------------------
-    let itemDetails;
-    if (itemName.includes('+')) {
-      itemDetails = await ItemModel.findOne({ 
-        itemName: itemName
-      })
-       .select("buyPrice sellPrice category type image craftingJobs itemRarity")
-       .lean();
-    } else {
-      itemDetails = await ItemModel.findOne({ 
-        itemName: { $regex: new RegExp(`^${escapeRegExp(itemName)}$`, 'i') }
-      })
-       .select("buyPrice sellPrice category type image craftingJobs itemRarity")
-       .lean();
-    }
-    if (!itemDetails) {
-     logger.error('ECONOMY', `Item details not found in database: ${itemName}`);
-     
-           // Try a partial search to see if there are similar items
-      const similarItems = await ItemModel.find({ 
-        itemName: { $regex: new RegExp(escapeRegExp(itemName), 'i') }
-      }).select("itemName buyPrice sellPrice").limit(5).lean();
-     
-     if (similarItems.length > 0) {
-       logger.debug('ECONOMY', `Similar items found: ${similarItems.map(item => item.itemName).join(', ')}`);
-     }
-     
-     return interaction.editReply("❌ Item details not found.");
-    }
-
     logger.info('ECONOMY', `Item details - Buy: ${itemDetails.buyPrice}, Sell: ${itemDetails.sellPrice}, Category: ${itemDetails.category}`);
 
     if (!itemDetails.buyPrice || itemDetails.buyPrice <= 0) {
-      logger.error('ECONOMY', `Invalid buy price for item ${itemName}: ${itemDetails.buyPrice}`);
+      logger.error('ECONOMY', `Invalid buy price for item ${canonicalNameBuy}: ${itemDetails.buyPrice}`);
       return interaction.editReply({
         embeds: [{
           color: 0xFF0000, // Red color
@@ -1390,40 +1457,30 @@ async function handleShopBuy(interaction) {
     }
     logger.info('ECONOMY', `${interaction.user.tag} tokens: ${currentTokens} - ${totalPrice} = ${currentTokens - totalPrice}`);
 
-    // Update inventory
+    // Update inventory (elixir tier + Fairy mix must match shop row)
+    const addShopOpts = {};
+    if (isElixirBuy) {
+      addShopOpts.elixirLevel = shopElixirLevelBuy;
+      addShopOpts.modifierHearts = shopModifierHeartsBuy;
+    }
     await addItemInventoryDatabase(
       character._id,
-      itemName,
+      canonicalNameBuy,
       quantity,
       interaction,
-      'Purchase from shop'
+      'Purchase from shop',
+      addShopOpts
     );
-    logger.success('ECONOMY', `Updated inventory for ${character.name}: ${itemName} +${quantity}`);
+    logger.success('ECONOMY', `Updated inventory for ${character.name}: ${canonicalNameBuy} +${quantity}`);
 
-    // Update shop stock
-    if (itemName.includes('+')) {
-      await ShopStock.updateOne(
-        { itemName: itemName },
-        { $set: { stock: shopQuantity - quantity } }
-      );
-    } else {
-      await ShopStock.updateOne(
-        { itemName: { $regex: new RegExp(`^${escapeRegExp(itemName)}$`, 'i') } },
-        { $set: { stock: shopQuantity - quantity } }
-      );
-    }
+    // Update shop stock (exact row)
+    await ShopStock.updateOne(
+      { _id: shopItem._id },
+      { $set: { stock: shopQuantity - quantity } }
+    );
 
-    // Delete item if stock reaches 0
     if (shopQuantity - quantity <= 0) {
-      if (itemName.includes('+')) {
-        await ShopStock.deleteOne({ 
-          itemName: itemName
-        });
-      } else {
-        await ShopStock.deleteOne({ 
-          itemName: { $regex: new RegExp(`^${escapeRegExp(itemName)}$`, 'i') } 
-        });
-      }
+      await ShopStock.deleteOne({ _id: shopItem._id });
     }
 
     // ------------------- Log Transaction -------------------
@@ -1445,8 +1502,8 @@ async function handleShopBuy(interaction) {
     // Log to token tracker
     if (user.tokenTracker) {
       const purchaseDescription = hasBirthdayDiscount 
-        ? `${characterName} - ${itemName} x${quantity} - Shop Purchase (🎂 ${discountPercentage}% Birthday Discount - Saved ${savedAmount} tokens)`
-        : `${characterName} - ${itemName} x${quantity} - Shop Purchase`;
+        ? `${characterName} - ${canonicalNameBuy} x${quantity} - Shop Purchase (🎂 ${discountPercentage}% Birthday Discount - Saved ${savedAmount} tokens)`
+        : `${characterName} - ${canonicalNameBuy} x${quantity} - Shop Purchase`;
       const tokenRow = [
         purchaseDescription,
         interactionUrl,
@@ -1461,8 +1518,8 @@ async function handleShopBuy(interaction) {
 
     // Update token balance
     const purchaseDescriptionForLog = hasBirthdayDiscount 
-      ? `${characterName} - ${itemName} x${quantity} - Shop Purchase (🎂 ${discountPercentage}% Birthday Discount - Saved ${savedAmount} tokens)`
-      : `${characterName} - ${itemName} x${quantity} - Shop Purchase`;
+      ? `${characterName} - ${canonicalNameBuy} x${quantity} - Shop Purchase (🎂 ${discountPercentage}% Birthday Discount - Saved ${savedAmount} tokens)`
+      : `${characterName} - ${canonicalNameBuy} x${quantity} - Shop Purchase`;
     await updateTokenBalance(interaction.user.id, -totalPrice, {
       category: 'purchase',
       description: purchaseDescriptionForLog,
@@ -1473,7 +1530,7 @@ async function handleShopBuy(interaction) {
     const purchaseEmbed = new EmbedBuilder()
       .setTitle("✅ Purchase Successful!")
       .setDescription(
-        `**${characterName}** successfully bought **${itemName} x ${quantity}** for 🪙 ${totalPrice} tokens`
+        `**${characterName}** successfully bought **${canonicalNameBuy} x ${quantity}** for 🪙 ${totalPrice} tokens`
       )
       .setThumbnail(itemDetails.image || "https://via.placeholder.com/150")
       .setAuthor({ name: characterName, iconURL: character.icon || "" })
@@ -1655,19 +1712,66 @@ if (quantity <= 0) {
    character
   );
   
-  // Get all inventory items to aggregate quantities from multiple stacks
-  const inventoryItems = await inventoryCollection.find().toArray();
-  const itemNameNorm = normalizeItemNameForCompare(itemName);
+  const tierParseSell = parseElixirTierFromItemOption(itemName);
+  let baseItemNameSell = itemName.trim();
+  if (tierParseSell) {
+    baseItemNameSell = tierParseSell.baseName.trim();
+  }
 
-  // Sum up all quantities of the same item (case-insensitive, normalized trim/collapse spaces)
+  let itemDetails;
+  if (baseItemNameSell.includes('+')) {
+    itemDetails = await ItemModel.findOne({ itemName: baseItemNameSell })
+      .select('buyPrice sellPrice category type image craftingJobs itemRarity itemName modifierHearts _id')
+      .lean();
+  } else {
+    itemDetails = await ItemModel.findOne({
+      itemName: { $regex: new RegExp(`^${escapeRegExp(baseItemNameSell)}$`, 'i') },
+    })
+      .select('buyPrice sellPrice category type image craftingJobs itemRarity itemName modifierHearts _id')
+      .lean();
+  }
+
+  if (!itemDetails) {
+    logger.error('ECONOMY', `Item not found in database: ${baseItemNameSell}`);
+    return interaction.editReply('❌ Item details not found.');
+  }
+
+  const canonicalNameSell = itemDetails.itemName;
+  const isElixirSell = isElixirItemName(canonicalNameSell);
+  let shopElixirLevelSell = null;
+  let shopModifierHeartsSell = null;
+  if (isElixirSell) {
+    if (tierParseSell) {
+      shopElixirLevelSell = normalizeElixirLevel(tierParseSell.elixirLevel);
+      shopModifierHeartsSell =
+        tierParseSell.modifierHearts != null
+          ? Math.max(0, Math.floor(tierParseSell.modifierHearts))
+          : 0;
+    } else {
+      shopElixirLevelSell = 1;
+      shopModifierHeartsSell = 0;
+    }
+  }
+
+  const itemNameNorm = normalizeItemNameForCompare(canonicalNameSell);
+
+  // Get all inventory items — elixirs: only count the matching tier + Fairy mix stack
+  const inventoryItems = await inventoryCollection.find().toArray();
+
+  const rowMatchesSellStack = (invItem) => {
+    if (normalizeItemNameForCompare(invItem.itemName) !== itemNameNorm) return false;
+    if (!isElixirSell) return true;
+    return (
+      normalizeElixirLevel(invItem.elixirLevel) === shopElixirLevelSell &&
+      stackModifierHeartsFromInventoryRow(invItem) === shopModifierHeartsSell
+    );
+  };
+
   const totalQuantity = inventoryItems
-    .filter(invItem => normalizeItemNameForCompare(invItem.itemName) === itemNameNorm)
+    .filter(rowMatchesSellStack)
     .reduce((sum, invItem) => sum + (invItem.quantity || 0), 0);
-  
-  // Find the first item entry for display purposes and crafting status
-  const inventoryItem = inventoryItems.find(invItem =>
-    normalizeItemNameForCompare(invItem.itemName) === itemNameNorm
-  );
+
+  const inventoryItem = inventoryItems.find(rowMatchesSellStack);
 
   // Get equipped items to check if we're trying to sell more than available non-equipped items
   const equippedItems = [
@@ -1685,12 +1789,12 @@ if (quantity <= 0) {
   const availableToSell = totalQuantity - (isEquipped ? 1 : 0);
 
   if (!inventoryItem || quantity > availableToSell) {
-   logger.error('INVENTORY', `Insufficient inventory for item: ${itemName}. Available to sell: ${availableToSell}${isEquipped ? ' (1 equipped)' : ''}`);
+   logger.error('INVENTORY', `Insufficient inventory for item: ${canonicalNameSell}. Available to sell: ${availableToSell}${isEquipped ? ' (1 equipped)' : ''}`);
    return interaction.editReply({
     embeds: [{
       color: 0xFF0000, // Red color
       title: '❌ Insufficient Inventory',
-      description: `You don't have enough \`${itemName}\` available to sell.${isEquipped ? ' One copy is currently equipped.' : ''}`,
+      description: `You don't have enough \`${canonicalNameSell}\` (${isElixirSell ? `tier stack` : 'this listing'}) available to sell.${isEquipped ? ' One copy is currently equipped.' : ''}`,
       fields: [
         {
           name: 'Requested',
@@ -1719,29 +1823,13 @@ if (quantity <= 0) {
    });
   }
 
-  logger.debug('INVENTORY', `Inventory validated: ${itemName} x${totalQuantity} available`);
+  logger.debug('INVENTORY', `Inventory validated: ${canonicalNameSell} x${totalQuantity} available`);
 
   // Safely handle obtain field - ensure it's a string
   const obtainMethod = (inventoryItem.obtain || '').toString().toLowerCase();
   const isCrafted = obtainMethod.includes("crafting") || obtainMethod.includes("crafted");
 
-  let itemDetails;
-  if (itemName.includes('+')) {
-    itemDetails = await ItemModel.findOne({ itemName: itemName })
-     .select("buyPrice sellPrice category type image craftingJobs itemRarity")
-     .lean();
-  } else {
-    itemDetails = await ItemModel.findOne({ itemName: { $regex: new RegExp(`^${escapeRegExp(itemName)}$`, 'i') } })
-     .select("buyPrice sellPrice category type image craftingJobs itemRarity")
-     .lean();
-  }
-  
-  if (!itemDetails) {
-   logger.error('ECONOMY', `Item not found in database: ${itemName}`);
-   return interaction.editReply("❌ Item details not found.");
-  }
-
-  logger.debug('ECONOMY', `Item found: ${itemName} (Buy: ${itemDetails.buyPrice}, Sell: ${itemDetails.sellPrice})`);
+  logger.debug('ECONOMY', `Item found: ${canonicalNameSell} (Buy: ${itemDetails.buyPrice}, Sell: ${itemDetails.sellPrice})`);
 
   // Determine the effective job for crafting (consider job vouchers)
   const effectiveJob = (character.jobVoucher && character.jobVoucherJob) ? character.jobVoucherJob : character.job;
@@ -1764,55 +1852,9 @@ if (quantity <= 0) {
     : itemDetails.sellPrice || 0;
 
   if (sellPrice <= 0) {
-   logger.error('ECONOMY', `Invalid sell price for ${itemName}`);
+   logger.error('ECONOMY', `Invalid sell price for ${canonicalNameSell}`);
    return interaction.editReply("❌ This item cannot be sold to the shop.");
   }
-
-  // Update shop stock first so we never remove from inventory without stock updated (avoids item loss if remove fails)
-  if (itemName.includes('+')) {
-    await ShopStock.updateOne(
-     { itemName: itemName },
-     { 
-       $inc: { stock: quantity },
-       $set: {
-         itemName: itemName, // Ensure correct case
-         buyPrice: itemDetails.buyPrice,
-         sellPrice: itemDetails.sellPrice,
-         category: itemDetails.category,
-         type: itemDetails.type,
-         image: itemDetails.image || 'No Image',
-         itemRarity: itemDetails.itemRarity || 1
-       }
-     },
-     { upsert: true }
-    );
-  } else {
-    await ShopStock.updateOne(
-     { itemName: { $regex: new RegExp(`^${escapeRegExp(itemName)}$`, 'i') } },
-     { 
-       $inc: { stock: quantity },
-       $set: {
-         itemName: itemName, // Ensure correct case
-         buyPrice: itemDetails.buyPrice,
-         sellPrice: itemDetails.sellPrice,
-         category: itemDetails.category,
-         type: itemDetails.type,
-         image: itemDetails.image || 'No Image',
-         itemRarity: itemDetails.itemRarity || 1
-       }
-     },
-     { upsert: true }
-    );
-  }
-
-  // Remove item from inventory using the proper function that handles Google Sheets logging
-  await removeItemInventoryDatabase(
-    character._id,
-    itemName,
-    quantity,
-    interaction,
-    'Sold to shop'
-  );
 
   // ============================================================================
   // ------------------- Check for Fortune Teller Boost Tag on Items -------------------
@@ -1820,7 +1862,7 @@ if (quantity <= 0) {
   // We need to check which items will actually be sold (prioritize boosted items)
   // ============================================================================
   const allMatchingItems = inventoryItems
-    .filter(invItem => normalizeItemNameForCompare(invItem.itemName) === itemNameNorm)
+    .filter(rowMatchesSellStack)
     .sort((a, b) => {
       // Prioritize boosted items (they should be sold first to maximize value)
       if (a.fortuneTellerBoost && !b.fortuneTellerBoost) return -1;
@@ -1856,6 +1898,55 @@ if (quantity <= 0) {
     logger.info('BOOST', `Price breakdown: ${boostedQuantity} boosted @ ${Math.floor(sellPrice * 1.2)} = ${boostedPrice}, ${regularQuantity} regular @ ${sellPrice} = ${regularPrice}, Total: ${totalPrice}`);
   } else {
     totalPrice = sellPrice * quantity;
+  }
+
+  // Remove inventory first, then add to shop (same elixir tier + Fairy mix as stock row)
+  const removeOptsSell = {};
+  if (isElixirSell) {
+    removeOptsSell.elixirLevel = shopElixirLevelSell;
+    removeOptsSell.modifierHearts = shopModifierHeartsSell;
+  }
+  await removeItemInventoryDatabase(
+    character._id,
+    canonicalNameSell,
+    quantity,
+    interaction,
+    'Sold to shop',
+    removeOptsSell
+  );
+
+  const shopSetSell = {
+    itemName: canonicalNameSell,
+    itemId: itemDetails._id,
+    buyPrice: itemDetails.buyPrice,
+    sellPrice: itemDetails.sellPrice,
+    category: itemDetails.category,
+    type: itemDetails.type,
+    image: itemDetails.image || 'No Image',
+    itemRarity: itemDetails.itemRarity || 1,
+    modifierHearts: isElixirSell ? shopModifierHeartsSell : itemDetails.modifierHearts ?? 0,
+    elixirLevel: isElixirSell ? shopElixirLevelSell : null,
+  };
+
+  if (isElixirSell) {
+    await ShopStock.updateOne(
+      {
+        itemName: canonicalNameSell,
+        elixirLevel: shopElixirLevelSell,
+        modifierHearts: shopModifierHeartsSell,
+      },
+      { $inc: { stock: quantity }, $set: shopSetSell },
+      { upsert: true }
+    );
+  } else {
+    await ShopStock.updateOne(
+      {
+        itemName: { $regex: new RegExp(`^${escapeRegExp(canonicalNameSell)}$`, 'i') },
+        $or: [{ elixirLevel: null }, { elixirLevel: { $exists: false } }],
+      },
+      { $inc: { stock: quantity }, $set: shopSetSell },
+      { upsert: true }
+    );
   }
   
   // ============================================================================
@@ -1896,7 +1987,7 @@ if (quantity <= 0) {
   const interactionUrl = `https://discord.com/channels/${interaction.guildId}/${interaction.channelId}/${interaction.id}`;
   await updateTokenBalance(interaction.user.id, totalPrice, {
     category: 'sale',
-    description: `${characterName} - Sold ${itemName} x${quantity}`,
+    description: `${characterName} - Sold ${canonicalNameSell} x${quantity}`,
     link: interactionUrl
   });
 
@@ -1906,7 +1997,7 @@ if (quantity <= 0) {
   let tokenTrackerLogged = false;
   if (user.tokenTracker) {
    const tokenRow = [
-    `${characterName} - Sold ${itemName} x${quantity}`,
+    `${characterName} - Sold ${canonicalNameSell} x${quantity}`,
     interactionUrl,
     "sale",
     "earned",
@@ -1928,10 +2019,10 @@ if (quantity <= 0) {
   }
 
   const priceType = bonusApplied ? "Crafter's Bonus" : "Standard";
-  logger.success('ECONOMY', `Sale completed - ${characterName} sold ${itemName} x${quantity} for ${totalPrice} tokens (${priceType})`);
+  logger.success('ECONOMY', `Sale completed - ${characterName} sold ${canonicalNameSell} x${quantity} for ${totalPrice} tokens (${priceType})`);
   
   // Build description with Fortune Teller boost flavor text if applicable
-  let description = `**${characterName}** sold **${itemName} x${quantity}** for 🪙 **${totalPrice}** tokens`;
+  let description = `**${characterName}** sold **${canonicalNameSell} x${quantity}** for 🪙 **${totalPrice}** tokens`;
   
   // Calculate boosted price per item if applicable
   const boostedPricePerItem = boostedQuantity > 0 ? Math.floor(sellPrice * 1.2) : null;

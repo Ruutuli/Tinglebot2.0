@@ -2878,7 +2878,11 @@ async function handleShopBuyItemAutocomplete(interaction, focusedValue) {
     const villageShopItems = await ShopStock.find({
       stock: { $gt: 0 },
       itemName: { $regex: new RegExp(escapedValue, 'i') }
-    }).sort({ itemName: 1 }).limit(25);
+    })
+      .sort({ itemName: 1, elixirLevel: 1 })
+      .limit(25)
+      .select('itemName stock buyPrice elixirLevel modifierHearts')
+      .lean();
 
     if (villageShopItems.length === 0) {
       return await interaction.respond([{
@@ -2887,10 +2891,19 @@ async function handleShopBuyItemAutocomplete(interaction, focusedValue) {
       }]);
     }
 
-    const choices = villageShopItems.map(item => ({
-      name: `${item.itemName} - ${item.buyPrice} tokens${item.stock ? ` (Stock: ${item.stock})` : ''}`,
-      value: item.itemName
-    }));
+    const choices = villageShopItems.map((item) => {
+      let value = item.itemName;
+      if (isElixirItemName(item.itemName)) {
+        const lv = normalizeElixirLevel(item.elixirLevel != null ? item.elixirLevel : 1);
+        const mh = Math.max(0, Math.floor(Number(item.modifierHearts) || 0));
+        value = formatElixirItemOptionValue(item.itemName.toLowerCase(), lv, mh);
+      }
+      const buyP = item.buyPrice != null ? item.buyPrice : '';
+      return {
+        name: `${item.itemName} - ${buyP} tokens${item.stock ? ` (Stock: ${item.stock})` : ''}`,
+        value,
+      };
+    });
 
     await interaction.respond(choices);
   } catch (error) {
@@ -2977,9 +2990,13 @@ async function handleShopItemAutocomplete(interaction, focusedValue) {
       const isCrafted = !!item.craftedAt || obtainMethod.includes("crafting") || obtainMethod.includes("crafted");
       const hasFortuneTellerBoost = !!item.fortuneTellerBoost;
       
-      // Create a unique key that includes name, crafting status, and boost status
-      // This ensures items with different properties are kept separate
-      const key = `${item.itemName.trim().toLowerCase()}-${isCrafted ? 'crafted' : 'regular'}-${hasFortuneTellerBoost ? 'boosted' : 'normal'}`;
+      // Create a unique key that includes name, crafting status, boost status, and elixir stack (tier + Fairy mix)
+      let key = `${item.itemName.trim().toLowerCase()}-${isCrafted ? 'crafted' : 'regular'}-${hasFortuneTellerBoost ? 'boosted' : 'normal'}`;
+      if (isElixirItemName(item.itemName)) {
+        const lv = normalizeElixirLevel(item.elixirLevel);
+        const mh = Math.max(0, Math.floor(Number(item.modifierHearts) || 0));
+        key += `-elx-${lv}-${mh}`;
+      }
       
       if (!itemMap.has(key)) {
         itemMap.set(key, {
@@ -2987,6 +3004,8 @@ async function handleShopItemAutocomplete(interaction, focusedValue) {
           quantity: item.quantity || 0,
           isCrafted: isCrafted,
           hasFortuneTellerBoost: hasFortuneTellerBoost,
+          elixirLevel: item.elixirLevel,
+          modifierHearts: item.modifierHearts,
         });
       } else {
         // Only aggregate if they have the same properties
@@ -3007,10 +3026,22 @@ async function handleShopItemAutocomplete(interaction, focusedValue) {
       if (item.hasFortuneTellerBoost) indicators += '🔮 ';
       // If no special indicators, use box emoji for regular items
       if (!indicators) indicators = '📦 ';
-      
+      let tierLabel = '';
+      if (isElixirItemName(item.name)) {
+        const lv = normalizeElixirLevel(item.elixirLevel);
+        const lab = ELIXIR_LEVEL_NAMES[lv] || String(lv);
+        const mh = Math.max(0, Math.floor(Number(item.modifierHearts) || 0));
+        tierLabel = mh > 0 ? ` [${lab}|m${mh}]` : ` [${lab}]`;
+      }
+      let value = item.name;
+      if (isElixirItemName(item.name)) {
+        const lv = normalizeElixirLevel(item.elixirLevel);
+        const mh = Math.max(0, Math.floor(Number(item.modifierHearts) || 0));
+        value = formatElixirItemOptionValue(item.name.toLowerCase(), lv, mh);
+      }
       return {
-        name: `${indicators}${item.name} - Qty: ${item.quantity}`,
-        value: item.name
+        name: `${indicators}${item.name}${tierLabel} - Qty: ${item.quantity}`,
+        value,
       };
     });
     
@@ -3401,17 +3432,25 @@ async function handleShopsAutocomplete(interaction, focusedOption) {
    let choices = [];
  
    if (subcommand === "shop-buy") {
-    const items = await ShopStock.find()
-     .sort({ itemName: 1 })
-     .select("itemName stock")
+    const items = await ShopStock.find({ stock: { $gt: 0 } })
+     .sort({ itemName: 1, elixirLevel: 1 })
+     .select("itemName stock buyPrice elixirLevel modifierHearts")
      .lean();
  
     choices = items
      .filter((item) => item.itemName.toLowerCase().includes(searchQuery))
-     .map((item) => ({
-      name: `${item.itemName} - Stock: ${item.stock}`,
-      value: item.itemName,
-     }));
+     .map((item) => {
+      let value = item.itemName;
+      if (isElixirItemName(item.itemName)) {
+        const lv = normalizeElixirLevel(item.elixirLevel != null ? item.elixirLevel : 1);
+        const mh = Math.max(0, Math.floor(Number(item.modifierHearts) || 0));
+        value = formatElixirItemOptionValue(item.itemName.toLowerCase(), lv, mh);
+      }
+      return {
+        name: `${item.itemName} - Stock: ${item.stock}`,
+        value,
+      };
+     });
    } else if (subcommand === "shop-sell") {
     const characterName = interaction.options.getString("charactername");
     if (!characterName) return await interaction.respond([]);
@@ -3439,9 +3478,12 @@ async function handleShopsAutocomplete(interaction, focusedOption) {
       const isCrafted = !!item.craftedAt || obtainMethod.includes("crafting") || obtainMethod.includes("crafted");
       const hasFortuneTellerBoost = !!item.fortuneTellerBoost;
       
-      // Create a unique key that includes name, crafting status, and boost status
-      // This ensures items with different properties are kept separate
-      const key = `${item.itemName.trim().toLowerCase()}-${isCrafted ? 'crafted' : 'regular'}-${hasFortuneTellerBoost ? 'boosted' : 'normal'}`;
+      let key = `${item.itemName.trim().toLowerCase()}-${isCrafted ? 'crafted' : 'regular'}-${hasFortuneTellerBoost ? 'boosted' : 'normal'}`;
+      if (isElixirItemName(item.itemName)) {
+        const lv = normalizeElixirLevel(item.elixirLevel);
+        const mh = Math.max(0, Math.floor(Number(item.modifierHearts) || 0));
+        key += `-elx-${lv}-${mh}`;
+      }
       
       if (!itemMap.has(key)) {
         itemMap.set(key, {
@@ -3449,6 +3491,8 @@ async function handleShopsAutocomplete(interaction, focusedOption) {
           quantity: item.quantity || 0,
           isCrafted: isCrafted,
           hasFortuneTellerBoost: hasFortuneTellerBoost,
+          elixirLevel: item.elixirLevel,
+          modifierHearts: item.modifierHearts,
         });
       } else {
         // Only aggregate if they have the same properties
@@ -3469,10 +3513,22 @@ async function handleShopsAutocomplete(interaction, focusedOption) {
       if (item.hasFortuneTellerBoost) indicators += '🔮 ';
       // If no special indicators, use box emoji for regular items
       if (!indicators) indicators = '📦 ';
-      
+      let tierLabel = '';
+      if (isElixirItemName(item.name)) {
+        const lv = normalizeElixirLevel(item.elixirLevel);
+        const lab = ELIXIR_LEVEL_NAMES[lv] || String(lv);
+        const mh = Math.max(0, Math.floor(Number(item.modifierHearts) || 0));
+        tierLabel = mh > 0 ? ` [${lab}|m${mh}]` : ` [${lab}]`;
+      }
+      let value = item.name;
+      if (isElixirItemName(item.name)) {
+        const lv = normalizeElixirLevel(item.elixirLevel);
+        const mh = Math.max(0, Math.floor(Number(item.modifierHearts) || 0));
+        value = formatElixirItemOptionValue(item.name.toLowerCase(), lv, mh);
+      }
       return {
-        name: `${indicators}${item.name} - Qty: ${item.quantity}`,
-        value: item.name,
+        name: `${indicators}${item.name}${tierLabel} - Qty: ${item.quantity}`,
+        value,
       };
     });
    }

@@ -35,6 +35,7 @@ const { checkInventorySync } = require('@/utils/characterUtils');
 const { handleInteractionError } = require('@/utils/globalErrorHandler');
 const { enforceJail } = require('@/utils/jailCheck');
 const { runCraftingBrew } = require('./brewMixerHandler');
+const { isElixirItemName } = require('../../modules/elixirModule');
 
 // ------------------- Embed Imports -------------------
 const { createCraftingEmbed } = require('../../embeds/embeds.js');
@@ -232,8 +233,18 @@ module.exports = {
         return interaction.editReply({ content: `❌ **No item found named "${itemName}".**`, flags: [MessageFlags.Ephemeral] });
       }
 
-      // ------------------- Validate Character Job and Voucher -------------------
       let job = (character.jobVoucher && character.jobVoucherJob) ? character.jobVoucherJob : character.job;
+      const jobNormalizedEarly = job ? job.trim() : '';
+      const jobLowerEarly = jobNormalizedEarly.toLowerCase();
+      if (isElixirItemName(item.itemName) && jobLowerEarly === 'witch') {
+        return interaction.editReply({
+          content:
+            '❌ **Witches make elixirs with `/crafting brew`, not `/crafting recipe`.** Use `/crafting brew` and choose the elixir you want to mix.',
+          flags: [MessageFlags.Ephemeral],
+        });
+      }
+
+      // ------------------- Validate Character Job and Voucher -------------------
       info('CRFT', `Job determined for ${character.name}: "${job}" (type: ${typeof job}, voucher: ${character.jobVoucher ? 'yes' : 'no'})`);
 
       // ------------------- Validate Job Perks -------------------

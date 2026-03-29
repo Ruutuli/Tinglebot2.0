@@ -198,12 +198,20 @@ function scaleElixirEffects(elixirName, baseEffects, level) {
   return out;
 }
 
-const fmtScaledElixirDisplay = (n) => {
+/**
+ * Display-only: round elixir buff numbers to the nearest **0.25** (quarter steps: 1.5, 1.75, 2, …)
+ * so values like 1.725 / 1.73 show as **×1.75** instead of long decimals. Combat still uses full precision in DB.
+ */
+function formatElixirStatDisplay(n) {
   const x = Number(n);
   if (!Number.isFinite(x)) return String(n);
-  const r = Math.round(x * 100) / 100;
-  return Number.isInteger(r) ? String(r) : String(r);
-};
+  const r = Math.round(x * 4) / 4;
+  if (Number.isInteger(r)) return String(r);
+  const t = parseFloat(r.toFixed(2));
+  return Number.isInteger(t) ? String(t) : String(t);
+}
+
+const fmtScaledElixirDisplay = (n) => formatElixirStatDisplay(n);
 
 /** Push consumption-style lines from scaled effects (matches `/item` elixir embed). */
 function appendScaledBuffStyleLines(scaled, buffLines) {
@@ -874,6 +882,7 @@ module.exports = {
   getElementalAdvantage,
   calculateElementalCombatBonus,
   ELEMENTAL_ADVANTAGE_BONUS,
-  ELEMENTAL_WEAKNESS_PENALTY
+  ELEMENTAL_WEAKNESS_PENALTY,
+  formatElixirStatDisplay,
 };
 
