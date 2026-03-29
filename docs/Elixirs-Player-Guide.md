@@ -98,7 +98,7 @@ Bottles are **Basic / Mid / High**. Autocomplete shows which stack you’re usin
 
 ## Brewing (`/crafting brew`)
 
-1. **Witch** (or whatever your server allows) runs **`/crafting brew`** → **character** + **elixir** line.
+1. **Witch** runs **`/crafting brew`** → **character** + **elixir** line.
 2. Menus: **critter** (matches **effect family**) → **monster part** (often **Chuchu Jelly**; some lines need a colored jelly / element part — the bot tells you).
 3. Optional **extras** (parts or same-family critters, up to the limit). **Fairy / Mock Fairy** can add **bonus hearts** on **`/item`** and count strong for **tier** math.
 4. **Cancel** before finish → no ingredients or stamina spent. **Finish** → spend ingredients + stamina, get the bottle with a **tier** (**mixer score** on the result).
