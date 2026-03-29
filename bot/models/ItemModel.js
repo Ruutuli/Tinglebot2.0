@@ -33,8 +33,8 @@ const ItemSchema = new Schema(
     type: { type: [String], default: ['Unknown'] },    // e.g., ['Material', 'Food']
     subtype: { type: [String], default: ['None'] },    // e.g., ['Head', 'Bow']
     recipeTag: { type: [String], default: ['#Not Craftable'] },
-    element: { type: String, default: 'none' },        // e.g., 'fire', 'ice', 'electric', 'tech', 'none' — also monster-part affinity for elixir mixer (`elixir-ingredient-labels.json`)
-    /** Elixir mixer critter family (`bright`, `chilly`, `mighty`, …). From `docs/elixir-ingredient-labels.json` via seed script. */
+    element: { type: String, default: 'none' },        // e.g., 'fire', 'ice', 'electric', 'tech', 'none' — monster-part affinity for elixir mixer (see `items` + seed)
+    /** Elixir mixer critter family (`bright`, `chilly`, `mighty`, …). Seeded from `docs/elixir-ingredient-labels.json` → DB. */
     effectFamily: { type: String, default: null },
 
     // ------------------- Economics -------------------

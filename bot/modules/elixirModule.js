@@ -26,7 +26,7 @@ const RESOURCE_ELIXIR_LEVEL_STATS = Object.freeze({
   'Fairy Tonic': { healHearts: [2, 3, 4] },
 });
 
-/** Not valid mixer ingredients (pet / compression / special use only). Keep in sync with `elixir-ingredient-labels.json`. */
+/** Not valid mixer ingredients (pet / compression / special use only). Keep in sync with `items` + ingredient-label seed. */
 const ELIXIR_MIXER_EXCLUDED_ITEM_NAMES = Object.freeze(['Chuchu Egg']);
 
 function normalizeElixirLevel(raw) {
