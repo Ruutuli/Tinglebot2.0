@@ -27,8 +27,15 @@ export type ItemFlipCardProps = ItemData & {
   emoji?: string;
   itemRarity: number;
   category: string[] | string;
+  categoryGear?: string;
   type: string[] | string;
   subtype?: string[] | string;
+  /** Monster part / jelly affinity for elixir mixer (`docs/elixir-ingredient-labels.json`) */
+  element?: string | null;
+  /** Critter effect family for elixir mixer */
+  effectFamily?: string | null;
+  /** Default potency tier for elixir/potion items (1 Basic, 2 Mid, 3 High) */
+  elixirLevel?: number | null;
   buyPrice: number;
   sellPrice: number;
   stackable: boolean;
@@ -68,6 +75,26 @@ export function ItemFlipCard({ item }: { item: ItemFlipCardProps }) {
   const mainCategory = getMainCategory(item);
   const mainType = getMainType(item);
   const imageUrl = formatItemImageUrl(item.image);
+
+  const gearCategories = new Set(["Weapon", "Armor", "Shield"]);
+  const isGearItem =
+    gearCategories.has(mainCategory) ||
+    (!!item.categoryGear && gearCategories.has(String(item.categoryGear)));
+
+  const elixirEffectFamily =
+    item.effectFamily && String(item.effectFamily).trim()
+      ? String(item.effectFamily).trim()
+      : "";
+  const rawElement = item.element != null ? String(item.element).trim().toLowerCase() : "";
+  /** Gear always shows element (typing); materials/other show when not neutral */
+  const showElementInDetails =
+    !!rawElement && (rawElement !== "none" || isGearItem);
+  const elixirLevelLabel =
+    item.elixirLevel === 1 ? "Basic" : item.elixirLevel === 2 ? "Mid" : item.elixirLevel === 3 ? "High" : "";
+  const showElixirMixingSection = !!elixirEffectFamily || !!elixirLevelLabel;
+
+  const formatMixerWord = (s: string) =>
+    s ? s.charAt(0).toUpperCase() + s.slice(1).toLowerCase() : s;
 
   // Type bar color mapping (based on category)
   const typeColorMap: Record<string, string> = {
@@ -261,6 +288,13 @@ export function ItemFlipCard({ item }: { item: ItemFlipCardProps }) {
                 <i className="fas fa-star" aria-hidden="true"></i>
                 <strong>Rarity:</strong> <span>{item.itemRarity || 1}</span>
               </div>
+              {showElementInDetails && (
+                <div className="item-detail-row modern-item-detail-row">
+                  <i className="fas fa-magic" aria-hidden="true"></i>
+                  <strong>Element:</strong>{" "}
+                  <span>{rawElement === "none" ? "None" : formatMixerWord(rawElement)}</span>
+                </div>
+              )}
               {/* Stats Section - Show for craftable items, weapons, and armor */}
               {(craftingMaterials || mainCategory === "Weapon" || mainCategory === "Armor") && (item.modifierHearts != null || item.staminaRecovered != null || item.staminaToCraft != null) && (
                 <>
@@ -289,6 +323,30 @@ export function ItemFlipCard({ item }: { item: ItemFlipCardProps }) {
               )}
             </div>
           </div>
+
+          {/* Elixir mixing (ingredient labels from DB / elixir-ingredient-labels) */}
+          {showElixirMixingSection && (
+            <div className="item-section modern-item-section">
+              <div className="item-section-label modern-item-section-label">
+                <i className="fas fa-flask" aria-hidden="true"></i> Elixir mixing
+              </div>
+              <div className="item-detail-list modern-item-detail-list">
+                {elixirEffectFamily && (
+                  <div className="item-detail-row modern-item-detail-row">
+                    <i className="fas fa-bug" aria-hidden="true"></i>
+                    <strong>Effect family:</strong>{" "}
+                    <span>{formatMixerWord(elixirEffectFamily)}</span>
+                  </div>
+                )}
+                {elixirLevelLabel && (
+                  <div className="item-detail-row modern-item-detail-row">
+                    <i className="fas fa-layer-group" aria-hidden="true"></i>
+                    <strong>Default potency:</strong> <span>{elixirLevelLabel}</span>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
 
           {/* Sources Section */}
           <div className="item-section modern-item-section">

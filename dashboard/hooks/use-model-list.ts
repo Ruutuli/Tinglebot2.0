@@ -48,8 +48,10 @@ const FILTER_LABELS: Record<ModelListResource, FilterKeyConfig> = {
     craftable: "Craftable",
     stackable: "Stackable",
     terrain: "Terrain",
-    entertainerItems: "Entertainer item",
-    divineItems: "Divine item",
+    boostTags: "Boost tags",
+    effectFamily: "Effect family",
+    element: "Part element",
+    elixirLevel: "Elixir potency",
   },
   maps: { region: "Region", status: "Square status", quadrantStatus: "Quadrant status", hazard: "Hazard", terrain: "Terrain", blighted: "Blighted", hasDiscoveries: "Has discoveries", hideAllInaccessible: "Hide all-inaccessible" },
   monsters: { species: "Species", type: "Type", tier: "Tier" },
@@ -133,11 +135,15 @@ function buildFilterGroups(
           id = ownerId || rawValue;
           optionValue = id;
           labelVal = ownerDisplay || ownerId || rawValue;
+        } else if (typeof v === "number" && key === "elixirLevel") {
+          labelVal = v === 1 ? "Basic" : v === 2 ? "Mid" : v === 3 ? "High" : `Level ${v}`;
         } else if (typeof v === "number" && (key === "rarity" || key === "tier")) {
           labelVal = key === "tier" ? `Tier ${v}` : `Rarity ${v}`;
         } else if (key === "isActive") {
           labelVal = String(v) === "true" ? "Active" : "Inactive";
-        } else if (key === "craftable" || key === "stackable" || key === "entertainerItems" || key === "divineItems" || key === "blighted" || key === "hasDiscoveries" || key === "hideAllInaccessible") {
+        } else if (key === "boostTags") {
+          labelVal = String(v).toLowerCase() === "entertainer" ? "Entertainer item" : String(v).toLowerCase() === "divine" ? "Divine item" : capitalize(String(v));
+        } else if (key === "craftable" || key === "stackable" || key === "blighted" || key === "hasDiscoveries" || key === "hideAllInaccessible") {
           labelVal = String(v) === "true" ? "Yes" : "No";
         } else if (key === "quadrantStatus") {
           const statusLabels: Record<string, string> = {
@@ -149,7 +155,7 @@ function buildFilterGroups(
           labelVal = statusLabels[String(v).toLowerCase()] ?? capitalize(String(v));
         } else if (key === "terrain" && resource === "maps") {
           labelVal = String(v); /* preserve emoji and casing for map terrain */
-        } else if (key === "race" || key === "village" || key === "job" || key === "source" || key === "location" || key === "status" || key === "species" || key === "petType" || key === "terrain" || key === "hazard") {
+        } else if (key === "race" || key === "village" || key === "job" || key === "source" || key === "location" || key === "status" || key === "species" || key === "petType" || key === "terrain" || key === "hazard" || key === "effectFamily" || key === "element") {
           labelVal = capitalize(String(v));
         } else {
           labelVal = String(v);
@@ -615,7 +621,7 @@ function buildQueryParams(
     if (values.length && key !== "sortBy" && key !== "perPage") {
       // Handle boolean values for isModCharacter, craftable, stackable
       // These are stored as strings "true"/"false" in filters
-      if (key === "isModCharacter" || key === "craftable" || key === "stackable" || key === "entertainerItems" || key === "divineItems" || key === "blighted" || key === "hasDiscoveries" || key === "hideAllInaccessible") {
+      if (key === "isModCharacter" || key === "craftable" || key === "stackable" || key === "blighted" || key === "hasDiscoveries" || key === "hideAllInaccessible") {
         const boolValues = values.map(v => {
           if (typeof v === "boolean") {
             return String(v);
@@ -827,10 +833,10 @@ export function useModelList<T>(
     setFilters((prev) => {
       const opts = filterOptions?.[groupId] ?? [];
       const opt = opts.find((v) => String(v) === optionId);
-      let value: string | number | boolean = opt ?? (groupId === "rarity" || groupId === "tier" ? parseInt(optionId, 10) : optionId);
+      let value: string | number | boolean = opt ?? (groupId === "rarity" || groupId === "tier" || groupId === "elixirLevel" ? parseInt(optionId, 10) : optionId);
       
-      // Handle boolean filters (craftable, stackable, entertainerItems, divineItems) - store as strings for API compatibility
-      if (groupId === "craftable" || groupId === "stackable" || groupId === "entertainerItems" || groupId === "divineItems" || groupId === "blighted" || groupId === "hasDiscoveries") {
+      // Handle boolean filters (craftable, stackable) - store as strings for API compatibility
+      if (groupId === "craftable" || groupId === "stackable" || groupId === "blighted" || groupId === "hasDiscoveries") {
         value = optionId; // Keep as string "true" or "false"
       }
       

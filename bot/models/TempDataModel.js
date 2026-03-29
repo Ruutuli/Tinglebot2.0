@@ -133,6 +133,7 @@ const tempDataSchema = new mongoose.Schema({
       // Crafting
       'craftingContinue',        // Crafting continuation state
       'craftingMaterialSelection', // Crafting material selection state
+      'brewMixerSession',        // /crafting brew — multi-step critter/part/extras
       
       // Combat & Encounters
       'battle',        // Battle progress
@@ -217,6 +218,9 @@ tempDataSchema.pre('save', function(next) {
       this.expiresAt = new Date(Date.now() + 15 * 60 * 1000); // 15 minutes
       break;
     case 'craftingMaterialSelection':
+      this.expiresAt = new Date(Date.now() + 15 * 60 * 1000); // 15 minutes
+      break;
+    case 'brewMixerSession':
       this.expiresAt = new Date(Date.now() + 15 * 60 * 1000); // 15 minutes
       break;
     case 'travelEncounter':

@@ -497,13 +497,27 @@ async function handleAutocompleteInternal(interaction, commandName, focusedOptio
             break;
 
           // ------------------- Crafting Command -------------------
-          case "crafting":
-            if (focusedOption.name === "charactername") {
-              await handleCharacterBasedCommandsAutocomplete(interaction, focusedOption, "crafting");
-            } else if (focusedOption.name === "itemname") {
-              await handleCraftingAutocomplete(interaction, focusedOption);
+          case "crafting": {
+            const craftingSub = interaction.options.getSubcommand();
+            if (craftingSub === "brew") {
+              if (focusedOption.name === "charactername") {
+                await handleCharacterBasedCommandsAutocomplete(interaction, focusedOption, "crafting");
+              } else if (focusedOption.name === "elixir") {
+                await handleCraftBrewElixirAutocomplete(interaction, focusedOption);
+              } else if (focusedOption.name === "critter") {
+                await handleCraftBrewCritterAutocomplete(interaction, focusedOption);
+              } else if (focusedOption.name === "part") {
+                await handleCraftBrewPartAutocomplete(interaction, focusedOption);
+              }
+            } else {
+              if (focusedOption.name === "charactername") {
+                await handleCharacterBasedCommandsAutocomplete(interaction, focusedOption, "crafting");
+              } else if (focusedOption.name === "itemname") {
+                await handleCraftingAutocomplete(interaction, focusedOption);
+              }
             }
             break;
+          }
 
           // ------------------- Economy Command -------------------
           case "economy":
@@ -2099,6 +2113,114 @@ async function handleCraftingAutocomplete(interaction, focusedOption) {
       });
 
     await safeAutocompleteResponse(interaction, filteredItems);
+  } catch (error) {
+    handleError(error, "autocompleteHandler.js");
+    await safeAutocompleteResponse(interaction, []);
+  }
+}
+
+// ------------------- /crafting brew — elixir list + critter / part inventory autocomplete -------------------
+async function handleCraftBrewElixirAutocomplete(interaction, focusedOption) {
+  try {
+    const { EFFECT_FAMILY_TO_ELIXIR } = require('../modules/elixirBrewModule');
+    const searchQuery = (focusedOption.value || '').toLowerCase();
+    const names = [...new Set(Object.values(EFFECT_FAMILY_TO_ELIXIR))].sort((a, b) =>
+      a.localeCompare(b)
+    );
+    const filtered = names
+      .filter((n) => !searchQuery || n.toLowerCase().includes(searchQuery))
+      .slice(0, 25)
+      .map((n) => ({ name: n.length > 100 ? `${n.slice(0, 97)}...` : n, value: n }));
+
+    await safeAutocompleteResponse(interaction, filtered);
+  } catch (error) {
+    handleError(error, 'autocompleteHandler.js');
+    await safeAutocompleteResponse(interaction, []);
+  }
+}
+
+async function handleCraftBrewCritterAutocomplete(interaction, focusedOption) {
+  try {
+    const characterName = interaction.options.getString('charactername');
+    const elixirName = interaction.options.getString('elixir');
+    if (!characterName || !elixirName) {
+      return await safeAutocompleteResponse(interaction, []);
+    }
+    const { getIngredientLabelSets, elixirNameToEffectFamily } = require('../modules/elixirBrewModule');
+    const requiredFamily = elixirNameToEffectFamily(elixirName);
+    if (!requiredFamily) {
+      return await safeAutocompleteResponse(interaction, []);
+    }
+    const { critterNames, familyByCritterName } = getIngredientLabelSets();
+    const searchQuery = (focusedOption.value || '').toLowerCase();
+
+    const inventoryCollection = await DatabaseConnectionManager.getInventoryCollection(characterName);
+    const inventory = await inventoryCollection.find({ quantity: { $gte: 1 } }).toArray();
+
+    const critterLower = new Set([...critterNames].map((n) => n.toLowerCase()));
+
+    const choices = [];
+    for (const row of inventory) {
+      const name = row.itemName;
+      if (!name) continue;
+      const qty =
+        typeof row.quantity === 'number' && !isNaN(row.quantity)
+          ? row.quantity
+          : parseInt(row.quantity, 10) || 0;
+      if (qty < 1) continue;
+      if (!critterLower.has(name.toLowerCase())) continue;
+      const fam = familyByCritterName.get(name.toLowerCase());
+      if (fam !== requiredFamily) continue;
+      if (searchQuery && !name.toLowerCase().includes(searchQuery)) continue;
+      choices.push({
+        name: `${name} (Qty: ${qty})`,
+        value: name,
+      });
+      if (choices.length >= 25) break;
+    }
+
+    await safeAutocompleteResponse(interaction, choices);
+  } catch (error) {
+    handleError(error, "autocompleteHandler.js");
+    await safeAutocompleteResponse(interaction, []);
+  }
+}
+
+async function handleCraftBrewPartAutocomplete(interaction, focusedOption) {
+  try {
+    const characterName = interaction.options.getString('charactername');
+    const elixirName = interaction.options.getString('elixir');
+    if (!characterName || !elixirName) {
+      return await safeAutocompleteResponse(interaction, []);
+    }
+    const { getIngredientLabelSets } = require('../modules/elixirBrewModule');
+    const { partNames } = getIngredientLabelSets();
+    const searchQuery = (focusedOption.value || '').toLowerCase();
+
+    const inventoryCollection = await DatabaseConnectionManager.getInventoryCollection(characterName);
+    const inventory = await inventoryCollection.find({ quantity: { $gte: 1 } }).toArray();
+
+    const partLower = new Set([...partNames].map((n) => n.toLowerCase()));
+
+    const choices = [];
+    for (const row of inventory) {
+      const name = row.itemName;
+      if (!name) continue;
+      const qty =
+        typeof row.quantity === 'number' && !isNaN(row.quantity)
+          ? row.quantity
+          : parseInt(row.quantity, 10) || 0;
+      if (qty < 1) continue;
+      if (!partLower.has(name.toLowerCase())) continue;
+      if (searchQuery && !name.toLowerCase().includes(searchQuery)) continue;
+      choices.push({
+        name: `${name} (Qty: ${qty})`,
+        value: name,
+      });
+      if (choices.length >= 25) break;
+    }
+
+    await safeAutocompleteResponse(interaction, choices);
   } catch (error) {
     handleError(error, "autocompleteHandler.js");
     await safeAutocompleteResponse(interaction, []);

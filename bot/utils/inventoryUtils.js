@@ -12,6 +12,10 @@ const generalCategories = require("../models/GeneralItemCategories");
 const { v4: uuidv4 } = require('uuid');
 const mongoose = require('mongoose');
 const ItemModel = require('../models/ItemModel');
+const {
+  isElixirItemName,
+  normalizeElixirLevel,
+} = require('../modules/elixirModule');
 const InventoryLog = require('../models/InventoryLogModel');
 const { ActionRowBuilder, StringSelectMenuBuilder, StringSelectMenuOptionBuilder, EmbedBuilder, MessageFlags, ButtonBuilder, ButtonStyle } = require('discord.js');
 const TempData = require('../models/TempDataModel');
@@ -125,6 +129,7 @@ function shouldLogError(error) {
 
 // ---- Function: syncToInventoryDatabase ----
 // Syncs item changes to database. Never inserts or leaves negative quantity; uses case-insensitive itemName.
+// Elixirs: separate DB documents per elixirLevel (1–3); sync add/merge and remove respect level like addItemInventoryDatabase.
 async function syncToInventoryDatabase(character, item, interaction) {
   try {
     if (!dbFunctions.connectToInventories) {
@@ -145,6 +150,17 @@ async function syncToInventoryDatabase(character, item, interaction) {
     const itemNameRegex = new RegExp(`^${escapeRegExp(itemNameForQuery)}$`, 'i');
     const quantity = typeof item.quantity === 'number' ? item.quantity : 0;
 
+    let itemDetailsForSync = null;
+    if (itemNameForQuery && dbFunctions.fetchItemByName) {
+      try {
+        itemDetailsForSync = await dbFunctions.fetchItemByName(itemNameForQuery);
+      } catch (_) {
+        itemDetailsForSync = null;
+      }
+    }
+    const syncIsElixir =
+      itemDetailsForSync && isElixirItemName(itemDetailsForSync.itemName);
+
     // ---- Removal (quantity <= 0): deduct from existing docs only, never insert ----
     if (quantity <= 0) {
       const toRemove = Math.abs(quantity);
@@ -153,7 +169,22 @@ async function syncToInventoryDatabase(character, item, interaction) {
       const allEntries = await inventoryCollection
         .find({ characterId: character._id, itemName: itemNameRegex })
         .toArray();
-      const positiveEntries = allEntries.filter((e) => (e.quantity || 0) > 0);
+      let positiveEntries = allEntries.filter((e) => (e.quantity || 0) > 0);
+
+      if (syncIsElixir && item.elixirLevel != null) {
+        const tl = normalizeElixirLevel(item.elixirLevel);
+        positiveEntries = positiveEntries.filter(
+          (e) => normalizeElixirLevel(e.elixirLevel) === tl
+        );
+      } else if (syncIsElixir) {
+        // No level on sync payload: consume lowest level first (Basic / legacy), then Mid, then High
+        positiveEntries.sort(
+          (a, b) =>
+            normalizeElixirLevel(a.elixirLevel) - normalizeElixirLevel(b.elixirLevel) ||
+            String(a._id).localeCompare(String(b._id))
+        );
+      }
+
       const totalAvailable = positiveEntries.reduce((sum, e) => sum + (e.quantity || 0), 0);
 
       const actualRemove = Math.min(toRemove, totalAvailable);
@@ -161,18 +192,39 @@ async function syncToInventoryDatabase(character, item, interaction) {
         logger.warn('INVENTORY', `Sync removal: only ${totalAvailable} ${itemNameForQuery} available, requested ${toRemove}; deducting ${actualRemove}`);
       }
 
-      // Atomic one-at-a-time removal to prevent negative quantity under concurrency
-      const syncRemovalFilter = { characterId: character._id, itemName: itemNameRegex, quantity: { $gte: 1 } };
       for (let i = 0; i < actualRemove; i++) {
+        let docId = null;
+        if (syncIsElixir) {
+          const head = positiveEntries.find((e) => (e.quantity || 0) > 0);
+          if (!head) break;
+          docId = head._id;
+        }
+
+        const fauOpts = { returnDocument: 'after' };
+        if (!docId) fauOpts.sort = { _id: 1 };
         const doc = await inventoryCollection.findOneAndUpdate(
-          syncRemovalFilter,
+          docId
+            ? { _id: docId, quantity: { $gte: 1 } }
+            : {
+                characterId: character._id,
+                itemName: itemNameRegex,
+                quantity: { $gte: 1 },
+              },
           { $inc: { quantity: -1 } },
-          { returnDocument: 'after', sort: { _id: 1 } }
+          fauOpts
         );
         if (!doc) break;
+        const docIdStr = String(doc._id);
+        if (syncIsElixir && docId) {
+          const ent = positiveEntries.find((e) => String(e._id) === docIdStr);
+          if (ent) ent.quantity = doc.quantity;
+        }
         if ((doc.quantity || 0) <= 0) {
           await inventoryCollection.deleteOne({ _id: doc._id });
           logger.info('INVENTORY', `Sync removal: deleted entry ${doc.itemName} (quantity reached 0)`);
+          if (syncIsElixir) {
+            positiveEntries = positiveEntries.filter((e) => String(e._id) !== docIdStr);
+          }
         }
       }
       return;
@@ -209,10 +261,34 @@ async function syncToInventoryDatabase(character, item, interaction) {
     }
 
     // ---- Addition (quantity > 0): find one existing (case-insensitive), $inc or insert ----
-    const existingItem = await inventoryCollection.findOne({
-      characterId: character._id,
-      itemName: itemNameRegex
-    });
+    const itemDetails = itemDetailsForSync || (await dbFunctions.fetchItemByName(item.itemName));
+    const syncStackElixirLevel =
+      syncIsElixir && itemDetails
+        ? normalizeElixirLevel(
+            item.elixirLevel != null
+              ? item.elixirLevel
+              : itemDetails.elixirLevel != null
+                ? itemDetails.elixirLevel
+                : 1
+          )
+        : null;
+
+    const stackCandidates = await inventoryCollection
+      .find({ characterId: character._id, itemName: itemNameRegex })
+      .toArray();
+
+    let existingItem = null;
+    if (syncIsElixir && syncStackElixirLevel != null) {
+      existingItem =
+        stackCandidates.find(
+          (e) =>
+            (e.quantity || 0) > 0 &&
+            normalizeElixirLevel(e.elixirLevel) === syncStackElixirLevel
+        ) || null;
+    } else {
+      existingItem =
+        stackCandidates.find((e) => (e.quantity || 0) > 0) || null;
+    }
 
     // If existing document has invalid (zero/negative) quantity, delete it and treat as new insert so transfer is never lost
     if (existingItem && (existingItem.quantity || 0) <= 0) {
@@ -221,9 +297,16 @@ async function syncToInventoryDatabase(character, item, interaction) {
     }
 
     if (existingItem && (existingItem.quantity || 0) > 0) {
+      const syncIncUpdate = { $inc: { quantity: quantity } };
+      const syncIncSet =
+        syncIsElixir && syncStackElixirLevel != null
+          ? { $set: { elixirLevel: syncStackElixirLevel } }
+          : {};
       await inventoryCollection.updateOne(
         { _id: existingItem._id },
-        { $inc: { quantity: quantity } }
+        syncIsElixir && syncStackElixirLevel != null
+          ? { ...syncIncUpdate, ...syncIncSet }
+          : syncIncUpdate
       );
       const updated = await inventoryCollection.findOne({ _id: existingItem._id });
       if (updated && (updated.quantity || 0) <= 0) {
@@ -234,7 +317,6 @@ async function syncToInventoryDatabase(character, item, interaction) {
       }
     } else {
       // No existing item, or we just deleted an invalid one — insert with the new quantity
-      const itemDetails = await dbFunctions.fetchItemByName(item.itemName);
       const itemId = itemDetails?._id || item.itemId || null;
       const category = Array.isArray(itemDetails?.category) ? itemDetails.category.join(", ") : (item.category || "");
       const type = Array.isArray(itemDetails?.type) ? itemDetails.type.join(", ") : (item.type || "");
@@ -247,7 +329,7 @@ async function syncToInventoryDatabase(character, item, interaction) {
       const obtain = item.obtain !== undefined ? item.obtain : "Manual Sync";
       const synced = item.synced || "";
 
-      await inventoryCollection.insertOne({
+      const insertDoc = {
         characterId: character._id,
         itemId,
         itemName: item.itemName || itemNameForQuery,
@@ -262,7 +344,11 @@ async function syncToInventoryDatabase(character, item, interaction) {
         date,
         obtain,
         synced
-      });
+      };
+      if (syncIsElixir && syncStackElixirLevel != null) {
+        insertDoc.elixirLevel = syncStackElixirLevel;
+      }
+      await inventoryCollection.insertOne(insertDoc);
       logger.success('INVENTORY', `Added new item ${itemNameForQuery} to database`);
     }
   } catch (error) {
@@ -289,10 +375,10 @@ async function removeNegativeQuantityEntries(inventoryCollection) {
 
 // ---- Function: addItemInventoryDatabase ----
 // Adds a single item to inventory database. Never leaves negative quantity; after $inc deletes if qty <= 0.
-// options: optional { craftedAt: Date, fortuneTellerBoost: boolean } for Crafting (Foresight in Sales tag).
+// options: optional { craftedAt, fortuneTellerBoost, elixirLevel } — elixirLevel 1–3 for potions (stack key with itemName).
 async function addItemInventoryDatabase(characterId, itemName, quantity, interaction, obtain = "", options = {}) {
   try {
-    const { craftedAt = null, fortuneTellerBoost = false } = options;
+    const { craftedAt = null, fortuneTellerBoost = false, elixirLevel: optElixirLevel = null } = options;
     const allowedNullInteractionObtain = ['Trade', 'Character Birthday', 'Duplicate Relic Turn-In'];
     if (!interaction && !allowedNullInteractionObtain.includes(obtain)) {
       throw new Error("Interaction object is undefined.");
@@ -359,14 +445,29 @@ async function addItemInventoryDatabase(characterId, itemName, quantity, interac
       logger.info('INVENTORY', `Adding enhanced item: ${returnedTrimmed} (qty: ${quantity}) for ${character.name}`);
     }
 
-    // Find existing stack by characterId + itemName only so all acquisition methods combine into one stack
     const itemNameRegex = new RegExp(`^${escapeRegExp(itemName.trim())}$`, "i");
     const obtainValue = obtain || "";
 
-    let inventoryItem = await inventoryCollection.findOne({
-      characterId,
-      itemName: itemNameRegex
-    });
+    const useElixirStacks = isElixirItemName(item.itemName);
+    const stackElixirLevel = useElixirStacks
+      ? normalizeElixirLevel(
+          optElixirLevel != null ? optElixirLevel : item.elixirLevel != null ? item.elixirLevel : 1
+        )
+      : null;
+
+    const stackCandidates = await inventoryCollection
+      .find({ characterId, itemName: itemNameRegex })
+      .toArray();
+
+    let inventoryItem = null;
+    if (useElixirStacks) {
+      inventoryItem = stackCandidates.find(
+        (e) =>
+          (e.quantity || 0) > 0 && normalizeElixirLevel(e.elixirLevel) === stackElixirLevel
+      );
+    } else {
+      inventoryItem = stackCandidates.find((e) => (e.quantity || 0) > 0) || null;
+    }
 
     // If found document has invalid quantity, remove it and treat as no existing stack
     if (inventoryItem && (inventoryItem.quantity || 0) <= 0) {
@@ -383,6 +484,9 @@ async function addItemInventoryDatabase(characterId, itemName, quantity, interac
       if (fortuneTellerBoost || craftedAt) {
         if (fortuneTellerBoost) updateOp.$set.fortuneTellerBoost = true;
         if (craftedAt) updateOp.$set.craftedAt = craftedAt;
+      }
+      if (useElixirStacks && stackElixirLevel != null) {
+        updateOp.$set.elixirLevel = stackElixirLevel;
       }
       await inventoryCollection.updateOne(
         { _id: inventoryItem._id },
@@ -410,6 +514,9 @@ async function addItemInventoryDatabase(characterId, itemName, quantity, interac
         date: new Date(),
         obtain: obtainValue,
       };
+      if (useElixirStacks && stackElixirLevel != null) {
+        newItem.elixirLevel = stackElixirLevel;
+      }
       if (fortuneTellerBoost) newItem.fortuneTellerBoost = true;
       if (craftedAt) newItem.craftedAt = craftedAt;
       await inventoryCollection.insertOne(newItem);
@@ -453,7 +560,7 @@ async function addItemInventoryDatabase(characterId, itemName, quantity, interac
 
 // ---- Function: removeItemInventoryDatabase ----
 // Removes a single item from inventory database
-async function removeItemInventoryDatabase(characterId, itemName, quantity, interaction, obtain = "Trade") {
+async function removeItemInventoryDatabase(characterId, itemName, quantity, interaction, obtain = "Trade", options = {}) {
   try {
     // Validate quantity parameter to prevent NaN corruption
     if (typeof quantity !== 'number' || isNaN(quantity) || quantity <= 0) {
@@ -474,6 +581,19 @@ async function removeItemInventoryDatabase(characterId, itemName, quantity, inte
     if (!character) {
       throw new Error(`Character with ID ${characterId} not found`);
     }
+
+    let itemDef = null;
+    if (dbFunctions.fetchItemByName) {
+      try {
+        itemDef = await dbFunctions.fetchItemByName(itemName.trim());
+      } catch (_) {
+        itemDef = null;
+      }
+    }
+    const useElixirStacks = itemDef && isElixirItemName(itemDef.itemName);
+    const targetElixirLevel = useElixirStacks
+      ? normalizeElixirLevel(options.elixirLevel != null ? options.elixirLevel : 1)
+      : null;
 
     logger.info('INVENTORY', `📦 Processing inventory for ${character.name}`);
     const collectionName = character.name.toLowerCase();
@@ -508,7 +628,13 @@ async function removeItemInventoryDatabase(characterId, itemName, quantity, inte
       await inventoryCollection.deleteOne({ _id: entry._id });
       logger.info('INVENTORY', `Deleted invalid entry ${entry.itemName} (quantity ${entry.quantity})`);
     }
-    const inventoryEntries = (allEntries || []).filter((e) => (e.quantity || 0) > 0);
+    let inventoryEntries = (allEntries || []).filter((e) => (e.quantity || 0) > 0);
+
+    if (useElixirStacks && targetElixirLevel != null) {
+      inventoryEntries = inventoryEntries.filter(
+        (e) => normalizeElixirLevel(e.elixirLevel) === targetElixirLevel
+      );
+    }
 
     if (!inventoryEntries || inventoryEntries.length === 0) {
       logger.error('INVENTORY', `Item "${itemName}" not found in ${character.name}'s inventory`);
@@ -542,15 +668,34 @@ async function removeItemInventoryDatabase(characterId, itemName, quantity, inte
     const canonicalItemName = inventoryEntries[0].itemName; // Use canonical name from first entry
 
     // Build filter for atomic decrement (same as initial query, plus quantity >= 1)
-    const atomicFilter = itemName.includes('+')
-      ? { characterId: character._id, itemName: itemName.trim(), quantity: { $gte: 1 } }
-      : { characterId: character._id, itemName: { $regex: new RegExp(`^${escapeRegExp(itemName.trim())}$`, 'i') }, quantity: { $gte: 1 } };
+    const buildAtomicFilter = () => {
+      const base =
+        itemName.includes('+')
+          ? { characterId: character._id, itemName: itemName.trim(), quantity: { $gte: 1 } }
+          : {
+              characterId: character._id,
+              itemName: { $regex: new RegExp(`^${escapeRegExp(itemName.trim())}$`, 'i') },
+              quantity: { $gte: 1 },
+            };
+      if (useElixirStacks && targetElixirLevel != null) {
+        if (targetElixirLevel === 1) {
+          base.$or = [
+            { elixirLevel: 1 },
+            { elixirLevel: { $exists: false } },
+            { elixirLevel: null },
+          ];
+        } else {
+          base.elixirLevel = targetElixirLevel;
+        }
+      }
+      return base;
+    };
 
     // Atomic one-at-a-time removal: each decrement is "take 1 only if quantity >= 1" in a single DB operation
     let removedCount = 0;
     for (let i = 0; i < quantity; i++) {
       const doc = await inventoryCollection.findOneAndUpdate(
-        atomicFilter,
+        buildAtomicFilter(),
         { $inc: { quantity: -1 } },
         { returnDocument: 'after', sort: { _id: 1 } }
       );

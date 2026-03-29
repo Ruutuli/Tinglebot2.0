@@ -8,7 +8,9 @@
     "dev:dashboard": "cd dashboard && npm run dev",
     "dev:dashboardNEW": "cd dashboardNEW && npm run dev",
     "dev": "concurrently \"npm run dev:bot\" \"npm run dev:dashboard\"",
-    "deploy:commands": "node bot/scripts/deploy-commands.js"
+    "deploy:commands": "node bot/scripts/deploy-commands.js",
+    "seed:elixir-ingredient-labels": "node bot/scripts/seedElixirIngredientLabels.js",
+    "seed:bright-sticky-elixirs": "node bot/scripts/seedBrightStickyElixirsAndRetireFireproof.js"
   },
   "devDependencies": {
     "concurrently": "^8.2.0"

@@ -1,6 +1,6 @@
 {
-  "version": 4,
-  "$comment": "Key order: effectFamily critters (by family A-Z, then item name), then element parts (electric, fire, ice, none, undead; then item name).",
+  "version": 7,
+  "$comment": "v7: Chuchu Egg removed — hatch/pet + jelly compression only, not a mixer part. Key order: effectFamily critters (A–Z by family), then element parts (electric, fire, ice, none, undead; A–Z). SS bugs: Lanayru Ant=tough; Woodland Rhino=tough; Skyloft Mantis=mighty; Eldin Roller/Volcanic Ladybug=chilly.",
   "labels": {
     "Blessed Butterfly": {
       "effectFamily": "bright"
@@ -30,9 +30,6 @@
       "effectFamily": "chilly"
     },
     "Electric Darner": {
-      "effectFamily": "electro"
-    },
-    "Lanayru Ant": {
       "effectFamily": "electro"
     },
     "Thunderwing Butterfly": {
@@ -95,13 +92,10 @@
     "Sky Stag Beetle": {
       "effectFamily": "mighty"
     },
-    "Woodland Rhino Beetle": {
+    "Skyloft Mantis": {
       "effectFamily": "mighty"
     },
     "Fabled Butterfly": {
-      "effectFamily": "sneaky"
-    },
-    "Skyloft Mantis": {
       "effectFamily": "sneaky"
     },
     "Sneaky River Snail": {
@@ -128,7 +122,13 @@
     "Ironshell Crab": {
       "effectFamily": "tough"
     },
+    "Lanayru Ant": {
+      "effectFamily": "tough"
+    },
     "Rugged Rhino Beetle": {
+      "effectFamily": "tough"
+    },
+    "Woodland Rhino Beetle": {
       "effectFamily": "tough"
     },
     "Electric Keese Wing": {
@@ -168,9 +168,6 @@
       "element": "none"
     },
     "Bokoblin Horn": {
-      "element": "none"
-    },
-    "Chuchu Egg": {
       "element": "none"
     },
     "Chuchu Jelly": {

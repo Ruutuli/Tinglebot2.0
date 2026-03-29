@@ -2541,6 +2541,8 @@ if (boostInfo && boostInfo.boosterJob?.toLowerCase() === 'teacher' && boostInfo.
      elixirHelpText += `\n\n🧪 **${elixirBuffInfo.elixirName} helped!** Electric resistance protected against electric monster!`;
    } else if (elixirBuffInfo.encounterType === 'ice' && elixirBuffInfo.elixirType === 'spicy') {
      elixirHelpText += `\n\n🧪 **${elixirBuffInfo.elixirName} helped!** Cold resistance protected against ice monster!`;
+   } else if (elixirBuffInfo.encounterType === 'water' && elixirBuffInfo.elixirType === 'sticky') {
+     elixirHelpText += `\n\n🧪 **${elixirBuffInfo.elixirName} helped!** Water resistance protected against water monster!`;
    } else if (elixirBuffInfo.elixirType === 'mighty') {
      elixirHelpText += `\n\n🧪 **${elixirBuffInfo.elixirName} helped!** Attack boost improved combat performance!`;
    } else if (elixirBuffInfo.elixirType === 'tough') {

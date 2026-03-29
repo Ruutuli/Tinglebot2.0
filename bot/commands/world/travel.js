@@ -430,7 +430,7 @@ module.exports = {
               safeMsg += `◈ Your character **${character.name}** braved the blight rain and managed to avoid infection thanks to their elixir buffs! ◈\n`;
               safeMsg += "The protective effects of your elixir kept you safe from the blight.";
               
-              // Consume chilly elixir after use (blight resistance)
+              // Consume Bright Elixir after use (blight resistance)
               if (shouldConsumeElixir(character, 'travel', { blightRain: true })) {
                 consumeElixirBuff(character);
                 // Update character in database
@@ -1157,7 +1157,7 @@ async function processTravelDay(day, context) {
               safeMsg += `◈ Your character **${character.name}** departed from ${capitalizeFirstLetter(startingVillage)} during blight rain and managed to avoid infection thanks to their elixir buffs! ◈\n`;
               safeMsg += "The protective effects of your elixir kept you safe from the blight.";
               
-              // Consume chilly elixir after use
+              // Consume Bright Elixir after use (blight resistance)
               if (shouldConsumeElixir(character, 'travel', { blightRain: true })) {
                 consumeElixirBuff(character);
                 // Update character in database

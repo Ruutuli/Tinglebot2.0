@@ -29,7 +29,15 @@ const { advanceRaidTurnOnItemUse } = require('../../modules/raidModule');
 const { advanceWaveTurnOnItemUse } = require('../../modules/waveModule');
 const { getJobVoucherErrorMessage } = require('../../modules/jobVoucherModule');
 const { getPetTypeData, getPetEmoji, getRollsDisplay } = require('../../modules/petModule');
-const { applyElixirBuff, getElixirInfo, removeExpiredBuffs, ELIXIR_EFFECTS } = require('../../modules/elixirModule');
+const {
+  applyElixirBuff,
+  getElixirInfo,
+  removeExpiredBuffs,
+  ELIXIR_EFFECTS,
+  normalizeElixirLevel,
+  scaleElixirEffects,
+  ELIXIR_LEVEL_NAMES,
+} = require('../../modules/elixirModule');
 
 // ------------------- Utility Functions -------------------
 // General-purpose utilities: error handling, inventory utils.
@@ -956,6 +964,41 @@ module.exports = {
       // Specialized logic for Breath of the Wild elixirs: applies buffs and effects
       const elixirInfo = getElixirInfo(item.itemName);
       if (elixirInfo) {
+        const nameLc = item.itemName.toLowerCase();
+        const elixirStacks = inventoryItems
+          .filter(
+            (inv) =>
+              inv.itemName?.toLowerCase() === nameLc && (inv.quantity || 0) > 0
+          )
+          .sort(
+            (a, b) =>
+              normalizeElixirLevel(a.elixirLevel) -
+                normalizeElixirLevel(b.elixirLevel) ||
+              String(a._id).localeCompare(String(b._id))
+          );
+        const ownedElixirStack = elixirStacks[0];
+        const elixirTotalQty = elixirStacks.reduce(
+          (s, r) => s + Math.max(0, r.quantity || 0),
+          0
+        );
+        if (!ownedElixirStack || elixirTotalQty < quantity) {
+          return void await interaction.editReply({
+            embeds: [{
+              color: 0xFF0000,
+              title: '❌ Insufficient Items',
+              description: `*${character.name} looks through their inventory, confused...*\n\n**Item Not Found**\n${character.name} does not have enough "${capitalizeWords(cleanItemNameForInventory)}" in their inventory.\n\n**Available:** ${elixirTotalQty}\n**Requested:** ${quantity}`,
+              image: {
+                url: 'https://storage.googleapis.com/tinglebot/Graphics/border.png'
+              },
+              footer: {
+                text: 'Inventory'
+              }
+            }],
+            ephemeral: true
+          });
+        }
+        const invElixirLevel = normalizeElixirLevel(ownedElixirStack.elixirLevel);
+
         // Force quantity to 1 for elixirs (they're powerful items)
         if (quantity !== 1) {
           return void await interaction.editReply({
@@ -1035,8 +1078,11 @@ module.exports = {
           
           // Special handling for Hearty and Enduring Elixirs - they expire immediately since they're just for healing/restoration
           if (item.itemName === 'Hearty Elixir') {
-            // Apply temporary extra hearts for immediate use
-            const extraHearts = 3;
+            const scaledHearty = scaleElixirEffects(
+              ELIXIR_EFFECTS['Hearty Elixir'].effects,
+              invElixirLevel
+            );
+            const extraHearts = scaledHearty.extraHearts || 3;
             character.currentHearts += extraHearts;
             // Don't modify maxHearts - just track the temporary addition
             
@@ -1047,8 +1093,11 @@ module.exports = {
               effects: {}
             };
           } else if (item.itemName === 'Enduring Elixir') {
-            // Apply immediate stamina restoration and temporary stamina boost
-            const staminaBoost = 1;
+            const scaledEnduring = scaleElixirEffects(
+              ELIXIR_EFFECTS['Enduring Elixir'].effects,
+              invElixirLevel
+            );
+            const staminaBoost = scaledEnduring.staminaBoost || 1;
             character.maxStamina += staminaBoost;
             character.currentStamina += staminaBoost;
             
@@ -1059,8 +1108,7 @@ module.exports = {
               effects: {}
             };
           } else {
-            // Apply normal elixir buff for other elixirs
-            applyElixirBuff(character, item.itemName);
+            applyElixirBuff(character, item.itemName, invElixirLevel);
           }
           
           // Update character in database
@@ -1104,7 +1152,14 @@ module.exports = {
         }
 
         // Remove the elixir from inventory with proper logging
-        await removeItemInventoryDatabase(character._id, item.itemName, 1, interaction, `Used ${item.itemName} for buff effects`);
+        await removeItemInventoryDatabase(
+          character._id,
+          item.itemName,
+          1,
+          interaction,
+          `Used ${item.itemName} for buff effects`,
+          { elixirLevel: invElixirLevel }
+        );
 
         // ------------------- Build and Send Elixir Embed -------------------
         // Build consistent effect fields for all elixirs
@@ -1127,6 +1182,12 @@ module.exports = {
           }
           if (buffEffects.fireResistance > 0) {
             effectFields.push({ name: '🌡️ Heat & fire resistance', value: `x${buffEffects.fireResistance}`, inline: true });
+          }
+          if (buffEffects.waterResistance > 0) {
+            effectFields.push({ name: '💧 Water resistance', value: `x${buffEffects.waterResistance}`, inline: true });
+          }
+          if (buffEffects.plusBoost > 0) {
+            effectFields.push({ name: '✨ Plus boost', value: `x${buffEffects.plusBoost}`, inline: true });
           }
           if (buffEffects.speedBoost > 0) {
             effectFields.push({ name: '🏃 Speed Boost', value: `+${buffEffects.speedBoost}`, inline: true });
@@ -1179,6 +1240,11 @@ module.exports = {
             `${elixirInfo.description}`
           )
           .addFields([
+            {
+              name: '📊 Potency',
+              value: `**${ELIXIR_LEVEL_NAMES[invElixirLevel]}** (level ${invElixirLevel})`,
+              inline: true
+            },
             { name: '❤️ Current Hearts', value: `**${displayCurrentHearts}/${displayMaxHearts}**`, inline: true },
             { name: '🟩 Current Stamina', value: `**${displayCurrentStamina}/${displayMaxStamina}**`, inline: true }
           ])

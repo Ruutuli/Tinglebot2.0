@@ -4,17 +4,65 @@
 // they last until their effects are used in relevant activities.
 
 // ============================================================================
+// ------------------- Elixir tier (one catalog name, level on inventory) ---
+// ============================================================================
+
+/** 1 = Basic (low), 2 = Mid, 3 = High — stored on inventory rows + optional catalog default. */
+const ELIXIR_LEVEL_FACTORS = { 1: 1, 2: 1.15, 3: 1.3 };
+
+const ELIXIR_LEVEL_NAMES = { 1: 'Basic', 2: 'Mid', 3: 'High' };
+
+/** Not valid mixer ingredients (pet / compression / special use only). Keep in sync with `elixir-ingredient-labels.json`. */
+const ELIXIR_MIXER_EXCLUDED_ITEM_NAMES = Object.freeze(['Chuchu Egg']);
+
+function normalizeElixirLevel(raw) {
+  const n = Number(raw);
+  if (n === 2 || n === 3) return n;
+  return 1;
+}
+
+/** Scale base `ELIXIR_EFFECTS` numbers by tier (tune factors in ELIXIR_LEVEL_FACTORS). */
+function scaleElixirEffects(baseEffects, level) {
+  const lv = normalizeElixirLevel(level);
+  const factor = ELIXIR_LEVEL_FACTORS[lv] || 1;
+  const out = {};
+  for (const [key, val] of Object.entries(baseEffects || {})) {
+    if (typeof val === 'number' && Number.isFinite(val)) {
+      if (key === 'extraHearts' || key === 'staminaBoost' || key === 'staminaRecovery') {
+        out[key] = Math.max(1, Math.round(val * factor));
+      } else {
+        out[key] = Math.round(val * factor * 100) / 100;
+      }
+    }
+  }
+  return out;
+}
+
+// ============================================================================
 // ------------------- Elixir Definitions -------------------
 // ============================================================================
 
 const ELIXIR_EFFECTS = {
   'Chilly Elixir': {
     type: 'chilly',
-    description: 'Heat/fire resistance (one stat: hot climates, fire hazards, fire-type enemies); water resistance; blight resistance',
+    description: 'Heat and fire resistance (hot climates, fire hazards, fire-type enemies) — one stat: fireResistance',
     effects: {
-      fireResistance: 1.5,
-      waterResistance: 1.5,
+      fireResistance: 1.5
+    }
+  },
+  'Bright Elixir': {
+    type: 'bright',
+    description: 'Blight resistance for travel, gathering, looting, and raids during blight conditions',
+    effects: {
       blightResistance: 1
+    }
+  },
+  'Sticky Elixir': {
+    type: 'sticky',
+    description: 'Water resistance vs water-type foes; plusBoost for yield (design — wire where needed)',
+    effects: {
+      waterResistance: 1.5,
+      plusBoost: 1
     }
   },
   'Spicy Elixir': {
@@ -97,27 +145,36 @@ const resolveElixirItemName = (rawName) => {
   return key || s;
 };
 
+function isElixirItemName(name) {
+  const key = resolveElixirItemName(name);
+  return !!(key && ELIXIR_EFFECTS[key]);
+}
+
 // ============================================================================
 // ------------------- Core Functions -------------------
 // ============================================================================
 
 // ------------------- Apply Elixir Buff -------------------
 // Applies an elixir buff to a character
-const applyElixirBuff = (character, elixirName) => {
-  const elixir = ELIXIR_EFFECTS[elixirName];
+const applyElixirBuff = (character, elixirName, elixirLevel = 1) => {
+  const key = resolveElixirItemName(elixirName);
+  const elixir = ELIXIR_EFFECTS[key];
   if (!elixir) {
     throw new Error(`Unknown elixir: ${elixirName}`);
   }
 
-  // Update character buff - no levels or duration, just static effects
+  const level = normalizeElixirLevel(elixirLevel);
+  const effects =
+    level === 1 ? { ...elixir.effects } : scaleElixirEffects(elixir.effects, level);
+
   character.buff = {
     active: true,
     type: elixir.type,
-    effects: elixir.effects
+    effects,
+    elixirLevel: level
   };
 
-  // Apply immediate effects
-  applyImmediateEffects(character, elixirName);
+  applyImmediateEffects(character, key, effects);
 
   return character;
 };
@@ -125,47 +182,49 @@ const applyElixirBuff = (character, elixirName) => {
 // ------------------- Apply Immediate Effects -------------------
 // Applies immediate effects when elixir is consumed
 // Note: Most immediate effects are now handled by the database item consumption system
-const applyImmediateEffects = (character, elixirName) => {
-  const elixir = ELIXIR_EFFECTS[resolveElixirItemName(elixirName)];
-  
-  switch (elixirName) {
+const applyImmediateEffects = (character, elixirKey, scaledEffects) => {
+  switch (elixirKey) {
     case 'Energizing Elixir':
-      // Restore stamina when consumed
-      if (elixir && elixir.effects && elixir.effects.staminaRecovery) {
-        const staminaToRestore = elixir.effects.staminaRecovery;
+      if (scaledEffects?.staminaRecovery) {
+        const staminaToRestore = scaledEffects.staminaRecovery;
         const previousStamina = character.currentStamina || 0;
         character.currentStamina = Math.min(
-          character.maxStamina || 3, 
+          character.maxStamina || 3,
           previousStamina + staminaToRestore
         );
         console.log(`[elixirModule.js]: ⚡ Energizing Elixir restored ${staminaToRestore} stamina for ${character.name} (${previousStamina} → ${character.currentStamina})`);
       }
       break;
-      
+
     case 'Enduring Elixir':
-      // Temporarily extend stamina wheel
-      if (elixir && elixir.effects && elixir.effects.staminaBoost) {
-        const staminaBoost = elixir.effects.staminaBoost;
+      if (scaledEffects?.staminaBoost) {
+        const staminaBoost = scaledEffects.staminaBoost;
         character.maxStamina = (character.maxStamina || 3) + staminaBoost;
         character.currentStamina = (character.currentStamina || 0) + staminaBoost;
         console.log(`[elixirModule.js]: 🏃 Enduring Elixir extended stamina by +${staminaBoost} for ${character.name}`);
       }
       break;
-      
+
     case 'Hearty Elixir':
-      // Add extra temporary hearts
-      if (elixir && elixir.effects && elixir.effects.extraHearts) {
-        const extraHearts = elixir.effects.extraHearts;
+      if (scaledEffects?.extraHearts) {
+        const extraHearts = scaledEffects.extraHearts;
         character.maxHearts = (character.maxHearts || 3) + extraHearts;
         character.currentHearts = (character.currentHearts || 3) + extraHearts;
         console.log(`[elixirModule.js]: ❤️ Hearty Elixir added +${extraHearts} temporary hearts for ${character.name}`);
       }
       break;
-      
+
     default:
-      // Other elixirs don't have immediate effects - they apply during activities
       break;
   }
+};
+
+/** Fire / heat thread only — Chilly elixir must not consume for water or blight. */
+const monsterNameImpliesChillyConsume = (monster) => {
+  if (!monster) return false;
+  if (monster.element === 'fire') return true;
+  const name = monster.name || '';
+  return /fire|igneo|meteo/i.test(name);
 };
 
 // ------------------- Check if Elixir Should Be Consumed -------------------
@@ -179,7 +238,14 @@ const shouldConsumeElixir = (character, activity, context = {}) => {
 
   switch (buffType) {
     case 'chilly':
-      // Blight rain protection (Chilly)
+      return (
+        (activity === 'combat' && monsterNameImpliesChillyConsume(context.monster)) ||
+        (activity === 'helpWanted' && monsterNameImpliesChillyConsume(context.monster)) ||
+        (activity === 'raid' && monsterNameImpliesChillyConsume(context.monster)) ||
+        (activity === 'loot' && monsterNameImpliesChillyConsume(context.monster))
+      );
+
+    case 'bright':
       if (context.blightRain) {
         return (
           activity === 'loot' ||
@@ -189,12 +255,14 @@ const shouldConsumeElixir = (character, activity, context = {}) => {
           activity === 'raid'
         );
       }
-      // Fire or water enemies (combined former Fireproof + Chilly combat use)
+      return false;
+
+    case 'sticky':
       return (
-        (activity === 'combat' && monsterNameImpliesChillyConsume(context.monster)) ||
-        (activity === 'helpWanted' && monsterNameImpliesChillyConsume(context.monster)) ||
-        (activity === 'raid' && monsterNameImpliesChillyConsume(context.monster)) ||
-        (activity === 'loot' && monsterNameImpliesChillyConsume(context.monster))
+        (activity === 'combat' && context.monster?.name?.includes('Water')) ||
+        (activity === 'helpWanted' && context.monster?.name?.includes('Water')) ||
+        (activity === 'raid' && context.monster?.name?.includes('Water')) ||
+        (activity === 'loot' && context.monster?.name?.includes('Water'))
       );
 
     case 'electro':
@@ -266,6 +334,7 @@ const consumeElixirBuff = (character) => {
   character.buff = {
     active: false,
     type: null,
+    elixirLevel: null,
     effects: {
       blightResistance: 0,
       electricResistance: 0,
@@ -280,7 +349,8 @@ const consumeElixirBuff = (character) => {
       coldResistance: 0,
       iceEffectiveness: 0,
       defenseBoost: 0,
-      waterResistance: 0
+      waterResistance: 0,
+      plusBoost: 0
     }
   };
   
@@ -447,9 +517,9 @@ const getResistanceForElement = (element) => {
     case 'fire': return 'fireResistance';
     case 'ice': return 'coldResistance';
     case 'electric': return 'electricResistance';
-    case 'water': return 'waterResistance';
+    case 'water': return 'waterResistance'; // Sticky Elixir
     case 'earth': return null; // No elixir currently counters earth
-    case 'undead': return 'blightResistance'; // Chilly elixir provides some undead resistance
+    case 'undead': return 'blightResistance'; // Bright Elixir
     case 'wind': return null; // No elixir currently counters wind
     default: return null;
   }
@@ -581,6 +651,12 @@ const calculateElementalCombatBonus = (character, monster) => {
 
 module.exports = {
   ELIXIR_EFFECTS,
+  ELIXIR_LEVEL_FACTORS,
+  ELIXIR_LEVEL_NAMES,
+  ELIXIR_MIXER_EXCLUDED_ITEM_NAMES,
+  normalizeElixirLevel,
+  scaleElixirEffects,
+  isElixirItemName,
   applyElixirBuff,
   applyImmediateEffects,
   shouldConsumeElixir,

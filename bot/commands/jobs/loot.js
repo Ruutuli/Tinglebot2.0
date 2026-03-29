@@ -463,7 +463,7 @@ module.exports = {
            safeMsg += `◈ Your character **${character.name}** braved the blight rain and managed to avoid infection thanks to their elixir buffs! ◈\n`;
            safeMsg += "The protective effects of your elixir kept you safe from the blight.";
            
-           // Consume chilly elixir after use
+           // Consume Bright Elixir after use (blight resistance)
            if (shouldConsumeElixir(character, 'loot', { blightRain: true })) {
              consumeElixirBuff(character);
              // Update character in database
@@ -1287,21 +1287,21 @@ async function processLootingLogic(
         };
       }
       if (activeBuff.waterResistance > 0 && encounteredMonster.name.includes('Water')) {
-        logger.info('ELIXIR', `💧 Chilly Elixir active: ${character.name} vs ${encounteredMonster.name} (+${activeBuff.waterResistance} water res)`);
+        logger.info('ELIXIR', `💧 Sticky Elixir active: ${character.name} vs ${encounteredMonster.name} (+${activeBuff.waterResistance} water res)`);
         elixirBuffInfo = {
           helped: true,
-          elixirName: 'Chilly Elixir',
-          elixirType: 'chilly',
+          elixirName: 'Sticky Elixir',
+          elixirType: 'sticky',
           encounterType: 'water',
           damageReduced: 0
         };
       }
       if (activeBuff.blightResistance > 0) {
-        logger.info('ELIXIR', `🧿 Chilly Elixir active: ${character.name} (+${activeBuff.blightResistance} blight res)`);
+        logger.info('ELIXIR', `🧿 Bright Elixir active: ${character.name} (+${activeBuff.blightResistance} blight res)`);
         elixirBuffInfo = {
           helped: true,
-          elixirName: 'Chilly Elixir',
-          elixirType: 'chilly',
+          elixirName: 'Bright Elixir',
+          elixirType: 'bright',
           encounterType: 'blight',
           damageReduced: 0
         };
@@ -1351,10 +1351,8 @@ async function processLootingLogic(
         logger.info('ELIXIR', `❄️ Spicy Elixir protected ${character.name} from ice damage vs ${encounteredMonster.name}`);
       } else if (consumedElixirType === 'electro' && encounteredMonster.name.includes('Electric')) {
         logger.info('ELIXIR', `⚡ Electro Elixir protected ${character.name} from electric damage vs ${encounteredMonster.name}`);
-      } else if (consumedElixirType === 'chilly' && encounteredMonster.name.includes('Water')) {
-        logger.info('ELIXIR', `💧 Chilly Elixir protected ${character.name} from water damage vs ${encounteredMonster.name}`);
-      } else if (consumedElixirType === 'chilly') {
-        logger.info('ELIXIR', `🧿 Chilly Elixir protected ${character.name} from blight rain effects`);
+      } else if (consumedElixirType === 'sticky' && encounteredMonster.name.includes('Water')) {
+        logger.info('ELIXIR', `💧 Sticky Elixir protected ${character.name} from water damage vs ${encounteredMonster.name}`);
       } else if (consumedElixirType === 'sneaky') {
         logger.info('ELIXIR', `👻 Sneaky Elixir helped ${character.name} with stealth during looting`);
       } else if (consumedElixirType === 'tough') {
@@ -1453,10 +1451,10 @@ async function processLootingLogic(
         outcome.hearts = boostedOutcome.hearts;
         logger.info('ELIXIR', `❄️ Spicy Elixir reduced damage from ${originalDamage} to ${outcome.hearts} (-${damageReduced})`);
       }
-    } else if (elixirBuffInfo.encounterType === 'water' && elixirBuffInfo.elixirType === 'chilly') {
-      // Chilly elixir provides 1.5x roll multiplier against water monsters (higher roll = less damage)
+    } else if (elixirBuffInfo.encounterType === 'water' && elixirBuffInfo.elixirType === 'sticky') {
+      // Sticky elixir provides 1.5x roll multiplier against water monsters (higher roll = less damage)
       outcome.adjustedRandomValue = Math.min(100, Math.ceil(originalRoll * 1.5));
-      logger.info('ELIXIR', `💧 Chilly Elixir boosted roll from ${originalRoll} to ${outcome.adjustedRandomValue}`);
+      logger.info('ELIXIR', `💧 Sticky Elixir boosted roll from ${originalRoll} to ${outcome.adjustedRandomValue}`);
       
       // Store original damage for comparison
       const originalDamage = outcome.hearts;
@@ -1475,7 +1473,7 @@ async function processLootingLogic(
         const damageReduced = originalDamage - boostedOutcome.hearts;
         elixirBuffInfo.damageReduced = damageReduced;
         outcome.hearts = boostedOutcome.hearts;
-        logger.info('ELIXIR', `💧 Chilly Elixir reduced damage from ${originalDamage} to ${outcome.hearts} (-${damageReduced})`);
+        logger.info('ELIXIR', `💧 Sticky Elixir reduced damage from ${originalDamage} to ${outcome.hearts} (-${damageReduced})`);
       }
     } else if (elixirBuffInfo.elixirType === 'mighty' && elixirBuffInfo.encounterType === 'general') {
       // Mighty elixir provides 1.25x roll multiplier for combat (higher roll = better outcome)

@@ -126,7 +126,7 @@ function getDamageResistance(character, damageType) {
   switch (damageType) {
     case 'blight':
       resistance = buffEffects?.blightResistance || 0;
-      // Consume chilly elixir after use
+      // Consume Bright Elixir (or any buff with blightResistance) after use
       if (resistance > 0 && shouldConsumeElixir(character, 'travel', { blightRain: true })) {
         consumeElixirBuff(character);
       } else if (character.buff?.active) {
@@ -167,12 +167,7 @@ function getDamageResistance(character, damageType) {
       break;
     case 'water':
       resistance = buffEffects?.waterResistance || 0;
-      // Consume chilly elixir after use
-      if (resistance > 0 && shouldConsumeElixir(character, 'combat')) {
-        consumeElixirBuff(character);
-      } else if (character.buff?.active) {
-        console.log(`[buffModule.js]: 🧪 Elixir not used for ${character.name} - conditions not met. Active buff: ${character.buff.type}`);
-      }
+      // Sticky Elixir: consume on water hits is handled in encounterModule (needs monster context)
       break;
     case 'ice':
       // Ice is an alias for cold resistance (Spicy Elixir)

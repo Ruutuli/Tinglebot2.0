@@ -131,13 +131,12 @@ function calculateDamage(attacker, defender) {
                 }
             }
             
-            // Check if monster is water type and character has water resistance (Chilly Elixir)
+            // Check if monster is water type and character has water resistance (Sticky Elixir)
             if (hasElement(attacker, 'water') && buffEffects && buffEffects.waterResistance > 0) {
                 const before = baseDamage;
                 baseDamage = applyElementalResistancePercent(baseDamage, buffEffects.waterResistance);
                 console.log(`[encounterModule.js]: 💧 Water resistance: damage ${before} → ${baseDamage} hearts`);
                 
-                // Consume chilly elixir after use
                 const { shouldConsumeElixir, consumeElixirBuff } = require('./elixirModule');
                 if (shouldConsumeElixir(defender, 'combat', { monster: attacker })) {
                     consumeElixirBuff(defender);

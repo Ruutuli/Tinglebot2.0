@@ -1432,6 +1432,8 @@ async function processMonsterEncounter(character, monsterName, heartsRemaining) 
       console.log(`[helpWanted.js]: ❄️ Spicy Elixir protected ${character.name} from ice damage during encounter with ${monster.name}`);
     } else if (consumedElixirType === 'electro' && monster.name.includes('Electric')) {
       console.log(`[helpWanted.js]: ⚡ Electro Elixir protected ${character.name} from electric damage during encounter with ${monster.name}`);
+    } else if (consumedElixirType === 'sticky' && monster.name.includes('Water')) {
+      console.log(`[helpWanted.js]: 💧 Sticky Elixir protected ${character.name} from water damage during encounter with ${monster.name}`);
     } else if (consumedElixirType === 'tough') {
       console.log(`[helpWanted.js]: 🛡️ Tough Elixir provided defense boost for ${character.name} during encounter`);
     } else if (consumedElixirType === 'mighty') {
@@ -1629,7 +1631,7 @@ async function handleMonsterHunt(interaction, questId, characterName) {
           blightRainMessage += `◈ Your character **${character.name}** braved the blight rain and managed to avoid infection thanks to their elixir buffs! ◈\n`;
           blightRainMessage += "The protective effects of your elixir kept you safe from the blight.";
           
-          // Consume chilly elixir after use (blight resistance)
+          // Consume Bright Elixir after use (blight resistance)
           if (shouldConsumeElixir(character, 'helpWanted', { blightRain: true })) {
             consumeElixirBuff(character);
             // Update character in database
@@ -2247,7 +2249,7 @@ module.exports = {
                 blightRainMessage += `◈ Your character **${character.name}** braved the blight rain and managed to avoid infection thanks to their elixir buffs! ◈\n`;
                 blightRainMessage += "The protective effects of your elixir kept you safe from the blight.";
                 
-                // Consume chilly elixir after use (blight resistance)
+                // Consume Bright Elixir after use (blight resistance)
                 if (shouldConsumeElixir(character, 'helpWanted', { blightRain: true })) {
                   consumeElixirBuff(character);
                   // Update character in database

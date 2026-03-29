@@ -129,9 +129,10 @@ const characterSchema = new Schema({
   },
   buff: {
     active: { type: Boolean, default: false },
-    type: { type: String, default: null }, // 'chilly', 'electro', 'enduring', 'energizing', 'hasty', 'hearty', 'mighty', 'sneaky', 'spicy', 'tough' (legacy: 'fireproof' merged into chilly)
+    type: { type: String, default: null }, // 'bright', 'chilly', 'electro', 'enduring', 'energizing', 'hasty', 'hearty', 'mighty', 'sneaky', 'spicy', 'sticky', 'tough' (legacy: 'fireproof' merged into chilly)
+    elixirLevel: { type: Number, default: null }, // 1–3 when buff came from a leveled potion; null if none
     effects: {
-      blightResistance: { type: Number, default: 0 }, // Chilly Elixir
+      blightResistance: { type: Number, default: 0 }, // Bright Elixir
       electricResistance: { type: Number, default: 0 }, // Electro Elixir
       staminaBoost: { type: Number, default: 0 }, // Enduring Elixir
       staminaRecovery: { type: Number, default: 0 }, // Energizing Elixir
@@ -141,7 +142,10 @@ const characterSchema = new Schema({
       attackBoost: { type: Number, default: 0 }, // Mighty Elixir
       stealthBoost: { type: Number, default: 0 }, // Sneaky Elixir
       coldResistance: { type: Number, default: 0 }, // Spicy Elixir
-      defenseBoost: { type: Number, default: 0 } // Tough Elixir
+      defenseBoost: { type: Number, default: 0 }, // Tough Elixir
+      waterResistance: { type: Number, default: 0 }, // Sticky Elixir
+      plusBoost: { type: Number, default: 0 }, // Sticky Elixir
+      fleeBoost: { type: Number, default: 0 } // Sneaky Elixir
     }
   },
   failedStealAttempts: { type: Number, default: 0 },

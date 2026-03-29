@@ -11,6 +11,7 @@ import {
   flatFilterOptions,
   buildListResponse,
   buildSearchRegex,
+  escapeRegExp,
 } from "@/lib/api-utils";
 import {
   buildMonsterDropMap,
@@ -70,14 +71,14 @@ export async function GET(req: NextRequest) {
     const craftableParam = params.get("craftable");
     const stackableParam = params.get("stackable");
     const terrains = getFilterParamMultiple(params, "terrain");
-    const entertainerItemsParam = params.get("entertainerItems");
-    const divineItemsParam = params.get("divineItems");
+    const boostTags = getFilterParamMultiple(params, "boostTags");
+    const effectFamilies = getFilterParamMultiple(params, "effectFamily");
+    const elements = getFilterParamMultiple(params, "element");
+    const elixirLevels = getFilterParamNumeric(params, "elixirLevel");
     
     // Parse craftable and stackable - if multiple values, check if both true and false are present
     let craftable: string | null = null;
     let stackable: string | null = null;
-    let entertainerItems: string | null = null;
-    let divineItems: string | null = null;
     
     if (craftableParam) {
       const craftableValues = craftableParam.split(",");
@@ -99,22 +100,6 @@ export async function GET(req: NextRequest) {
       // If both are selected, stackable remains null (no filter)
     }
     
-    if (entertainerItemsParam) {
-      const v = entertainerItemsParam.split(",");
-      const hasTrue = v.includes("true");
-      const hasFalse = v.includes("false");
-      if (hasTrue && !hasFalse) entertainerItems = "true";
-      else if (hasFalse && !hasTrue) entertainerItems = "false";
-    }
-    
-    if (divineItemsParam) {
-      const v = divineItemsParam.split(",");
-      const hasTrue = v.includes("true");
-      const hasFalse = v.includes("false");
-      if (hasTrue && !hasFalse) divineItems = "true";
-      else if (hasFalse && !hasTrue) divineItems = "false";
-    }
-
     // ------------------- Build Filter -------------------
     const filter: Record<string, unknown> = {};
     const orConditions: Record<string, unknown>[] = [];
@@ -294,30 +279,45 @@ export async function GET(req: NextRequest) {
     }
     // If stackable contains both "true" and "false", don't add filter (show all)
     
-    // Entertainer items filter
-    if (entertainerItems === "true") {
-      filter.entertainerItems = true;
-    } else if (entertainerItems === "false") {
+    // Boost tags (entertainer / divine) — OR when both selected
+    if (boostTags.length) {
+      const n = boostTags.map((t) => t.toLowerCase());
+      const wantEnt = n.includes("entertainer");
+      const wantDiv = n.includes("divine");
+      if (wantEnt && wantDiv) {
+        orConditions.push({
+          $or: [{ entertainerItems: true }, { divineItems: true }],
+        });
+      } else if (wantEnt) {
+        filter.entertainerItems = true;
+      } else if (wantDiv) {
+        filter.divineItems = true;
+      }
+    }
+
+    // Elixir mixer: effect family (critters)
+    if (effectFamilies.length) {
       orConditions.push({
-        $or: [
-          { entertainerItems: { $ne: true } },
-          { entertainerItems: { $exists: false } },
-        ],
+        $or: effectFamilies.map((f) => ({
+          effectFamily: new RegExp(`^${escapeRegExp(f)}$`, "i"),
+        })),
       });
     }
-    
-    // Divine items filter
-    if (divineItems === "true") {
-      filter.divineItems = true;
-    } else if (divineItems === "false") {
+
+    // Elixir mixer: part / jelly element (single string field on Item)
+    if (elements.length) {
       orConditions.push({
-        $or: [
-          { divineItems: { $ne: true } },
-          { divineItems: { $exists: false } },
-        ],
+        $or: elements.map((el) => ({
+          element: new RegExp(`^${escapeRegExp(el)}$`, "i"),
+        })),
       });
     }
-    
+
+    // Default elixir potency tier on item document (potions)
+    if (elixirLevels.length) {
+      filter.elixirLevel = { $in: elixirLevels };
+    }
+
     // Combine $or conditions with $and if we have multiple
     let finalFilter: Record<string, unknown> = filter;
     if (orConditions.length > 0) {
@@ -358,7 +358,7 @@ export async function GET(req: NextRequest) {
     // - type (for filtering)
     // - itemRarity (for filtering)
     const itemSelect =
-      "itemName image imageType emoji type subtype category categoryGear buyPrice sellPrice stackable maxStackSize itemRarity " +
+      "itemName image imageType emoji type subtype category categoryGear element effectFamily elixirLevel buyPrice sellPrice stackable maxStackSize itemRarity " +
       "gathering looting traveling exploring vending crafting petPerk " +
       "locations centralHyrule eldin faron gerudo hebra lanayru pathOfScarletLeaves leafDewWay terrain terrains " +
       "allJobs farmer forager rancher herbalist adventurer artist beekeeper blacksmith cook craftsman " +
@@ -368,7 +368,21 @@ export async function GET(req: NextRequest) {
       "entertainerItems divineItems monsterList " +
       ITEM_MONSTER_FIELDS.join(" ");
 
-    const [data, total, categoryOpts, typeOpts, rarityOpts, categoryGearOpts, subtypeOpts, terrainOpts, terrainsOpts, rawMonsters] = await Promise.all([
+    const [
+      data,
+      total,
+      categoryOpts,
+      typeOpts,
+      rarityOpts,
+      categoryGearOpts,
+      subtypeOpts,
+      terrainOpts,
+      terrainsOpts,
+      effectFamilyOpts,
+      elementOpts,
+      elixirLevelOpts,
+      rawMonsters,
+    ] = await Promise.all([
       Item.find(finalFilter)
         .select(itemSelect)
         .sort(sortQuery)
@@ -383,6 +397,9 @@ export async function GET(req: NextRequest) {
       Item.distinct("subtype"),
       Item.distinct("terrain"),
       Item.distinct("terrains"),
+      Item.distinct("effectFamily"),
+      Item.distinct("element"),
+      Item.distinct("elixirLevel"),
       (async () => {
         const MonsterModule = await import("@/models/MonsterModel.js");
         const Monster = (mongoose.models.Monster ?? MonsterModule.default) as Model<unknown>;
@@ -411,6 +428,16 @@ export async function GET(req: NextRequest) {
     });
 
     // ------------------- Build Filter Options -------------------
+    const effectFamilyFilterOpts = (Array.isArray(effectFamilyOpts) ? effectFamilyOpts : [])
+      .filter((x): x is string => typeof x === "string" && x.trim() !== "")
+      .sort((a, b) => a.localeCompare(b));
+    const elementFilterOpts = (Array.isArray(elementOpts) ? elementOpts : [])
+      .filter((x): x is string => typeof x === "string" && x.trim() !== "")
+      .sort((a, b) => a.localeCompare(b));
+    const elixirLevelFilterOpts = (Array.isArray(elixirLevelOpts) ? elixirLevelOpts : [])
+      .filter((x): x is number => typeof x === "number" && !Number.isNaN(x))
+      .sort((a, b) => a - b);
+
     const filterOptions: Record<string, (string | number)[]> = {
       category: flatFilterOptions(categoryOpts as unknown[]),
       type: flatFilterOptions(typeOpts as unknown[]),
@@ -421,6 +448,9 @@ export async function GET(req: NextRequest) {
         ...(Array.isArray(terrainOpts) ? terrainOpts : []),
         ...(Array.isArray(terrainsOpts) ? terrainsOpts : []),
       ] as unknown[]),
+      ...(effectFamilyFilterOpts.length ? { effectFamily: effectFamilyFilterOpts } : {}),
+      ...(elementFilterOpts.length ? { element: elementFilterOpts } : {}),
+      ...(elixirLevelFilterOpts.length ? { elixirLevel: elixirLevelFilterOpts } : {}),
       source: ["Gathering", "Looting", "Traveling", "Exploring", "Vending", "Crafting", "Special Weather", "Pet Perk"],
       location: [
         "Central Hyrule",
@@ -458,8 +488,7 @@ export async function GET(req: NextRequest) {
       ],
       craftable: ["true", "false"],
       stackable: ["true", "false"],
-      entertainerItems: ["true", "false"],
-      divineItems: ["true", "false"],
+      boostTags: ["entertainer", "divine"],
     };
 
     // ------------------- Return Response -------------------

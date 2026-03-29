@@ -33,7 +33,9 @@ const ItemSchema = new Schema(
     type: { type: [String], default: ['Unknown'] },    // e.g., ['Material', 'Food']
     subtype: { type: [String], default: ['None'] },    // e.g., ['Head', 'Bow']
     recipeTag: { type: [String], default: ['#Not Craftable'] },
-    element: { type: String, default: 'none' },        // e.g., 'fire', 'ice', 'electric', 'tech', 'none'
+    element: { type: String, default: 'none' },        // e.g., 'fire', 'ice', 'electric', 'tech', 'none' — also monster-part affinity for elixir mixer (`elixir-ingredient-labels.json`)
+    /** Elixir mixer critter family (`bright`, `chilly`, `mighty`, …). From `docs/elixir-ingredient-labels.json` via seed script. */
+    effectFamily: { type: String, default: null },
 
     // ------------------- Economics -------------------
     buyPrice: { type: Number, default: 0 },
@@ -43,6 +45,8 @@ const ItemSchema = new Schema(
     // For gear: used as attack (weapon) or defense (armor/shield) when equipped
     modifierHearts: { type: Number, default: 0 },
     staminaRecovered: { type: Number, default: 0 },
+    /** Potions only: default potency when adding to inventory if `addItemInventoryDatabase` omits `options.elixirLevel`. 1 = Basic, 2 = Mid, 3 = High. */
+    elixirLevel: { type: Number, default: null },
 
     // ------------------- Stack Rules -------------------
     stackable: { type: Boolean, default: false },

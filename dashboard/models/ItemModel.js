@@ -33,6 +33,9 @@ const ItemSchema = new Schema(
     type: { type: [String], default: ['Unknown'] },    // e.g., ['Material', 'Food']
     subtype: { type: [String], default: ['None'] },    // e.g., ['Head', 'Bow']
     recipeTag: { type: [String], default: ['#Not Craftable'] },
+    element: { type: String, default: 'none' },
+    /** Elixir mixer critter family — `docs/elixir-ingredient-labels.json` */
+    effectFamily: { type: String, default: null },
 
     // ------------------- Economics -------------------
     buyPrice: { type: Number, default: 0 },
@@ -41,6 +44,7 @@ const ItemSchema = new Schema(
     // ------------------- Effects / Stats -------------------
     modifierHearts: { type: Number, default: 0 },
     staminaRecovered: { type: Number, default: 0 },
+    elixirLevel: { type: Number, default: null },
 
     // ------------------- Stack Rules -------------------
     stackable: { type: Boolean, default: false },
