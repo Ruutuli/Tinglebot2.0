@@ -45,7 +45,10 @@ const ItemSchema = new Schema(
     // For gear: used as attack (weapon) or defense (armor/shield) when equipped
     modifierHearts: { type: Number, default: 0 },
     staminaRecovered: { type: Number, default: 0 },
-    /** Potions only: default potency when adding to inventory if `addItemInventoryDatabase` omits `options.elixirLevel`. 1 = Basic, 2 = Mid, 3 = High. */
+    /**
+     * Elixir/potion **tier** (1–3) should live on **inventory** (and shop stock), not on catalog `items` for elixirs.
+     * May still be read as a fallback when granting items without `options.elixirLevel`.
+     */
     elixirLevel: { type: Number, default: null },
 
     // ------------------- Stack Rules -------------------

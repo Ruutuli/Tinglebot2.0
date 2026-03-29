@@ -41,6 +41,7 @@ const {
   getRequiredPartElementForFamily,
   getPartElementFromLabels,
   getIngredientLabelSets,
+  ensureIngredientLabelsLoaded,
   isExcludedMixerItem,
   isMixerUniversalFairyCritterName,
   mixerFairyHealHeartsFromExtras,
@@ -622,6 +623,8 @@ function formatCatalogMixerRecipeForEmbed(elixirItem) {
 }
 
 async function finalizeBrewMixerSession(interaction, session, critterName, partName, extraPartNames = []) {
+  await ensureIngredientLabelsLoaded();
+
   const userId = interaction.user.id;
 
   const brewMixerErrFollowUp = async (payload) => {
@@ -919,6 +922,8 @@ async function runCraftingBrew(interaction) {
   };
 
   try {
+    await ensureIngredientLabelsLoaded();
+
     let character = await fetchCharacterByNameAndUserId(characterName, userId);
     if (!character) {
       const { fetchModCharacterByNameAndUserId } = require('@/database/db');
@@ -1169,6 +1174,8 @@ async function handleBrewMixerInteraction(interaction) {
 
   // Acknowledge before inventory / N× item lookups — avoids "Unknown interaction" (3s limit).
   await interaction.deferUpdate();
+
+  await ensureIngredientLabelsLoaded();
 
   const inventoryCollection = await getCharacterInventoryCollection(session.characterName);
   const inventory = await inventoryCollection.find({ quantity: { $gte: 1 } }).toArray();

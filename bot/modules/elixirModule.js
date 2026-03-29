@@ -12,6 +12,20 @@ const ELIXIR_LEVEL_FACTORS = { 1: 1, 2: 1.15, 3: 1.3 };
 
 const ELIXIR_LEVEL_NAMES = { 1: 'Basic', 2: 'Mid', 3: 'High' };
 
+/**
+ * Explicit Basic → Mid → High values for hearts/stamina elixirs (mixer tier 1–3).
+ * Index 0 = level 1; must match level-1 numbers in ELIXIR_EFFECTS for those items.
+ * Other elixirs still use ELIXIR_LEVEL_FACTORS on their effect numbers.
+ */
+const RESOURCE_ELIXIR_LEVEL_STATS = Object.freeze({
+  /** Tuned for ~3 starting hearts — strong but not runaway healing. */
+  'Hearty Elixir': { extraHearts: [1, 2, 3] },
+  'Enduring Elixir': { staminaBoost: [1, 2, 3] },
+  'Energizing Elixir': { staminaRecovery: [2, 4, 6] },
+  /** Restore only, capped at max — see `item.js` Fairy Tonic branch. */
+  'Fairy Tonic': { healHearts: [2, 3, 4] },
+});
+
 /** Not valid mixer ingredients (pet / compression / special use only). Keep in sync with `elixir-ingredient-labels.json`. */
 const ELIXIR_MIXER_EXCLUDED_ITEM_NAMES = Object.freeze(['Chuchu Egg']);
 
@@ -19,23 +33,6 @@ function normalizeElixirLevel(raw) {
   const n = Number(raw);
   if (n === 2 || n === 3) return n;
   return 1;
-}
-
-/** Scale base `ELIXIR_EFFECTS` numbers by tier (tune factors in ELIXIR_LEVEL_FACTORS). */
-function scaleElixirEffects(baseEffects, level) {
-  const lv = normalizeElixirLevel(level);
-  const factor = ELIXIR_LEVEL_FACTORS[lv] || 1;
-  const out = {};
-  for (const [key, val] of Object.entries(baseEffects || {})) {
-    if (typeof val === 'number' && Number.isFinite(val)) {
-      if (key === 'extraHearts' || key === 'staminaBoost' || key === 'staminaRecovery') {
-        out[key] = Math.max(1, Math.round(val * factor));
-      } else {
-        out[key] = Math.round(val * factor * 100) / 100;
-      }
-    }
-  }
-  return out;
 }
 
 // ============================================================================
@@ -81,14 +78,14 @@ const ELIXIR_EFFECTS = {
   },
   'Enduring Elixir': {
     type: 'enduring',
-    description: 'Temporarily extends stamina wheel by +1',
+    description: 'Extends max stamina: **Basic** +1 / **Mid** +2 / **High** +3 (temporary segments).',
     effects: {
-      staminaBoost: 1 // Adds +1 temporary stamina on top of max
+      staminaBoost: 1
     }
   },
   'Energizing Elixir': {
     type: 'energizing',
-    description: 'Restores stamina for physical actions',
+    description: 'Restores current stamina: **Basic** +2 / **Mid** +4 / **High** +6.',
     effects: {
       staminaRecovery: 2
     }
@@ -102,9 +99,10 @@ const ELIXIR_EFFECTS = {
   },
   'Hearty Elixir': {
     type: 'hearty',
-    description: 'Restores health and adds +3 temporary hearts',
+    description:
+      'Adds hearts on drink (can exceed current pool): **Basic** +1 / **Mid** +2 / **High** +3, plus Fairy mix-in on the bottle.',
     effects: {
-      extraHearts: 3
+      extraHearts: 1
     }
   },
   'Mighty Elixir': {
@@ -128,6 +126,14 @@ const ELIXIR_EFFECTS = {
       stealthBoost: 1,
       fleeBoost: 1
     }
+  },
+  'Fairy Tonic': {
+    type: 'fairy',
+    description:
+      'Fairy-brewed tonic: **restores missing hearts only** (never above max). **Basic** up to 2 / **Mid** 3 / **High** 4 healed, plus Fairy mix-in — not bonus max hearts.',
+    effects: {
+      healHearts: 2
+    }
   }
 };
 
@@ -150,6 +156,88 @@ function isElixirItemName(name) {
   return !!(key && ELIXIR_EFFECTS[key]);
 }
 
+/**
+ * Scale catalog effect numbers by elixir tier.
+ * @param {string} elixirName - Canonical elixir item name (e.g. `'Hearty Elixir'`).
+ * @param {Record<string, number>} baseEffects - From ELIXIR_EFFECTS[name].effects
+ * @param {number} level - 1–3
+ */
+function scaleElixirEffects(elixirName, baseEffects, level) {
+  const key = resolveElixirItemName(elixirName) || String(elixirName || '').trim();
+  const lv = normalizeElixirLevel(level);
+  const idx = lv - 1;
+  const resourceSpec = RESOURCE_ELIXIR_LEVEL_STATS[key];
+  const base = baseEffects || {};
+
+  if (resourceSpec) {
+    const out = { ...base };
+    for (const [stat, tiers] of Object.entries(resourceSpec)) {
+      if (Array.isArray(tiers) && typeof tiers[idx] === 'number' && Number.isFinite(tiers[idx])) {
+        out[stat] = tiers[idx];
+      }
+    }
+    return out;
+  }
+
+  if (lv === 1) {
+    return { ...base };
+  }
+
+  const factor = ELIXIR_LEVEL_FACTORS[lv] || 1;
+  const out = {};
+  for (const [k, val] of Object.entries(base)) {
+    if (typeof val === 'number' && Number.isFinite(val)) {
+      if (k === 'extraHearts' || k === 'staminaBoost' || k === 'staminaRecovery') {
+        out[k] = Math.max(1, Math.round(val * factor));
+      } else {
+        out[k] = Math.round(val * factor * 100) / 100;
+      }
+    }
+  }
+  return out;
+}
+
+/** `/item` autocomplete `value`: unique per stack (Discord returns this string unchanged). */
+function formatElixirItemOptionValue(lowercaseItemName, elixirLevel, modifierHearts) {
+  const name = String(lowercaseItemName || '')
+    .trim()
+    .toLowerCase();
+  const lv = normalizeElixirLevel(elixirLevel);
+  const lab = ELIXIR_LEVEL_NAMES[lv];
+  const mh = Math.max(0, Math.floor(Number(modifierHearts) || 0));
+  return `${name} [${lab}|m${mh}]`;
+}
+
+/**
+ * Parses autocomplete suffix from `formatElixirItemOptionValue`, or legacy `[Basic]` only.
+ * @returns {{ baseName: string, elixirLevel: number, modifierHearts: number | null } | null}
+ *   `modifierHearts` is a number when `|mN` was present; `null` means any mix-in at that tier.
+ */
+function parseElixirTierFromItemOption(raw) {
+  const s = String(raw || '').trim();
+  const withM = s.match(/^(.+?)\s+\[(Basic|Mid|High)\|m(\d+)\]\s*$/i);
+  if (withM) {
+    const tag = withM[2].toLowerCase();
+    const elixirLevel = tag === 'basic' ? 1 : tag === 'mid' ? 2 : 3;
+    return {
+      baseName: withM[1].trim(),
+      elixirLevel,
+      modifierHearts: Math.max(0, parseInt(withM[3], 10) || 0),
+    };
+  }
+  const short = s.match(/^(.+?)\s+\[(Basic|Mid|High)\]\s*$/i);
+  if (short) {
+    const tag = short[2].toLowerCase();
+    const elixirLevel = tag === 'basic' ? 1 : tag === 'mid' ? 2 : 3;
+    return {
+      baseName: short[1].trim(),
+      elixirLevel,
+      modifierHearts: null,
+    };
+  }
+  return null;
+}
+
 // ============================================================================
 // ------------------- Core Functions -------------------
 // ============================================================================
@@ -164,8 +252,7 @@ const applyElixirBuff = (character, elixirName, elixirLevel = 1) => {
   }
 
   const level = normalizeElixirLevel(elixirLevel);
-  const effects =
-    level === 1 ? { ...elixir.effects } : scaleElixirEffects(elixir.effects, level);
+  const effects = scaleElixirEffects(key, elixir.effects, level);
 
   character.buff = {
     active: true,
@@ -653,9 +740,12 @@ module.exports = {
   ELIXIR_EFFECTS,
   ELIXIR_LEVEL_FACTORS,
   ELIXIR_LEVEL_NAMES,
+  RESOURCE_ELIXIR_LEVEL_STATS,
   ELIXIR_MIXER_EXCLUDED_ITEM_NAMES,
   normalizeElixirLevel,
   scaleElixirEffects,
+  formatElixirItemOptionValue,
+  parseElixirTierFromItemOption,
   isElixirItemName,
   applyElixirBuff,
   applyImmediateEffects,

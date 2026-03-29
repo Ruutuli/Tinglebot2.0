@@ -116,14 +116,15 @@ async function seedBrightSticky(dryRun, chillyTemplate) {
     image: BRIGHT_IMG,
     imageType: COOKING_GRAPHIC,
     emoji: '',
-    itemRarity: 5,
+    itemRarity: 1,
     buyPrice: 750,
     sellPrice: 190,
-    staminaToCraft: '4',
+    staminaToCraft: 3,
     craftingMaterial: brightMats,
     element: 'none',
     effectFamily: null,
-    elixirLevel: 1,
+    modifierHearts: 0,
+    staminaRecovered: 0,
   });
 
   const stickyDoc = applyElixirTemplate(chillyTemplate, {
@@ -131,14 +132,15 @@ async function seedBrightSticky(dryRun, chillyTemplate) {
     image: STICKY_IMG,
     imageType: COOKING_GRAPHIC,
     emoji: '',
-    itemRarity: 5,
+    itemRarity: 1,
     buyPrice: 750,
     sellPrice: 190,
-    staminaToCraft: '4',
+    staminaToCraft: 3,
     craftingMaterial: stickyMats,
     element: 'none',
     effectFamily: null,
-    elixirLevel: 1,
+    modifierHearts: 0,
+    staminaRecovered: 0,
   });
 
   if (dryRun) {
@@ -152,7 +154,7 @@ async function seedBrightSticky(dryRun, chillyTemplate) {
     const name = doc.itemName;
     await Item.updateOne(
       { itemName: new RegExp(`^${escapeRx(name)}$`, 'i') },
-      { $set: doc },
+      { $set: doc, $unset: { elixirLevel: '' } },
       { upsert: true }
     );
     console.log(`✓ Upserted: ${name}`);

@@ -37,6 +37,8 @@ const {
   normalizeElixirLevel,
   scaleElixirEffects,
   ELIXIR_LEVEL_NAMES,
+  parseElixirTierFromItemOption,
+  isElixirItemName,
 } = require('../../modules/elixirModule');
 
 // ------------------- Utility Functions -------------------
@@ -186,6 +188,15 @@ module.exports = {
         // Remove quantity in dash format: " - Qty: 1" or "- Qty:1"
         .replace(/\s*-\s*Qty:\s*\d+\s*$/i, '')
         .trim();
+
+      let requestedElixirLevel = null;
+      let requestedStackModifierHearts = null;
+      const tierParse = parseElixirTierFromItemOption(cleanItemName);
+      if (tierParse && isElixirItemName(tierParse.baseName)) {
+        cleanItemName = tierParse.baseName.trim();
+        requestedElixirLevel = tierParse.elixirLevel;
+        requestedStackModifierHearts = tierParse.modifierHearts;
+      }
       
       // Normalize common compound item names that may be missing spaces
       const commonItemSpaces = {
@@ -965,17 +976,30 @@ module.exports = {
       const elixirInfo = getElixirInfo(item.itemName);
       if (elixirInfo) {
         const nameLc = item.itemName.toLowerCase();
-        const elixirStacks = inventoryItems
-          .filter(
-            (inv) =>
-              inv.itemName?.toLowerCase() === nameLc && (inv.quantity || 0) > 0
-          )
-          .sort(
-            (a, b) =>
-              normalizeElixirLevel(a.elixirLevel) -
-                normalizeElixirLevel(b.elixirLevel) ||
-              String(a._id).localeCompare(String(b._id))
+        let elixirStacks = inventoryItems.filter(
+          (inv) =>
+            inv.itemName?.toLowerCase() === nameLc && (inv.quantity || 0) > 0
+        );
+        if (requestedElixirLevel != null) {
+          elixirStacks = elixirStacks.filter(
+            (inv) => normalizeElixirLevel(inv.elixirLevel) === requestedElixirLevel
           );
+        }
+        if (requestedStackModifierHearts != null) {
+          elixirStacks = elixirStacks.filter(
+            (inv) =>
+              Math.max(0, Math.floor(Number(inv.modifierHearts) || 0)) ===
+              requestedStackModifierHearts
+          );
+        }
+        elixirStacks.sort(
+          (a, b) =>
+            normalizeElixirLevel(a.elixirLevel) -
+              normalizeElixirLevel(b.elixirLevel) ||
+            Math.max(0, Math.floor(Number(a.modifierHearts) || 0)) -
+              Math.max(0, Math.floor(Number(b.modifierHearts) || 0)) ||
+            String(a._id).localeCompare(String(b._id))
+        );
         const ownedElixirStack = elixirStacks[0];
         const elixirTotalQty = elixirStacks.reduce(
           (s, r) => s + Math.max(0, r.quantity || 0),
@@ -998,6 +1022,12 @@ module.exports = {
           });
         }
         const invElixirLevel = normalizeElixirLevel(ownedElixirStack.elixirLevel);
+        const stackModifierHearts = Math.max(
+          0,
+          Math.floor(Number(ownedElixirStack.modifierHearts) || 0)
+        );
+        const healUsesTierPlusFairyMix =
+          item.itemName === 'Hearty Elixir' || item.itemName === 'Fairy Tonic';
 
         // Force quantity to 1 for elixirs (they're powerful items)
         if (quantity !== 1) {
@@ -1064,8 +1094,11 @@ module.exports = {
         try {
           
           // Apply immediate healing effects first
-          if (item.modifierHearts) {
-            const healAmount = Math.min(item.modifierHearts, character.maxHearts - character.currentHearts);
+          if (stackModifierHearts > 0 && !healUsesTierPlusFairyMix) {
+            const healAmount = Math.min(
+              stackModifierHearts,
+              character.maxHearts - character.currentHearts
+            );
             character.currentHearts += healAmount;
             await updateCurrentHearts(character._id, character.currentHearts);
           }
@@ -1079,10 +1112,11 @@ module.exports = {
           // Special handling for Hearty and Enduring Elixirs - they expire immediately since they're just for healing/restoration
           if (item.itemName === 'Hearty Elixir') {
             const scaledHearty = scaleElixirEffects(
+              'Hearty Elixir',
               ELIXIR_EFFECTS['Hearty Elixir'].effects,
               invElixirLevel
             );
-            const extraHearts = scaledHearty.extraHearts || 3;
+            const extraHearts = (scaledHearty.extraHearts || 0) + stackModifierHearts;
             character.currentHearts += extraHearts;
             // Don't modify maxHearts - just track the temporary addition
             
@@ -1092,8 +1126,24 @@ module.exports = {
               type: null,
               effects: {}
             };
+          } else if (item.itemName === 'Fairy Tonic') {
+            const scaledTonic = scaleElixirEffects(
+              'Fairy Tonic',
+              ELIXIR_EFFECTS['Fairy Tonic'].effects,
+              invElixirLevel
+            );
+            const healBudget = (scaledTonic.healHearts || 0) + stackModifierHearts;
+            const room = Math.max(0, character.maxHearts - character.currentHearts);
+            const actualHeal = Math.min(healBudget, room);
+            character.currentHearts += actualHeal;
+            character.buff = {
+              active: false,
+              type: null,
+              effects: {}
+            };
           } else if (item.itemName === 'Enduring Elixir') {
             const scaledEnduring = scaleElixirEffects(
+              'Enduring Elixir',
               ELIXIR_EFFECTS['Enduring Elixir'].effects,
               invElixirLevel
             );
@@ -1115,8 +1165,8 @@ module.exports = {
           const updateFunction = character.isModCharacter ? updateModCharacterById : updateCharacterById;
           await updateFunction(character._id, { buff: character.buff });
           
-          // Update hearts if they were modified by Hearty Elixir
-          if (item.itemName === 'Hearty Elixir') {
+          // Update hearts if they were modified by Hearty Elixir or Fairy Tonic
+          if (item.itemName === 'Hearty Elixir' || item.itemName === 'Fairy Tonic') {
             await updateCurrentHearts(character._id, character.currentHearts);
           }
           
@@ -1158,7 +1208,10 @@ module.exports = {
           1,
           interaction,
           `Used ${item.itemName} for buff effects`,
-          { elixirLevel: invElixirLevel }
+          {
+            elixirLevel: invElixirLevel,
+            modifierHearts: Math.max(0, Math.floor(Number(ownedElixirStack.modifierHearts) || 0)),
+          }
         );
 
         // ------------------- Build and Send Elixir Embed -------------------
@@ -1221,8 +1274,7 @@ module.exports = {
         let displayCurrentStamina = character.currentStamina;
         let displayMaxStamina = character.maxStamina;
         
-        if (item.itemName === 'Hearty Elixir') {
-          // For Hearty Elixir, show current hearts (including temporary) / original max hearts
+        if (item.itemName === 'Hearty Elixir' || item.itemName === 'Fairy Tonic') {
           displayCurrentHearts = character.currentHearts;
           displayMaxHearts = originalMaxHearts;
         } else if (item.itemName === 'Enduring Elixir') {
@@ -1260,10 +1312,10 @@ module.exports = {
         }
 
         // Add immediate effects section if there are healing/restoration effects
-        if (item.modifierHearts || item.staminaRecovered) {
+        if (stackModifierHearts > 0 || item.staminaRecovered) {
           let immediateEffects = [];
-          if (item.modifierHearts) {
-            immediateEffects.push(`❤️ **Hearts restored: +${item.modifierHearts}**`);
+          if (stackModifierHearts > 0 && !healUsesTierPlusFairyMix) {
+            immediateEffects.push(`❤️ **Hearts restored: +${stackModifierHearts}**`);
           }
           if (item.staminaRecovered) {
             immediateEffects.push(`🟩 **Stamina restored: +${item.staminaRecovered}**`);
@@ -1277,7 +1329,10 @@ module.exports = {
         }
 
         // Set footer based on elixir type
-        const isImmediateElixir = item.itemName === 'Hearty Elixir' || item.itemName === 'Enduring Elixir';
+        const isImmediateElixir =
+          item.itemName === 'Hearty Elixir' ||
+          item.itemName === 'Fairy Tonic' ||
+          item.itemName === 'Enduring Elixir';
         elixirEmbed.setFooter({ 
           text: isImmediateElixir ? `${item.itemName} consumed immediately` : 'Elixir effects active until used',
           iconURL: character.icon

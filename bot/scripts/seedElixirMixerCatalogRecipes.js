@@ -75,6 +75,17 @@ async function buildMixerCraftingMaterial(critterName) {
   return out;
 }
 
+/**
+ * Catalog defaults on **items** only. Potency tier (`elixirLevel`) comes from brew / stock rows — not this collection.
+ * Effect magnitudes stay in `elixirModule` ELIXIR_EFFECTS.
+ */
+const ELIXIR_CATALOG_BASE = {
+  itemRarity: 5,
+  staminaToCraft: 3,
+  modifierHearts: 0,
+  staminaRecovered: 0,
+};
+
 /** Representative critter per README “Elixir | Critter + part” table (part slot = Any Monster Part in DB). */
 const MIXER_RECIPES = [
   { elixir: 'Bright Elixir', critter: 'Deep Firefly' },
@@ -102,14 +113,15 @@ What it does:
   • Connects to MongoDB (MONGODB_URI in bot/.env).
   • For each elixir in MIXER_RECIPES, finds that item in the **items** collection
     (by itemName, case-insensitive).
-  • **Only changes** the field: craftingMaterial
-  • Sets craftingMaterial to exactly **2** rows:
+  • Sets **craftingMaterial** to exactly **2** rows:
       1) One **critter** (representative name from the mixer README table)
       2) **Any Monster Part** — same as Witch recipes elsewhere: itemName is the
          category string; _id points at a real catalog item used as anchor.
-  • Does **not** create new elixir items, delete items, or change buy/sell/stats.
+  • Also sets unified catalog base: itemRarity, staminaToCraft 3, modifierHearts 0,
+    staminaRecovered 0; **clears** \`elixirLevel\` on the item doc (tier lives on inventory / shops only).
+  • Does **not** create new elixir items, delete items, or change buy/sell prices.
 
-Mode: ${dryRun ? 'DRY RUN — no writes; only prints what would be set.' : 'APPLY — running Item.updateOne(..., { $set: { craftingMaterial } }) per elixir.'}
+Mode: ${dryRun ? 'DRY RUN — no writes; only prints what would be set.' : 'APPLY — Item.updateOne per elixir (craftingMaterial + ELIXIR_CATALOG_BASE).'}
 `);
 
   await mongoose.connect(MONGODB_URI, { maxPoolSize: 5, serverSelectionTimeoutMS: 10000 });
@@ -125,13 +137,20 @@ Mode: ${dryRun ? 'DRY RUN — no writes; only prints what would be set.' : 'APPL
 
     if (dryRun) {
       const crit = mats[0].itemName;
-      console.log(`[dry-run] ${row.elixir}  →  craftingMaterial: [ ${crit} x1, Any Monster Part x1 ]`);
+      console.log(
+        `[dry-run] ${row.elixir}  →  craftingMaterial: [ ${crit} x1, Any Monster Part x1 ] + base ${JSON.stringify(
+          ELIXIR_CATALOG_BASE
+        )}`
+      );
       continue;
     }
 
     const res = await Item.updateOne(
       { itemName: new RegExp(`^${escapeRx(row.elixir)}$`, 'i') },
-      { $set: { craftingMaterial: mats } }
+      {
+        $set: { craftingMaterial: mats, ...ELIXIR_CATALOG_BASE },
+        $unset: { elixirLevel: '' },
+      }
     );
     if (res.matchedCount === 0) {
       console.warn(`⚠️  No item matched "${row.elixir}" — skipped`);

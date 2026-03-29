@@ -60,6 +60,12 @@ const { normalPets, specialPets, speciesRollPermissions } = require("../modules/
 const MapModule = require("../modules/mapModule");
 const { getAllRaces } = require("../modules/raceModule");
 const { NPCs } = require("../modules/NPCsModule");
+const {
+  ELIXIR_LEVEL_NAMES,
+  formatElixirItemOptionValue,
+  isElixirItemName,
+  normalizeElixirLevel,
+} = require("../modules/elixirModule");
 
 // ------------------- Utility Functions -------------------
 const { handleError } = require('@/utils/globalErrorHandler');
@@ -3187,7 +3193,9 @@ async function handleItemAutocomplete(interaction, focusedOption) {
             quantity: item.quantity,
             isCrafted: isCrafted,
             hasFortuneTellerBoost: hasFortuneTellerBoost,
-            obtain: item.obtain || 'Unknown'
+            obtain: item.obtain || 'Unknown',
+            elixirLevel: item.elixirLevel,
+            modifierHearts: item.modifierHearts,
           };
         })
         .filter(item => item.name); // Remove items without names
@@ -3214,23 +3222,40 @@ async function handleItemAutocomplete(interaction, focusedOption) {
           .map(item => {
             const craftingIcon = item.isCrafted ? '🔨' : '📦';
             const sellPrice = itemsMap.get(item.name) || "N/A";
-            return {
-              name: `${craftingIcon} ${capitalizeWords(item.name)} (Qty: ${item.quantity}) - Sell: ${sellPrice}`,
-              value: item.name,
-            };
+            const isElix = isElixirItemName(item.name);
+            let label = `${craftingIcon} ${capitalizeWords(item.name)}`;
+            let value = item.name;
+            if (isElix) {
+              const lv = normalizeElixirLevel(item.elixirLevel);
+              const mh = Math.max(0, Math.floor(Number(item.modifierHearts) || 0));
+              label += ` · ${ELIXIR_LEVEL_NAMES[lv]}`;
+              if (mh > 0) label += ` · +${mh}♥`;
+              label += ` (Qty: ${item.quantity}) - Sell: ${sellPrice}`;
+              value = formatElixirItemOptionValue(item.name, lv, mh);
+            } else {
+              label += ` (Qty: ${item.quantity}) - Sell: ${sellPrice}`;
+            }
+            return { name: label, value };
           });
       } else {
         // For non-sell subcommands, aggregate by item name + crafted + boost so multiple DB rows show as one option
         const itemMap = new Map();
         for (const item of processedItems) {
           if (item.name === "initial item") continue;
-          const key = `${item.name}-${item.isCrafted ? 'crafted' : 'regular'}-${item.hasFortuneTellerBoost ? 'boosted' : 'normal'}`;
+          const isElix = isElixirItemName(item.name);
+          const elv = isElix ? normalizeElixirLevel(item.elixirLevel) : 'na';
+          const mh = isElix ? Math.max(0, Math.floor(Number(item.modifierHearts) || 0)) : 0;
+          const key = isElix
+            ? `${item.name}-${item.isCrafted ? 'crafted' : 'regular'}-${item.hasFortuneTellerBoost ? 'boosted' : 'normal'}-elv${elv}-mh${mh}`
+            : `${item.name}-${item.isCrafted ? 'crafted' : 'regular'}-${item.hasFortuneTellerBoost ? 'boosted' : 'normal'}`;
           if (!itemMap.has(key)) {
             itemMap.set(key, {
               name: item.name,
               quantity: item.quantity || 0,
               isCrafted: item.isCrafted,
               hasFortuneTellerBoost: item.hasFortuneTellerBoost,
+              elixirLevel: item.elixirLevel,
+              modifierHearts: item.modifierHearts,
             });
           } else {
             const existing = itemMap.get(key);
@@ -3246,9 +3271,21 @@ async function handleItemAutocomplete(interaction, focusedOption) {
           });
         choices = aggregatedItems.map(item => {
           const craftingIcon = item.isCrafted ? '🔨' : (item.hasFortuneTellerBoost ? '🔮' : '📦');
+          const isElix = isElixirItemName(item.name);
+          if (!isElix) {
+            return {
+              name: `${craftingIcon} ${capitalizeWords(item.name)} (Qty: ${item.quantity})`,
+              value: item.name,
+            };
+          }
+          const lv = normalizeElixirLevel(item.elixirLevel);
+          const mh = Math.max(0, Math.floor(Number(item.modifierHearts) || 0));
+          let name = `${craftingIcon} ${capitalizeWords(item.name)} · ${ELIXIR_LEVEL_NAMES[lv]}`;
+          if (mh > 0) name += ` · +${mh}♥`;
+          name += ` (Qty: ${item.quantity})`;
           return {
-            name: `${craftingIcon} ${capitalizeWords(item.name)} (Qty: ${item.quantity})`,
-            value: item.name,
+            name,
+            value: formatElixirItemOptionValue(item.name, lv, mh),
           };
         });
       }

@@ -607,6 +607,10 @@ async function removeItemInventoryDatabase(characterId, itemName, quantity, inte
     const targetElixirLevel = useElixirStacks
       ? normalizeElixirLevel(options.elixirLevel != null ? options.elixirLevel : 1)
       : null;
+    const targetModifierHearts =
+      useElixirStacks && options.modifierHearts != null
+        ? Math.max(0, Math.floor(Number(options.modifierHearts) || 0))
+        : null;
 
     logger.info('INVENTORY', `📦 Processing inventory for ${character.name}`);
     const collectionName = character.name.toLowerCase();
@@ -646,6 +650,12 @@ async function removeItemInventoryDatabase(characterId, itemName, quantity, inte
     if (useElixirStacks && targetElixirLevel != null) {
       inventoryEntries = inventoryEntries.filter(
         (e) => normalizeElixirLevel(e.elixirLevel) === targetElixirLevel
+      );
+    }
+
+    if (targetModifierHearts != null) {
+      inventoryEntries = inventoryEntries.filter(
+        (e) => Math.max(0, Math.floor(Number(e.modifierHearts) || 0)) === targetModifierHearts
       );
     }
 
@@ -700,6 +710,21 @@ async function removeItemInventoryDatabase(characterId, itemName, quantity, inte
         } else {
           base.elixirLevel = targetElixirLevel;
         }
+      }
+      if (targetModifierHearts != null) {
+        const mh = targetModifierHearts;
+        const mhClause =
+          mh === 0
+            ? {
+                $or: [
+                  { modifierHearts: { $exists: false } },
+                  { modifierHearts: null },
+                  { modifierHearts: 0 },
+                ],
+              }
+            : { modifierHearts: mh };
+        if (!base.$and) base.$and = [];
+        base.$and.push(mhClause);
       }
       return base;
     };

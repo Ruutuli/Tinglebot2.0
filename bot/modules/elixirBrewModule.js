@@ -1,12 +1,12 @@
 // ============================================================================
 // Elixir brew (mixer) — resolve labels + output elixir from critter + part
 // ============================================================================
+// Mixer “labels” are **MongoDB `items` rows**: critters have `effectFamily`, monster parts have
+// `element` (and no `effectFamily`). Populate via `npm run seed:elixir-ingredient-labels`.
+// ============================================================================
 
-const fs = require('fs');
-const path = require('path');
+const Item = require('../models/ItemModel');
 const { ELIXIR_MIXER_EXCLUDED_ITEM_NAMES, normalizeElixirLevel } = require('./elixirModule');
-
-const LABELS_PATH = path.join(__dirname, '..', '..', 'docs', 'elixir-ingredient-labels.json');
 
 /** effectFamily string → catalog elixir item name (Witch-era names in `items` + `ELIXIR_EFFECTS`). */
 const EFFECT_FAMILY_TO_ELIXIR = Object.freeze({
@@ -25,36 +25,10 @@ const EFFECT_FAMILY_TO_ELIXIR = Object.freeze({
   tough: 'Tough Elixir',
 });
 
-let _cachedLabels = null;
-
-function loadLabelsDoc() {
-  if (_cachedLabels) return _cachedLabels;
-  const raw = fs.readFileSync(LABELS_PATH, 'utf8');
-  _cachedLabels = JSON.parse(raw);
-  return _cachedLabels;
-}
-
-/** @returns {{ critterNames: Set<string>, partNames: Set<string>, familyByCritterName: Map<string,string> }} */
-function getIngredientLabelSets() {
-  const doc = loadLabelsDoc();
-  const labels = doc.labels || {};
-  const critterNames = new Set();
-  const partNames = new Set();
-  const familyByCritterName = new Map();
-
-  for (const [itemName, lab] of Object.entries(labels)) {
-    if (!lab || typeof lab !== 'object') continue;
-    if (lab.effectFamily) {
-      critterNames.add(itemName);
-      familyByCritterName.set(itemName.toLowerCase(), lab.effectFamily);
-    }
-    if (lab.element !== undefined && !lab.effectFamily) {
-      partNames.add(itemName);
-    }
-  }
-
-  return { critterNames, partNames, familyByCritterName };
-}
+/** @type {{ critterNames: Set<string>, partNames: Set<string>, familyByCritterName: Map<string,string> } | null} */
+let _labelSetsCache = null;
+/** Part name (lower) → element string for mixer fallback when `partItem` lacks `element`. */
+let _partElementByNameLower = new Map();
 
 function normalizeNameKey(name) {
   return String(name || '').trim().toLowerCase();
@@ -62,6 +36,70 @@ function normalizeNameKey(name) {
 
 function isExcludedMixerItem(itemName) {
   return ELIXIR_MIXER_EXCLUDED_ITEM_NAMES.some((x) => x.toLowerCase() === normalizeNameKey(itemName));
+}
+
+/**
+ * Loads critter/part sets from `items`: `effectFamily` = mixer critter; `element` + no family = part.
+ * Call after DB is connected (e.g. `ensureIngredientLabelsLoaded()`).
+ */
+async function refreshIngredientLabelSetsFromDb() {
+  const [critterDocs, partDocs] = await Promise.all([
+    Item.find({
+      effectFamily: { $exists: true, $nin: [null, ''] },
+    })
+      .select('itemName effectFamily')
+      .lean(),
+    Item.find({
+      element: { $exists: true, $ne: null },
+      $or: [{ effectFamily: { $exists: false } }, { effectFamily: null }, { effectFamily: '' }],
+    })
+      .select('itemName element effectFamily')
+      .lean(),
+  ]);
+
+  const critterNames = new Set();
+  const familyByCritterName = new Map();
+  for (const d of critterDocs) {
+    const name = d.itemName;
+    if (!name) continue;
+    if (isExcludedMixerItem(name)) continue;
+    critterNames.add(name);
+    const fam = String(d.effectFamily || '').trim().toLowerCase();
+    if (fam) familyByCritterName.set(normalizeNameKey(name), fam);
+  }
+
+  const partNames = new Set();
+  const partMap = new Map();
+  for (const d of partDocs) {
+    const name = d.itemName;
+    if (!name) continue;
+    if (isExcludedMixerItem(name)) continue;
+    if (d.effectFamily && String(d.effectFamily).trim() !== '') continue;
+    partNames.add(name);
+    const el =
+      d.element != null && String(d.element).trim() !== ''
+        ? String(d.element).trim().toLowerCase()
+        : 'none';
+    partMap.set(normalizeNameKey(name), el);
+  }
+
+  _labelSetsCache = { critterNames, partNames, familyByCritterName };
+  _partElementByNameLower = partMap;
+}
+
+/** Ensures label cache is populated (refreshes from DB each call so staff edits apply promptly). */
+async function ensureIngredientLabelsLoaded() {
+  await refreshIngredientLabelSetsFromDb();
+}
+
+/** @returns {{ critterNames: Set<string>, partNames: Set<string>, familyByCritterName: Map<string,string> }} */
+function getIngredientLabelSets() {
+  if (!_labelSetsCache) {
+    throw new Error(
+      'Mixer labels not loaded — call await ensureIngredientLabelsLoaded() after the database is connected.'
+    );
+  }
+  return _labelSetsCache;
 }
 
 /** Resolve output elixir name from critter label family. */
@@ -72,7 +110,7 @@ function elixirNameForCritterFamily(effectFamily) {
 
 /**
  * Validate critter + part Item docs for a brew.
- * Flexible: trusts label JSON + DB `effectFamily` / `element` when present.
+ * Uses DB-backed label sets + item `effectFamily` / `element`.
  */
 function validateBrewPair({ critterItem, partItem, critterName, partName }) {
   const { critterNames, partNames, familyByCritterName } = getIngredientLabelSets();
@@ -89,10 +127,16 @@ function validateBrewPair({ critterItem, partItem, critterName, partName }) {
   const critterListed = [...critterNames].some((n) => n.toLowerCase() === cKey);
   const partListed = [...partNames].some((n) => n.toLowerCase() === pKey);
   if (!critterListed) {
-    return { ok: false, message: `**${critterName}** is not a labeled mixer critter (see \`elixir-ingredient-labels.json\`).` };
+    return {
+      ok: false,
+      message: `**${critterName}** is not a mixer critter — set \`effectFamily\` on its item in the database (or run the ingredient-label seed).`,
+    };
   }
   if (!partListed) {
-    return { ok: false, message: `**${partName}** is not a labeled mixer part.` };
+    return {
+      ok: false,
+      message: `**${partName}** is not a mixer monster part — set \`element\` on its item (and clear \`effectFamily\` for parts).`,
+    };
   }
 
   const familyFromLabel = familyByCritterName.get(cKey);
@@ -120,14 +164,14 @@ function validateBrewPair({ critterItem, partItem, critterName, partName }) {
   return { ok: true, effectFamily, elixirName };
 }
 
+/** Fallback element for a part name from the last DB refresh (when `partItem` has no `element`). */
 function getPartElementFromLabels(partName) {
-  const doc = loadLabelsDoc();
-  const lab = doc.labels?.[partName];
-  if (!lab || lab.element === undefined) return null;
-  return String(lab.element).trim().toLowerCase();
+  const key = normalizeNameKey(partName);
+  if (_partElementByNameLower.has(key)) return _partElementByNameLower.get(key);
+  return null;
 }
 
-/** Prefer DB `element` on the item doc, then labels JSON. */
+/** Prefer DB `element` on the item doc, then cached part map from `items`. */
 function resolvePartElementForMixer(partItem, partName) {
   const dbEl = partItem?.element != null ? String(partItem.element).trim().toLowerCase() : '';
   if (dbEl) return dbEl;
@@ -261,7 +305,7 @@ const MIXER_SYNERGY_BONUS_MAX = 1.35;
 
 /**
  * Counts **extras only** that are “on theme” for potency synergy:
- * - **Critter** listed in labels with the same `effectFamily` as this brew (e.g. Bladed Rhino Beetle extra on Mighty).
+ * - **Critter** in DB with the same `effectFamily` as this brew (e.g. Bladed Rhino Beetle extra on Mighty).
  * - **Monster part** whose resolved element equals the brew’s **thread** element (electric / fire / ice / undead), not neutral-only families.
  */
 function countMixerExtraSynergy(extraItems, effectFamily) {
@@ -364,6 +408,8 @@ function elixirNameToEffectFamily(elixirName) {
 
 module.exports = {
   EFFECT_FAMILY_TO_ELIXIR,
+  ensureIngredientLabelsLoaded,
+  refreshIngredientLabelSetsFromDb,
   getIngredientLabelSets,
   elixirNameForCritterFamily,
   elixirNameToEffectFamily,

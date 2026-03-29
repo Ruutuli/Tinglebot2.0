@@ -159,6 +159,14 @@ async function initializeDatabases() {
     
     clearTimeout(connectionTimeout);
     logger.success('DATABASE', 'All databases connected');
+
+    try {
+      const { refreshIngredientLabelSetsFromDb } = require('./modules/elixirBrewModule');
+      await refreshIngredientLabelSetsFromDb();
+      logger.success('DATABASE', 'Elixir mixer label sets loaded from items collection');
+    } catch (labelsErr) {
+      logger.warn('DATABASE', `Elixir mixer labels preload failed (will load on first brew): ${labelsErr.message}`);
+    }
     
     // Clean up temp data entries without expiration dates (TTL handles expiresAt automatically)
     const noExpirationResult = await TempData.deleteMany({ expiresAt: { $exists: false } });
