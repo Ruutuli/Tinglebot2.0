@@ -16,6 +16,33 @@ This is for **members of the Zelda RP community using Tinglebot in Discord** —
 
 ---
 
+## Basic / Mid / High — what each tier does
+
+**Basic (level 1)** is the baseline bottle. **Mid** and **High** are stronger. Discord embeds may **round** buff numbers for display (e.g. to the nearest **0.25**); the bot still stores and applies the **scaled** values from the code.
+
+### Fixed tier ladders (exact numbers per tier)
+
+These elixirs use **explicit Basic / Mid / High values** wired in the bot — **not** the **×1.15 / ×1.3** rule used for resist/stat buffs below.
+
+| Elixir | Basic | Mid | High |
+| --- | ---: | ---: | ---: |
+| **Hearty Elixir** | +**1** temporary heart | +**2** | +**3** |
+| **Energizing Elixir** | +**5** stamina chunks (refill) | +**7** | +**9** |
+| **Enduring Elixir** | +**5** stamina chunks to max **and** current | +**7** | +**9** |
+| **Fairy Tonic** | Heal cap ≈ **¼** of max hearts (at least **1** heart) | cap ≈ **½** of max (at least **1**) | heal budget = **max hearts** (so you can refill **all** missing HP) |
+
+**Fairy Tonic:** Uses **max hearts** when you use **`/item`**. The bot computes a **heal budget** per tier (quarter / half / full max), then heals **`min(budget, missing hearts)`** — never above your real max. **Fairy** / **Mock Fairy** on the bottle add **extra** hearts on top; that is **separate** from tier.
+
+**Hearty, Fairy Tonic, and Enduring** are one-shot on **`/item`** (no lingering elixir buff). **Energizing** uses the chunk ladder above **and** also sets an **active buff** until the bot consumes it (see §B).
+
+**Stamina:** refill and extra max use **whole integer chunks**; **5 chunks = 1 wheel** in bot math (same convention as `ELIXIR_EFFECTS` / docs).
+
+### Buff elixirs (resists, attack, defense, speed, stealth, etc.)
+
+**Chilly, Spicy, Electro, Bright, Sticky, Mighty, Tough, Sneaky, Hasty**, and similar use the bot’s **base** (Basic) stats, then **Mid = ×1.15** and **High = ×1.3** on each effect number, **rounded** to two decimals. **Sticky** scales both **water resistance** and **plus boost**. **Sneaky** scales **stealth** and **flee**. **Hearty / Energizing / Enduring / Fairy Tonic** use the **fixed ladders** above instead of this multiplier for their main effect.
+
+---
+
 ## Commands you actually need
 
 | Command | What it does |
