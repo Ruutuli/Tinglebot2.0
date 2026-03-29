@@ -49,17 +49,41 @@ const { createCraftingEmbed } = require('../../embeds/embeds.js');
 const EMBED_BORDER_IMAGE_URL = 'https://storage.googleapis.com/tinglebot/Graphics/border.png';
 const MAX_MIXER_EXTRAS = 3;
 
-/** Player-facing brew math (replaces raw peak/mean/weakest % labels). */
+/** Player-facing brew math — readable tier, score, rarity breakdown, synergy (Discord field ≤1024). */
 function formatUserFriendlyBrewBlend(mixOutcome, tierWord, brewedElixirLevel) {
-  const synergyExtra =
-    mixOutcome.synergyExtraCount > 0
-      ? `\n\n**Synergy:** +${Number(mixOutcome.synergyRaw.toFixed(2))} from **${mixOutcome.synergyExtraCount}** extra ingredient${mixOutcome.synergyExtraCount === 1 ? '' : 's'} that matched this brew.`
-      : '';
-  const raw = [
-    `**Tier:** ${tierWord} (level ${brewedElixirLevel})`,
-    `**Blend score:** ${mixOutcome.combinedRounded}/10 — **${tierWord}** tier (1-3 = Basic, 4-6 = Mid, 7-10 = High).`,
-    `**How your ingredients stacked:** best rarity **${mixOutcome.maxR}**, average **${Number(mixOutcome.avgR.toFixed(2))}**, weakest **${mixOutcome.minR}**.${synergyExtra}`,
-  ].join('\n');
+  const combined = mixOutcome.combinedRounded;
+  const avgStr = Number(mixOutcome.avgR.toFixed(2));
+  const synRaw = Number(mixOutcome.synergyRaw.toFixed(2));
+  const nIng = mixOutcome.ingredientCount || 0;
+
+  const lines = [
+    `**${tierWord} elixir** · level **${brewedElixirLevel}**`,
+    `**Mixer score:** **${combined}/10** → **${tierWord}** potency`,
+    '',
+    '*Bands:* **1–3** Basic · **4–6** Mid · **7–10** High',
+    '',
+    '**Ingredient rarities** (1–10 each)',
+    `> ★ **Peak** — **${mixOutcome.maxR}** — strongest single ingredient (weighted heavily)`,
+    `> ◆ **Average** — **${avgStr}** — across **${nIng}** ingredient${nIng === 1 ? '' : 's'}`,
+    `> · **Weakest** — **${mixOutcome.minR}** — still pulls the blend toward the middle`,
+    '',
+    '**How the score works:** your **peak** rarity and **average** rarity are blended (peak counts more than a flat mean).',
+  ];
+  if (mixOutcome.synergyExtraCount > 0) {
+    lines.push(
+      '',
+      '**Synergy bonus**',
+      `+**${synRaw}** toward the score from **${mixOutcome.synergyExtraCount}** optional extra${mixOutcome.synergyExtraCount === 1 ? '' : 's'} that matched this brew (same effect family or on-theme part).`
+    );
+  } else {
+    lines.push(
+      '',
+      '**Synergy**',
+      'No matching extras this brew — optional on-theme critters or parts can add a small bonus next time.'
+    );
+  }
+
+  const raw = lines.join('\n');
   return raw.length > 1024 ? `${raw.slice(0, 1020)}…` : raw;
 }
 
