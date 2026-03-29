@@ -102,6 +102,11 @@ function escapeRegExp(string) {
   return string.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
+/** Fairy mix-in heal on elixir stacks — part of stack key with `elixirLevel` (must not merge +0 with +2). */
+function normalizeElixirStackModifierHearts(row) {
+  return Math.max(0, Math.floor(Number(row?.modifierHearts) || 0));
+}
+
 // ============================================================================
 // ---- Error Handling ----
 // Error tracking and logging utilities
@@ -129,7 +134,7 @@ function shouldLogError(error) {
 
 // ---- Function: syncToInventoryDatabase ----
 // Syncs item changes to database. Never inserts or leaves negative quantity; uses case-insensitive itemName.
-// Elixirs: separate DB documents per elixirLevel (1–3); sync add/merge and remove respect level like addItemInventoryDatabase.
+// Elixirs: separate DB documents per elixirLevel (1–3) and per modifierHearts (Fairy mix-in); sync matches addItemInventoryDatabase.
 async function syncToInventoryDatabase(character, item, interaction) {
   try {
     if (!dbFunctions.connectToInventories) {
@@ -173,8 +178,11 @@ async function syncToInventoryDatabase(character, item, interaction) {
 
       if (syncIsElixir && item.elixirLevel != null) {
         const tl = normalizeElixirLevel(item.elixirLevel);
+        const mh = Math.max(0, Math.floor(Number(item.modifierHearts ?? 0) || 0));
         positiveEntries = positiveEntries.filter(
-          (e) => normalizeElixirLevel(e.elixirLevel) === tl
+          (e) =>
+            normalizeElixirLevel(e.elixirLevel) === tl &&
+            normalizeElixirStackModifierHearts(e) === mh
         );
       } else if (syncIsElixir) {
         // No level on sync payload: consume lowest level first (Basic / legacy), then Mid, then High
@@ -272,6 +280,10 @@ async function syncToInventoryDatabase(character, item, interaction) {
                 : 1
           )
         : null;
+    const syncStackModifierHearts =
+      syncIsElixir && syncStackElixirLevel != null
+        ? Math.max(0, Math.floor(Number(item.modifierHearts ?? 0) || 0))
+        : null;
 
     const stackCandidates = await inventoryCollection
       .find({ characterId: character._id, itemName: itemNameRegex })
@@ -283,7 +295,8 @@ async function syncToInventoryDatabase(character, item, interaction) {
         stackCandidates.find(
           (e) =>
             (e.quantity || 0) > 0 &&
-            normalizeElixirLevel(e.elixirLevel) === syncStackElixirLevel
+            normalizeElixirLevel(e.elixirLevel) === syncStackElixirLevel &&
+            normalizeElixirStackModifierHearts(e) === syncStackModifierHearts
         ) || null;
     } else {
       existingItem =
@@ -298,15 +311,16 @@ async function syncToInventoryDatabase(character, item, interaction) {
 
     if (existingItem && (existingItem.quantity || 0) > 0) {
       const syncIncUpdate = { $inc: { quantity: quantity } };
-      const syncIncSet =
-        syncIsElixir && syncStackElixirLevel != null
-          ? { $set: { elixirLevel: syncStackElixirLevel } }
-          : {};
+      let syncElixirSet = null;
+      if (syncIsElixir && syncStackElixirLevel != null) {
+        syncElixirSet = { elixirLevel: syncStackElixirLevel };
+        if (syncStackModifierHearts != null && syncStackModifierHearts > 0) {
+          syncElixirSet.modifierHearts = syncStackModifierHearts;
+        }
+      }
       await inventoryCollection.updateOne(
         { _id: existingItem._id },
-        syncIsElixir && syncStackElixirLevel != null
-          ? { ...syncIncUpdate, ...syncIncSet }
-          : syncIncUpdate
+        syncElixirSet ? { ...syncIncUpdate, $set: syncElixirSet } : syncIncUpdate
       );
       const updated = await inventoryCollection.findOne({ _id: existingItem._id });
       if (updated && (updated.quantity || 0) <= 0) {
@@ -375,7 +389,7 @@ async function removeNegativeQuantityEntries(inventoryCollection) {
 
 // ---- Function: addItemInventoryDatabase ----
 // Adds a single item to inventory database. Never leaves negative quantity; after $inc deletes if qty <= 0.
-// options: optional { craftedAt, fortuneTellerBoost, elixirLevel, modifierHearts } — elixirLevel 1–3 for potions (stack key with itemName); modifierHearts for crafted elixir heal-on-use (e.g. Fairy mix-in).
+// options: optional { craftedAt, fortuneTellerBoost, elixirLevel, modifierHearts } — elixir stack key = itemName + elixirLevel + modifierHearts (Fairy mix-in; 0 vs 2 = separate rows).
 async function addItemInventoryDatabase(characterId, itemName, quantity, interaction, obtain = "", options = {}) {
   try {
     const {
@@ -459,6 +473,10 @@ async function addItemInventoryDatabase(characterId, itemName, quantity, interac
           optElixirLevel != null ? optElixirLevel : item.elixirLevel != null ? item.elixirLevel : 1
         )
       : null;
+    const stackModifierHearts =
+      useElixirStacks && stackElixirLevel != null
+        ? Math.max(0, Math.floor(Number(optModifierHearts ?? 0) || 0))
+        : null;
 
     const stackCandidates = await inventoryCollection
       .find({ characterId, itemName: itemNameRegex })
@@ -468,7 +486,9 @@ async function addItemInventoryDatabase(characterId, itemName, quantity, interac
     if (useElixirStacks) {
       inventoryItem = stackCandidates.find(
         (e) =>
-          (e.quantity || 0) > 0 && normalizeElixirLevel(e.elixirLevel) === stackElixirLevel
+          (e.quantity || 0) > 0 &&
+          normalizeElixirLevel(e.elixirLevel) === stackElixirLevel &&
+          normalizeElixirStackModifierHearts(e) === stackModifierHearts
       );
     } else {
       inventoryItem = stackCandidates.find((e) => (e.quantity || 0) > 0) || null;
@@ -493,10 +513,8 @@ async function addItemInventoryDatabase(characterId, itemName, quantity, interac
       if (useElixirStacks && stackElixirLevel != null) {
         updateOp.$set.elixirLevel = stackElixirLevel;
       }
-      if (optModifierHearts != null && Number(optModifierHearts) > 0) {
-        const nh = Math.floor(Number(optModifierHearts));
-        const prev = Math.floor(Number(inventoryItem.modifierHearts)) || 0;
-        updateOp.$set.modifierHearts = Math.max(prev, nh);
+      if (useElixirStacks && stackModifierHearts != null && stackModifierHearts > 0) {
+        updateOp.$set.modifierHearts = stackModifierHearts;
       }
       await inventoryCollection.updateOne(
         { _id: inventoryItem._id },
@@ -527,8 +545,8 @@ async function addItemInventoryDatabase(characterId, itemName, quantity, interac
       if (useElixirStacks && stackElixirLevel != null) {
         newItem.elixirLevel = stackElixirLevel;
       }
-      if (optModifierHearts != null && Number(optModifierHearts) > 0) {
-        newItem.modifierHearts = Math.floor(Number(optModifierHearts));
+      if (useElixirStacks && stackModifierHearts != null && stackModifierHearts > 0) {
+        newItem.modifierHearts = stackModifierHearts;
       }
       if (fortuneTellerBoost) newItem.fortuneTellerBoost = true;
       if (craftedAt) newItem.craftedAt = craftedAt;
@@ -608,8 +626,8 @@ async function removeItemInventoryDatabase(characterId, itemName, quantity, inte
       ? normalizeElixirLevel(options.elixirLevel != null ? options.elixirLevel : 1)
       : null;
     const targetModifierHearts =
-      useElixirStacks && options.modifierHearts != null
-        ? Math.max(0, Math.floor(Number(options.modifierHearts) || 0))
+      useElixirStacks && targetElixirLevel != null
+        ? Math.max(0, Math.floor(Number(options.modifierHearts ?? 0) || 0))
         : null;
 
     logger.info('INVENTORY', `📦 Processing inventory for ${character.name}`);
@@ -649,13 +667,9 @@ async function removeItemInventoryDatabase(characterId, itemName, quantity, inte
 
     if (useElixirStacks && targetElixirLevel != null) {
       inventoryEntries = inventoryEntries.filter(
-        (e) => normalizeElixirLevel(e.elixirLevel) === targetElixirLevel
-      );
-    }
-
-    if (targetModifierHearts != null) {
-      inventoryEntries = inventoryEntries.filter(
-        (e) => Math.max(0, Math.floor(Number(e.modifierHearts) || 0)) === targetModifierHearts
+        (e) =>
+          normalizeElixirLevel(e.elixirLevel) === targetElixirLevel &&
+          normalizeElixirStackModifierHearts(e) === targetModifierHearts
       );
     }
 
@@ -711,7 +725,7 @@ async function removeItemInventoryDatabase(characterId, itemName, quantity, inte
           base.elixirLevel = targetElixirLevel;
         }
       }
-      if (targetModifierHearts != null) {
+      if (useElixirStacks && targetElixirLevel != null && targetModifierHearts != null) {
         const mh = targetModifierHearts;
         const mhClause =
           mh === 0
