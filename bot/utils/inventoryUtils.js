@@ -375,10 +375,15 @@ async function removeNegativeQuantityEntries(inventoryCollection) {
 
 // ---- Function: addItemInventoryDatabase ----
 // Adds a single item to inventory database. Never leaves negative quantity; after $inc deletes if qty <= 0.
-// options: optional { craftedAt, fortuneTellerBoost, elixirLevel } — elixirLevel 1–3 for potions (stack key with itemName).
+// options: optional { craftedAt, fortuneTellerBoost, elixirLevel, modifierHearts } — elixirLevel 1–3 for potions (stack key with itemName); modifierHearts for crafted elixir heal-on-use (e.g. Fairy mix-in).
 async function addItemInventoryDatabase(characterId, itemName, quantity, interaction, obtain = "", options = {}) {
   try {
-    const { craftedAt = null, fortuneTellerBoost = false, elixirLevel: optElixirLevel = null } = options;
+    const {
+      craftedAt = null,
+      fortuneTellerBoost = false,
+      elixirLevel: optElixirLevel = null,
+      modifierHearts: optModifierHearts = null,
+    } = options;
     const allowedNullInteractionObtain = ['Trade', 'Character Birthday', 'Duplicate Relic Turn-In'];
     if (!interaction && !allowedNullInteractionObtain.includes(obtain)) {
       throw new Error("Interaction object is undefined.");
@@ -488,6 +493,11 @@ async function addItemInventoryDatabase(characterId, itemName, quantity, interac
       if (useElixirStacks && stackElixirLevel != null) {
         updateOp.$set.elixirLevel = stackElixirLevel;
       }
+      if (optModifierHearts != null && Number(optModifierHearts) > 0) {
+        const nh = Math.floor(Number(optModifierHearts));
+        const prev = Math.floor(Number(inventoryItem.modifierHearts)) || 0;
+        updateOp.$set.modifierHearts = Math.max(prev, nh);
+      }
       await inventoryCollection.updateOne(
         { _id: inventoryItem._id },
         updateOp
@@ -516,6 +526,9 @@ async function addItemInventoryDatabase(characterId, itemName, quantity, interac
       };
       if (useElixirStacks && stackElixirLevel != null) {
         newItem.elixirLevel = stackElixirLevel;
+      }
+      if (optModifierHearts != null && Number(optModifierHearts) > 0) {
+        newItem.modifierHearts = Math.floor(Number(optModifierHearts));
       }
       if (fortuneTellerBoost) newItem.fortuneTellerBoost = true;
       if (craftedAt) newItem.craftedAt = craftedAt;

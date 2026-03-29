@@ -10,15 +10,7 @@ const { v4: uuidv4 } = require('uuid');
 
 // ------------------- Discord.js Components -------------------
 const { SlashCommandBuilder } = require('@discordjs/builders');
-const {
-  MessageFlags,
-  EmbedBuilder,
-  ActionRowBuilder,
-  StringSelectMenuBuilder,
-  StringSelectMenuOptionBuilder,
-  ButtonBuilder,
-  ButtonStyle,
-} = require('discord.js');
+const { MessageFlags, EmbedBuilder } = require('discord.js');
 
 // ------------------- Database Connections -------------------
 const { connectToTinglebot, fetchCharacterByNameAndUserId, getCharacterInventoryCollection, fetchItemByName } = require('@/database/db');
@@ -37,19 +29,12 @@ const { clearBoostAfterUse, getEffectiveJob, isBoosterUsingVoucherForJob, retrie
 const { info, success, error } = require('@/utils/logger');
 
 // ------------------- Utility Functions -------------------
-const { addItemInventoryDatabase, processMaterials, removeItemInventoryDatabase } = require('@/utils/inventoryUtils');
+const { addItemInventoryDatabase, processMaterials } = require('@/utils/inventoryUtils');
 const { checkInventorySync } = require('@/utils/characterUtils');
 // Google Sheets functionality removed
 const { handleInteractionError } = require('@/utils/globalErrorHandler');
 const { enforceJail } = require('@/utils/jailCheck');
-const {
-  validateBrewPair,
-  elixirNameToEffectFamily,
-  normalizeNameKey,
-  getRequiredPartElementForFamily,
-  getPartElementFromLabels,
-} = require('../../modules/elixirBrewModule');
-const TempData = require('@/models/TempDataModel');
+const { runCraftingBrew } = require('./brewMixerHandler');
 
 // ------------------- Embed Imports -------------------
 const { createCraftingEmbed } = require('../../embeds/embeds.js');
@@ -80,247 +65,7 @@ async function sendPublicCraftingRefundReply(interaction, voucherEmbed) {
   await interaction.followUp({ ...payload, flags: [MessageFlags.Ephemeral] });
 }
 
-// ============================================================================
-// /crafting brew — Witch elixir mixer (same rules as former /craft brew)
-// ============================================================================
-
-function cleanBrewOptionItemName(raw) {
-  if (!raw || typeof raw !== 'string') return '';
-  return raw
-    .replace(/\s*\(Qty:\s*\d+\)/i, '')
-    .replace(/\s*-\s*🟩\s*\d+\s*\|\s*Has:\s*\d+/i, '')
-    .trim();
-}
-
-function parseStaminaToCraftBrew(raw) {
-  if (raw == null) return 4;
-  if (typeof raw === 'number' && Number.isFinite(raw)) return Math.max(1, Math.floor(raw));
-  const n = parseInt(String(raw), 10);
-  return Number.isFinite(n) ? Math.max(1, n) : 4;
-}
-
-async function runCraftingBrew(interaction) {
-  await interaction.deferReply({ flags: [MessageFlags.Ephemeral] });
-  await connectToTinglebot();
-
-  const userId = interaction.user.id;
-  const characterName = interaction.options.getString('charactername');
-  const elixirRaw = interaction.options.getString('elixir');
-  const critterRaw = interaction.options.getString('critter');
-  const partRaw = interaction.options.getString('part');
-  const chosenElixirName = cleanBrewOptionItemName(elixirRaw);
-  const critterName = cleanBrewOptionItemName(critterRaw);
-  const partName = cleanBrewOptionItemName(partRaw);
-
-  const villageChannels = {
-    Rudania: process.env.RUDANIA_TOWNHALL,
-    Inariko: process.env.INARIKO_TOWNHALL,
-    Vhintl: process.env.VHINTL_TOWNHALL,
-  };
-
-  try {
-    let character = await fetchCharacterByNameAndUserId(characterName, userId);
-    if (!character) {
-      const { fetchModCharacterByNameAndUserId } = require('@/database/db');
-      character = await fetchModCharacterByNameAndUserId(characterName, userId);
-    }
-    if (!character) {
-      return interaction.editReply({
-        content: `❌ **Character "${characterName}" not found or does not belong to you.**`,
-        flags: [MessageFlags.Ephemeral],
-      });
-    }
-
-    if (await enforceJail(interaction, character)) return;
-
-    await checkInventorySync(character);
-
-    let currentVillage = capitalizeWords(character.currentVillage);
-    let allowedChannel = villageChannels[currentVillage];
-    if (character.jobVoucher && character.jobVoucherJob) {
-      const perk = getJobPerk(character.jobVoucherJob);
-      if (perk && perk.village) {
-        currentVillage = capitalizeWords(perk.village);
-        allowedChannel = villageChannels[currentVillage];
-      }
-    }
-
-    const testingChannelId = '1391812848099004578';
-    const isTestingChannel =
-      interaction.channelId === testingChannelId || interaction.channel?.parentId === testingChannelId;
-
-    if (!allowedChannel || (interaction.channelId !== allowedChannel && !isTestingChannel)) {
-      const channelMention = `<#${allowedChannel}>`;
-      return interaction.editReply({
-        embeds: [
-          {
-            color: 0x008b8b,
-            description: `*${character.name} looks around, confused by their surroundings...*\n\n**Channel Restriction**\nYou can only brew in the ${currentVillage} Town Hall channel!\n\n📍 **Current Location:** ${capitalizeWords(character.currentVillage)}\n💬 **Allowed in:** ${channelMention}`,
-            image: { url: 'https://storage.googleapis.com/tinglebot/Graphics/border.png' },
-            footer: { text: 'Channel Restriction' },
-          },
-        ],
-        flags: [MessageFlags.Ephemeral],
-      });
-    }
-
-    let job = character.jobVoucher && character.jobVoucherJob ? character.jobVoucherJob : character.job;
-    const jobPerk = getJobPerk(job);
-    const hasAllPerks = jobPerk && jobPerk.perks && jobPerk.perks.includes('ALL');
-    if (!jobPerk || (!hasAllPerks && !jobPerk.perks.includes('CRAFTING'))) {
-      const err = getJobVoucherErrorMessage('MISSING_SKILLS', {
-        characterName: character.name,
-        jobName: job || 'Unknown',
-        activity: 'crafting',
-      });
-      return interaction.editReply({ embeds: [err.embed], flags: [MessageFlags.Ephemeral] });
-    }
-
-    const chosenFamily = elixirNameToEffectFamily(chosenElixirName);
-    if (!chosenFamily) {
-      return interaction.editReply({
-        content: `❌ **${chosenElixirName || 'That'}** is not a mixer elixir. Pick one from the elixir list (autocomplete).`,
-        flags: [MessageFlags.Ephemeral],
-      });
-    }
-
-    const critterItem = await fetchItemByName(critterName, {
-      commandName: interaction.commandName,
-      userId: interaction.user?.id,
-      operation: 'brew_validate_critter',
-    });
-    const partItem = await fetchItemByName(partName, {
-      commandName: interaction.commandName,
-      userId: interaction.user?.id,
-      operation: 'brew_validate_part',
-    });
-
-    if (!critterItem || !partItem) {
-      return interaction.editReply({
-        content: `❌ Could not load items. Check **${critterName}** and **${partName}** (use autocomplete).`,
-        flags: [MessageFlags.Ephemeral],
-      });
-    }
-
-    const pair = validateBrewPair({
-      critterItem,
-      partItem,
-      critterName: critterItem.itemName,
-      partName: partItem.itemName,
-    });
-    if (!pair.ok) {
-      return interaction.editReply({ content: `❌ ${pair.message}`, flags: [MessageFlags.Ephemeral] });
-    }
-
-    if (normalizeNameKey(pair.elixirName) !== normalizeNameKey(chosenElixirName)) {
-      return interaction.editReply({
-        content: `❌ **${critterItem.itemName}** + **${partItem.itemName}** would make **${pair.elixirName}**, not **${chosenElixirName}**. Pick a critter that matches **${chosenElixirName}** (or change the elixir).`,
-        flags: [MessageFlags.Ephemeral],
-      });
-    }
-
-    const outputName = pair.elixirName;
-    const outputItem = await fetchItemByName(outputName, {
-      commandName: interaction.commandName,
-      userId: interaction.user?.id,
-      operation: 'brew_output',
-    });
-
-    if (!outputItem) {
-      return interaction.editReply({
-        content: `❌ Output item **${outputName}** is not in the database.`,
-        flags: [MessageFlags.Ephemeral],
-      });
-    }
-
-    if (!hasAllPerks && outputItem.witch !== true) {
-      return interaction.editReply({
-        content: `❌ **${outputName}** is not Witch-craftable in the catalog.`,
-        flags: [MessageFlags.Ephemeral],
-      });
-    }
-
-    const staminaCost = parseStaminaToCraftBrew(outputItem.staminaToCraft);
-    const fresh = await fetchCharacterByNameAndUserId(character.name, userId);
-    if (!fresh) {
-      return interaction.editReply({ content: '❌ Character not found.', flags: [MessageFlags.Ephemeral] });
-    }
-
-    const available = fresh.currentStamina ?? 0;
-    if (available < staminaCost) {
-      return interaction.editReply({
-        embeds: [
-          new EmbedBuilder()
-            .setTitle('❌ Not Enough Stamina')
-            .setDescription(`**${fresh.name}** needs **${staminaCost}** stamina to brew (has ${available}).`)
-            .setColor(0xff0000),
-        ],
-        flags: [MessageFlags.Ephemeral],
-      });
-    }
-
-    try {
-      await removeItemInventoryDatabase(
-        character._id,
-        critterItem.itemName,
-        1,
-        interaction,
-        'Elixir brew (critter)',
-        {}
-      );
-      await removeItemInventoryDatabase(
-        character._id,
-        partItem.itemName,
-        1,
-        interaction,
-        'Elixir brew (part)',
-        {}
-      );
-    } catch (invErr) {
-      handleInteractionError(invErr, 'crafting.js');
-      return interaction.editReply({
-        content: `❌ **Could not remove ingredients:** ${invErr.message || invErr}`,
-        flags: [MessageFlags.Ephemeral],
-      });
-    }
-
-    let staminaAfter;
-    try {
-      staminaAfter = await checkAndUseStamina(fresh, staminaCost);
-    } catch (stErr) {
-      await addItemInventoryDatabase(character._id, critterItem.itemName, 1, interaction, 'Brew refund (stamina)');
-      await addItemInventoryDatabase(character._id, partItem.itemName, 1, interaction, 'Brew refund (stamina)');
-      return interaction.editReply({
-        content: `❌ **Stamina error:** ${stErr.message || stErr}. Ingredients refunded.`,
-        flags: [MessageFlags.Ephemeral],
-      });
-    }
-
-    await addItemInventoryDatabase(character._id, outputItem.itemName, 1, interaction, 'Elixir brew', {
-      elixirLevel: outputItem.elixirLevel != null ? outputItem.elixirLevel : undefined,
-    });
-
-    const embed = new EmbedBuilder()
-      .setTitle('🧪 Brew complete')
-      .setDescription(
-        `**${character.name}** mixed **${critterItem.itemName}** + **${partItem.itemName}** → **${outputItem.itemName}**.`
-      )
-      .addFields(
-        { name: 'Family', value: pair.effectFamily, inline: true },
-        { name: 'Stamina', value: `${staminaCost} (→ ${staminaAfter})`, inline: true }
-      )
-      .setColor(0x2ecc71)
-      .setTimestamp();
-
-    return interaction.editReply({ embeds: [embed], flags: [MessageFlags.Ephemeral] });
-  } catch (error) {
-    handleInteractionError(error, 'crafting.js');
-    const msg = error?.message || String(error);
-    try {
-      await interaction.editReply({ content: `❌ **Brew failed:** ${msg}`, flags: [MessageFlags.Ephemeral] });
-    } catch (_) {}
-  }
-}
+// Brew: `brewMixerHandler.js` (multi-step menus)
 
 // ============================================================================
 // ------------------- CRAFTING COMMAND HANDLER -------------------
@@ -350,18 +95,12 @@ module.exports = {
     .addSubcommand((sub) =>
       sub
         .setName('brew')
-        .setDescription('Choose elixir, then critter + part from inventory (Witch mixer)')
+        .setDescription('Mixer brew: pick elixir, then menus for critter, part, optional Fairy')
         .addStringOption((opt) =>
           opt.setName('charactername').setDescription('Character who brews').setRequired(true).setAutocomplete(true)
         )
         .addStringOption((opt) =>
           opt.setName('elixir').setDescription('Elixir you want to brew').setRequired(true).setAutocomplete(true)
-        )
-        .addStringOption((opt) =>
-          opt.setName('critter').setDescription('Critter ingredient (matches elixir family)').setRequired(true).setAutocomplete(true)
-        )
-        .addStringOption((opt) =>
-          opt.setName('part').setDescription('Monster part ingredient (from labels)').setRequired(true).setAutocomplete(true)
         )
     ),
 

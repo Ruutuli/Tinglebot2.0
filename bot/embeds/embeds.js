@@ -1554,7 +1554,7 @@ const createTokenTrackerSetupEmbed = (
 
 // ------------------- Function: createCraftingEmbed -------------------
 // Creates an embed for crafting activities with materials used and boost support
-const createCraftingEmbed = async (item, character, flavorText, materialsUsed, quantity, staminaCost, remainingStamina, jobForFlavorText = null, originalStaminaCost = null, staminaSavings = 0, materialSavings = [], teacherBoostInfo = null) => {
+const createCraftingEmbed = async (item, character, flavorText, materialsUsed, quantity, staminaCost, remainingStamina, jobForFlavorText = null, originalStaminaCost = null, staminaSavings = 0, materialSavings = [], teacherBoostInfo = null, brewedElixirLevelValue = null) => {
  const action = jobActions[character.job] || "crafted";
  const itemQuantityText = ` x${quantity}`;
  const locationPrefix = getLocationPrefix(character);
@@ -1650,6 +1650,23 @@ const createCraftingEmbed = async (item, character, flavorText, materialsUsed, q
   staminaCostValue = `> ${staminaCost}\n💫 *Would have used ${originalStaminaCost}, but thanks to Priest boost it was reduced to ${reducedCost} (saved ${staminaSavings})*`;
  }
 
+ const materialFieldSpecs = Array.isArray(craftingMaterialText)
+  ? craftingMaterialText.map((chunk, index) => ({
+     name: `📜 **__Materials Used__** (Part ${index + 1})`,
+     value: chunk,
+     inline: false,
+    }))
+  : [{ name: "📜 **__Materials Used__**", value: craftingMaterialText, inline: false }];
+
+ const elixirLevelFields = brewedElixirLevelValue
+  ? [{ name: "🧪 **__Elixir Level__**", value: brewedElixirLevelValue, inline: false }]
+  : [];
+
+ const staminaRowFields = [
+  { name: "⚡ **__Stamina Cost__**", value: staminaCostValue, inline: true },
+  { name: "💚 **__Remaining Stamina__**", value: `> ${updatedStamina}`, inline: true },
+ ];
+
  const embed = new EmbedBuilder()
   .setColor("#AA926A")
   .setTitle(embedTitle)
@@ -1659,17 +1676,7 @@ const createCraftingEmbed = async (item, character, flavorText, materialsUsed, q
    iconURL: character.icon || DEFAULT_IMAGE_URL,
    url: character.inventory || "",
   })
-  .addFields(
-   ...(Array.isArray(craftingMaterialText)
-    ? craftingMaterialText.map((chunk, index) => ({
-       name: `📜 **__Materials Used__** (Part ${index + 1})`,
-       value: chunk,
-       inline: false,
-      }))
-    : [{ name: "📜 **__Materials Used__**", value: craftingMaterialText, inline: false }]),
-   { name: "⚡ **__Stamina Cost__**", value: staminaCostValue, inline: true },
-   { name: "💚 **__Remaining Stamina__**", value: `> ${updatedStamina}`, inline: true }
-  )
+  .addFields(...elixirLevelFields, ...materialFieldSpecs, ...staminaRowFields)
   .setThumbnail(isValidImageUrl(item.image) ? item.image : 'https://via.placeholder.com/150')
   .setImage(DEFAULT_IMAGE_URL)
   .setFooter({ 

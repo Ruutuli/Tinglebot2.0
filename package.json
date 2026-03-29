@@ -10,7 +10,10 @@
     "dev": "concurrently \"npm run dev:bot\" \"npm run dev:dashboard\"",
     "deploy:commands": "node bot/scripts/deploy-commands.js",
     "seed:elixir-ingredient-labels": "node bot/scripts/seedElixirIngredientLabels.js",
-    "seed:bright-sticky-elixirs": "node bot/scripts/seedBrightStickyElixirsAndRetireFireproof.js"
+    "seed:bright-sticky-elixirs": "node bot/scripts/seedBrightStickyElixirsAndRetireFireproof.js",
+    "seed:elixir-mixer-recipes": "node bot/scripts/seedElixirMixerCatalogRecipes.js",
+    "seed:tingle-monster-parts": "node bot/scripts/seedTingleMonsterPartsInventory.js",
+    "seed:tingle-creature": "node bot/scripts/seedTingleCreatureInventory.js"
   },
   "devDependencies": {
     "concurrently": "^8.2.0"

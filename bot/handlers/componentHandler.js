@@ -1972,6 +1972,12 @@ async function handleComponentInteraction(interaction) {
       return;
     }
 
+    // /crafting brew — mixer steps (select menus + buttons)
+    if (interaction.customId.startsWith('brew-mixer-')) {
+      const { handleBrewMixerInteraction } = require('../commands/jobs/brewMixerHandler');
+      return await handleBrewMixerInteraction(interaction);
+    }
+
     // Explore buttons (ruins/chest/grotto) are handled by message collectors in explore.js
     if (interaction.customId.startsWith('explore_')) {
       logger.info("EXPLORE", `[componentHandler] explore_ button ignored (handled by collector): customId=${interaction.customId} userId=${interaction.user?.id}`);
@@ -2085,7 +2091,11 @@ async function handleComponentInteraction(interaction) {
           flags: 64
         });
       } else if (interaction.replied) {
-        // Try followUp if already replied
+        await interaction.followUp({
+          content: '❌ **An error occurred while processing your interaction.**',
+          flags: 64
+        });
+      } else if (interaction.deferred) {
         await interaction.followUp({
           content: '❌ **An error occurred while processing your interaction.**',
           flags: 64

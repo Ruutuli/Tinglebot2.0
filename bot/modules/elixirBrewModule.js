@@ -4,7 +4,7 @@
 
 const fs = require('fs');
 const path = require('path');
-const { ELIXIR_MIXER_EXCLUDED_ITEM_NAMES } = require('./elixirModule');
+const { ELIXIR_MIXER_EXCLUDED_ITEM_NAMES, normalizeElixirLevel } = require('./elixirModule');
 
 const LABELS_PATH = path.join(__dirname, '..', '..', 'docs', 'elixir-ingredient-labels.json');
 
@@ -107,14 +107,10 @@ function validateBrewPair({ critterItem, partItem, critterName, partName }) {
     return { ok: false, message: `No output elixir mapped for family \`${effectFamily}\`.` };
   }
 
-  /** Mixer README: chilly→fire, spicy→ice, electro→electric, bright→undead; else neutral `none`. */
-  const requiredPartElement = getRequiredPartElementForFamily(effectFamily);
+  const allowedPartElements = getAllowedPartElementsForFamily(effectFamily);
   const actualPartElement = resolvePartElementForMixer(partItem, partName);
-  if (actualPartElement !== requiredPartElement) {
-    const need =
-      requiredPartElement === 'none'
-        ? 'a **neutral** monster part (`element`: none — e.g. Chuchu Jelly, horns)'
-        : `a **${requiredPartElement}**-aligned part (see mixer element table)`;
+  if (!allowedPartElements.includes(actualPartElement)) {
+    const need = describeAllowedPartElementsForBrew(allowedPartElements);
     return {
       ok: false,
       message: `**${partName}** does not match this brew’s monster-part slot. ${elixirName} needs ${need}.`,
@@ -151,6 +147,211 @@ function getRequiredPartElementForFamily(effectFamily) {
   return map[f] ?? 'none';
 }
 
+/**
+ * Part elements allowed for the monster-part slot (and optional extras).
+ * If the family has a thread element (fire / ice / electric / undead), players may use **neutral** parts or that element.
+ * Families that are neutral-only stay `['none']`.
+ */
+function getAllowedPartElementsForFamily(effectFamily) {
+  const req = getRequiredPartElementForFamily(effectFamily);
+  if (req === 'none') return ['none'];
+  return ['none', req];
+}
+
+function describeAllowedPartElementsForBrew(allowed) {
+  if (!allowed.length) return 'a valid monster part for this elixir';
+  if (allowed.length === 1 && allowed[0] === 'none') {
+    return 'a **neutral** monster part (`element`: **none**)';
+  }
+  if (allowed.length === 1) {
+    return `a **${allowed[0]}**-element monster part`;
+  }
+  const bits = allowed.map((e) => (e === 'none' ? '**neutral** (`none`)' : `**${e}**-element`));
+  return bits.join(' or ');
+}
+
+/** **Fairy** / **Mock Fairy** may be used as optional extras on any elixir brew for a small heal on use. */
+const MIXER_UNIVERSAL_FAIRY_KEYS = Object.freeze(new Set(['fairy', 'mock fairy']));
+
+function isMixerUniversalFairyCritterName(name) {
+  return MIXER_UNIVERSAL_FAIRY_KEYS.has(normalizeNameKey(name));
+}
+
+/**
+ * Sum `modifierHearts` applied to the crafted elixir inventory row (consumed in `item.js` before buffs).
+ * **Fairy** +2, **Mock Fairy** +1 per extra used.
+ */
+function mixerFairyHealHeartsFromExtras(extraItems) {
+  let h = 0;
+  for (const it of extraItems || []) {
+    const k = normalizeNameKey(it?.itemName);
+    if (k === 'fairy') h += 2;
+    else if (k === 'mock fairy') h += 1;
+  }
+  return h;
+}
+
+/**
+ * Optional brew extras: labeled **monster parts** (neutral / thread element) **or** labeled **critters**
+ * in the same `effectFamily` as this brew, **or** **Fairy** / **Mock Fairy** (any brew). Same item name
+ * as the main critter is allowed when you have a second copy in inventory (validator no longer blocks by name; finalize enforces quantities).
+ */
+function validateBrewExtraPart({ partItem, partName, effectFamily }) {
+  const { partNames, critterNames, familyByCritterName } = getIngredientLabelSets();
+  const pKey = normalizeNameKey(partName);
+  const partListed = [...partNames].some((n) => n.toLowerCase() === pKey);
+  const critterListed = [...critterNames].some((n) => n.toLowerCase() === pKey);
+
+  if (isExcludedMixerItem(partName)) {
+    return { ok: false, message: `**${partName}** can’t be used in the mixer.` };
+  }
+
+  if (partListed) {
+    const allowed = getAllowedPartElementsForFamily(effectFamily);
+    const actual = resolvePartElementForMixer(partItem, partName);
+    if (!allowed.includes(actual)) {
+      return { ok: false, message: `**${partName}** must be neutral or an element that matches this brew.` };
+    }
+    return { ok: true };
+  }
+
+  if (critterListed) {
+    if (isMixerUniversalFairyCritterName(partName)) {
+      return { ok: true };
+    }
+    const famFromDb = partItem?.effectFamily && String(partItem.effectFamily).trim().toLowerCase();
+    const fam = famFromDb || familyByCritterName.get(pKey);
+    const brewFam = String(effectFamily || '').trim().toLowerCase();
+    if (fam !== brewFam) {
+      return {
+        ok: false,
+        message: `**${partName}** must be a **${brewFam}**-family critter (same family as this elixir), **Fairy** / **Mock Fairy**, or an allowed monster part.`,
+      };
+    }
+    return { ok: true };
+  }
+
+  return { ok: false, message: `**${partName}** is not a labeled mixer part or critter.` };
+}
+
+/** Catalog `itemRarity` is treated as **1–10**; invalid/low values → 1, values above 10 → 10. */
+function normalizeMixerIngredientRarity(itemRarity) {
+  const r = Number(itemRarity);
+  if (!Number.isFinite(r) || r < 1) return 1;
+  return Math.min(10, Math.floor(r));
+}
+
+/**
+ * Mixer potency blend (weights sum to **1**):
+ * - **Peak** (max rarity): best single ingredient — keeps a rarity **10** from being “erased” by one low piece.
+ * - **Bulk** (mean): overall quality of everything in the pot.
+ * - **Weak link** (min rarity): small drag from the worst ingredient (dilution), without dominating the peak.
+ *
+ * `blend = W_MAX*max + W_AVG*avg + W_MIN*min`, then add **synergy** for on-theme **extras** only
+ * (see `countMixerExtraSynergy`). Rounded sum, clamped 1–10 → **1–3** Basic, **4–6** Mid, **7–10** High.
+ */
+const MIXER_POTENCY_WEIGHT_MAX = 0.5;
+const MIXER_POTENCY_WEIGHT_AVG = 0.35;
+const MIXER_POTENCY_WEIGHT_MIN = 0.15;
+
+/** Per optional extra that matches the brew (same effect-family critter, or thread-element part on threaded elixirs). */
+const MIXER_SYNERGY_BONUS_PER_EXTRA = 0.45;
+/** Cap so at most ~1.5 raw score from synergy (e.g. three on-theme extras). */
+const MIXER_SYNERGY_BONUS_MAX = 1.35;
+
+/**
+ * Counts **extras only** that are “on theme” for potency synergy:
+ * - **Critter** listed in labels with the same `effectFamily` as this brew (e.g. Bladed Rhino Beetle extra on Mighty).
+ * - **Monster part** whose resolved element equals the brew’s **thread** element (electric / fire / ice / undead), not neutral-only families.
+ */
+function countMixerExtraSynergy(extraItems, effectFamily) {
+  const items = Array.isArray(extraItems) ? extraItems : [];
+  if (!items.length) return 0;
+  const { partNames, critterNames, familyByCritterName } = getIngredientLabelSets();
+  const brewFam = String(effectFamily || '').trim().toLowerCase();
+  const req = getRequiredPartElementForFamily(effectFamily);
+  let n = 0;
+  for (const item of items) {
+    const name = item?.itemName;
+    if (!name) continue;
+    const key = normalizeNameKey(name);
+    const critListed = [...critterNames].some((c) => c.toLowerCase() === key);
+    if (critListed) {
+      const famFromDb = item?.effectFamily && String(item.effectFamily).trim().toLowerCase();
+      const fam = famFromDb || familyByCritterName.get(key);
+      if (fam === brewFam) {
+        n++;
+      }
+      continue;
+    }
+    const partListed = [...partNames].some((p) => p.toLowerCase() === key);
+    if (partListed && req !== 'none') {
+      const actual = String(resolvePartElementForMixer(item, name) || 'none').toLowerCase();
+      if (actual === req) n++;
+    }
+  }
+  return n;
+}
+
+/**
+ * @param {unknown[]} rarityValues
+ * @param {{ synergyExtraCount?: number }} [options] — from `countMixerExtraSynergy(extraItems, effectFamily)`
+ */
+function mixerBrewOutcomeFromIngredientRarities(rarityValues, options = {}) {
+  const list = Array.isArray(rarityValues) ? rarityValues : [];
+  const normalized = list.map(normalizeMixerIngredientRarity);
+  const synergyExtras = Math.max(0, Math.floor(Number(options.synergyExtraCount) || 0));
+  const synergyRaw = Math.min(MIXER_SYNERGY_BONUS_MAX, synergyExtras * MIXER_SYNERGY_BONUS_PER_EXTRA);
+  if (!normalized.length) {
+    return {
+      elixirLevel: normalizeElixirLevel(1),
+      combinedRounded: 1,
+      ingredientCount: 0,
+      sum: 0,
+      maxR: 1,
+      avgR: 1,
+      minR: 1,
+      synergyExtraCount: synergyExtras,
+      synergyRaw,
+      blendRaw: 0,
+    };
+  }
+  const sum = normalized.reduce((a, b) => a + b, 0);
+  const n = normalized.length;
+  const avgR = sum / n;
+  const maxR = Math.max(...normalized);
+  const minR = Math.min(...normalized);
+  const blendRaw =
+    MIXER_POTENCY_WEIGHT_MAX * maxR +
+    MIXER_POTENCY_WEIGHT_AVG * avgR +
+    MIXER_POTENCY_WEIGHT_MIN * minR;
+  const combinedRaw = blendRaw + synergyRaw;
+  const combinedRounded = Math.min(10, Math.max(1, Math.round(combinedRaw)));
+  let level = 1;
+  if (combinedRounded >= 7) level = 3;
+  else if (combinedRounded >= 4) level = 2;
+  return {
+    elixirLevel: normalizeElixirLevel(level),
+    combinedRounded,
+    ingredientCount: n,
+    sum,
+    maxR,
+    avgR,
+    minR,
+    synergyExtraCount: synergyExtras,
+    synergyRaw,
+    blendRaw,
+  };
+}
+
+function elixirLevelFromMixerIngredientRarities(rarityValues, options) {
+  return mixerBrewOutcomeFromIngredientRarities(rarityValues, options).elixirLevel;
+}
+
+function elixirLevelFromMixerMainPartRarity(itemRarity) {
+  return elixirLevelFromMixerIngredientRarities([itemRarity]);
+}
+
 /** Reverse map: catalog elixir name → effect family key (e.g. `Chilly Elixir` → `chilly`). */
 function elixirNameToEffectFamily(elixirName) {
   const key = normalizeNameKey(elixirName);
@@ -167,9 +368,23 @@ module.exports = {
   elixirNameForCritterFamily,
   elixirNameToEffectFamily,
   getRequiredPartElementForFamily,
+  getAllowedPartElementsForFamily,
   resolvePartElementForMixer,
   getPartElementFromLabels,
   validateBrewPair,
+  validateBrewExtraPart,
+  isMixerUniversalFairyCritterName,
+  mixerFairyHealHeartsFromExtras,
+  elixirLevelFromMixerIngredientRarities,
+  mixerBrewOutcomeFromIngredientRarities,
+  countMixerExtraSynergy,
+  MIXER_POTENCY_WEIGHT_MAX,
+  MIXER_POTENCY_WEIGHT_AVG,
+  MIXER_POTENCY_WEIGHT_MIN,
+  MIXER_SYNERGY_BONUS_PER_EXTRA,
+  MIXER_SYNERGY_BONUS_MAX,
+  elixirLevelFromMixerMainPartRarity,
+  normalizeMixerIngredientRarity,
   isExcludedMixerItem,
   normalizeNameKey,
 };
