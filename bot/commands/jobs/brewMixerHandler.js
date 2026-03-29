@@ -49,40 +49,17 @@ const { createCraftingEmbed } = require('../../embeds/embeds.js');
 const EMBED_BORDER_IMAGE_URL = 'https://storage.googleapis.com/tinglebot/Graphics/border.png';
 const MAX_MIXER_EXTRAS = 3;
 
-/** Player-facing brew math — readable tier, score, rarity breakdown, synergy (Discord field ≤1024). */
+/** Short brew summary for Discord; full math is in `docs/elixir-mixing/README.md` (Mixer brew score). */
 function formatUserFriendlyBrewBlend(mixOutcome, tierWord, brewedElixirLevel) {
   const combined = mixOutcome.combinedRounded;
-  const avgStr = Number(mixOutcome.avgR.toFixed(2));
-  const synRaw = Number(mixOutcome.synergyRaw.toFixed(2));
-  const nIng = mixOutcome.ingredientCount || 0;
-
   const lines = [
     `**${tierWord} elixir** · level **${brewedElixirLevel}**`,
     `**Mixer score:** **${combined}/10** → **${tierWord}** potency`,
     '',
     '*Bands:* **1–3** Basic · **4–6** Mid · **7–10** High',
     '',
-    '**Ingredient rarities** (1–10 each)',
-    `> ★ **Peak** — **${mixOutcome.maxR}** — strongest single ingredient (weighted heavily)`,
-    `> ◆ **Average** — **${avgStr}** — across **${nIng}** ingredient${nIng === 1 ? '' : 's'}`,
-    `> · **Weakest** — **${mixOutcome.minR}** — still pulls the blend toward the middle`,
-    '',
-    '**How the score works:** your **peak** rarity and **average** rarity are blended (peak counts more than a flat mean).',
+    '_Full formula (peak/average, synergy, Fairy floor): `docs/elixir-mixing/README.md` — **Mixer brew score (live)**._',
   ];
-  if (mixOutcome.synergyExtraCount > 0) {
-    lines.push(
-      '',
-      '**Synergy bonus**',
-      `+**${synRaw}** toward the score from **${mixOutcome.synergyExtraCount}** optional extra${mixOutcome.synergyExtraCount === 1 ? '' : 's'} that matched this brew (same effect family or on-theme part).`
-    );
-  } else {
-    lines.push(
-      '',
-      '**Synergy**',
-      'No matching extras this brew — optional on-theme critters or parts can add a small bonus next time.'
-    );
-  }
-
   const raw = lines.join('\n');
   return raw.length > 1024 ? `${raw.slice(0, 1020)}…` : raw;
 }
@@ -819,9 +796,9 @@ async function finalizeBrewMixerSession(interaction, session, critterName, partN
   }
 
   const levelRarityInputs = [
-    critterItem.itemRarity,
-    partItem.itemRarity,
-    ...extraItems.map((p) => p.itemRarity),
+    { itemRarity: critterItem.itemRarity, itemName: critterItem.itemName },
+    { itemRarity: partItem.itemRarity, itemName: partItem.itemName },
+    ...extraItems.map((p) => ({ itemRarity: p.itemRarity, itemName: p.itemName })),
   ];
   const synergyExtraCount = countMixerExtraSynergy(extraItems, session.effectFamily);
   const mixOutcome = mixerBrewOutcomeFromIngredientRarities(levelRarityInputs, { synergyExtraCount });
@@ -844,7 +821,7 @@ async function finalizeBrewMixerSession(interaction, session, critterName, partN
   }
   if (brewPreview.immediateText) {
     brewedElixirExtraFields.push({
-      name: '💚 **__When you drink it__**',
+      name: '💚 **__When you consume it__**',
       value: brewPreview.immediateText.slice(0, 1024),
       inline: false,
     });

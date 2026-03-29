@@ -285,6 +285,17 @@ function normalizeMixerIngredientRarity(itemRarity) {
   return Math.min(10, Math.floor(r));
 }
 
+/** Fairies are catalog **rarity 1** but are high-impact mixer ingredients — floor their **effective** rarity for blend math. */
+const MIXER_FAIRY_MIN_EFFECTIVE_RARITY = 5;
+
+function effectiveMixerIngredientRarity(itemRarity, itemName) {
+  const base = normalizeMixerIngredientRarity(itemRarity);
+  if (itemName != null && isMixerUniversalFairyCritterName(itemName)) {
+    return Math.max(base, MIXER_FAIRY_MIN_EFFECTIVE_RARITY);
+  }
+  return base;
+}
+
 /**
  * Mixer potency blend (**simple “better stuff → better bottle”**):
  * `blendRaw = (2 × maxRarity + meanRarity) / 3` — your **best ingredient counts double** vs the **average**
@@ -332,12 +343,20 @@ function countMixerExtraSynergy(extraItems, effectFamily) {
 }
 
 /**
- * @param {unknown[]} rarityValues
+ * @param {unknown[]} rarityValues — each entry: a **number** (legacy) or `{ itemRarity, itemName }` (Fairy/Mock Fairy get a **min effective rarity** for blend).
  * @param {{ synergyExtraCount?: number }} [options] — from `countMixerExtraSynergy(extraItems, effectFamily)`
  */
 function mixerBrewOutcomeFromIngredientRarities(rarityValues, options = {}) {
   const list = Array.isArray(rarityValues) ? rarityValues : [];
-  const normalized = list.map(normalizeMixerIngredientRarity);
+  const normalized = list.map((entry) => {
+    if (entry != null && typeof entry === 'object' && !Array.isArray(entry)) {
+      const name = entry.itemName;
+      if (name != null && String(name).trim() !== '') {
+        return effectiveMixerIngredientRarity(entry.itemRarity, name);
+      }
+    }
+    return normalizeMixerIngredientRarity(entry);
+  });
   const synergyExtras = Math.max(0, Math.floor(Number(options.synergyExtraCount) || 0));
   const synergyRaw = Math.min(MIXER_SYNERGY_BONUS_MAX, synergyExtras * MIXER_SYNERGY_BONUS_PER_EXTRA);
   if (!normalized.length) {

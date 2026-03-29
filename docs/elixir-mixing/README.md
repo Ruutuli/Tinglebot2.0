@@ -38,10 +38,27 @@ For the **mixer** (future `/mix` / `/brew`), each ingredient’s **`itemRarity` 
 | **Low `R_agg`** | Baseline band: smaller stamina chunks, lower resist %, lower hearty band, fewer **charges** — see live magnitudes in `ELIXIR_EFFECTS` / tier notes in this doc. |
 | **High `R_agg`** | Pushes toward **middle / high** bands in the design tables (chunks, resists, hearts). |
 | **Example** | Critter **2** + part **2** → weak aggregate. Critter **6** + part **8** → much stronger aggregate. |
-| **Fairy** | Current **`itemRarity`** is in the catalog table (live JSON). **Fairy Tonic** heal strength is still **`ELIXIR_EFFECTS`** + `/item` — mixer **`R_agg`** is separate from that heal math until wired. |
+| **Fairy** | Catalog **`itemRarity`** is in the item table; **Fairy Tonic** heal-on-use is **`ELIXIR_EFFECTS`** + `/item`. For **mixer tier math**, Fairies get a **minimum effective rarity** — see [Mixer brew score (live)](#mixer-brew-score-live). |
 | **Chuchu Egg** | **Never** a mixer part — hatch / pet + 100-jelly compression only. Use **Chuchu Jelly** as the neutral part. |
 
-**Today:** Witch crafting and `/item` use fixed recipes; **`itemRarity`** already affects loot weights, explore rolls, etc. **When the mixer exists**, wire **`R_agg`** → output tier / charges / magnitudes so **rarity 2 vs 8** ingredients produce clearly different elixir strength.
+**Today:** Witch crafting and non-mixer `/item` still use fixed recipes; **`itemRarity`** also affects loot weights and explore rolls. Elixir **potency tier** from the **mixer** follows [Mixer brew score (live)](#mixer-brew-score-live). Older **`R_agg`** design targets for future stat bands remain under [Future rarity tiers](#future-rarity-tiers-r_agg).
+
+### Mixer brew score (live)
+
+Implemented in **`bot/modules/elixirBrewModule.js`** (`mixerBrewOutcomeFromIngredientRarities`, `countMixerExtraSynergy`, `effectiveMixerIngredientRarity`). Constants: **`MIXER_SYNERGY_BONUS_PER_EXTRA`** `0.45`, **`MIXER_SYNERGY_BONUS_MAX`** `1.35`, Fairy floor **`5`**.
+
+| | |
+| --- | --- |
+| **Pot** | One **critter** + one **monster part** + up to **three** optional extras |
+| **Normalize** | Each ingredient’s **`itemRarity`** → clamp **1–10** (invalid/low → 1, above 10 → 10) |
+| **Fairy / Mock Fairy** | Effective rarity for blend is **`max(catalog, 5)`** — catalog may still list **1** |
+| **Peak / average / weakest** | **Max**, **mean**, and **min** of the normalized rarities (all ingredients in the pot) |
+| **Blend** | `blendRaw = (2 × peak + average) / 3` — best single ingredient counts more than a flat mean |
+| **Synergy** | **`+0.45`** per optional extra that matches (same **effectFamily** critter, or on-theme monster part on threaded elixirs), capped at **`+1.35`** (three extras) |
+| **Score** | `round(blendRaw + synergyRaw)`, clamp **1–10** |
+| **Tier → `elixirLevel`** | **1–3** Basic (**1**), **4–6** Mid (**2**), **7–10** High (**3**) |
+
+The in-Discord brew embed only shows **tier**, **numeric score**, and **bands**; this section is the full breakdown.
 
 ---
 

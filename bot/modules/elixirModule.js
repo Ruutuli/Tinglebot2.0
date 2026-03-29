@@ -290,7 +290,7 @@ function appendScaledBuffStyleLines(scaled, buffLines) {
 }
 
 /**
- * Brew result embed: predicted buffs vs on-drink effects (future tense).
+ * Brew result embed: predicted buffs vs immediate effects on consumption (future tense).
  * @returns {{ buffText: string | null, immediateText: string | null }}
  */
 function getBrewPreviewForElixir(elixirName, level, fairyHealHearts = 0) {
@@ -328,7 +328,7 @@ function getBrewPreviewForElixir(elixirName, level, fairyHealHearts = 0) {
   }
 
   if (fairyHealHearts > 0) {
-    immediateLines.push(`❤️ **+${fairyHealHearts}** hearts when drunk (Fairy mix-in)`);
+    immediateLines.push(`❤️ **+${fairyHealHearts}** hearts when consumed (Fairy mix-in)`);
   }
 
   return {
