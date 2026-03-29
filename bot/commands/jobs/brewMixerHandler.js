@@ -32,6 +32,7 @@ const {
   MIXER_SYNERGY_BONUS_PER_EXTRA,
   MIXER_SYNERGY_BONUS_MAX,
   normalizeMixerIngredientRarity,
+  effectiveMixerIngredientRarity,
   elixirNameToEffectFamily,
   normalizeNameKey,
   getAllowedPartElementsForFamily,
@@ -60,6 +61,83 @@ function formatUserFriendlyBrewBlend(mixOutcome, tierWord, brewedElixirLevel) {
   return raw.length > 1024 ? `${raw.slice(0, 1020)}…` : raw;
 }
 
+/** Catalog rarity vs effective rarity when Fairy / Mock Fairy floor applies. */
+function brewIngredientRarityText(item) {
+  if (!item?.itemName) return '';
+  const cat = normalizeMixerIngredientRarity(item.itemRarity);
+  const eff = effectiveMixerIngredientRarity(item.itemRarity, item.itemName);
+  let line = `**${item.itemName}** — catalog **${cat}**`;
+  if (eff !== cat) {
+    line += ` → **${eff}** for blend (Fairy / Mock Fairy floor)`;
+  }
+  return line;
+}
+
+/**
+ * Ephemeral “brew complete” breakdown: what went in, how blend + synergy → score.
+ * Field values capped for Discord (1024).
+ */
+function buildBrewCompleteEphemeralFields({
+  mixOutcome,
+  tierWord,
+  brewedElixirLevel,
+  critterItem,
+  partItem,
+  extraItems,
+}) {
+  const tierBlock = formatUserFriendlyBrewBlend(mixOutcome, tierWord, brewedElixirLevel);
+  const nIng = mixOutcome.ingredientCount || 0;
+  const avgStr = Number(mixOutcome.avgR.toFixed(2));
+  const blendStr = Number(mixOutcome.blendRaw.toFixed(2));
+  const synStr = Number(mixOutcome.synergyRaw.toFixed(2));
+
+  const potLines = [
+    `**Critter:** ${brewIngredientRarityText(critterItem)}`,
+    `**Part:** ${brewIngredientRarityText(partItem)}`,
+  ];
+  if (Array.isArray(extraItems) && extraItems.length) {
+    potLines.push(
+      `**Extras:**\n${extraItems.map((p) => `• ${brewIngredientRarityText(p)}`).join('\n')}`
+    );
+  } else {
+    potLines.push('**Extras:** none');
+  }
+  let potValue = potLines.join('\n');
+  if (potValue.length > 1024) potValue = `${potValue.slice(0, 1020)}…`;
+
+  const synExplain =
+    mixOutcome.synergyExtraCount > 0
+      ? `**Synergy:** +**${synStr}** from **${mixOutcome.synergyExtraCount}** on-theme extra(s) (same effect family critter, or matching thread-element part). Capped at **+${MIXER_SYNERGY_BONUS_MAX}**.`
+      : `**Synergy:** no matching extras this brew — on-theme critters/parts can add up to **+${MIXER_SYNERGY_BONUS_MAX}** next time.`;
+
+  let mathValue = [
+    `★ **Peak** **${mixOutcome.maxR}** · ◆ **Average** **${avgStr}** (${nIng} ingredients) · **Weakest** **${mixOutcome.minR}**`,
+    `**Blend:** (2×peak + average) ÷ 3 → **${blendStr}**`,
+    synExplain,
+    `**Final:** **${blendStr}** + **${synStr}** → rounded **${mixOutcome.combinedRounded}/10** → **${tierWord}**`,
+    `**Bands:** 1–3 Basic · 4–6 Mid · 7–10 High`,
+  ].join('\n');
+  if (mathValue.length > 1024) mathValue = `${mathValue.slice(0, 1020)}…`;
+
+  return [
+    {
+      name: '🧪 Tier & score',
+      value: tierBlock.slice(0, 1024),
+      inline: false,
+    },
+    {
+      name: '🧺 What went in the pot',
+      value: potValue,
+      inline: false,
+    },
+    {
+      name: '📐 Why this tier',
+      value: mathValue,
+      inline: false,
+    },
+  ];
+}
+
 /** After `deferUpdate` on a brew menu: clear components and show text (errors). Uses `editReply` first (correct after defer). */
 async function stripBrewMixerEphemeralUi(interaction, line) {
   const payload = { content: line, embeds: [], components: [] };
@@ -75,13 +153,18 @@ async function stripBrewMixerEphemeralUi(interaction, line) {
 }
 
 /** Replace mixer UI with a done state: success embed, no buttons/selects. */
-async function completeBrewMixerEphemeralUi(interaction, { characterName, itemName }) {
+async function completeBrewMixerEphemeralUi(interaction, { characterName, itemName, brewFields }) {
   const embed = new EmbedBuilder()
     .setTitle('✅ Brew complete')
     .setDescription(
-      `**${characterName}** brewed **${itemName}**.\n\n_See the public craft card in this channel._`
+      `**${characterName}** brewed **${itemName}**.\n\n_See the **public craft card** below in this channel for the full recipe card._`
     )
     .setColor(0x008b8b);
+  if (Array.isArray(brewFields) && brewFields.length) {
+    for (const f of brewFields) {
+      if (f?.name && f?.value) embed.addFields(f);
+    }
+  }
   const payload = { content: '', embeds: [embed], components: [] };
   try {
     await interaction.editReply(payload);
@@ -915,9 +998,18 @@ async function finalizeBrewMixerSession(interaction, session, critterName, partN
     }
   }
 
+  const brewCompleteFields = buildBrewCompleteEphemeralFields({
+    mixOutcome,
+    tierWord,
+    brewedElixirLevel,
+    critterItem,
+    partItem,
+    extraItems,
+  });
   await completeBrewMixerEphemeralUi(interaction, {
     characterName: character.name,
     itemName: outputItem.itemName,
+    brewFields: brewCompleteFields,
   });
   await interaction.followUp({ embeds: [brewEmbed], ephemeral: false });
 }

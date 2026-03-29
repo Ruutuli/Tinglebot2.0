@@ -438,6 +438,7 @@ module.exports = {
   MIXER_SYNERGY_BONUS_MAX,
   elixirLevelFromMixerMainPartRarity,
   normalizeMixerIngredientRarity,
+  effectiveMixerIngredientRarity,
   isExcludedMixerItem,
   normalizeNameKey,
 };
