@@ -1,6 +1,6 @@
 # Elixirs — simple player guide
 
-This is for **members of the Zelda RP community using Tinglebot in Discord** — not a separate video game. If anything here disagrees with what the bot replies in your server, **trust the bot** and ask staff.
+This is for **members of the Zelda RP community using Tinglebot in Discord** — how elixirs work in your server’s bot. When in doubt, **trust the bot** and ask staff.
 
 ---
 
@@ -8,9 +8,9 @@ This is for **members of the Zelda RP community using Tinglebot in Discord** —
 
 1. **Get** elixirs from loot, shops, RP rewards, trades, or by **brewing** with the bot (if your character is a **Witch** and uses **`/crafting brew`**).
 2. **Use / consume** them with **`/item`** (pick your character and the elixir from the list).
-3. **Only one elixir buff active at a time** — buff effects **do not stack**. Wait until the current buff is **used up** or cleared before relying on a different elixir buff (the bot may also block overlapping uses — follow in-bot messages).
-4. **Inventory** is different: you can own **many bottles** and they can sit in **separate stacks** (different **Basic / Mid / High**, different **Fairy** mix-ins, different brews) — that’s **not** the same as stacking buffs.
-5. Many elixirs give a **buff that lasts until the bot “uses it up”** on a qualifying command (travel, combat, gather, etc.) — not a real-world countdown timer.
+3. **Only one elixir buff active at a time.** Wait until the current buff is **used up** or cleared before relying on a different elixir buff (the bot may also block overlapping uses — follow in-bot messages).
+4. **Inventory** holds **many bottles** in **separate stacks** (different **Basic / Mid / High**, **Fairy** mix-ins, or brews). **Only one** elixir **buff** is active on your character at a time.
+5. Many elixirs give a **buff that lasts until the bot “uses it up”** on a qualifying command (travel, combat, gather, etc.).
 6. **Stronger bottles** use **Basic / Mid / High** tiers — your inventory and autocomplete show which stack you’re holding.
 7. When **brewing**, ingredients use **effect family** (critters) and **element** (parts); **rarity** and **extra on-theme ingredients** drive the **tier** — **more (good) stuff in the pot → better elixir**.
 
@@ -22,7 +22,7 @@ This is for **members of the Zelda RP community using Tinglebot in Discord** —
 
 ### Fixed tier ladders (exact numbers per tier)
 
-These elixirs use **explicit Basic / Mid / High values** wired in the bot — **not** the **×1.15 / ×1.3** rule used for resist/stat buffs below.
+These elixirs use **fixed numbers** per tier (see the table). **Resist/stat buffs** use **×1.15** (Mid) and **×1.3** (High) on the base stats (see below).
 
 | Elixir | Basic | Mid | High |
 | --- | ---: | ---: | ---: |
@@ -31,15 +31,15 @@ These elixirs use **explicit Basic / Mid / High values** wired in the bot — **
 | **Enduring Elixir** | +**5** stamina chunks to max **and** current | +**7** | +**9** |
 | **Fairy Tonic** | Heal cap ≈ **¼** of max hearts (at least **1** heart) | cap ≈ **½** of max (at least **1**) | heal budget = **max hearts** (so you can refill **all** missing HP) |
 
-**Fairy Tonic:** Uses **max hearts** when you use **`/item`**. The bot computes a **heal budget** per tier (quarter / half / full max), then heals **`min(budget, missing hearts)`** — never above your real max. **Fairy** / **Mock Fairy** on the bottle add **extra** hearts on top; that is **separate** from tier.
+**Fairy Tonic:** Uses **max hearts** when you use **`/item`**. The bot computes a **heal budget** per tier (quarter / half / full max), then heals **`min(budget, missing hearts)`** up to your **max hearts**. **Fairy** / **Mock Fairy** on the bottle add **extra** hearts on top of tier.
 
-**Hearty, Fairy Tonic, and Enduring** are one-shot on **`/item`** (no lingering elixir buff). **Energizing** uses the chunk ladder above **and** also sets an **active buff** until the bot consumes it (see §B).
+**Hearty, Fairy Tonic, and Enduring** are **one-shot** when you use **`/item`**. **Energizing** uses the chunk ladder above **and** sets an **active buff** until the bot consumes it (see §B).
 
-**Stamina:** refill and extra max use **whole integer chunks**; **5 chunks = 1 wheel** in bot math (same convention as `ELIXIR_EFFECTS` / docs).
+**Stamina:** refill and extra max use **whole integer chunks**; **5 chunks = 1 wheel** in bot math.
 
 ### Buff elixirs (resists, attack, defense, speed, stealth, etc.)
 
-**Chilly, Spicy, Electro, Bright, Sticky, Mighty, Tough, Sneaky, Hasty**, and similar use the bot’s **base** (Basic) stats, then **Mid = ×1.15** and **High = ×1.3** on each effect number, **rounded** to two decimals. **Sticky** scales both **water resistance** and **plus boost**. **Sneaky** scales **stealth** and **flee**. **Hearty / Energizing / Enduring / Fairy Tonic** use the **fixed ladders** above instead of this multiplier for their main effect.
+**Chilly, Spicy, Electro, Bright, Sticky, Mighty, Tough, Sneaky, Hasty**, and similar use the bot’s **base** (Basic) stats, then **Mid = ×1.15** and **High = ×1.3** on each effect number, **rounded** to two decimals. **Sticky** scales both **water resistance** and **plus boost**. **Sneaky** scales **stealth** and **flee**. **Hearty / Energizing / Enduring / Fairy Tonic** use the **fixed ladders** in the table above for their main effect.
 
 ---
 
@@ -47,52 +47,52 @@ These elixirs use **explicit Basic / Mid / High values** wired in the bot — **
 
 | Command | What it does |
 | --- | --- |
-| **`/item`** | **Use / consume** an item. This is how you apply an elixir in Discord. Fill in **character name** and **item name** (use autocomplete). For elixirs, you can only use **quantity 1** at a time. |
-| **`/crafting brew`** | **How Witches make elixirs** — step-by-step **mixer** brew. You pick the elixir line, then **menus** (critter → monster part → optional extras like more parts or **Fairy** / **Mock Fairy**). Ingredients and stamina are spent when the brew **finishes**; if you **cancel** mid-flow, **nothing** is taken. |
-| **`/crafting recipe`** | **Fixed-recipe crafting** for characters with the right **job + item flags** (Cook, Blacksmith, Weaver, etc.). **Witches do not use this to make elixirs** — elixir crafting for Witches is **`/crafting brew`** only. Other jobs use **`/crafting recipe`** for their own catalog items as usual. |
+| **`/item`** | **Use / consume** an item. This is how you apply an elixir in Discord. Fill in **character name** and **item name** (use autocomplete). For elixirs, use **quantity 1** per use. |
+| **`/crafting brew`** | **How Witches make elixirs** — step-by-step **mixer** brew. You pick the elixir line, then **menus** (critter → monster part → optional extras like more parts or **Fairy** / **Mock Fairy**). Ingredients and stamina are spent when the brew **finishes**; **cancel** mid-flow and your ingredients stay put. |
+| **`/crafting recipe`** | **Fixed-recipe crafting** for characters with the right **job + item flags** (Cook, Blacksmith, Weaver, etc.). **Witches** make elixirs with **`/crafting brew`**; other jobs use **`/crafting recipe`** for their catalog items. |
 
 **Where you can use them**
 
 - **`/item`** only works in **town hall** channels, the **community board** channel, or **threads inside** those places (plus any staff **test** channel the bot allows).
-- **`/crafting`** (including **brew**) is meant for your character’s **village town hall** channel (same idea as other crafting — if the bot says “wrong channel,” move to the place it names).
+- **`/crafting`** (including **brew**) is meant for your character’s **village town hall** channel (same idea as other crafting — use the channel the bot asks for).
 
-Always use **autocomplete** for character and item names so you don’t typo.
+Use **autocomplete** for character and item names so they match what the bot expects.
 
 ---
 
 ## Picking the right bottle in `/item` (Basic / Mid / High)
 
-Your **inventory** can hold multiple elixir stacks at once — they **don’t merge** into one mega-stack if they were brewed differently (different **tier**, **Fairy** / **Mock Fairy** heal add-on, or separate brews). Autocomplete lines show which stack you’re targeting, for example:
+Your **inventory** can hold multiple elixir stacks at once — each **tier**, **Fairy** / **Mock Fairy** add-on, or brew stays its **own stack**. Autocomplete lines show which stack you’re targeting, for example:
 
 - `Hearty Elixir [Basic]`
 - `Mighty Elixir [Mid]`
 - `Chilly Elixir [High|m2]` (example: extra fairy heal tracked as `m` — pick the line that matches **your** stack)
 
-**Rule of thumb:** the tag in brackets is the **tier** of that **specific** stack. Pick the line that matches what you own. The bot uses **one stack at a time** when you use **`/item`** and tends to use **lower tiers first** if you don’t pick a line — so if you care about potency, **always choose the exact autocomplete line** for the stack you want.
+**Rule of thumb:** the tag in brackets is the **tier** of that **specific** stack. Pick the line that matches what you own. The bot uses **one stack at a time** when you use **`/item`** and tends to use **lower tiers first** unless you pick a specific line — for the bottle you want, **choose the exact autocomplete line** for that stack.
 
-**Reminder:** many stacks in inventory ≠ many buffs stacked. **Only one active elixir buff at a time** on your character (see below).
+**Reminder:** **Only one active elixir buff at a time** on your character, no matter how many bottles you carry (see below).
 
 ---
 
 ## What happens when you consume one?
 
-**One buff at a time:** The bot tracks **one** active elixir buff on your character. You **cannot** stack multiple elixir combat buffs (e.g. Mighty + Tough at once). Plan around **one active effect** until it’s consumed or RP/staff say otherwise.
+**One buff at a time:** The bot tracks **one** active elixir buff on your character (e.g. one combat-style buff at a time — plan around **one active effect** until it’s consumed or RP/staff say otherwise).
 
 Roughly three cases:
 
 ### A) Instant “do the thing” uses
 
-Some bottles apply **right away** and **do not** leave a long-term buff in the same way as resist elixirs. Treat these as **one-shot** when you use **`/item`**:
+Some bottles apply **right away** as **one-shot** effects when you use **`/item`**:
 
 - **Hearty Elixir** — extra temporary hearts (tier: **Basic +1 / Mid +2 / High +3**).
-- **Fairy Tonic** — heals **missing** hearts only (never above your **real** max). Tier sets a **heal budget** from your **max hearts**: **Basic** about **¼** of max · **Mid** about **½** · **High** up to **all** missing hearts. **Fairy / Mock Fairy** mix-ins on the bottle add **extra** hearts on top (see brewing below).
+- **Fairy Tonic** — heals **missing** hearts up to your **max hearts**. Tier sets a **heal budget** from **max hearts**: **Basic** about **¼** of max · **Mid** about **½** · **High** up to **all** missing hearts. **Fairy / Mock Fairy** mix-ins on the bottle add **extra** hearts on top (see brewing below).
 - **Enduring Elixir** — adds **extra max stamina** and **current** stamina in **chunks** by tier: **Basic +5 / Mid +7 / High +9** (stamina is counted in **chunks**; **5 chunks = 1 wheel** in bot math).
 
 ### B) Buffs that last until the bot consumes them
 
-Most other elixirs set an **active buff**. It does **not** run out after 10 minutes in real time. It goes away when a **command or activity the bot cares about** **consumes** that buff (travel, combat, gather, loot, etc., depending on the elixir).
+Most other elixirs set an **active buff** that lasts until a **command or activity** **consumes** it (travel, combat, gather, loot, etc., depending on the elixir).
 
-Below: **what it does in plain English**, **environmental / hazard angles** (where the bot has a resist or explore hook), and **where the bot tends to use it** (combat, travel, gather, etc.). Exact triggers are in the bot logic — use this as a **cheat sheet**, not a legal contract.
+Below: **what it does in plain English**, **environmental / hazard angles** (where the bot has a resist or explore hook), and **where the bot tends to use it** (combat, travel, gather, etc.). Exact triggers live in the bot — treat this as a **quick reference**.
 
 | Elixir | Plain English | Environmental / hazards (where relevant) | Where the bot uses it (examples) |
 | --- | --- | --- | --- |
@@ -106,19 +106,19 @@ Below: **what it does in plain English**, **environmental / hazard angles** (whe
 | **Mighty Elixir** | **Attack** up | — | **Combat**, **help wanted**, **loot**, **raid** |
 | **Tough Elixir** | **Defense** up | — | **Combat**, **help wanted**, **loot**, **raid** |
 | **Sneaky Elixir** | **Stealth** + **flee** | — | **Gather**, **loot**, **travel** |
-| **Hearty / Fairy Tonic / Enduring** | See section A — instant, not a long buff like the rows above | — | Applied on **`/item`**; stats update in the bot |
+| **Hearty / Fairy Tonic / Enduring** | See section A — **one-shot** on **`/item`** | — | Applied on **`/item`**; stats update in the bot |
 
-**Earth** and **wind** hazards don’t have a dedicated elixir row in the bot right now — ask staff if you’re unsure.
+**Earth** and **wind** hazards: ask staff which elixirs or rules apply in your server.
 
 ### C) Optional: Fairy / Mock Fairy in brewing
 
-If the mixer lets you add **Fairy** or **Mock Fairy**, that can add **bonus hearts when you consume** the finished elixir (on top of the elixir’s normal effect). **Fairy** and **Mock Fairy** also count as **stronger** than a plain “rarity 1” for **mixer tier** math (see **Rarity, extra ingredients, and Basic / Mid / High** below).
+If the mixer lets you add **Fairy** or **Mock Fairy**, that can add **bonus hearts when you consume** the finished elixir (on top of the elixir’s normal effect). **Fairy** and **Mock Fairy** count as at least **rarity 5** for **mixer tier** math (see **Rarity, extra ingredients, and Basic / Mid / High** below).
 
 ---
 
 ## Brewing (`/crafting brew`) — step by step
 
-**Witches:** use **`/crafting brew`** for elixirs. Do **not** expect **`/crafting recipe`** to be your elixir pipeline — that subcommand is for **other jobs** and fixed recipes; **mixer elixirs** are **`brew`** only.
+**Witches:** use **`/crafting brew`** for elixirs. **`/crafting recipe`** is for **other jobs**’ fixed recipes; mixer elixirs use **`brew`**.
 
 1. Your character must be a **Witch** (or whatever your server allows for this command).
 2. Run **`/crafting brew`**, choose **character** and the **elixir** you want to make (autocomplete).
@@ -127,23 +127,23 @@ If the mixer lets you add **Fairy** or **Mock Fairy**, that can add **bonus hear
    - Pick a **monster part** (often neutral **Chuchu Jelly**; some elixirs need a **colored** jelly or specific element part — the bot will tell you).
    - Optionally add **extras** (more parts or same-family critters, up to the limit the bot shows).
    - **Fairy / Mock Fairy** may be offered as an extra for bonus heal-on-use.
-4. **Cancel** anytime before completion — **no refund drama** because nothing was consumed yet.
+4. **Cancel** anytime before completion — ingredients and stamina spend **when the brew finishes**.
 5. When it **completes**, you get the elixir in inventory with a **tier** (**Basic / Mid / High**) from the mixer (the bot shows your **mixer score** on the brew result).
 
-**Note:** **Chuchu Egg** is **not** a mixer ingredient — use **Chuchu Jelly** (and similar) instead.
+**Note:** Put **Chuchu Jelly** (and similar) in the mixer; **Chuchu Egg** is used elsewhere (e.g. hatch / pet).
 
 ---
 
 ## Labels, elements, and why the bot cares
 
-Mixer ingredients are not random loot with pretty names — in the database, items are tagged so the bot knows how they behave in the pot.
+In the database, mixer ingredients are **tagged** so the bot knows how they behave in the pot.
 
 | Kind of ingredient | What’s labeled | What it does for you |
 | --- | --- | --- |
-| **Critters** (bugs, lizards, fairies, etc.) | **Effect family** | Decides **which elixir line** you’re brewing toward (e.g. chilly, mighty, hearty). Wrong family → wrong bottle or the bot says no. |
-| **Monster parts** (horns, jellies, tails, etc.) | **Element** | Decides **which parts are allowed** for that brew. Many elixirs allow **neutral** parts; some need a **thread** element (e.g. fire for Chilly, ice for Spicy, electric for Electro, undead-adjacent for Bright). The bot only accepts parts whose **element** matches the rules for that elixir. |
+| **Critters** (bugs, lizards, fairies, etc.) | **Effect family** | Pick a critter whose **family** matches the elixir line (e.g. chilly, mighty, hearty). |
+| **Monster parts** (horns, jellies, tails, etc.) | **Element** | Pick parts **allowed** for that brew: often **neutral**; some lines need a **thread** element (e.g. fire for Chilly, ice for Spicy, electric for Electro, undead-adjacent for Bright). |
 
-So: **family** on the critter + **element** on the part (when it matters) control **whether the mix is legal**. If something matches Zelda lore but fails in the bot, it’s usually because that catalog row is missing the right **effect family** or **element** tag — that’s a staff/database fix, not something you can fix in Discord.
+**Family** on the critter + **element** on the part (when it matters) make a **legal** mix. Staff can add or adjust **effect family** / **element** tags on catalog rows so ingredients show up correctly in the mixer.
 
 ---
 
@@ -154,8 +154,8 @@ So: **family** on the critter + **element** on the part (when it matters) contro
 **Plain rules:**
 
 1. **Higher rarity = stronger contribution.** Your **best** single ingredient counts **extra** compared to the **average** of everything — so one amazing drop can carry a brew, but a pile of weak stuff drags the average down.
-2. **Fairy / Mock Fairy** are very useful in RP, so for **tier** math the bot treats them as at least **rarity 5** even if the catalog row says **1**. (Heal-on-use from Fairies is **separate** — that’s the **mix-in** hearts on the inventory stack.)
-3. **More valid ingredients usually means a better elixir**, because you add more rarity into the mix **and** you can unlock **synergy** (see below). You still have to follow the bot’s menus: you can’t throw random junk in; extras must be **allowed** (same-family critters, matching parts, or Fairy / Mock Fairy where offered).
+2. **Fairy / Mock Fairy** are very useful in RP, so for **tier** math the bot treats them as at least **rarity 5**. **Mix-in** hearts from Fairies are tracked **separately** on the inventory stack.
+3. **More valid ingredients usually means a better elixir**, because you add more rarity into the mix **and** you can unlock **synergy** (see below). Extras must be **allowed** by the bot’s menus (same-family critters, matching parts, or Fairy / Mock Fairy where offered).
 4. **Synergy (extras that match the theme):** optional extras that are **on-brand** for the brew — for example, **another critter from the same effect family**, or (on elixirs that use a **thread element**) **another part with that element** — add a **small bonus** toward a higher tier. The bot counts those and folds them into the score.
 
 **Tier bands (after the bot combines rarity + synergy into one score from 1–10):**
@@ -164,25 +164,24 @@ So: **family** on the critter + **element** on the part (when it matters) contro
 - **4–6** → **Mid**  
 - **7–10** → **High**  
 
-You’ll see the tier on the crafted item; you don’t need to track the number yourself. **Fairy / Mock Fairy** extras also add **bonus heal when you consume** the bottle (separate from tier), as the brew message explains.
+You’ll see the tier on the crafted item. **Fairy / Mock Fairy** extras also add **bonus heal when you consume** the bottle on top of tier.
 
-You don’t need to do math by hand — just remember: **rarer parts, smart extras, on-theme ingredients, and Fairies where allowed → better bottles.**
+Remember: **rarer parts, smart extras, on-theme ingredients, and Fairies where allowed → better bottles.**
 
 ---
 
-## Quick mistakes to avoid
+## Quick reminders
 
-- Using **`/item`** in a random channel → bot will say **wrong channel**; move to town hall or community board.
-- Typing item names by hand → use **autocomplete**.
-- Trying to chug **more than one elixir per `/item`** → set **quantity** to **1** for elixirs.
-- Expecting **multiple elixir buffs** at once — **only one active buff**; inventory quantity is **not** the same thing.
-- Using **`/crafting recipe`** as a **Witch** to mass-produce elixirs — use **`/crafting brew`** for mixer elixirs.
-- Expecting **Chilly** to help in **water** or **blight** — that’s **Sticky** / **Bright**, not Chilly.
-- Expecting **Bright** to replace **Chilly** for fire — **Chilly** is the heat/fire one.
-- Thinking **every** bug or horn counts in the mixer — only items the bot recognizes as labeled **critters** or **parts** count; if the bot rejects an item, it’s not set up as a mixer ingredient.
+- Use **`/item`** in **town hall**, **community board**, or **threads** there (or staff **test** channels the bot allows).
+- Prefer **autocomplete** for character and item names.
+- Use **quantity 1** per **`/item`** for elixirs.
+- **One active elixir buff** at a time; lots of bottles in inventory is fine.
+- **Witches:** mixer elixirs come from **`/crafting brew`**.
+- **Chilly** = heat / fire · **Sticky** = water · **Bright** = blight.
+- Use **labeled** mixer **critters** and **parts** from the menus; ask staff if you’re unsure about a specific item.
 
 ---
 
 ## Need more detail?
 
-Staff keep technical mixer notes in the repo. If anything disagrees with the bot, **trust the bot** and ask staff.
+Staff keep technical mixer notes in the repo. When in doubt, **trust the bot** and ask staff.
