@@ -171,6 +171,34 @@ function isElixirItemName(name) {
 }
 
 /**
+ * Persisted buff numbers: integer hearts/stamina keys stay whole; other numeric stats → nearest **0.25**.
+ * Matches Discord display (`formatElixirStatDisplay`) and gameplay math.
+ */
+function roundElixirEffectNumberForStorage(key, value) {
+  const x = Number(value);
+  if (!Number.isFinite(x)) return value;
+  if (key === 'healHearts') {
+    return Math.max(0, Math.round(x));
+  }
+  if (key === 'extraHearts' || key === 'staminaBoost' || key === 'staminaRecovery') {
+    return Math.max(1, Math.round(x));
+  }
+  return Math.round(x * 4) / 4;
+}
+
+/** Apply `roundElixirEffectNumberForStorage` to every finite number on a scaled effects object. */
+function normalizeScaledElixirEffects(effects) {
+  if (!effects || typeof effects !== 'object') return effects;
+  const out = { ...effects };
+  for (const [k, v] of Object.entries(out)) {
+    if (typeof v === 'number' && Number.isFinite(v)) {
+      out[k] = roundElixirEffectNumberForStorage(k, v);
+    }
+  }
+  return out;
+}
+
+/**
  * Scale catalog effect numbers by elixir tier.
  * @param {string} elixirName - Canonical elixir item name (e.g. `'Hearty Elixir'`).
  * @param {Record<string, number>} baseEffects - From ELIXIR_EFFECTS[name].effects
@@ -182,51 +210,48 @@ function scaleElixirEffects(elixirName, baseEffects, level, options = {}) {
   const lv = normalizeElixirLevel(level);
   const idx = lv - 1;
   const base = baseEffects || {};
+  const resourceSpec = RESOURCE_ELIXIR_LEVEL_STATS[key];
+
+  let result;
 
   if (key === 'Fairy Tonic') {
     const maxH = options.maxHeartsForFairyTonic;
     if (typeof maxH === 'number' && Number.isFinite(maxH) && maxH > 0) {
-      return {
+      result = {
         ...base,
         healHearts: getFairyTonicHealBudget(maxH, lv),
       };
+    } else {
+      result = { ...base, healHearts: 0 };
     }
-    return { ...base, healHearts: 0 };
-  }
-
-  const resourceSpec = RESOURCE_ELIXIR_LEVEL_STATS[key];
-
-  if (resourceSpec) {
-    const out = { ...base };
+  } else if (resourceSpec) {
+    result = { ...base };
     for (const [stat, tiers] of Object.entries(resourceSpec)) {
       if (Array.isArray(tiers) && typeof tiers[idx] === 'number' && Number.isFinite(tiers[idx])) {
-        out[stat] = tiers[idx];
+        result[stat] = tiers[idx];
       }
     }
-    return out;
-  }
-
-  if (lv === 1) {
-    return { ...base };
-  }
-
-  const factor = ELIXIR_LEVEL_FACTORS[lv] || 1;
-  const out = {};
-  for (const [k, val] of Object.entries(base)) {
-    if (typeof val === 'number' && Number.isFinite(val)) {
-      if (k === 'extraHearts' || k === 'staminaBoost' || k === 'staminaRecovery') {
-        out[k] = Math.max(1, Math.round(val * factor));
-      } else {
-        out[k] = Math.round(val * factor * 100) / 100;
+  } else if (lv === 1) {
+    result = { ...base };
+  } else {
+    const factor = ELIXIR_LEVEL_FACTORS[lv] || 1;
+    result = {};
+    for (const [k, val] of Object.entries(base)) {
+      if (typeof val === 'number' && Number.isFinite(val)) {
+        if (k === 'extraHearts' || k === 'staminaBoost' || k === 'staminaRecovery') {
+          result[k] = Math.max(1, Math.round(val * factor));
+        } else {
+          result[k] = Math.round(val * factor * 100) / 100;
+        }
       }
     }
   }
-  return out;
+
+  return normalizeScaledElixirEffects(result);
 }
 
 /**
- * Display-only: round elixir buff numbers to the nearest **0.25** (quarter steps: 1.5, 1.75, 2, …)
- * so values like 1.725 / 1.73 show as **×1.75** instead of long decimals. Combat still uses full precision in DB.
+ * Format elixir buff numbers for display — same **quarter** grid as stored effects (`scaleElixirEffects` → `normalizeScaledElixirEffects`).
  */
 function formatElixirStatDisplay(n) {
   const x = Number(n);
