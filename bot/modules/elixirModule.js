@@ -20,8 +20,8 @@ const ELIXIR_LEVEL_NAMES = { 1: 'Basic', 2: 'Mid', 3: 'High' };
 const RESOURCE_ELIXIR_LEVEL_STATS = Object.freeze({
   /** Tuned for ~3 starting hearts — strong but not runaway healing. */
   'Hearty Elixir': { extraHearts: [1, 2, 3] },
-  'Enduring Elixir': { staminaBoost: [1, 2, 3] },
-  'Energizing Elixir': { staminaRecovery: [2, 4, 6] },
+  'Enduring Elixir': { staminaBoost: [5, 7, 9] },
+  'Energizing Elixir': { staminaRecovery: [5, 7, 9] },
   /** Restore only, capped at max — see `item.js` Fairy Tonic branch. */
   'Fairy Tonic': { healHearts: [2, 3, 4] },
 });
@@ -79,16 +79,16 @@ const ELIXIR_EFFECTS = {
   },
   'Enduring Elixir': {
     type: 'enduring',
-    description: 'Extends max stamina: **Basic** +1 / **Mid** +2 / **High** +3 (temporary segments).',
+    description: 'Extends max stamina: **Basic** +5 / **Mid** +7 / **High** +9 (temporary segments).',
     effects: {
-      staminaBoost: 1
+      staminaBoost: 5
     }
   },
   'Energizing Elixir': {
     type: 'energizing',
-    description: 'Restores current stamina: **Basic** +2 / **Mid** +4 / **High** +6.',
+    description: 'Restores current stamina: **Basic** +5 / **Mid** +7 / **High** +9.',
     effects: {
-      staminaRecovery: 2
+      staminaRecovery: 5
     }
   },
   'Hasty Elixir': {
