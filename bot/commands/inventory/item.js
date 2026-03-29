@@ -1127,7 +1127,8 @@ module.exports = {
             const scaledTonic = scaleElixirEffects(
               'Fairy Tonic',
               ELIXIR_EFFECTS['Fairy Tonic'].effects,
-              invElixirLevel
+              invElixirLevel,
+              { maxHeartsForFairyTonic: character.maxHearts }
             );
             const healBudget = (scaledTonic.healHearts || 0) + stackModifierHearts;
             const room = Math.max(0, character.maxHearts - character.currentHearts);

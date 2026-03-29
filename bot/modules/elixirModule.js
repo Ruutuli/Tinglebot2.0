@@ -22,8 +22,6 @@ const RESOURCE_ELIXIR_LEVEL_STATS = Object.freeze({
   'Hearty Elixir': { extraHearts: [1, 2, 3] },
   'Enduring Elixir': { staminaBoost: [5, 7, 9] },
   'Energizing Elixir': { staminaRecovery: [5, 7, 9] },
-  /** Restore only, capped at max — see `item.js` Fairy Tonic branch. */
-  'Fairy Tonic': { healHearts: [2, 3, 4] },
 });
 
 /** Not valid mixer ingredients (pet / compression / special use only). Keep in sync with `items` + ingredient-label seed. */
@@ -33,6 +31,21 @@ function normalizeElixirLevel(raw) {
   const n = Number(raw);
   if (n === 2 || n === 3) return n;
   return 1;
+}
+
+/**
+ * Fairy Tonic: heal budget is a fraction of **max hearts** by tier (still capped by missing hearts in `item.js`).
+ * Basic ≈ quarter, Mid ≈ half, High = full max (so you can refill all missing hearts).
+ * @param {number} maxHearts
+ * @param {number} level 1–3
+ */
+function getFairyTonicHealBudget(maxHearts, level) {
+  const maxH = Math.max(0, Math.floor(Number(maxHearts) || 0));
+  if (maxH <= 0) return 0;
+  const lv = normalizeElixirLevel(level);
+  if (lv === 3) return maxH;
+  if (lv === 2) return Math.max(1, Math.floor(maxH / 2));
+  return Math.max(1, Math.floor(maxH / 4));
 }
 
 // ============================================================================
@@ -131,9 +144,9 @@ const ELIXIR_EFFECTS = {
   'Fairy Tonic': {
     type: 'fairy',
     description:
-      'Fairy-brewed tonic: **restores missing hearts only** (never above max). **Basic** up to 2 / **Mid** 3 / **High** 4 healed, plus Fairy mix-in — not bonus max hearts.',
+      'Fairy-brewed tonic: **restores missing hearts only** (never above max). **Basic** up to **¼** of max / **Mid** up to **½** of max / **High** up to **full** missing hearts, plus Fairy mix-in — not bonus max hearts.',
     effects: {
-      healHearts: 2
+      healHearts: 0
     }
   }
 };
@@ -162,13 +175,26 @@ function isElixirItemName(name) {
  * @param {string} elixirName - Canonical elixir item name (e.g. `'Hearty Elixir'`).
  * @param {Record<string, number>} baseEffects - From ELIXIR_EFFECTS[name].effects
  * @param {number} level - 1–3
+ * @param {{ maxHeartsForFairyTonic?: number }} [options] - For Fairy Tonic only: character max hearts at drink time.
  */
-function scaleElixirEffects(elixirName, baseEffects, level) {
+function scaleElixirEffects(elixirName, baseEffects, level, options = {}) {
   const key = resolveElixirItemName(elixirName) || String(elixirName || '').trim();
   const lv = normalizeElixirLevel(level);
   const idx = lv - 1;
-  const resourceSpec = RESOURCE_ELIXIR_LEVEL_STATS[key];
   const base = baseEffects || {};
+
+  if (key === 'Fairy Tonic') {
+    const maxH = options.maxHeartsForFairyTonic;
+    if (typeof maxH === 'number' && Number.isFinite(maxH) && maxH > 0) {
+      return {
+        ...base,
+        healHearts: getFairyTonicHealBudget(maxH, lv),
+      };
+    }
+    return { ...base, healHearts: 0 };
+  }
+
+  const resourceSpec = RESOURCE_ELIXIR_LEVEL_STATS[key];
 
   if (resourceSpec) {
     const out = { ...base };
@@ -284,11 +310,13 @@ function getBrewPreviewForElixir(elixirName, level, fairyHealHearts = 0) {
       );
     }
   } else if (key === 'Fairy Tonic') {
-    if (scaled.healHearts > 0) {
-      immediateLines.push(
-        `❤️ **Up to ${scaled.healHearts}** missing hearts restored (won't overfill)`
-      );
-    }
+    immediateLines.push(
+      lv === 3
+        ? `❤️ **Up to full** missing hearts restored (won't overfill)`
+        : lv === 2
+          ? `❤️ **Up to half** of your max hearts restored (won't overfill)`
+          : `❤️ **Up to a quarter** of your max hearts restored (won't overfill)`
+    );
   } else if (key === 'Enduring Elixir') {
     if (scaled.staminaBoost > 0) {
       immediateLines.push(
@@ -364,7 +392,9 @@ const applyElixirBuff = (character, elixirName, elixirLevel = 1) => {
   }
 
   const level = normalizeElixirLevel(elixirLevel);
-  const effects = scaleElixirEffects(key, elixir.effects, level);
+  const effects = scaleElixirEffects(key, elixir.effects, level, {
+    maxHeartsForFairyTonic: character?.maxHearts,
+  });
 
   character.buff = {
     active: true,
