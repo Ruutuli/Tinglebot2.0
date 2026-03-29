@@ -388,8 +388,8 @@ module.exports = {
         let collab = [];
         if (collabInput) {
           // Extract all user mentions from the input
-          const mentionRegex = /<@(\d+)>/g;
-          const mentions = collabInput.match(mentionRegex);
+          const mentionRegex = /<@!?(\d+)>/g;
+          const mentions = [...collabInput.matchAll(mentionRegex)].map(m => `<@${m[1]}>`);
           
           if (!mentions || mentions.length === 0) {
             await interaction.editReply({ 
@@ -515,8 +515,8 @@ module.exports = {
         let collab = [];
         if (collabInput) {
           // Extract all user mentions from the input
-          const mentionRegex = /<@(\d+)>/g;
-          const mentions = collabInput.match(mentionRegex);
+          const mentionRegex = /<@!?(\d+)>/g;
+          const mentions = [...collabInput.matchAll(mentionRegex)].map(m => `<@${m[1]}>`);
           
           if (!mentions || mentions.length === 0) {
             await interaction.editReply({ 

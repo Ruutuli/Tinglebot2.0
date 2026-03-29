@@ -83,6 +83,19 @@ const ELIXIR_EFFECTS = {
   }
 };
 
+/** Normalize user/display strings to a key in ELIXIR_EFFECTS (or original cleaned string if not an elixir). */
+const resolveElixirItemName = (rawName) => {
+  if (rawName == null || typeof rawName !== 'string') return '';
+  let s = rawName.trim();
+  s = s
+    .replace(/^[\u{1F300}-\u{1F9FF}\u{2600}-\u{26FF}\u{2700}-\u{27BF}]\s*/u, '')
+    .replace(/\s*\(Qty:\s*\d+\s*\)/gi, '')
+    .replace(/\s*-\s*Qty:\s*\d+\s*$/i, '')
+    .trim();
+  if (ELIXIR_EFFECTS[s]) return s;
+  const key = Object.keys(ELIXIR_EFFECTS).find((k) => k.toLowerCase() === s.toLowerCase());
+  return key || s;
+};
 
 // ============================================================================
 // ------------------- Core Functions -------------------

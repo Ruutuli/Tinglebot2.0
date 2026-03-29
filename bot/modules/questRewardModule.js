@@ -1739,8 +1739,8 @@ async function processArtQuestCompletionFromSubmission(submissionData, userId) {
             return completionResult;
         }
         
-        // If quest allows collab and submission has tagged collaborators, credit them too when they are participants
-        if (quest.collabAllowed && submissionData.collab) {
+        // Credit tagged collaborators who are active participants (not gated on collabAllowed — that flag is for token/collab bonus rules)
+        if (submissionData.collab) {
             const collabList = Array.isArray(submissionData.collab) ? submissionData.collab : (submissionData.collab ? [submissionData.collab] : []);
             for (const mention of collabList) {
                 if (!mention || typeof mention !== 'string') continue;
@@ -1838,8 +1838,8 @@ async function processWritingQuestCompletionFromSubmission(submissionData, userI
             return completionResult;
         }
         
-        // If quest allows collab and submission has tagged collaborators, credit them too when they are participants
-        if (quest.collabAllowed && submissionData.collab) {
+        // Credit tagged collaborators who are active participants (not gated on collabAllowed — that flag is for token/collab bonus rules)
+        if (submissionData.collab) {
             const collabList = Array.isArray(submissionData.collab) ? submissionData.collab : (submissionData.collab ? [submissionData.collab] : []);
             for (const mention of collabList) {
                 if (!mention || typeof mention !== 'string') continue;
