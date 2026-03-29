@@ -49,16 +49,12 @@ const { createCraftingEmbed } = require('../../embeds/embeds.js');
 const EMBED_BORDER_IMAGE_URL = 'https://storage.googleapis.com/tinglebot/Graphics/border.png';
 const MAX_MIXER_EXTRAS = 3;
 
-/** Short brew summary for Discord; full math is in `docs/elixir-mixing/README.md` (Mixer brew score). */
+/** Short brew summary for Discord (tier + mixer score only). */
 function formatUserFriendlyBrewBlend(mixOutcome, tierWord, brewedElixirLevel) {
   const combined = mixOutcome.combinedRounded;
   const lines = [
     `**${tierWord} elixir** · level **${brewedElixirLevel}**`,
     `**Mixer score:** **${combined}/10** → **${tierWord}** potency`,
-    '',
-    '*Bands:* **1–3** Basic · **4–6** Mid · **7–10** High',
-    '',
-    '_Full formula (peak/average, synergy, Fairy floor): `docs/elixir-mixing/README.md` — **Mixer brew score (live)**._',
   ];
   const raw = lines.join('\n');
   return raw.length > 1024 ? `${raw.slice(0, 1020)}…` : raw;
