@@ -56,7 +56,8 @@ const ELIXIR_EFFECTS = {
   },
   'Sticky Elixir': {
     type: 'sticky',
-    description: 'Water resistance vs water-type foes; plusBoost for yield (design — wire where needed)',
+    description:
+      'Takes the edge off water-type attacks, and helps you walk away with a little more from harvests and rewards.',
     effects: {
       waterResistance: 1.5,
       plusBoost: 1
@@ -195,6 +196,109 @@ function scaleElixirEffects(elixirName, baseEffects, level) {
     }
   }
   return out;
+}
+
+const fmtScaledElixirDisplay = (n) => {
+  const x = Number(n);
+  if (!Number.isFinite(x)) return String(n);
+  const r = Math.round(x * 100) / 100;
+  return Number.isInteger(r) ? String(r) : String(r);
+};
+
+/** Push consumption-style lines from scaled effects (matches `/item` elixir embed). */
+function appendScaledBuffStyleLines(scaled, buffLines) {
+  if (!scaled || !buffLines) return;
+  if (scaled.blightResistance > 0) {
+    buffLines.push(`🧿 **Blight resistance** — ×${fmtScaledElixirDisplay(scaled.blightResistance)}`);
+  }
+  if (scaled.electricResistance > 0) {
+    buffLines.push(`⚡ **Electric resistance** — ×${fmtScaledElixirDisplay(scaled.electricResistance)}`);
+  }
+  if (scaled.staminaBoost > 0) {
+    buffLines.push(`🟩 **Stamina boost** — +${fmtScaledElixirDisplay(scaled.staminaBoost)}`);
+  }
+  if (scaled.staminaRecovery > 0) {
+    buffLines.push(`💚 **Stamina recovery** — +${fmtScaledElixirDisplay(scaled.staminaRecovery)}`);
+  }
+  if (scaled.fireResistance > 0) {
+    buffLines.push(`🌡️ **Heat & fire resistance** — ×${fmtScaledElixirDisplay(scaled.fireResistance)}`);
+  }
+  if (scaled.waterResistance > 0) {
+    buffLines.push(`💧 **Water resistance** — ×${fmtScaledElixirDisplay(scaled.waterResistance)}`);
+  }
+  if (scaled.plusBoost > 0) {
+    buffLines.push(`✨ **Plus boost** — ×${fmtScaledElixirDisplay(scaled.plusBoost)}`);
+  }
+  if (scaled.speedBoost > 0) {
+    buffLines.push(`🏃 **Speed boost** — +${fmtScaledElixirDisplay(scaled.speedBoost)}`);
+  }
+  if (scaled.extraHearts > 0) {
+    buffLines.push(`❤️ **Extra hearts** — +${fmtScaledElixirDisplay(scaled.extraHearts)}`);
+  }
+  if (scaled.attackBoost > 0) {
+    buffLines.push(`⚔️ **Attack** — ×${fmtScaledElixirDisplay(scaled.attackBoost)}`);
+  }
+  if (scaled.stealthBoost > 0) {
+    buffLines.push(`👻 **Stealth** — +${fmtScaledElixirDisplay(scaled.stealthBoost)}`);
+  }
+  if (scaled.fleeBoost > 0) {
+    buffLines.push(`🏃‍♂️ **Flee** — +${fmtScaledElixirDisplay(scaled.fleeBoost)}`);
+  }
+  if (scaled.coldResistance > 0) {
+    buffLines.push(`❄️ **Cold resistance** — ×${fmtScaledElixirDisplay(scaled.coldResistance)}`);
+  }
+  if (scaled.iceEffectiveness > 0) {
+    buffLines.push(`🧊 **Ice effectiveness** — +${fmtScaledElixirDisplay(scaled.iceEffectiveness)}`);
+  }
+  if (scaled.defenseBoost > 0) {
+    buffLines.push(`🛡️ **Defense** — ×${fmtScaledElixirDisplay(scaled.defenseBoost)}`);
+  }
+}
+
+/**
+ * Brew result embed: predicted buffs vs on-drink effects (future tense).
+ * @returns {{ buffText: string | null, immediateText: string | null }}
+ */
+function getBrewPreviewForElixir(elixirName, level, fairyHealHearts = 0) {
+  const key = resolveElixirItemName(elixirName);
+  const elixir = ELIXIR_EFFECTS[key];
+  if (!elixir) return { buffText: null, immediateText: null };
+
+  const lv = normalizeElixirLevel(level);
+  const scaled = scaleElixirEffects(key, elixir.effects, lv);
+  const buffLines = [];
+  const immediateLines = [];
+
+  if (key === 'Hearty Elixir') {
+    if (scaled.extraHearts > 0) {
+      immediateLines.push(
+        `❤️ **+${scaled.extraHearts}** temporary hearts (can go over your max)`
+      );
+    }
+  } else if (key === 'Fairy Tonic') {
+    if (scaled.healHearts > 0) {
+      immediateLines.push(
+        `❤️ **Up to ${scaled.healHearts}** missing hearts restored (won't overfill)`
+      );
+    }
+  } else if (key === 'Enduring Elixir') {
+    if (scaled.staminaBoost > 0) {
+      immediateLines.push(
+        `🟩 **+${scaled.staminaBoost}** stamina (adds to max and current)`
+      );
+    }
+  } else {
+    appendScaledBuffStyleLines(scaled, buffLines);
+  }
+
+  if (fairyHealHearts > 0) {
+    immediateLines.push(`❤️ **+${fairyHealHearts}** hearts when drunk (Fairy mix-in)`);
+  }
+
+  return {
+    buffText: buffLines.length ? buffLines.join('\n') : null,
+    immediateText: immediateLines.length ? immediateLines.join('\n') : null,
+  };
 }
 
 /** `/item` autocomplete `value`: unique per stack (Discord returns this string unchanged). */
@@ -744,6 +848,7 @@ module.exports = {
   ELIXIR_MIXER_EXCLUDED_ITEM_NAMES,
   normalizeElixirLevel,
   scaleElixirEffects,
+  getBrewPreviewForElixir,
   formatElixirItemOptionValue,
   parseElixirTierFromItemOption,
   isElixirItemName,

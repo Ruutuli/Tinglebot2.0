@@ -29,9 +29,6 @@ const {
   validateBrewExtraPart,
   mixerBrewOutcomeFromIngredientRarities,
   countMixerExtraSynergy,
-  MIXER_POTENCY_WEIGHT_MAX,
-  MIXER_POTENCY_WEIGHT_AVG,
-  MIXER_POTENCY_WEIGHT_MIN,
   MIXER_SYNERGY_BONUS_PER_EXTRA,
   MIXER_SYNERGY_BONUS_MAX,
   normalizeMixerIngredientRarity,
@@ -46,18 +43,24 @@ const {
   isMixerUniversalFairyCritterName,
   mixerFairyHealHeartsFromExtras,
 } = require('../../modules/elixirBrewModule');
+const { getBrewPreviewForElixir } = require('../../modules/elixirModule');
 const { createCraftingEmbed } = require('../../embeds/embeds.js');
 
 const EMBED_BORDER_IMAGE_URL = 'https://storage.googleapis.com/tinglebot/Graphics/border.png';
 const MAX_MIXER_EXTRAS = 3;
 
-function formatElixirLevelForCraftingEmbed(level) {
-  if (level == null || level === '') return null;
-  const n = Number(level);
-  if (!Number.isFinite(n)) return String(level);
-  const names = { 1: 'Basic', 2: 'Mid', 3: 'High' };
-  const word = names[n];
-  return word ? `${n} (${word})` : String(n);
+/** Player-facing brew math (replaces raw peak/mean/weakest % labels). */
+function formatUserFriendlyBrewBlend(mixOutcome, tierWord, brewedElixirLevel) {
+  const synergyExtra =
+    mixOutcome.synergyExtraCount > 0
+      ? `\n\n**Synergy:** +${Number(mixOutcome.synergyRaw.toFixed(2))} from **${mixOutcome.synergyExtraCount}** extra ingredient${mixOutcome.synergyExtraCount === 1 ? '' : 's'} that matched this brew.`
+      : '';
+  const raw = [
+    `**Tier:** ${tierWord} (level ${brewedElixirLevel})`,
+    `**Blend score:** ${mixOutcome.combinedRounded}/10 — **${tierWord}** tier (1-3 = Basic, 4-6 = Mid, 7-10 = High).`,
+    `**How your ingredients stacked:** best rarity **${mixOutcome.maxR}**, average **${Number(mixOutcome.avgR.toFixed(2))}**, weakest **${mixOutcome.minR}**.${synergyExtra}`,
+  ].join('\n');
+  return raw.length > 1024 ? `${raw.slice(0, 1020)}…` : raw;
 }
 
 /** After `deferUpdate` on a brew menu: clear components and show text (errors). Uses `editReply` first (correct after defer). */
@@ -806,6 +809,22 @@ async function finalizeBrewMixerSession(interaction, session, critterName, partN
     critterItem.itemRarity != null && critterItem.itemRarity !== '' ? critterItem.itemRarity : 1;
   const tierNames = { 1: 'Basic', 2: 'Mid', 3: 'High' };
   const tierWord = tierNames[brewedElixirLevel] || String(brewedElixirLevel);
+  const brewPreview = getBrewPreviewForElixir(outputItem.itemName, brewedElixirLevel, fairyHealHearts);
+  const brewedElixirExtraFields = [];
+  if (brewPreview.buffText) {
+    brewedElixirExtraFields.push({
+      name: '✨ **__Will apply__** (buffs until used)',
+      value: brewPreview.buffText.slice(0, 1024),
+      inline: false,
+    });
+  }
+  if (brewPreview.immediateText) {
+    brewedElixirExtraFields.push({
+      name: '💚 **__When you drink it__**',
+      value: brewPreview.immediateText.slice(0, 1024),
+      inline: false,
+    });
+  }
   const extrasForLog =
     extraItems.length === 0
       ? 'none'
@@ -815,7 +834,6 @@ async function finalizeBrewMixerSession(interaction, session, critterName, partN
             return `${p.itemName} (rarity ${er})`;
           })
           .join(', ');
-  const pct = (w) => Math.round(w * 100);
   const avgStr = Number(mixOutcome.avgR.toFixed(2));
   const blendStr = Number(mixOutcome.blendRaw.toFixed(2));
   const synStr = Number(mixOutcome.synergyRaw.toFixed(2));
@@ -823,12 +841,12 @@ async function finalizeBrewMixerSession(interaction, session, critterName, partN
     'BREW',
     [
       `Mixer elixir level → **${brewedElixirLevel}** (${tierWord}) for **${character.name}** / output **${outputItem.itemName}**`,
-      `  Potency: **${pct(MIXER_POTENCY_WEIGHT_MAX)}%** peak + **${pct(MIXER_POTENCY_WEIGHT_AVG)}%** mean + **${pct(MIXER_POTENCY_WEIGHT_MIN)}%** min (rarity 1–10 each, floored); **+${MIXER_SYNERGY_BONUS_PER_EXTRA}** raw per on-theme extra (cap **${MIXER_SYNERGY_BONUS_MAX}**) — same-family critter extra or thread-element part extra; then round → 1–3 Basic, 4–6 Mid, 7–10 High.`,
+      `  Potency: blend = **(2×max + avg) / 3** (rarity 1–10 per ingredient, floored); **+${MIXER_SYNERGY_BONUS_PER_EXTRA}** raw per on-theme extra (cap **${MIXER_SYNERGY_BONUS_MAX}**); round → 1–3 Basic, 4–6 Mid, 7–10 High.`,
       `  Critter: **${critterItem.itemName}** (rarity **${critR}**)`,
       `  Main part: **${partItem.itemName}** (rarity **${partR}**)`,
       `  Extras: ${extrasForLog}`,
       `  On-theme extras (synergy): **${mixOutcome.synergyExtraCount}**`,
-      `  Score **${mixOutcome.combinedRounded}** (blend **${blendStr}** + synergy **${synStr}**; peak **${mixOutcome.maxR}**, mean **${avgStr}**, min **${mixOutcome.minR}**; **${mixOutcome.ingredientCount}** ingredients, sum **${mixOutcome.sum}**) → elixirLevel **${brewedElixirLevel}**`,
+      `  Score **${mixOutcome.combinedRounded}** (blend **${blendStr}** + synergy **${synStr}**; max **${mixOutcome.maxR}**, mean **${avgStr}**, min **${mixOutcome.minR}**; **${mixOutcome.ingredientCount}** ingredients, sum **${mixOutcome.sum}**) → elixirLevel **${brewedElixirLevel}**`,
       fairyHealHearts > 0
         ? `  Fairy mix-in: **+${fairyHealHearts}** heart(s) on use (\`modifierHearts\` on inventory row).`
         : '',
@@ -851,17 +869,13 @@ async function finalizeBrewMixerSession(interaction, session, critterName, partN
   const jobForFlavor =
     character.jobVoucher && character.jobVoucherJob ? character.jobVoucherJob : character.job;
 
-  const levelLine = formatElixirLevelForCraftingEmbed(brewedElixirLevel);
-  const synergyEmbed =
-    mixOutcome.synergyExtraCount > 0
-      ? ` **+${synStr}** synergy (**${mixOutcome.synergyExtraCount}** themed extra${mixOutcome.synergyExtraCount === 1 ? '' : 's'}).`
-      : '';
-  const fairyEmbed =
-    fairyHealHearts > 0
-      ? ` **+${fairyHealHearts}** heart(s) when used (Fairy mix-in).`
-      : '';
-  const brewedElixirLevelValue = levelLine
-    ? `> ${levelLine}\n_Blended potency **${mixOutcome.combinedRounded}** — **${pct(MIXER_POTENCY_WEIGHT_MAX)}/${pct(MIXER_POTENCY_WEIGHT_AVG)}/${pct(MIXER_POTENCY_WEIGHT_MIN)}** peak/mean/weakest (**${mixOutcome.maxR}** / **${avgStr}** / **${mixOutcome.minR}**).${synergyEmbed}${fairyEmbed}_`
+  const brewedElixirLevelValue = formatUserFriendlyBrewBlend(
+    mixOutcome,
+    tierWord,
+    brewedElixirLevel
+  );
+  const brewedElixirExtraFieldsForEmbed = brewedElixirExtraFields.length
+    ? brewedElixirExtraFields
     : null;
 
   let brewEmbed;
@@ -879,7 +893,8 @@ async function finalizeBrewMixerSession(interaction, session, critterName, partN
       0,
       [],
       null,
-      brewedElixirLevelValue
+      brewedElixirLevelValue,
+      brewedElixirExtraFieldsForEmbed
     );
   } catch (embedErr) {
     handleInteractionError(embedErr, 'brewMixerHandler.js');
@@ -891,12 +906,15 @@ async function finalizeBrewMixerSession(interaction, session, critterName, partN
           (extraItems.length ? ` + ${extraItems.map((p) => `**${p.itemName}**`).join(', ')}` : '') +
           `.`
       );
-    if (brewedElixirLevelValue) {
-      brewEmbed.addFields({
-        name: '🧪 **__Elixir Level__**',
-        value: brewedElixirLevelValue,
-        inline: false,
-      });
+    brewEmbed.addFields({
+      name: '🧪 **__Elixir tier & blend__**',
+      value: brewedElixirLevelValue,
+      inline: false,
+    });
+    if (brewedElixirExtraFieldsForEmbed) {
+      for (const f of brewedElixirExtraFieldsForEmbed) {
+        brewEmbed.addFields(f);
+      }
     }
   }
 

@@ -286,17 +286,11 @@ function normalizeMixerIngredientRarity(itemRarity) {
 }
 
 /**
- * Mixer potency blend (weights sum to **1**):
- * - **Peak** (max rarity): best single ingredient — keeps a rarity **10** from being “erased” by one low piece.
- * - **Bulk** (mean): overall quality of everything in the pot.
- * - **Weak link** (min rarity): small drag from the worst ingredient (dilution), without dominating the peak.
- *
- * `blend = W_MAX*max + W_AVG*avg + W_MIN*min`, then add **synergy** for on-theme **extras** only
+ * Mixer potency blend (**simple “better stuff → better bottle”**):
+ * `blendRaw = (2 × maxRarity + meanRarity) / 3` — your **best ingredient counts double** vs the **average**
+ * of everything in the pot (no separate “weak link” penalty). Then add **synergy** for on-theme **extras**
  * (see `countMixerExtraSynergy`). Rounded sum, clamped 1–10 → **1–3** Basic, **4–6** Mid, **7–10** High.
  */
-const MIXER_POTENCY_WEIGHT_MAX = 0.5;
-const MIXER_POTENCY_WEIGHT_AVG = 0.35;
-const MIXER_POTENCY_WEIGHT_MIN = 0.15;
 
 /** Per optional extra that matches the brew (same effect-family critter, or thread-element part on threaded elixirs). */
 const MIXER_SYNERGY_BONUS_PER_EXTRA = 0.45;
@@ -365,10 +359,7 @@ function mixerBrewOutcomeFromIngredientRarities(rarityValues, options = {}) {
   const avgR = sum / n;
   const maxR = Math.max(...normalized);
   const minR = Math.min(...normalized);
-  const blendRaw =
-    MIXER_POTENCY_WEIGHT_MAX * maxR +
-    MIXER_POTENCY_WEIGHT_AVG * avgR +
-    MIXER_POTENCY_WEIGHT_MIN * minR;
+  const blendRaw = (2 * maxR + avgR) / 3;
   const combinedRaw = blendRaw + synergyRaw;
   const combinedRounded = Math.min(10, Math.max(1, Math.round(combinedRaw)));
   let level = 1;
@@ -424,9 +415,6 @@ module.exports = {
   elixirLevelFromMixerIngredientRarities,
   mixerBrewOutcomeFromIngredientRarities,
   countMixerExtraSynergy,
-  MIXER_POTENCY_WEIGHT_MAX,
-  MIXER_POTENCY_WEIGHT_AVG,
-  MIXER_POTENCY_WEIGHT_MIN,
   MIXER_SYNERGY_BONUS_PER_EXTRA,
   MIXER_SYNERGY_BONUS_MAX,
   elixirLevelFromMixerMainPartRarity,

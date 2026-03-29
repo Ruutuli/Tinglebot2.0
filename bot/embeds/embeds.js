@@ -1554,7 +1554,7 @@ const createTokenTrackerSetupEmbed = (
 
 // ------------------- Function: createCraftingEmbed -------------------
 // Creates an embed for crafting activities with materials used and boost support
-const createCraftingEmbed = async (item, character, flavorText, materialsUsed, quantity, staminaCost, remainingStamina, jobForFlavorText = null, originalStaminaCost = null, staminaSavings = 0, materialSavings = [], teacherBoostInfo = null, brewedElixirLevelValue = null) => {
+const createCraftingEmbed = async (item, character, flavorText, materialsUsed, quantity, staminaCost, remainingStamina, jobForFlavorText = null, originalStaminaCost = null, staminaSavings = 0, materialSavings = [], teacherBoostInfo = null, brewedElixirLevelValue = null, brewedElixirExtraFields = null) => {
  const action = jobActions[character.job] || "crafted";
  const itemQuantityText = ` x${quantity}`;
  const locationPrefix = getLocationPrefix(character);
@@ -1658,9 +1658,19 @@ const createCraftingEmbed = async (item, character, flavorText, materialsUsed, q
     }))
   : [{ name: "📜 **__Materials Used__**", value: craftingMaterialText, inline: false }];
 
- const elixirLevelFields = brewedElixirLevelValue
-  ? [{ name: "🧪 **__Elixir Level__**", value: brewedElixirLevelValue, inline: false }]
-  : [];
+ const elixirLevelFields = [];
+ if (brewedElixirLevelValue) {
+  elixirLevelFields.push({
+   name: "🧪 **__Elixir tier & blend__**",
+   value: brewedElixirLevelValue,
+   inline: false,
+  });
+ }
+ if (Array.isArray(brewedElixirExtraFields) && brewedElixirExtraFields.length > 0) {
+  for (const f of brewedElixirExtraFields) {
+   if (f && f.name && f.value) elixirLevelFields.push({ name: f.name, value: f.value, inline: f.inline === true });
+  }
+ }
 
  const staminaRowFields = [
   { name: "⚡ **__Stamina Cost__**", value: staminaCostValue, inline: true },

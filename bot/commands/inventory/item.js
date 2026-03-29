@@ -1215,127 +1215,144 @@ module.exports = {
         );
 
         // ------------------- Build and Send Elixir Embed -------------------
-        // Build consistent effect fields for all elixirs
-        let effectFields = [];
-        const buffEffects = character.buff?.effects;
-        
-        // Always show buff effects if they exist (for non-immediate elixirs)
-        if (buffEffects && Object.keys(buffEffects).length > 0) {
-          if (buffEffects.blightResistance > 0) {
-            effectFields.push({ name: '🧿 Blight Resistance', value: `x${buffEffects.blightResistance}`, inline: true });
-          }
-          if (buffEffects.electricResistance > 0) {
-            effectFields.push({ name: '⚡ Electric Resistance', value: `x${buffEffects.electricResistance}`, inline: true });
-          }
-          if (buffEffects.staminaBoost > 0) {
-            effectFields.push({ name: '🟩 Stamina Boost', value: `+${buffEffects.staminaBoost}`, inline: true });
-          }
-          if (buffEffects.staminaRecovery > 0) {
-            effectFields.push({ name: '💚 Stamina Recovery', value: `+${buffEffects.staminaRecovery}`, inline: true });
-          }
-          if (buffEffects.fireResistance > 0) {
-            effectFields.push({ name: '🌡️ Heat & fire resistance', value: `x${buffEffects.fireResistance}`, inline: true });
-          }
-          if (buffEffects.waterResistance > 0) {
-            effectFields.push({ name: '💧 Water resistance', value: `x${buffEffects.waterResistance}`, inline: true });
-          }
-          if (buffEffects.plusBoost > 0) {
-            effectFields.push({ name: '✨ Plus boost', value: `x${buffEffects.plusBoost}`, inline: true });
-          }
-          if (buffEffects.speedBoost > 0) {
-            effectFields.push({ name: '🏃 Speed Boost', value: `+${buffEffects.speedBoost}`, inline: true });
-          }
-          if (buffEffects.extraHearts > 0) {
-            effectFields.push({ name: '❤️ Extra Hearts', value: `+${buffEffects.extraHearts}`, inline: true });
-          }
-          if (buffEffects.attackBoost > 0) {
-            effectFields.push({ name: '⚔️ Attack Boost', value: `x${buffEffects.attackBoost}`, inline: true });
-          }
-          if (buffEffects.stealthBoost > 0) {
-            effectFields.push({ name: '👻 Stealth Boost', value: `+${buffEffects.stealthBoost}`, inline: true });
-          }
-          if (buffEffects.fleeBoost > 0) {
-            effectFields.push({ name: '🏃‍♂️ Flee Boost', value: `+${buffEffects.fleeBoost}`, inline: true });
-          }
-          if (buffEffects.coldResistance > 0) {
-            effectFields.push({ name: '❄️ Cold Resistance', value: `x${buffEffects.coldResistance}`, inline: true });
-          }
-          if (buffEffects.iceEffectiveness > 0) {
-            effectFields.push({ name: '🧊 Ice Effectiveness', value: `+${buffEffects.iceEffectiveness}`, inline: true });
-          }
-          if (buffEffects.defenseBoost > 0) {
-            effectFields.push({ name: '🛡️ Defense Boost', value: `x${buffEffects.defenseBoost}`, inline: true });
-          }
-        }
+        const fmtElixirEffectVal = (n) => {
+          const x = Number(n);
+          if (!Number.isFinite(x)) return String(n);
+          const r = Math.round(x * 100) / 100;
+          return Number.isInteger(r) ? String(r) : String(r);
+        };
 
-        // Calculate display values for consistent display
-        let displayCurrentHearts = character.currentHearts;
-        let displayMaxHearts = originalMaxHearts;
-        let displayCurrentStamina = character.currentStamina;
-        let displayMaxStamina = character.maxStamina;
-        
-        if (item.itemName === 'Hearty Elixir' || item.itemName === 'Fairy Tonic') {
-          displayCurrentHearts = character.currentHearts;
-          displayMaxHearts = originalMaxHearts;
-        } else if (item.itemName === 'Enduring Elixir') {
-          // For Enduring Elixir, show current stamina (including temporary) / original max stamina
-          displayCurrentStamina = character.currentStamina;
-          displayMaxStamina = originalMaxStamina;
-        }
-        
-        // Build uniform elixir embed
-        const elixirEmbed = new EmbedBuilder()
-          .setColor('#8B4513')
-          .setTitle('🧪 Elixir Consumed!')
-          .setDescription(
-            `**${character.name}** has consumed a **${item.itemName}**!\n\n` +
-            `${elixirInfo.description}`
-          )
-          .addFields([
-            {
-              name: '📊 Potency',
-              value: `**${ELIXIR_LEVEL_NAMES[invElixirLevel]}** (level ${invElixirLevel})`,
-              inline: true
-            },
-            { name: '❤️ Current Hearts', value: `**${displayCurrentHearts}/${displayMaxHearts}**`, inline: true },
-            { name: '🟩 Current Stamina', value: `**${displayCurrentStamina}/${displayMaxStamina}**`, inline: true }
-          ])
-          .setThumbnail(item.image || character.icon)
-          .setImage('https://storage.googleapis.com/tinglebot/Graphics/border.png');
-
-        // Add buff effects section if there are effects to show
-        if (effectFields.length > 0) {
-          elixirEmbed.addFields([
-            { name: '✨ Active Effects', value: 'The following effects are now active:', inline: false },
-            ...effectFields
-          ]);
-        }
-
-        // Add immediate effects section if there are healing/restoration effects
-        if (stackModifierHearts > 0 || item.staminaRecovered) {
-          let immediateEffects = [];
-          if (stackModifierHearts > 0 && !healUsesTierPlusFairyMix) {
-            immediateEffects.push(`❤️ **Hearts restored: +${stackModifierHearts}**`);
-          }
-          if (item.staminaRecovered) {
-            immediateEffects.push(`🟩 **Stamina restored: +${item.staminaRecovered}**`);
-          }
-          
-          elixirEmbed.addFields({
-            name: '💚 Immediate Effects',
-            value: immediateEffects.join('\n'),
-            inline: false
-          });
-        }
-
-        // Set footer based on elixir type
         const isImmediateElixir =
           item.itemName === 'Hearty Elixir' ||
           item.itemName === 'Fairy Tonic' ||
           item.itemName === 'Enduring Elixir';
-        elixirEmbed.setFooter({ 
-          text: isImmediateElixir ? `${item.itemName} consumed immediately` : 'Elixir effects active until used',
-          iconURL: character.icon
+
+        const buffEffects = character.buff?.effects;
+        const buffLines = [];
+        if (buffEffects && Object.keys(buffEffects).length > 0) {
+          if (buffEffects.blightResistance > 0) {
+            buffLines.push(`🧿 **Blight resistance** — ×${fmtElixirEffectVal(buffEffects.blightResistance)}`);
+          }
+          if (buffEffects.electricResistance > 0) {
+            buffLines.push(`⚡ **Electric resistance** — ×${fmtElixirEffectVal(buffEffects.electricResistance)}`);
+          }
+          if (buffEffects.staminaBoost > 0) {
+            buffLines.push(`🟩 **Stamina boost** — +${fmtElixirEffectVal(buffEffects.staminaBoost)}`);
+          }
+          if (buffEffects.staminaRecovery > 0) {
+            buffLines.push(`💚 **Stamina recovery** — +${fmtElixirEffectVal(buffEffects.staminaRecovery)}`);
+          }
+          if (buffEffects.fireResistance > 0) {
+            buffLines.push(`🌡️ **Heat & fire resistance** — ×${fmtElixirEffectVal(buffEffects.fireResistance)}`);
+          }
+          if (buffEffects.waterResistance > 0) {
+            buffLines.push(`💧 **Water resistance** — ×${fmtElixirEffectVal(buffEffects.waterResistance)}`);
+          }
+          if (buffEffects.plusBoost > 0) {
+            buffLines.push(`✨ **Plus boost** — ×${fmtElixirEffectVal(buffEffects.plusBoost)}`);
+          }
+          if (buffEffects.speedBoost > 0) {
+            buffLines.push(`🏃 **Speed boost** — +${fmtElixirEffectVal(buffEffects.speedBoost)}`);
+          }
+          if (buffEffects.extraHearts > 0) {
+            buffLines.push(`❤️ **Extra hearts** — +${fmtElixirEffectVal(buffEffects.extraHearts)}`);
+          }
+          if (buffEffects.attackBoost > 0) {
+            buffLines.push(`⚔️ **Attack** — ×${fmtElixirEffectVal(buffEffects.attackBoost)}`);
+          }
+          if (buffEffects.stealthBoost > 0) {
+            buffLines.push(`👻 **Stealth** — +${fmtElixirEffectVal(buffEffects.stealthBoost)}`);
+          }
+          if (buffEffects.fleeBoost > 0) {
+            buffLines.push(`🏃‍♂️ **Flee** — +${fmtElixirEffectVal(buffEffects.fleeBoost)}`);
+          }
+          if (buffEffects.coldResistance > 0) {
+            buffLines.push(`❄️ **Cold resistance** — ×${fmtElixirEffectVal(buffEffects.coldResistance)}`);
+          }
+          if (buffEffects.iceEffectiveness > 0) {
+            buffLines.push(`🧊 **Ice effectiveness** — +${fmtElixirEffectVal(buffEffects.iceEffectiveness)}`);
+          }
+          if (buffEffects.defenseBoost > 0) {
+            buffLines.push(`🛡️ **Defense** — ×${fmtElixirEffectVal(buffEffects.defenseBoost)}`);
+          }
+        }
+
+        let displayCurrentHearts = character.currentHearts;
+        let displayMaxHearts = originalMaxHearts;
+        let displayCurrentStamina = character.currentStamina;
+        let displayMaxStamina = character.maxStamina;
+
+        if (item.itemName === 'Hearty Elixir' || item.itemName === 'Fairy Tonic') {
+          displayCurrentHearts = character.currentHearts;
+          displayMaxHearts = originalMaxHearts;
+        } else if (item.itemName === 'Enduring Elixir') {
+          displayCurrentStamina = character.currentStamina;
+          displayMaxStamina = originalMaxStamina;
+        }
+
+        const potencyLabel = ELIXIR_LEVEL_NAMES[invElixirLevel];
+        const guideBlurb = (elixirInfo.description || '').trim();
+        const descParts = [
+          `**${character.name}** drank **${item.itemName}** (${potencyLabel}, level ${invElixirLevel}).`,
+          guideBlurb ? `> ${guideBlurb}` : null,
+          !isImmediateElixir
+            ? '_Buffs last until they\'re spent in combat, gathering, travel, or similar._'
+            : null,
+        ].filter(Boolean);
+
+        const authorPayload = {
+          name: character.name,
+          iconURL: character.icon,
+        };
+        if (character.inventory) authorPayload.url = character.inventory;
+
+        const elixirEmbed = new EmbedBuilder()
+          .setColor(0x3d7a66)
+          .setAuthor(authorPayload)
+          .setTitle('🧪 Elixir consumed')
+          .setDescription(descParts.join('\n\n'))
+          .addFields({
+            name: '❤️ · 🟩 Condition',
+            value: [
+              `**Hearts** — ${displayCurrentHearts} / ${displayMaxHearts}`,
+              `**Stamina** — ${displayCurrentStamina} / ${displayMaxStamina}`,
+            ].join('\n'),
+            inline: false,
+          })
+          .setThumbnail(item.image || character.icon)
+          .setImage('https://storage.googleapis.com/tinglebot/Graphics/border.png');
+
+        if (stackModifierHearts > 0 || item.staminaRecovered) {
+          const immediateLines = [];
+          if (stackModifierHearts > 0 && !healUsesTierPlusFairyMix) {
+            immediateLines.push(
+              `❤️ **+${stackModifierHearts}** hearts from **Fairy mix-in**`
+            );
+          }
+          if (item.staminaRecovered) {
+            immediateLines.push(`🟩 **+${item.staminaRecovered}** stamina restored`);
+          }
+          elixirEmbed.addFields({
+            name: '⚡ Right now',
+            value: immediateLines.join('\n'),
+            inline: false,
+          });
+        }
+
+        if (buffLines.length > 0) {
+          const buffValue = buffLines.join('\n').slice(0, 1024);
+          elixirEmbed.addFields({
+            name: '✨ Active buffs',
+            value: buffValue,
+            inline: false,
+          });
+        }
+
+        elixirEmbed.setFooter({
+          text: isImmediateElixir
+            ? `${item.itemName} — instant effect`
+            : 'Buffs apply until used',
+          iconURL: character.icon,
         });
 
         return void await interaction.editReply({ embeds: [elixirEmbed] });
