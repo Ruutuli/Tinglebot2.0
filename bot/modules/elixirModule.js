@@ -132,7 +132,7 @@ const ELIXIR_EFFECTS = {
   'Hearty Elixir': {
     type: 'hearty',
     description:
-      '**Temporary** hearts: **Basic ×1.2** / **Mid ×1.4** / **High ×1.7** of your max — added to **current only** (can exceed max until lost; real max unchanged). Plus Fairy mix-in on the bottle.',
+      '**Temporary hearts** — **Basic ×1.2** / **Mid ×1.4** / **High ×1.7** of your max; adds that many extra hearts. **Fairy mix-in** heals up to max only; only the tier bonus can go past max.',
     effects: {
       extraHearts: 1
     }
@@ -370,7 +370,7 @@ function getBrewPreviewForElixir(elixirName, level, fairyHealHearts = 0, preview
     const mult = HEARTY_MAX_POOL_MULTIPLIERS[lv - 1];
     if (scaled.extraHearts > 0) {
       immediateLines.push(
-        `❤️ **×${mult}** of max hearts — **+${scaled.extraHearts}** temporary hearts (can go over your max)`
+        `❤️ **+${scaled.extraHearts}** temporary hearts (**×${mult}** of your max)`
       );
     } else if (mult) {
       immediateLines.push(
@@ -401,7 +401,11 @@ function getBrewPreviewForElixir(elixirName, level, fairyHealHearts = 0, preview
   }
 
   if (fairyHealHearts > 0) {
-    immediateLines.push(`❤️ **+${fairyHealHearts}** hearts when consumed (Fairy mix-in)`);
+    immediateLines.push(
+      key === 'Hearty Elixir'
+        ? `❤️ **+${fairyHealHearts}** from Fairy mix-in (heals up to max only)`
+        : `❤️ **+${fairyHealHearts}** hearts when consumed (Fairy mix-in)`
+    );
   }
 
   return {

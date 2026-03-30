@@ -14,7 +14,8 @@ Design notes for a **mixer command** that turns ingredients into a real item, th
 - **Chilly** = heat and **fire** only (`fireResistance`). It is **not** water or blight.
 - **Sticky** = water (`waterResistance`, `plusBoost`). **Bright** = blight (`blightResistance`).
 - **Hearts:** `extraHearts`, `recoverHearts`, and any heart outcomes are **whole full hearts** (integers ≥ 0). No halves or fractions in storage or display.
-- **Stamina:** **5 chunks = 1 wheel.** Refill (`staminaRecovery`) and extra max (`staminaBoost`) use **whole chunks** only.
+- **Current vs max:** Normally **current ≤ max** for hearts and stamina. **Hearty** and **Enduring** are **exceptions**: they only change **current**, never **max**, and can temporarily show **current > max** until damage or spend (see **`docs/Elixirs-Player-Guide.md`**).
+- **Stamina:** **5 chunks = 1 wheel.** Refill (`staminaRecovery`) and **Enduring** (`staminaBoost`) use **whole chunks** only; **Enduring** adds to **current** only, not **max**.
 
 ---
 
@@ -166,7 +167,7 @@ Only as an **extra** on an otherwise valid brew: output family stays from critte
 | `bright` | `blightResistance` | Blight; light / maze angles (flags TBD) | exploring, gathering |
 | `sticky` | `waterResistance`, `plusBoost` | Wet/rain + extra yield — **not** Sneaky | combat, crafting, exploring, gathering, looting |
 
-**Hearty vs Fairy:** `extraHearts` vs `recoverHearts` — different on purpose. **Sneaky vs Sticky:** stealth/flee vs water + yield. **Blight:** only on Bright, not Chilly.
+**Hearty vs Fairy:** `extraHearts` vs `recoverHearts` — different on purpose. On **Hearty** bottles, **`modifierHearts`** (Fairy mix-in on the inventory row) heals **up to max** only; tier **`extraHearts`** is applied **after** and can exceed max. **Sneaky vs Sticky:** stealth/flee vs water + yield. **Blight:** only on Bright, not Chilly.
 
 ### Weather stacking
 

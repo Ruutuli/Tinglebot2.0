@@ -23,6 +23,12 @@ Use **autocomplete** for names so they match the bot.
 2. **Buff elixirs don’t time out in real life.** After **`/item`**, the buff **stays** until the bot **spends** it in the right activity (travel, combat, gather, loot, etc.). Another buff elixir is blocked while one is active (see in-bot messages).
 3. **Hearty**, **Fairy Tonic**, and **Enduring** are **one-shot** on **`/item`** (no long buff). Most other elixirs set a **lasting buff** until spent. **Energizing** refills stamina **and** keeps a buff until spent.
 
+### Reminder: current vs max (hearts and stamina)
+
+For almost everything in play, **current** cannot go **above** **max**. If you’re **3/3** hearts, you normally **cannot** end up **5/3**; same idea for stamina (**current ≤ max**).
+
+**Hearty** and **Enduring** are **special cases**. They **only** add to **current** — they **never** raise **max**. That’s why they can show numbers like **5/3** or **8/5** until you take damage or spend stamina down. **Fairy Tonic**, **Energizing** refills, and most other effects follow the usual cap (**current** stays at or below **max**).
+
 ---
 
 ## Pick an elixir for the situation
@@ -52,9 +58,9 @@ Use **autocomplete** for names so they match the bot.
 
 | Bottle | What it does |
 | --- | --- |
-| **Hearty** | **Basic ×1.2 / Mid ×1.4 / High ×1.7** of your **max hearts** — temporary hearts to **current** (formula below; tuned for **~3** max hearts). **Fairy** mix-in on the stack adds **extra hearts** on **`/item`**. |
+| **Hearty** | **Basic ×1.2 / Mid ×1.4 / High ×1.7** of your **max hearts** — temporary **extra current** only (**max** unchanged; see **Reminder** above). **`m`** Fairy mix-in heals **up to max**; the **tier** bonus can go past max. |
 | **Fairy Tonic** | Heals **missing** HP only (never above your real max). Heal **budget** by tier: **½ / ¾ / full max hearts** (floored whole hearts), then **`min(budget, missing)`**. **Fairy / Mock Fairy** extras add bonus heal. |
-| **Enduring** | **Basic ×1.25 / Mid ×1.45 / High ×1.7** of your **max stamina (chunks)** — chunk gain to **current only** (you can read **above** max until you spend down; **max** never increases) (formula below; tuned for **~5** chunks). One-shot on **`/item`**. |
+| **Enduring** | **Basic ×1.25 / Mid ×1.45 / High ×1.7** of your **max stamina (chunks)** — extra **current** chunks only (**max** unchanged; see **Reminder** above). Formula below; tuned for **~5** chunks. One-shot on **`/item`**. |
 | **Energizing** | **+5 / +7 / +9** stamina chunks **refill** on **`/item`** by tier, **plus** an **active buff** until the bot uses it in stamina-related play (gather, loot, crafting hooks, etc.). |
 
 **Stamina chunks:** whole numbers; **5 chunks ≈ 1 wheel** if you think in wheels.
@@ -95,8 +101,7 @@ Bottles are **Basic / Mid / High**. Autocomplete shows which stack you’re usin
 | Mid | 1.45 |
 | High | 1.7 |
 
-- **Hearty:** result goes to **current** as temporary hearts (main **`/item`** path); **max** hearts never increases.
-- **Enduring:** same number of chunks added to **current** stamina only; **max** stamina never increases.
+- **Hearty / Enduring:** gain goes to **current** only; **max** never increases. These two elixirs are the usual way **current** can sit **above** **max** for a while (see **Reminder** at the top of this guide).
 
 Other max pools still scale with the same formula; only these baselines were used for calibration.
 

@@ -1086,6 +1086,8 @@ module.exports = {
         // Store original values for display (moved to broader scope)
         const originalMaxHearts = character.maxHearts;
         const originalMaxStamina = character.maxStamina;
+        let heartyTierBonusForDisplay = 0;
+        let fairyHealAppliedForDisplay = 0;
 
         // Apply the elixir buff
         try {
@@ -1114,9 +1116,14 @@ module.exports = {
               invElixirLevel,
               { maxHeartsForHearty: originalMaxHearts }
             );
-            const extraHearts = (scaledHearty.extraHearts || 0) + stackModifierHearts;
-            character.currentHearts += extraHearts;
-            // Don't modify maxHearts - just track the temporary addition
+            heartyTierBonusForDisplay = scaledHearty.extraHearts || 0;
+            // Fairy mix-in: heal only up to max (never overflow past max)
+            if (stackModifierHearts > 0) {
+              const roomToMax = Math.max(0, character.maxHearts - character.currentHearts);
+              fairyHealAppliedForDisplay = Math.min(stackModifierHearts, roomToMax);
+              character.currentHearts += fairyHealAppliedForDisplay;
+            }
+            character.currentHearts += heartyTierBonusForDisplay;
             
             // Don't set a buff, just apply the healing
             character.buff = {
@@ -1311,7 +1318,20 @@ module.exports = {
           .setThumbnail(item.image || character.icon)
           .setImage('https://storage.googleapis.com/tinglebot/Graphics/border.png');
 
-        if (stackModifierHearts > 0 || item.staminaRecovered) {
+        if (item.itemName === 'Hearty Elixir' && (fairyHealAppliedForDisplay > 0 || heartyTierBonusForDisplay > 0)) {
+          const immediateLines = [];
+          if (fairyHealAppliedForDisplay > 0) {
+            immediateLines.push(`❤️ **+${fairyHealAppliedForDisplay}** from Fairy mix-in (up to max)`);
+          }
+          if (heartyTierBonusForDisplay > 0) {
+            immediateLines.push(`❤️ **+${heartyTierBonusForDisplay}** temporary hearts (tier)`);
+          }
+          elixirEmbed.addFields({
+            name: '⚡ Right now',
+            value: immediateLines.join('\n'),
+            inline: false,
+          });
+        } else if ((stackModifierHearts > 0 && !healUsesTierPlusFairyMix) || item.staminaRecovered) {
           const immediateLines = [];
           if (stackModifierHearts > 0 && !healUsesTierPlusFairyMix) {
             immediateLines.push(
