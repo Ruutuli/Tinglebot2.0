@@ -54,7 +54,7 @@ const FILTER_LABELS: Record<ModelListResource, FilterKeyConfig> = {
     elixirLevel: "Elixir potency",
   },
   maps: { region: "Region", status: "Square status", quadrantStatus: "Quadrant status", hazard: "Hazard", terrain: "Terrain", blighted: "Blighted", hasDiscoveries: "Has discoveries", hideAllInaccessible: "Hide all-inaccessible" },
-  monsters: { species: "Species", type: "Type", tier: "Tier" },
+  monsters: { species: "Species", type: "Type", tier: "Tier", element: "Element" },
   pets: { status: "Status", species: "Species", petType: "Type" },
   users: { status: "Status" },
   villages: { region: "Region" },

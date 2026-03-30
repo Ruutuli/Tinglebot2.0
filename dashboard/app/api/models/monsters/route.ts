@@ -37,6 +37,7 @@ export async function GET(req: NextRequest) {
     const params = req.nextUrl.searchParams;
     const species = getFilterParamMultiple(params, "species");
     const types = getFilterParamMultiple(params, "type");
+    const elements = getFilterParamMultiple(params, "element");
     const tiers = getFilterParamNumeric(params, "tier");
 
     const filter: FilterQuery<unknown> = {};
@@ -72,6 +73,15 @@ export async function GET(req: NextRequest) {
         filter.$or = typeFilter.$or;
       }
     }
+    if (elements.length) {
+      const elementFilter = buildCaseInsensitiveFilter("element", elements);
+      if (filter.$or || filter.$and) {
+        if (!filter.$and) filter.$and = [];
+        filter.$and.push(elementFilter);
+      } else {
+        filter.$or = elementFilter.$or;
+      }
+    }
     if (tiers.length) filter.tier = { $in: tiers };
 
     const sortBy = params.get("sortBy") || "name";
@@ -86,17 +96,34 @@ export async function GET(req: NextRequest) {
     else if (sortBy === "dmg-asc") sortQuery = { dmg: 1, name: 1 };
     else if (sortBy === "dmg-desc") sortQuery = { dmg: -1, name: 1 };
 
-    const [data, total, speciesOpts, typeOpts, tierOpts] = await Promise.all([
+    const ELEMENT_ORDER = ["none", "fire", "ice", "electric", "water", "earth", "undead", "wind"];
+    function sortMonsterElementOptions(opts: string[]): string[] {
+      return [...opts].filter(Boolean).sort((a, b) => {
+        const la = String(a).toLowerCase();
+        const lb = String(b).toLowerCase();
+        const ia = ELEMENT_ORDER.indexOf(la);
+        const ib = ELEMENT_ORDER.indexOf(lb);
+        if (ia !== -1 && ib !== -1) return ia - ib;
+        if (ia !== -1) return -1;
+        if (ib !== -1) return 1;
+        return la.localeCompare(lb);
+      });
+    }
+
+    const [data, total, speciesOpts, typeOpts, elementOpts, tierOpts] = await Promise.all([
       Monster.find(filter).sort(sortQuery).skip((page - 1) * limit).limit(limit).lean(),
       Monster.countDocuments(filter),
       Monster.distinct("species"),
       Monster.distinct("type"),
+      Monster.distinct("element"),
       Monster.distinct("tier"),
     ]);
 
+    const elementFilterList = sortMonsterElementOptions(elementOpts as string[]);
     const filterOptions: Record<string, (string | number)[]> = {
       species: (speciesOpts as string[]).filter(Boolean).sort(),
       type: (typeOpts as string[]).filter(Boolean).sort(),
+      ...(elementFilterList.length ? { element: elementFilterList } : {}),
       tier: (tierOpts as number[]).filter((n) => !Number.isNaN(n)).sort((a, b) => a - b),
     };
 
