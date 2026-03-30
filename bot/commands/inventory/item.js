@@ -1290,9 +1290,6 @@ module.exports = {
         const descParts = [
           `**${character.name}** drank **${item.itemName}** (${potencyLabel}, level ${invElixirLevel}).`,
           guideBlurb ? `> ${guideBlurb}` : null,
-          !isImmediateElixir
-            ? '_Buffs last until they\'re spent in combat, gathering, travel, or similar._'
-            : null,
         ].filter(Boolean);
 
         const authorPayload = {
@@ -1357,9 +1354,7 @@ module.exports = {
         }
 
         elixirEmbed.setFooter({
-          text: isImmediateElixir
-            ? `${item.itemName} — instant effect`
-            : 'Buffs apply until used',
+          text: isImmediateElixir ? 'Instant effect' : 'Until spent',
           iconURL: character.icon,
         });
 

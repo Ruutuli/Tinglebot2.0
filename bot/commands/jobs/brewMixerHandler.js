@@ -138,17 +138,39 @@ function buildBrewCompleteEphemeralFields({
   ];
 }
 
-/** After `deferUpdate` on a brew menu: clear components and show text (errors). Uses `editReply` first (correct after defer). */
-async function stripBrewMixerEphemeralUi(interaction, line) {
-  const payload = { content: line, embeds: [], components: [] };
+/**
+ * One-shot error UI for mixer finalize: replaces the ephemeral brew message (no “see next message” hop).
+ * @param {import('discord.js').Interaction} interaction
+ * @param {{ content?: string, embeds?: import('discord.js').EmbedBuilder[] }} payload
+ */
+async function brewMixerShowError(interaction, payload) {
+  const hasEmbeds = Array.isArray(payload.embeds) && payload.embeds.length > 0;
+  const merged = {
+    components: [],
+    embeds: hasEmbeds ? payload.embeds : [],
+    content:
+      payload.content != null
+        ? payload.content
+        : hasEmbeds
+          ? ''
+          : '❌ Something went wrong.',
+  };
   try {
-    await interaction.editReply(payload);
+    await interaction.editReply(merged);
   } catch (_) {
     try {
       if (typeof interaction.message?.edit === 'function') {
-        await interaction.message.edit(payload);
+        await interaction.message.edit(merged);
       }
-    } catch (_) {}
+    } catch (_) {
+      try {
+        await interaction.followUp({
+          content: merged.content || undefined,
+          embeds: merged.embeds,
+          flags: [MessageFlags.Ephemeral],
+        });
+      } catch (_) {}
+    }
   }
 }
 
@@ -711,8 +733,7 @@ async function finalizeBrewMixerSession(interaction, session, critterName, partN
   const userId = interaction.user.id;
 
   const brewMixerErrFollowUp = async (payload) => {
-    await stripBrewMixerEphemeralUi(interaction, '❌ Brew stopped. See the next message.');
-    await interaction.followUp({ ...payload, flags: [MessageFlags.Ephemeral] });
+    await brewMixerShowError(interaction, payload);
   };
 
   let character = await fetchCharacterByNameAndUserId(session.characterName, userId);
@@ -835,26 +856,61 @@ async function finalizeBrewMixerSession(interaction, session, critterName, partN
     return;
   }
   if ((fresh.currentStamina ?? 0) < staminaCost) {
+    const cur = fresh.currentStamina ?? 0;
+    const max = fresh.maxStamina ?? '?';
     await brewMixerErrFollowUp({
       embeds: [
         new EmbedBuilder()
-          .setTitle('❌ Not Enough Stamina')
-          .setDescription(`**${fresh.name}** needs **${staminaCost}** stamina to brew.`),
+          .setColor(0xc0392b)
+          .setTitle('🟩 Not enough stamina')
+          .setDescription(
+            `**${fresh.name}** needs **${staminaCost}** stamina to brew **${outputItem.itemName}**, but only has **${cur}** / **${max}**.\n\n` +
+              '**Nothing was taken** — your ingredients are still in your inventory and no stamina was spent.'
+          )
+          .setFooter({ text: 'Recover stamina, then brew again.' }),
       ],
     });
     return;
   }
 
+  const removedIngredientNames = [];
   try {
     await removeItemInventoryDatabase(character._id, critterItem.itemName, 1, interaction, 'Elixir brew (critter)', {});
+    removedIngredientNames.push(critterItem.itemName);
     await removeItemInventoryDatabase(character._id, partItem.itemName, 1, interaction, 'Elixir brew (part)', {});
+    removedIngredientNames.push(partItem.itemName);
     for (const p of extraItems) {
       await removeItemInventoryDatabase(character._id, p.itemName, 1, interaction, 'Elixir brew (extra part)', {});
+      removedIngredientNames.push(p.itemName);
     }
   } catch (invErr) {
     handleInteractionError(invErr, 'brewMixerHandler.js');
+    for (let i = removedIngredientNames.length - 1; i >= 0; i--) {
+      try {
+        await addItemInventoryDatabase(
+          character._id,
+          removedIngredientNames[i],
+          1,
+          interaction,
+          'Brew refund (ingredient rollback)',
+          {}
+        );
+      } catch (refundErr) {
+        console.error('[brewMixerHandler.js] Ingredient rollback failed:', refundErr?.message || refundErr);
+      }
+    }
     await brewMixerErrFollowUp({
-      content: `❌ **Could not remove ingredients:** ${invErr.message || invErr}`,
+      embeds: [
+        new EmbedBuilder()
+          .setColor(0xc0392b)
+          .setTitle('❌ Could not remove ingredients')
+          .setDescription(
+            `**${invErr.message || invErr}**\n\n` +
+              (removedIngredientNames.length
+                ? '**Your ingredients were put back** — inventory was restored to how it was before this brew.'
+                : '**Nothing was removed** from your inventory.')
+          ),
+      ],
     });
     return;
   }
@@ -869,7 +925,16 @@ async function finalizeBrewMixerSession(interaction, session, critterName, partN
       await addItemInventoryDatabase(character._id, p.itemName, 1, interaction, 'Brew refund (stamina)');
     }
     await brewMixerErrFollowUp({
-      content: `❌ **Stamina error:** ${stErr.message || stErr}. Ingredients refunded.`,
+      embeds: [
+        new EmbedBuilder()
+          .setColor(0xc0392b)
+          .setTitle('❌ Stamina could not be spent')
+          .setDescription(
+            `${stErr.message || stErr}\n\n` +
+              '**Your ingredients were refunded** — everything you put in the pot was returned to your inventory.'
+          )
+          .setFooter({ text: 'If this keeps happening, try again in a moment or ask a mod.' }),
+      ],
     });
     return;
   }
@@ -894,16 +959,9 @@ async function finalizeBrewMixerSession(interaction, session, critterName, partN
     maxStaminaForEnduring: fresh.maxStamina,
   });
   const brewedElixirExtraFields = [];
-  if (brewPreview.buffText) {
-    brewedElixirExtraFields.push({
-      name: '✨ **__Will apply__** (buffs until used)',
-      value: brewPreview.buffText.slice(0, 1024),
-      inline: false,
-    });
-  }
   if (brewPreview.immediateText) {
     brewedElixirExtraFields.push({
-      name: '💚 **__When you consume it__**',
+      name: '🧪 **Effect**',
       value: brewPreview.immediateText.slice(0, 1024),
       inline: false,
     });
