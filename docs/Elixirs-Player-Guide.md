@@ -52,9 +52,9 @@ Use **autocomplete** for names so they match the bot.
 
 | Bottle | What it does |
 | --- | --- |
-| **Hearty** | **Basic ×1.2 / Mid ×1.3 / High ×1.4** of your **max hearts** — adds that many **temporary** hearts to **current** right away (see **Max-pool multipliers** below). **Fairy** mix-in on the stack adds **extra hearts** on **`/item`**. |
+| **Hearty** | **Basic ×1.2 / Mid ×1.4 / High ×1.7** of your **max hearts** — temporary hearts to **current** (formula below; tuned for **~3** max hearts). **Fairy** mix-in on the stack adds **extra hearts** on **`/item`**. |
 | **Fairy Tonic** | Heals **missing** HP only (never above your real max). Heal **budget** by tier: **½ / ¾ / full max hearts** (floored whole hearts), then **`min(budget, missing)`**. **Fairy / Mock Fairy** extras add bonus heal. |
-| **Enduring** | **Basic ×1.2 / Mid ×1.3 / High ×1.4** of your **max stamina (chunks)** — same **chunk gain** added to **max stamina** and **current stamina** (see **Max-pool multipliers**). One-shot on **`/item`**. |
+| **Enduring** | **Basic ×1.25 / Mid ×1.45 / High ×1.7** of your **max stamina (chunks)** — same chunk gain to **max and current** (formula below; tuned for **~5** chunks). One-shot on **`/item`**. |
 | **Energizing** | **+5 / +7 / +9** stamina chunks **refill** on **`/item`** by tier, **plus** an **active buff** until the bot uses it in stamina-related play (gather, loot, crafting hooks, etc.). |
 
 **Stamina chunks:** whole numbers; **5 chunks ≈ 1 wheel** if you think in wheels.
@@ -75,22 +75,30 @@ Bottles are **Basic / Mid / High**. Autocomplete shows which stack you’re usin
 | Mid | +7 |
 | High | +9 |
 
-### Hearty & Enduring — **max-pool multipliers** (same tier bands)
+### Hearty & Enduring — **× max pool** (separate tier multipliers)
 
-Both use **×1.2 / ×1.3 / ×1.4** of your **max pool before drinking** (max **hearts** for Hearty, max **stamina chunks** for Enduring).
+**Gain:** **`ceil(max × M) − max`** (whole hearts/chunks), at least **+1** if that difference would be **0**.
 
-**Gain (hearts or chunks):** **`ceil(max × M) − max`**, where **M** is **1.2**, **1.3**, or **1.4** for Basic / Mid / High. At least **+1** if that difference would otherwise be **0**.
+**Hearty** (`HEARTY_MAX_POOL_MULTIPLIERS` in code) — tuned so **~3 max hearts** gives about **+1 / +2 / +3** at Basic / Mid / High:
 
-| Tier | Multiplier **M** |
+| Tier | **M** (hearts) |
 | --- | ---: |
 | Basic | 1.2 |
-| Mid | 1.3 |
-| High | 1.4 |
+| Mid | 1.4 |
+| High | 1.7 |
 
-- **Hearty:** adds the result to **current hearts** as temporary buffer (does not change your listed max hearts on the main **`/item`** path).
-- **Enduring:** adds the result to **max** and **current** stamina.
+**Enduring** (`ENDURING_MAX_POOL_MULTIPLIERS`) — tuned so **~5 max stamina chunks** gives about **+2 / +3 / +4**:
 
-Higher **max** pool → bigger gains at the same bottle tier.
+| Tier | **M** (chunks) |
+| --- | ---: |
+| Basic | 1.25 |
+| Mid | 1.45 |
+| High | 1.7 |
+
+- **Hearty:** result goes to **current** as temporary hearts (main **`/item`** path).
+- **Enduring:** same number of chunks added to **max** and **current** stamina.
+
+Other max pools still scale with the same formula; only these baselines were used for calibration.
 
 ### Fairy Tonic (heal budget by tier)
 

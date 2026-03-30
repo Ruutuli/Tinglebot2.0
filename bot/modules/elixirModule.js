@@ -13,21 +13,23 @@ const ELIXIR_LEVEL_FACTORS = { 1: 1, 2: 1.15, 3: 1.3 };
 const ELIXIR_LEVEL_NAMES = { 1: 'Basic', 2: 'Mid', 3: 'High' };
 
 /**
- * Explicit Basic → Mid → High values for hearts/stamina elixirs (mixer tier 1–3).
- * Index 0 = level 1; must match level-1 numbers in ELIXIR_EFFECTS for those items.
- * Other elixirs still use ELIXIR_LEVEL_FACTORS on their effect numbers.
- * Enduring uses `ENDURING_MAX_STAMINA_MULTIPLIERS`; Hearty uses `HEARTY_MAX_HEARTS_MULTIPLIERS`.
+ * Explicit Basic → Mid → High values for Energizing (mixer tier 1–3).
+ * Hearty & Enduring use **× max pool** multipliers (separate arrays — calibrated to different baselines).
  */
-/** Basic / Mid / High — multiply max pool; gain = ceil(max × tier) − max (min +1). */
-const ENDURING_MAX_STAMINA_MULTIPLIERS = Object.freeze([1.2, 1.3, 1.4]);
-const HEARTY_MAX_HEARTS_MULTIPLIERS = Object.freeze([1.2, 1.3, 1.4]);
+/** ~**3 max hearts** → +1 / +2 / +3 temporary hearts at Basic / Mid / High (`ceil(max×M)−max`, min +1). */
+const HEARTY_MAX_POOL_MULTIPLIERS = Object.freeze([1.2, 1.4, 1.7]);
+/** ~**5 stamina chunks** (~1 wheel) → +2 / +3 / +4 chunks to max & current at Basic / Mid / High. */
+const ENDURING_MAX_POOL_MULTIPLIERS = Object.freeze([1.25, 1.45, 1.7]);
 
 const RESOURCE_ELIXIR_LEVEL_STATS = Object.freeze({
   'Energizing Elixir': { staminaRecovery: [5, 7, 9] },
 });
 
-/** Shared tier math for Enduring (stamina chunks) and Hearty (temporary hearts). */
-function computeTieredGainFromMaxBase(baseMax, level, multipliers) {
+/**
+ * @param {number} baseMax - max hearts or max stamina chunks before drink
+ * @param {readonly number[]} multipliers - length 3 for Basic / Mid / High
+ */
+function computeGainFromMaxPoolMultiplier(baseMax, level, multipliers) {
   const lv = normalizeElixirLevel(level);
   const mult = multipliers[lv - 1];
   if (typeof mult !== 'number' || !Number.isFinite(mult)) return 0;
@@ -37,14 +39,6 @@ function computeTieredGainFromMaxBase(baseMax, level, multipliers) {
   let gain = newVal - base;
   if (gain < 1) gain = 1;
   return gain;
-}
-
-function computeEnduringStaminaChunkBoost(baseMaxStamina, level) {
-  return computeTieredGainFromMaxBase(baseMaxStamina, level, ENDURING_MAX_STAMINA_MULTIPLIERS);
-}
-
-function computeHeartyExtraHeartsFromMax(baseMaxHearts, level) {
-  return computeTieredGainFromMaxBase(baseMaxHearts, level, HEARTY_MAX_HEARTS_MULTIPLIERS);
 }
 
 /** Not valid mixer ingredients (pet / compression / special use only). Keep in sync with `items` + ingredient-label seed. */
@@ -116,9 +110,9 @@ const ELIXIR_EFFECTS = {
   'Enduring Elixir': {
     type: 'enduring',
     description:
-      'Extends max stamina by tier: **Basic ×1.2** / **Mid ×1.3** / **High ×1.4** of your max (chunks) — same amount added to max and current.',
+      'Extends max stamina: **Basic ×1.25** / **Mid ×1.45** / **High ×1.7** of your max (chunks) — same chunk gain added to max and current.',
     effects: {
-      staminaBoost: 5
+      staminaBoost: 2
     }
   },
   'Energizing Elixir': {
@@ -138,7 +132,7 @@ const ELIXIR_EFFECTS = {
   'Hearty Elixir': {
     type: 'hearty',
     description:
-      'Adds temporary hearts on drink: **Basic ×1.2** / **Mid ×1.3** / **High ×1.4** of your max hearts — plus Fairy mix-in on the bottle.',
+      'Adds temporary hearts: **Basic ×1.2** / **Mid ×1.4** / **High ×1.7** of your max hearts — plus Fairy mix-in on the bottle.',
     effects: {
       extraHearts: 1
     }
@@ -227,7 +221,7 @@ function normalizeScaledElixirEffects(effects) {
  * @param {string} elixirName - Canonical elixir item name (e.g. `'Hearty Elixir'`).
  * @param {Record<string, number>} baseEffects - From ELIXIR_EFFECTS[name].effects
  * @param {number} level - 1–3
- * @param {{ maxHeartsForFairyTonic?: number, maxHeartsForHearty?: number, maxStaminaForEnduring?: number }} [options] - Fairy: max hearts. Hearty: max hearts before drink. Enduring: max stamina **before** drink (chunks).
+ * @param {{ maxHeartsForFairyTonic?: number, maxHeartsForHearty?: number, maxStaminaForEnduring?: number }} [options] - Fairy: max hearts. Hearty / Enduring: max pool **before** drink (hearts / stamina chunks). Energizing: `RESOURCE_ELIXIR_LEVEL_STATS`.
  */
 function scaleElixirEffects(elixirName, baseEffects, level, options = {}) {
   const key = resolveElixirItemName(elixirName) || String(elixirName || '').trim();
@@ -251,7 +245,7 @@ function scaleElixirEffects(elixirName, baseEffects, level, options = {}) {
   } else if (key === 'Hearty Elixir') {
     const maxH = options.maxHeartsForHearty;
     if (typeof maxH === 'number' && Number.isFinite(maxH) && maxH > 0) {
-      const extraHearts = computeHeartyExtraHeartsFromMax(maxH, lv);
+      const extraHearts = computeGainFromMaxPoolMultiplier(maxH, lv, HEARTY_MAX_POOL_MULTIPLIERS);
       result = { ...base, extraHearts };
     } else {
       result = { ...base, extraHearts: 0 };
@@ -259,7 +253,7 @@ function scaleElixirEffects(elixirName, baseEffects, level, options = {}) {
   } else if (key === 'Enduring Elixir') {
     const maxS = options.maxStaminaForEnduring;
     if (typeof maxS === 'number' && Number.isFinite(maxS) && maxS > 0) {
-      const staminaBoost = computeEnduringStaminaChunkBoost(maxS, lv);
+      const staminaBoost = computeGainFromMaxPoolMultiplier(maxS, lv, ENDURING_MAX_POOL_MULTIPLIERS);
       result = { ...base, staminaBoost };
     } else {
       result = { ...base, staminaBoost: 0 };
@@ -373,14 +367,14 @@ function getBrewPreviewForElixir(elixirName, level, fairyHealHearts = 0, preview
   const immediateLines = [];
 
   if (key === 'Hearty Elixir') {
-    const mult = HEARTY_MAX_HEARTS_MULTIPLIERS[lv - 1];
+    const mult = HEARTY_MAX_POOL_MULTIPLIERS[lv - 1];
     if (scaled.extraHearts > 0) {
       immediateLines.push(
         `❤️ **×${mult}** of max hearts — **+${scaled.extraHearts}** temporary hearts (can go over your max)`
       );
     } else if (mult) {
       immediateLines.push(
-        `❤️ **×${mult}** of max hearts — temporary heart gain depends on your max when you drink`
+        `❤️ **×${mult}** of max hearts — gain depends on your max when you drink`
       );
     }
   } else if (key === 'Fairy Tonic') {
@@ -392,14 +386,14 @@ function getBrewPreviewForElixir(elixirName, level, fairyHealHearts = 0, preview
           : `❤️ **Up to half** of your max hearts restored (won't overfill)`
     );
   } else if (key === 'Enduring Elixir') {
-    const mult = ENDURING_MAX_STAMINA_MULTIPLIERS[lv - 1];
+    const mult = ENDURING_MAX_POOL_MULTIPLIERS[lv - 1];
     if (scaled.staminaBoost > 0) {
       immediateLines.push(
         `🟩 **×${mult}** of max stamina — **+${scaled.staminaBoost}** stamina chunks (adds to max and current)`
       );
     } else if (mult) {
       immediateLines.push(
-        `🟩 **×${mult}** of max stamina — chunk gain depends on your max when you drink (adds to max and current)`
+        `🟩 **×${mult}** of max stamina — chunk gain depends on your max when you drink`
       );
     }
   } else {
