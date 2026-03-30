@@ -39,7 +39,6 @@ const {
   ELIXIR_LEVEL_NAMES,
   parseElixirTierFromItemOption,
   isElixirItemName,
-  formatElixirStatDisplay,
   getElixirItemUseBlurb,
 } = require('../../modules/elixirModule');
 
@@ -1072,13 +1071,13 @@ module.exports = {
                 ...(currentElixirInfo
                   ? [
                       {
-                        name: '✨ Effect',
+                        name: 'Effect',
                         value:
                           getElixirItemUseBlurb(elixirDisplayName, normalizeElixirLevel(character.buff?.elixirLevel) || 1, {
                             maxHeartsForFairyTonic: character.maxHearts,
                             maxHeartsForHearty: character.maxHearts,
                             maxStaminaForEnduring: character.maxStamina,
-                          }) || currentElixirInfo.description,
+                          }).slice(0, 1024) || currentElixirInfo.description,
                         inline: false,
                       },
                     ]
@@ -1237,56 +1236,6 @@ module.exports = {
           item.itemName === 'Fairy Tonic' ||
           item.itemName === 'Enduring Elixir';
 
-        const buffEffects = character.buff?.effects;
-        const buffLines = [];
-        if (buffEffects && Object.keys(buffEffects).length > 0) {
-          if (buffEffects.blightResistance > 0) {
-            buffLines.push(`🧿 **Blight resistance** — ×${formatElixirStatDisplay(buffEffects.blightResistance)}`);
-          }
-          if (buffEffects.electricResistance > 0) {
-            buffLines.push(`⚡ **Electric resistance** — ×${formatElixirStatDisplay(buffEffects.electricResistance)}`);
-          }
-          if (buffEffects.staminaBoost > 0) {
-            buffLines.push(`🟩 **Stamina boost** — +${formatElixirStatDisplay(buffEffects.staminaBoost)}`);
-          }
-          if (buffEffects.staminaRecovery > 0) {
-            buffLines.push(`💚 **Stamina recovery** — +${formatElixirStatDisplay(buffEffects.staminaRecovery)}`);
-          }
-          if (buffEffects.fireResistance > 0) {
-            buffLines.push(`🌡️ **Heat & fire resistance** — ×${formatElixirStatDisplay(buffEffects.fireResistance)}`);
-          }
-          if (buffEffects.waterResistance > 0) {
-            buffLines.push(`💧 **Water resistance** — ×${formatElixirStatDisplay(buffEffects.waterResistance)}`);
-          }
-          if (buffEffects.plusBoost > 0) {
-            buffLines.push(`✨ **Plus boost** — ×${formatElixirStatDisplay(buffEffects.plusBoost)}`);
-          }
-          if (buffEffects.speedBoost > 0) {
-            buffLines.push(`🏃 **Speed boost** — +${formatElixirStatDisplay(buffEffects.speedBoost)}`);
-          }
-          if (buffEffects.extraHearts > 0) {
-            buffLines.push(`❤️ **Extra hearts** — +${formatElixirStatDisplay(buffEffects.extraHearts)}`);
-          }
-          if (buffEffects.attackBoost > 0) {
-            buffLines.push(`⚔️ **Attack** — ×${formatElixirStatDisplay(buffEffects.attackBoost)}`);
-          }
-          if (buffEffects.stealthBoost > 0) {
-            buffLines.push(`👻 **Stealth** — +${formatElixirStatDisplay(buffEffects.stealthBoost)}`);
-          }
-          if (buffEffects.fleeBoost > 0) {
-            buffLines.push(`🏃‍♂️ **Flee** — +${formatElixirStatDisplay(buffEffects.fleeBoost)}`);
-          }
-          if (buffEffects.coldResistance > 0) {
-            buffLines.push(`❄️ **Cold resistance** — ×${formatElixirStatDisplay(buffEffects.coldResistance)}`);
-          }
-          if (buffEffects.iceEffectiveness > 0) {
-            buffLines.push(`🧊 **Ice effectiveness** — +${formatElixirStatDisplay(buffEffects.iceEffectiveness)}`);
-          }
-          if (buffEffects.defenseBoost > 0) {
-            buffLines.push(`🛡️ **Defense** — ×${formatElixirStatDisplay(buffEffects.defenseBoost)}`);
-          }
-        }
-
         let displayCurrentHearts = character.currentHearts;
         let displayMaxHearts = originalMaxHearts;
         let displayCurrentStamina = character.currentStamina;
@@ -1298,16 +1247,16 @@ module.exports = {
         }
 
         const potencyLabel = ELIXIR_LEVEL_NAMES[invElixirLevel];
-        const guideBlurb =
+        let effectValue =
           getElixirItemUseBlurb(item.itemName, invElixirLevel, {
             maxHeartsForFairyTonic: character.maxHearts,
             maxHeartsForHearty: originalMaxHearts,
             maxStaminaForEnduring: originalMaxStamina,
           }).trim() || (elixirInfo.description || '').trim();
-        const descParts = [
-          `**${character.name}** drank **${item.itemName}** (${potencyLabel}, level ${invElixirLevel}).`,
-          guideBlurb ? `> ${guideBlurb}` : null,
-        ].filter(Boolean);
+        if (item.itemName === 'Hearty Elixir' && fairyHealAppliedForDisplay > 0) {
+          effectValue += `\nFairy Mix-In : +${fairyHealAppliedForDisplay} hearts (up to max)`;
+        }
+        const descParts = [`**${character.name}** drank **${item.itemName}** (${potencyLabel}, level ${invElixirLevel}).`];
 
         const authorPayload = {
           name: character.name,
@@ -1320,14 +1269,19 @@ module.exports = {
           .setAuthor(authorPayload)
           .setTitle('🧪 Elixir consumed')
           .setDescription(descParts.join('\n\n'))
-          .addFields({
-            name: '❤️ · 🟩 Condition',
-            value: [
-              `**Hearts** — ${displayCurrentHearts} / ${displayMaxHearts}`,
-              `**Stamina** — ${displayCurrentStamina} / ${displayMaxStamina}`,
-            ].join('\n'),
-            inline: false,
-          })
+          .addFields(
+            ...(effectValue
+              ? [{ name: 'Effect', value: effectValue.slice(0, 1024), inline: false }]
+              : []),
+            {
+              name: '❤️ · 🟩 Condition',
+              value: [
+                `**Hearts** — ${displayCurrentHearts} / ${displayMaxHearts}`,
+                `**Stamina** — ${displayCurrentStamina} / ${displayMaxStamina}`,
+              ].join('\n'),
+              inline: false,
+            }
+          )
           .setThumbnail(item.image || character.icon)
           .setImage('https://storage.googleapis.com/tinglebot/Graphics/border.png');
 
@@ -1357,15 +1311,6 @@ module.exports = {
           elixirEmbed.addFields({
             name: '⚡ Right now',
             value: immediateLines.join('\n'),
-            inline: false,
-          });
-        }
-
-        if (buffLines.length > 0) {
-          const buffValue = buffLines.join('\n').slice(0, 1024);
-          elixirEmbed.addFields({
-            name: '✨ Active buffs',
-            value: buffValue,
             inline: false,
           });
         }
