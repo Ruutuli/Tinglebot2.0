@@ -322,7 +322,62 @@ function formatElixirStatDisplay(n) {
 }
 
 /**
- * Brew embed: catalog line + optional “this bottle” numbers (not full site docs).
+ * One-line effect copy for `/item` (and similar) — uses **this bottle’s** level, not all tiers.
+ * @param {{ maxHeartsForFairyTonic?: number, maxHeartsForHearty?: number, maxStaminaForEnduring?: number }} [options]
+ */
+function getElixirItemUseBlurb(elixirName, elixirLevel, options = {}) {
+  const key = resolveElixirItemName(elixirName);
+  if (!key || !ELIXIR_EFFECTS[key]) return '';
+  const lv = normalizeElixirLevel(elixirLevel);
+  const base = ELIXIR_EFFECTS[key].effects;
+  const scaled = scaleElixirEffects(key, base, lv, options);
+
+  switch (key) {
+    case 'Sticky Elixir': {
+      const w = scaled.waterResistance;
+      const range = STICKY_BONUS_EXTRA_RANGE_BY_LEVEL[lv - 1] ?? STICKY_BONUS_EXTRA_RANGE_BY_LEVEL[0];
+      return `Water ×${formatElixirStatDisplay(w)}; **+${range[0]}–${range[1]}** extra copies of the same item when you earn loot.`;
+    }
+    case 'Chilly Elixir':
+      return `Heat & fire resistance ×${formatElixirStatDisplay(scaled.fireResistance)}.`;
+    case 'Bright Elixir':
+      return `Blight resistance ×${formatElixirStatDisplay(scaled.blightResistance)}.`;
+    case 'Spicy Elixir':
+      return `Cold & ice resistance ×${formatElixirStatDisplay(scaled.coldResistance)}.`;
+    case 'Electro Elixir':
+      return `Electric resistance ×${formatElixirStatDisplay(scaled.electricResistance)}.`;
+    case 'Mighty Elixir':
+      return `Attack ×${formatElixirStatDisplay(scaled.attackBoost)}.`;
+    case 'Tough Elixir':
+      return `Defense ×${formatElixirStatDisplay(scaled.defenseBoost)}.`;
+    case 'Sneaky Elixir':
+      return `Stealth +${formatElixirStatDisplay(scaled.stealthBoost)}, flee +${formatElixirStatDisplay(scaled.fleeBoost)}.`;
+    case 'Hasty Elixir':
+      return `Travel speed +${formatElixirStatDisplay(scaled.speedBoost)}.`;
+    case 'Energizing Elixir': {
+      const arr = RESOURCE_ELIXIR_LEVEL_STATS['Energizing Elixir']?.staminaRecovery;
+      const n = arr?.[lv - 1];
+      return typeof n === 'number' ? `Restores **+${n}** stamina.` : 'Restores stamina.';
+    }
+    case 'Hearty Elixir': {
+      const ex = scaled.extraHearts;
+      return `**+${ex}** temporary hearts from this tier.`;
+    }
+    case 'Enduring Elixir': {
+      const st = scaled.staminaBoost;
+      return `**+${st}** temporary stamina chunks.`;
+    }
+    case 'Fairy Tonic': {
+      const h = scaled.healHearts;
+      return `Heal up to **${h}** missing hearts (capped by your max).`;
+    }
+    default:
+      return (ELIXIR_EFFECTS[key].description || '').trim();
+  }
+}
+
+/**
+ * Brew embed: same tier-specific line as `/item`, plus optional Fairy mix-in note.
  * @param {{ maxHeartsForHearty?: number, maxStaminaForEnduring?: number, maxHeartsForFairyTonic?: number }} [previewOptions]
  * @returns {{ buffText: string | null, immediateText: string | null }}
  */
@@ -332,37 +387,10 @@ function getBrewPreviewForElixir(elixirName, level, fairyHealHearts = 0, preview
   if (!elixir) return { buffText: null, immediateText: null };
 
   const lv = normalizeElixirLevel(level);
-  const parts = [elixir.description.trim()];
-
-  if (key === 'Hearty Elixir' && typeof previewOptions.maxHeartsForHearty === 'number') {
-    const extra = computeGainFromMaxPoolMultiplier(
-      previewOptions.maxHeartsForHearty,
-      lv,
-      HEARTY_MAX_POOL_MULTIPLIERS
-    );
-    if (extra > 0) parts.push(`This bottle: **~+${extra}** temp hearts at your max.`);
-  }
-  if (key === 'Enduring Elixir' && typeof previewOptions.maxStaminaForEnduring === 'number') {
-    const boost = computeGainFromMaxPoolMultiplier(
-      previewOptions.maxStaminaForEnduring,
-      lv,
-      ENDURING_MAX_POOL_MULTIPLIERS
-    );
-    if (boost > 0) parts.push(`This bottle: **~+${boost}** stamina chunks at your max.`);
-  }
-  if (key === 'Fairy Tonic' && typeof previewOptions.maxHeartsForFairyTonic === 'number') {
-    const heal = getFairyTonicHealBudget(previewOptions.maxHeartsForFairyTonic, lv);
-    if (heal > 0) parts.push(`This bottle: up to **${heal}** hearts healed (missing only).`);
-  }
-  if (key === 'Energizing Elixir') {
-    const arr = RESOURCE_ELIXIR_LEVEL_STATS['Energizing Elixir']?.staminaRecovery;
-    const n = arr?.[lv - 1];
-    if (typeof n === 'number') parts.push(`This bottle: **+${n}** stamina.`);
-  }
-  if (key === 'Sticky Elixir') {
-    const range = STICKY_BONUS_EXTRA_RANGE_BY_LEVEL[lv - 1];
-    if (range) parts.push(`This bottle: **+${range[0]}–${range[1]}** bonus copies when it applies.`);
-  }
+  const primary = getElixirItemUseBlurb(elixirName, lv, previewOptions);
+  const parts = [];
+  if (primary) parts.push(primary);
+  else parts.push(elixir.description.trim());
 
   if (fairyHealHearts > 0) {
     parts.push(`Fairy mix-in **+${fairyHealHearts}** hearts.`);
@@ -922,6 +950,7 @@ module.exports = {
   normalizeElixirLevel,
   scaleElixirEffects,
   getBrewPreviewForElixir,
+  getElixirItemUseBlurb,
   formatElixirItemOptionValue,
   parseElixirTierFromItemOption,
   isElixirItemName,

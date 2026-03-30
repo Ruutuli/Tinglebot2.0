@@ -40,6 +40,7 @@ const {
   parseElixirTierFromItemOption,
   isElixirItemName,
   formatElixirStatDisplay,
+  getElixirItemUseBlurb,
 } = require('../../modules/elixirModule');
 
 // ------------------- Utility Functions -------------------
@@ -1069,7 +1070,18 @@ module.exports = {
               fields: [
                 { name: '🧪 Current buff', value: `**${elixirDisplayName}**`, inline: true },
                 ...(currentElixirInfo
-                  ? [{ name: '✨ Effect', value: currentElixirInfo.description, inline: false }]
+                  ? [
+                      {
+                        name: '✨ Effect',
+                        value:
+                          getElixirItemUseBlurb(elixirDisplayName, normalizeElixirLevel(character.buff?.elixirLevel) || 1, {
+                            maxHeartsForFairyTonic: character.maxHearts,
+                            maxHeartsForHearty: character.maxHearts,
+                            maxStaminaForEnduring: character.maxStamina,
+                          }) || currentElixirInfo.description,
+                        inline: false,
+                      },
+                    ]
                   : []),
               ],
               image: {
@@ -1286,7 +1298,12 @@ module.exports = {
         }
 
         const potencyLabel = ELIXIR_LEVEL_NAMES[invElixirLevel];
-        const guideBlurb = (elixirInfo.description || '').trim();
+        const guideBlurb =
+          getElixirItemUseBlurb(item.itemName, invElixirLevel, {
+            maxHeartsForFairyTonic: character.maxHearts,
+            maxHeartsForHearty: originalMaxHearts,
+            maxStaminaForEnduring: originalMaxStamina,
+          }).trim() || (elixirInfo.description || '').trim();
         const descParts = [
           `**${character.name}** drank **${item.itemName}** (${potencyLabel}, level ${invElixirLevel}).`,
           guideBlurb ? `> ${guideBlurb}` : null,

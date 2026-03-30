@@ -67,7 +67,13 @@ const { triggerRaid, endExplorationRaidAsRetreat, closeRaidsForExpedition, advan
 const { startWave, joinWave, advanceWaveTurnOnItemUse } = require("../../modules/waveModule.js");
 const MapModule = require('@/modules/mapModule.js');
 const { pushProgressLog, hasDiscoveriesInQuadrant, hasUnpinnedDiscoveriesInQuadrant, shouldSkipDiscoveryCleanupEntry, addExpeditionPinKeysToReportedSet, updateDiscoveryGrottoStatus, markGrottoCleared, applyExpeditionFailedState } = require("../../modules/exploreModule.js");
-const { getElixirTypeByName, elixirCountersExplorationHazard, isHazardResistanceElixir } = require("../../modules/elixirModule.js");
+const {
+  getElixirTypeByName,
+  elixirCountersExplorationHazard,
+  isHazardResistanceElixir,
+  rollStickyBonusExtraQuantity,
+} = require("../../modules/elixirModule.js");
+const { isAprilFoolsEastern } = require("@/utils/aprilFoolsRoll.js");
 const { finalizeBlightApplication } = require("../../handlers/blightHandler.js");
 const { partyHasRelic, consumeBlightCandleUse, partyHasLensOfTruthRelic, characterHasRelic, relicOwnerMatchQuery } = require('@/utils/relicUtils.js');
 
@@ -6821,9 +6827,21 @@ module.exports = {
 
          if (lootedItem) {
           const qty = lootedItem.quantity ?? 1;
+          let stickyRaidExtras = 0;
+          try {
+           if (!isAprilFoolsEastern()) {
+            stickyRaidExtras = rollStickyBonusExtraQuantity(character);
+           }
+          } catch (_) {
+           stickyRaidExtras = 0;
+          }
+          let lootFoundValue = `${lootedItem.emoji || ""} **${lootedItem.itemName}**${qty > 1 ? ` x${qty}` : ""}`;
+          if (stickyRaidExtras > 0) {
+           lootFoundValue += `\n✨ **Sticky Elixir:** +${stickyRaidExtras} extra **${lootedItem.itemName}**.`;
+          }
           embed.addFields({
            name: `🎉 __Loot Found__`,
-           value: `${lootedItem.emoji || ""} **${lootedItem.itemName}**${qty > 1 ? ` x${qty}` : ""}`,
+           value: lootFoundValue,
            inline: false,
           });
 
@@ -6835,6 +6853,19 @@ module.exports = {
             interaction,
             "Exploration Loot"
            );
+           if (stickyRaidExtras > 0) {
+            await addItemInventoryDatabase(
+             character._id,
+             lootedItem.itemName,
+             stickyRaidExtras,
+             interaction,
+             "Exploration Loot (Sticky Elixir)"
+            );
+            logger.info(
+             "EXPLORE",
+             `Sticky Elixir: +${stickyRaidExtras} extra ${lootedItem.itemName} for ${character.name} (Exploration Raid Loot)`
+            );
+           }
           }
 
           if (!party.gatheredItems) {
@@ -6844,7 +6875,7 @@ module.exports = {
            characterId: character._id,
            characterName: character.name,
            itemName: lootedItem.itemName,
-           quantity: qty,
+           quantity: qty + stickyRaidExtras,
            emoji: lootedItem.emoji || "",
           });
           party.markModified("gatheredItems");
@@ -6975,9 +7006,21 @@ module.exports = {
 
        if (outcome.canLoot && lootedItem) {
         const qty = lootedItem.quantity ?? 1;
+        let stickyExploreExtras = 0;
+        try {
+         if (!isAprilFoolsEastern()) {
+          stickyExploreExtras = rollStickyBonusExtraQuantity(character);
+         }
+        } catch (_) {
+         stickyExploreExtras = 0;
+        }
+        let lootFoundValue = `${lootedItem.emoji || ""} **${lootedItem.itemName}**${qty > 1 ? ` x${qty}` : ""}`;
+        if (stickyExploreExtras > 0) {
+         lootFoundValue += `\n✨ **Sticky Elixir:** +${stickyExploreExtras} extra **${lootedItem.itemName}**.`;
+        }
         embed.addFields({
          name: `🎉 __Loot Found__`,
-         value: `${lootedItem.emoji || ""} **${lootedItem.itemName}**${qty > 1 ? ` x${qty}` : ""}`,
+         value: lootFoundValue,
          inline: false,
         });
 
@@ -6989,6 +7032,19 @@ module.exports = {
           interaction,
           "Exploration Loot"
          );
+         if (stickyExploreExtras > 0) {
+          await addItemInventoryDatabase(
+           character._id,
+           lootedItem.itemName,
+           stickyExploreExtras,
+           interaction,
+           "Exploration Loot (Sticky Elixir)"
+          );
+          logger.info(
+           "EXPLORE",
+           `Sticky Elixir: +${stickyExploreExtras} extra ${lootedItem.itemName} for ${character.name} (Exploration Loot)`
+          );
+         }
         }
 
         if (!party.gatheredItems) {
@@ -6998,7 +7054,7 @@ module.exports = {
          characterId: character._id,
          characterName: character.name,
          itemName: lootedItem.itemName,
-         quantity: qty,
+         quantity: qty + stickyExploreExtras,
          emoji: lootedItem.emoji || "",
         });
         party.markModified("gatheredItems");
