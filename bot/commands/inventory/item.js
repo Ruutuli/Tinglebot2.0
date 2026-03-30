@@ -41,6 +41,7 @@ const {
   isElixirItemName,
   getElixirItemUseBlurb,
   elixirQuotedEffectLine,
+  resolveElixirItemName,
 } = require('../../modules/elixirModule');
 
 // ------------------- Utility Functions -------------------
@@ -977,10 +978,11 @@ module.exports = {
       // Specialized logic for Breath of the Wild elixirs: applies buffs and effects
       const elixirInfo = getElixirInfo(item.itemName);
       if (elixirInfo) {
-        const nameLc = item.itemName.toLowerCase();
+        const canonicalItemName = resolveElixirItemName(item.itemName);
         let elixirStacks = inventoryItems.filter(
           (inv) =>
-            inv.itemName?.toLowerCase() === nameLc && (inv.quantity || 0) > 0
+            resolveElixirItemName(inv.itemName || '') === canonicalItemName &&
+            (inv.quantity || 0) > 0
         );
         if (requestedElixirLevel != null) {
           elixirStacks = elixirStacks.filter(
@@ -1029,7 +1031,7 @@ module.exports = {
           Math.floor(Number(ownedElixirStack.modifierHearts) || 0)
         );
         const healUsesTierPlusFairyMix =
-          item.itemName === 'Hearty Elixir' || item.itemName === 'Fairy Tonic';
+          canonicalItemName === 'Hearty Elixir' || canonicalItemName === 'Fairy Tonic';
 
         // Force quantity to 1 for elixirs (they're powerful items)
         if (quantity !== 1) {
@@ -1051,9 +1053,9 @@ module.exports = {
 
         // Only one buff elixir active at a time. Instant elixirs (no lingering buff) may still be drunk.
         const elixirInstantNoPersistentBuff =
-          item.itemName === 'Hearty Elixir' ||
-          item.itemName === 'Fairy Tonic' ||
-          item.itemName === 'Enduring Elixir';
+          canonicalItemName === 'Hearty Elixir' ||
+          canonicalItemName === 'Fairy Tonic' ||
+          canonicalItemName === 'Enduring Elixir';
         if (character.buff?.active && !elixirInstantNoPersistentBuff) {
           const rawType = character.buff.type;
           const typeForLookup = rawType === 'fireproof' ? 'chilly' : rawType;
@@ -1118,7 +1120,7 @@ module.exports = {
           }
           
           // Special handling for Hearty and Enduring Elixirs - they expire immediately since they're just for healing/restoration
-          if (item.itemName === 'Hearty Elixir') {
+          if (canonicalItemName === 'Hearty Elixir') {
             const scaledHearty = scaleElixirEffects(
               'Hearty Elixir',
               ELIXIR_EFFECTS['Hearty Elixir'].effects,
@@ -1140,7 +1142,7 @@ module.exports = {
               type: null,
               effects: {}
             };
-          } else if (item.itemName === 'Fairy Tonic') {
+          } else if (canonicalItemName === 'Fairy Tonic') {
             const scaledTonic = scaleElixirEffects(
               'Fairy Tonic',
               ELIXIR_EFFECTS['Fairy Tonic'].effects,
@@ -1156,7 +1158,7 @@ module.exports = {
               type: null,
               effects: {}
             };
-          } else if (item.itemName === 'Enduring Elixir') {
+          } else if (canonicalItemName === 'Enduring Elixir') {
             const scaledEnduring = scaleElixirEffects(
               'Enduring Elixir',
               ELIXIR_EFFECTS['Enduring Elixir'].effects,
@@ -1174,7 +1176,7 @@ module.exports = {
               effects: {}
             };
           } else {
-            applyElixirBuff(character, item.itemName, invElixirLevel);
+            applyElixirBuff(character, canonicalItemName, invElixirLevel);
           }
           
           // Update character in database
@@ -1182,12 +1184,12 @@ module.exports = {
           await updateFunction(character._id, { buff: character.buff });
           
           // Update hearts if they were modified by Hearty Elixir or Fairy Tonic
-          if (item.itemName === 'Hearty Elixir' || item.itemName === 'Fairy Tonic') {
+          if (canonicalItemName === 'Hearty Elixir' || canonicalItemName === 'Fairy Tonic') {
             await updateCurrentHearts(character._id, character.currentHearts);
           }
           
           // Update stamina if it was modified by Enduring Elixir
-          if (item.itemName === 'Enduring Elixir') {
+          if (canonicalItemName === 'Enduring Elixir') {
             await updateCurrentStamina(character._id, character.currentStamina);
           }
         } catch (error) {
@@ -1219,10 +1221,10 @@ module.exports = {
         // Remove the elixir from inventory with proper logging
         await removeItemInventoryDatabase(
           character._id,
-          item.itemName,
+          ownedElixirStack.itemName,
           1,
           interaction,
-          `Used ${item.itemName} for buff effects`,
+          `Used ${ownedElixirStack.itemName} for buff effects`,
           {
             elixirLevel: invElixirLevel,
             modifierHearts: Math.max(0, Math.floor(Number(ownedElixirStack.modifierHearts) || 0)),
@@ -1231,32 +1233,32 @@ module.exports = {
 
         // ------------------- Build and Send Elixir Embed -------------------
         const isImmediateElixir =
-          item.itemName === 'Hearty Elixir' ||
-          item.itemName === 'Fairy Tonic' ||
-          item.itemName === 'Enduring Elixir';
+          canonicalItemName === 'Hearty Elixir' ||
+          canonicalItemName === 'Fairy Tonic' ||
+          canonicalItemName === 'Enduring Elixir';
 
         let displayCurrentHearts = character.currentHearts;
         let displayMaxHearts = originalMaxHearts;
         let displayCurrentStamina = character.currentStamina;
         let displayMaxStamina = character.maxStamina;
 
-        if (item.itemName === 'Hearty Elixir' || item.itemName === 'Fairy Tonic') {
+        if (canonicalItemName === 'Hearty Elixir' || canonicalItemName === 'Fairy Tonic') {
           displayCurrentHearts = character.currentHearts;
           displayMaxHearts = originalMaxHearts;
         }
 
         const potencyLabel = ELIXIR_LEVEL_NAMES[invElixirLevel];
         let effectValue =
-          getElixirItemUseBlurb(item.itemName, invElixirLevel, {
+          getElixirItemUseBlurb(canonicalItemName, invElixirLevel, {
             maxHeartsForFairyTonic: character.maxHearts,
             maxHeartsForHearty: originalMaxHearts,
             maxStaminaForEnduring: originalMaxStamina,
           }).trim() || (elixirInfo.description || '').trim();
-        if (item.itemName === 'Hearty Elixir' && fairyHealAppliedForDisplay > 0) {
+        if (canonicalItemName === 'Hearty Elixir' && fairyHealAppliedForDisplay > 0) {
           effectValue += `\n${elixirQuotedEffectLine('Fairy Mix-In', `+${fairyHealAppliedForDisplay} hearts (up to max)`)}`;
         }
         const descParts = [
-          `**${character.name}** drank **${item.itemName}** (${potencyLabel}, level ${invElixirLevel}).`,
+          `**${character.name}** drank **${canonicalItemName}** (${potencyLabel}, level ${invElixirLevel}).`,
           effectValue ? `**Effect**\n${effectValue.slice(0, 3500)}` : null,
         ].filter(Boolean);
 
@@ -1282,7 +1284,7 @@ module.exports = {
           .setThumbnail(item.image || character.icon)
           .setImage('https://storage.googleapis.com/tinglebot/Graphics/border.png');
 
-        if (item.itemName === 'Hearty Elixir' && (fairyHealAppliedForDisplay > 0 || heartyTierBonusForDisplay > 0)) {
+        if (canonicalItemName === 'Hearty Elixir' && (fairyHealAppliedForDisplay > 0 || heartyTierBonusForDisplay > 0)) {
           const immediateLines = [];
           if (fairyHealAppliedForDisplay > 0) {
             immediateLines.push(`❤️ **+${fairyHealAppliedForDisplay}** from Fairy mix-in (up to max)`);

@@ -608,6 +608,7 @@ module.exports = {
       }
 
       // ------------------- Calculate Travel Duration -------------------
+      let hastyTravelSummary = null;
       const totalTravelDuration = calculateTravelDuration(startingVillage, destination, mode, character);
 
       // ------------------- Consume Hasty Elixir if Travel Time was Reduced -------------------
@@ -629,8 +630,20 @@ module.exports = {
               `[travel.js]: 🧪 Travel time reduced: ${originalDuration} → ${totalTravelDuration} days`
             );
             console.log(`[travel.js]: 🏃 Hasty Elixir helped ${character.name} travel faster!`);
-            consumeElixirTravelChargeOrBuff(character);
-            
+            const hastyResult = consumeElixirTravelChargeOrBuff(character);
+            const chargesRemaining = hastyResult.fullyRemoved
+              ? 0
+              : Math.max(
+                  0,
+                  Math.floor(Number(character.buff?.effects?.hastyTravelCharges) || 0)
+                );
+            hastyTravelSummary = {
+              daysBefore: originalDuration,
+              daysAfter: totalTravelDuration,
+              chargesRemaining,
+              buffFullySpent: !!hastyResult.fullyRemoved,
+            };
+
             // Update character in database to persist the consumed elixir
             if (character.isModCharacter) {
               const ModCharacter = require('@/models/ModCharacterModel.js');
@@ -730,7 +743,17 @@ module.exports = {
       }
 
       // ------------------- Send Initial Travel Embed -------------------
-      const initialEmbed = createInitialTravelEmbed(character, startingVillage, destination, paths, totalTravelDuration, null, mode, boostFlavorText);
+      const initialEmbed = createInitialTravelEmbed(
+        character,
+        startingVillage,
+        destination,
+        paths,
+        totalTravelDuration,
+        null,
+        mode,
+        boostFlavorText,
+        hastyTravelSummary
+      );
       await interaction.followUp({ embeds: [initialEmbed] });
 
       // ------------------- Start Travel Processing -------------------
@@ -748,7 +771,8 @@ module.exports = {
         mode,
         startingWeather,
         scholarTravelGuideActive: false,
-        scholarTravelGuideTriggered: false
+        scholarTravelGuideTriggered: false,
+        hastyTravelSummary,
       });
       
     } catch (error) {
@@ -898,7 +922,8 @@ async function processTravelDay(day, context) {
       channel: savedChannel,
       mount,
       mode,
-      startingWeather
+      startingWeather,
+      hastyTravelSummary,
     } = context;
 
     // ------------------- Reset Travel Gathering Flag ------------------
@@ -1224,7 +1249,14 @@ async function processTravelDay(day, context) {
         context.travelLog.push('🎵 **Bolero of Fire** crackled in the air, warding off trouble before it could find you.');
       }
       const filteredLog = context.travelLog.filter(entry => !entry.startsWith('fight: win & loot'));
-      const finalEmbed = createFinalTravelEmbed(character, destination, paths, totalTravelDuration, filteredLog);
+      const finalEmbed = createFinalTravelEmbed(
+        character,
+        destination,
+        paths,
+        totalTravelDuration,
+        filteredLog,
+        context.hastyTravelSummary
+      );
 
       const imageEmbed = new EmbedBuilder()
         .setImage('https://storage.googleapis.com/tinglebot/Graphics/travel.png')
@@ -1559,7 +1591,14 @@ async function processTravelDay(day, context) {
         `${character.name} gazed at constellations and felt at peace. 🌟`
       ];
       const doNothingFlavor = doNothingFlavorTexts[Math.floor(Math.random() * doNothingFlavorTexts.length)];
-      const safeEmbed = createSafeTravelDayEmbed(character, day, totalTravelDuration, pathEmoji, currentPath);
+      const safeEmbed = createSafeTravelDayEmbed(
+        character,
+        day,
+        totalTravelDuration,
+        pathEmoji,
+        currentPath,
+        hastyTravelSummary
+      );
       
       // Update embed description if chest was found
       if (chestFound) {

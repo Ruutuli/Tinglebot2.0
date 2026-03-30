@@ -3424,6 +3424,22 @@ const createTravelMonsterEncounterEmbed = async (
  return embed;
 };
 
+// ------------------- Hasty Elixir (travel): shared embed field -------------------
+/** @param {{ daysBefore: number, daysAfter: number, chargesRemaining: number, buffFullySpent: boolean } | null | undefined} summary */
+function buildHastyTravelEmbedField(summary) {
+  if (!summary) return null;
+  const { daysBefore, daysAfter, chargesRemaining, buffFullySpent } = summary;
+  return {
+    name: '🧪 Hasty Elixir',
+    value:
+      `Travel time halved (**${daysBefore}** → **${daysAfter}** day(s)).\n` +
+      (buffFullySpent
+        ? 'Buff **fully used** on this leg — no charges left.'
+        : `**${chargesRemaining}** trip charge(s) remaining.`),
+    inline: false,
+  };
+}
+
 // ------------------- Function: createInitialTravelEmbed -------------------
 // Creates an embed for initial travel announcements
 const createInitialTravelEmbed = (
@@ -3434,7 +3450,8 @@ const createInitialTravelEmbed = (
  totalTravelDuration,
  mount = null,
  mode = 'on foot',
- boostFlavor = null
+ boostFlavor = null,
+ hastyTravelSummary = null
 ) => {
  const startEmoji = villageEmojis[startingVillage.toLowerCase()] || "";
  const destEmoji = villageEmojis[destination.toLowerCase()] || "";
@@ -3467,6 +3484,9 @@ const createInitialTravelEmbed = (
   });
  }
 
+ const hastyField = buildHastyTravelEmbedField(hastyTravelSummary);
+ if (hastyField) embed.addFields(hastyField);
+
  setDefaultImage(embed);
  return embed;
 };
@@ -3490,7 +3510,8 @@ const createSafeTravelDayEmbed = (
  day,
  totalTravelDuration,
  pathEmoji,
- currentPath
+ currentPath,
+ hastyTravelSummary = null
 ) => {
  const description = `🌸 **It's a nice and safe day of traveling.** What do you want to do next?\n- ❤️ Recover a heart (costs 1 🟩 stamina)\n- 🌿 Gather (costs 1 🟩 stamina)\n- 💤 Do nothing (move onto the next day)`;
 
@@ -3508,6 +3529,11 @@ const createSafeTravelDayEmbed = (
   )
   .setColor("#AA926A")
   .setTimestamp();
+
+ if (day === 1) {
+  const hastyField = buildHastyTravelEmbedField(hastyTravelSummary);
+  if (hastyField) embed.addFields(hastyField);
+ }
 
  if (isValidImageUrl(pathImage)) {
   embed.setImage(pathImage);
@@ -4228,6 +4254,7 @@ module.exports = {
  createRaidKOEmbed,
  createHealEmbed,
  createTravelMonsterEncounterEmbed,
+ buildHastyTravelEmbedField,
  createInitialTravelEmbed,
  createTravelingEmbed,
  createSafeTravelDayEmbed,

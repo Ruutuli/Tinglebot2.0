@@ -156,7 +156,7 @@ const ELIXIR_EFFECTS = {
   'Hasty Elixir': {
     type: 'hasty',
     description:
-      'Travel duration **halved** (min **1** day per leg). **1 / 2 / 3** travel charges (Basic / Mid / High). **Explore:** **×1.5** weight for **Quadrant explored** (roller has Hasty).',
+      'Travel time **halved**. **Explore:** **×1.5** for Quadrant explored (you roll).',
     effects: {
       speedBoost: 1
     }
@@ -208,6 +208,8 @@ const resolveElixirItemName = (rawName) => {
     .replace(/\s*\(Qty:\s*\d+\s*\)/gi, '')
     .replace(/\s*-\s*Qty:\s*\d+\s*$/i, '')
     .trim();
+  // Autocomplete stack label, e.g. "Hasty Elixir [Mid|m0]" → "Hasty Elixir"
+  s = s.replace(/\s*\[[^\]]+\]\s*$/i, '').trim();
   if (ELIXIR_EFFECTS[s]) return s;
   const key = Object.keys(ELIXIR_EFFECTS).find((k) => k.toLowerCase() === s.toLowerCase());
   return key || s;
@@ -370,15 +372,14 @@ function getElixirItemUseBlurb(elixirName, elixirLevel, options = {}) {
         elixirQuotedEffectLine('Stealth', `+${formatElixirStatDisplay(scaled.stealthBoost)}`),
         elixirQuotedEffectLine('Flee', `+${formatElixirStatDisplay(scaled.fleeBoost)}`),
       ].join('\n');
-    case 'Hasty Elixir':
+    case 'Hasty Elixir': {
+      const tripsLabel = lv === 1 ? '1 trip' : `${lv} trips`;
       return [
-        elixirQuotedEffectLine('Travel time', 'Halved (min 1 day per leg)'),
-        elixirQuotedEffectLine(
-          'Travel charges',
-          `${lv} trip(s) on this bottle (Basic 1 / Mid 2 / High 3)`
-        ),
+        elixirQuotedEffectLine('Travel time', 'Halved'),
+        elixirQuotedEffectLine('Travel charges', tripsLabel),
         elixirQuotedEffectLine('Explore roll', '×1.5 weight for Quadrant explored (you roll)'),
       ].join('\n');
+    }
     case 'Energizing Elixir': {
       const arr = RESOURCE_ELIXIR_LEVEL_STATS['Energizing Elixir']?.staminaRecovery;
       const n = arr?.[lv - 1];
@@ -1051,6 +1052,7 @@ module.exports = {
   getBuffDuration,
   calculateBuffedStats,
   getElixirInfo,
+  resolveElixirItemName,
   getAllElixirTypes,
   getElixirTypeByName,
   elixirCountersExplorationHazard,

@@ -24,6 +24,7 @@ const { fetchAllItems, fetchItemsByMonster } = require('@/database/db');
 const { 
   createKOEmbed,
   createUpdatedTravelEmbed,
+  buildHastyTravelEmbedField,
   pathEmojis,
   villageEmojis,
   DEFAULT_IMAGE_URL
@@ -136,7 +137,7 @@ async function updateDailyRoll(character, activity) {
 
 // ------------------- Final Travel Summary Embed -------------------
 // Creates a formatted embed summarizing the character's journey
-function createFinalTravelEmbed(character, destination, paths, totalTravelDuration, travelLog) {
+function createFinalTravelEmbed(character, destination, paths, totalTravelDuration, travelLog, hastyTravelSummary = null) {
   const destEmoji = villageEmojis[destination.toLowerCase()] || "";
 
   // Process and format travel log entries
@@ -176,7 +177,9 @@ function createFinalTravelEmbed(character, destination, paths, totalTravelDurati
     .map(([day, entries]) => `**Day ${day}:**\n${entries.join('\n')}`)
     .join('\n\n');
 
-  return new EmbedBuilder()
+  const hastyField = buildHastyTravelEmbedField(hastyTravelSummary);
+
+  const embed = new EmbedBuilder()
     .setTitle(`✅ ${character.name} has arrived at ${destEmoji} ${capitalizeFirstLetter(destination)}!`)
     .setDescription(
       `**Travel Path:** ${paths.map(path => 
@@ -186,14 +189,18 @@ function createFinalTravelEmbed(character, destination, paths, totalTravelDurati
       `**❤️ __Hearts:__** ${character.currentHearts}/${character.maxHearts}\n` +
       `**🟩 __Stamina:__** ${character.currentStamina}/${character.maxStamina}`
     )
-    .addFields({
-      name: "📖 Travel Log",
-      value: processedLog || "No significant events occurred during the journey."
-    })
     .setColor("#AA926A")
     .setAuthor({ name: "Travel Summary", iconURL: character.icon })
     .setImage(DEFAULT_IMAGE_URL)
     .setTimestamp();
+
+  if (hastyField) embed.addFields(hastyField);
+  embed.addFields({
+    name: "📖 Travel Log",
+    value: processedLog || "No significant events occurred during the journey."
+  });
+
+  return embed;
 }
 
 // ============================================================================
