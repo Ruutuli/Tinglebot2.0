@@ -14,6 +14,8 @@ type Monster = {
   image?: string;
   species: string;
   type: string;
+  /** none | fire | ice | electric | water | earth | undead | wind (MonsterModel) */
+  element?: string;
   tier: number;
   hearts: number;
   dmg: number;
@@ -68,6 +70,37 @@ function normalizeLocationsForDisplay(locations: string[] | null | undefined): s
   }
   if (out.length > 0) return out;
   return joined ? [joined] : locations;
+}
+
+function monsterElementRaw(monster: Monster): string {
+  const e = monster.element != null ? String(monster.element).trim().toLowerCase() : "";
+  return e || "none";
+}
+
+function formatMonsterElementLabel(raw: string): string {
+  if (!raw || raw === "none") return "None";
+  return raw.charAt(0).toUpperCase() + raw.slice(1).toLowerCase();
+}
+
+function monsterElementTextClass(raw: string): string {
+  switch (raw) {
+    case "fire":
+      return "text-orange-400";
+    case "ice":
+      return "text-cyan-300";
+    case "electric":
+      return "text-yellow-300";
+    case "water":
+      return "text-sky-400";
+    case "earth":
+      return "text-amber-600";
+    case "undead":
+      return "text-violet-400";
+    case "wind":
+      return "text-slate-300";
+    default:
+      return "text-[var(--totk-grey-200)]";
+  }
 }
 
 // ------------------- Monster flip card (front: stats, back: drops) -------------------
@@ -162,6 +195,13 @@ function MonsterFlipCard({ monster }: { monster: Monster }) {
             <div className="item-detail-row modern-item-detail-row">
               <i className="fas fa-bolt" aria-hidden="true"></i>
               <strong>Damage:</strong> <span className="text-[var(--blight-border)]">{monster.dmg}</span>
+            </div>
+            <div className="item-detail-row modern-item-detail-row">
+              <i className="fas fa-magic" aria-hidden="true"></i>
+              <strong>Element:</strong>{" "}
+              <span className={monsterElementTextClass(monsterElementRaw(monster))}>
+                {formatMonsterElementLabel(monsterElementRaw(monster))}
+              </span>
             </div>
           </div>
         </div>
