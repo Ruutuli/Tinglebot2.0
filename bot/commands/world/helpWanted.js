@@ -1410,7 +1410,11 @@ async function processMonsterEncounter(character, monsterName, heartsRemaining) 
   // Add elixir buff information to the outcome message if active
   if (elixirBuffs && (elixirBuffs.speedBoost > 0 || elixirBuffs.stealthBoost > 0 || elixirBuffs.attackBoost > 0 || elixirBuffs.defenseBoost > 0)) {
     let buffInfo = '\n\n🧪 **Active Elixir Effects:**';
-    if (elixirBuffs.speedBoost > 0) buffInfo += `\n• Speed Boost: +${elixirBuffs.speedBoost}`;
+    if (elixirBuffs.speedBoost > 0) {
+      const ch = character?.buff?.effects?.hastyTravelCharges;
+      const chStr = typeof ch === 'number' && Number.isFinite(ch) && ch > 0 ? ` · ${ch} travel charge(s) left` : '';
+      buffInfo += `\n• Hasty: travel duration halved (min 1 day)${chStr}`;
+    }
     if (elixirBuffs.stealthBoost > 0) buffInfo += `\n• Stealth Boost: +${elixirBuffs.stealthBoost}`;
     if (elixirBuffs.attackBoost > 0) buffInfo += `\n• Attack Boost: +${elixirBuffs.attackBoost}`;
     if (elixirBuffs.defenseBoost > 0) buffInfo += `\n• Defense Boost: +${elixirBuffs.defenseBoost}`;

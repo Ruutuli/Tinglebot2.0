@@ -156,7 +156,7 @@ const ELIXIR_EFFECTS = {
   'Hasty Elixir': {
     type: 'hasty',
     description:
-      'Travel speed **+1** at Basic; Mid/High higher. **1 / 2 / 3** travel legs (Basic/Mid/High) before the buff clears. **Explore:** **×1.5** weight for the **Quadrant explored** roll (roller has Hasty).',
+      'Travel duration **halved** (min **1** day per leg). **1 / 2 / 3** travel charges (Basic / Mid / High). **Explore:** **×1.5** weight for **Quadrant explored** (roller has Hasty).',
     effects: {
       speedBoost: 1
     }
@@ -372,10 +372,10 @@ function getElixirItemUseBlurb(elixirName, elixirLevel, options = {}) {
       ].join('\n');
     case 'Hasty Elixir':
       return [
-        elixirQuotedEffectLine('Travel Speed', `+${formatElixirStatDisplay(scaled.speedBoost)}`),
+        elixirQuotedEffectLine('Travel time', 'Halved (min 1 day per leg)'),
         elixirQuotedEffectLine(
-          'Travel uses',
-          `${lv} trip(s) before buff ends (Basic 1 / Mid 2 / High 3)`
+          'Travel charges',
+          `${lv} trip(s) on this bottle (Basic 1 / Mid 2 / High 3)`
         ),
         elixirQuotedEffectLine('Explore roll', '×1.5 weight for Quadrant explored (you roll)'),
       ].join('\n');
