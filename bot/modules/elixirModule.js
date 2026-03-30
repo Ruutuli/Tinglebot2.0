@@ -50,11 +50,13 @@ function normalizeElixirLevel(raw) {
   return 1;
 }
 
-/** Max extra copies from one Sticky Elixir streak (gather / travel / loot / steal). */
-const STICKY_BONUS_MAX_EXTRAS = 5;
+/**
+ * Max extra copies from one Sticky Elixir streak per tier (Basic / Mid / High).
+ * Higher tier = higher cap and higher per-step chance (`STICKY_BONUS_REPEAT_CHANCE`).
+ */
+const STICKY_BONUS_MAX_EXTRAS_BY_LEVEL = Object.freeze([2, 4, 5]);
 /**
  * Per streak step by tier (Basic / Mid / High): chance to add **another** extra copy of the same item.
- * Higher tier → higher chance each step → more extras on average (capped at STICKY_BONUS_MAX_EXTRAS).
  */
 const STICKY_BONUS_REPEAT_CHANCE = Object.freeze([0.28, 0.38, 0.48]);
 
@@ -73,8 +75,9 @@ function rollStickyBonusExtraQuantity(character) {
   if (!Number.isFinite(plus) || plus <= 0) return 0;
   const lv = normalizeElixirLevel(character.buff.elixirLevel);
   const p = STICKY_BONUS_REPEAT_CHANCE[lv - 1] ?? STICKY_BONUS_REPEAT_CHANCE[0];
+  const maxExtras = STICKY_BONUS_MAX_EXTRAS_BY_LEVEL[lv - 1] ?? STICKY_BONUS_MAX_EXTRAS_BY_LEVEL[0];
   let extras = 0;
-  while (extras < STICKY_BONUS_MAX_EXTRAS && Math.random() < p) {
+  while (extras < maxExtras && Math.random() < p) {
     extras++;
   }
   return extras;
@@ -117,7 +120,7 @@ const ELIXIR_EFFECTS = {
   'Sticky Elixir': {
     type: 'sticky',
     description:
-      'Water resistance in combat. While active, **gathering, travel gather, loot wins, and successful steals** can grant **extra copies** of the same item — chance goes **Basic → Mid → High**; you can get **more than one** extra at once.',
+      '💧 **Water resistance** vs water-type monsters and water-themed danger. ✨ **Sticky bonus** — you may get **extra copies** of the same item whenever something gives you items; tier improves odds and max extras.',
     effects: {
       waterResistance: 1.5,
       plusBoost: 1
@@ -427,11 +430,9 @@ function getBrewPreviewForElixir(elixirName, level, fairyHealHearts = 0, preview
       );
     }
   } else if (key === 'Sticky Elixir') {
-    appendScaledBuffStyleLines(scaled, buffLines);
-    const p = STICKY_BONUS_REPEAT_CHANCE[lv - 1] ?? STICKY_BONUS_REPEAT_CHANCE[0];
-    const pct = Math.round(p * 100);
     immediateLines.push(
-      `✨ **Extra copies** (same item) — **~${pct}%** chance per extra at this tier (up to **${STICKY_BONUS_MAX_EXTRAS}** per action) on gather, travel gather, loot, steal, quest loot`
+      '💧 **Water resistance** — helps vs **water-type** monsters and other water-themed threats.\n\n' +
+        '✨ **Sticky bonus** — you may get **extra copies** of the same item from any action that gives you items (gathering, travel gather, loot, steal, quest loot, etc.). Higher tier improves odds and max extras per action.'
     );
   } else {
     appendScaledBuffStyleLines(scaled, buffLines);
@@ -1017,7 +1018,7 @@ module.exports = {
   ELEMENTAL_WEAKNESS_PENALTY,
   formatElixirStatDisplay,
   rollStickyBonusExtraQuantity,
-  STICKY_BONUS_MAX_EXTRAS,
+  STICKY_BONUS_MAX_EXTRAS_BY_LEVEL,
   STICKY_BONUS_REPEAT_CHANCE,
 };
 

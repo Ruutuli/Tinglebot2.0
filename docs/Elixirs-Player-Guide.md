@@ -41,7 +41,7 @@ For almost everything in play, **current** cannot go **above** **max**. If you�
 | **Spicy** | **Cold**, **ice**, frost, ice-themed threats |
 | **Electro** | **Lightning**, shock, storm-style danger |
 | **Bright** | **Blight** weather / infection-style conditions |
-| **Sticky** | **Water** resistance in combat + **chance for extra copies** of the same item when you gather, travel-gather, loot, steal, or get quest loot — **higher tier = better odds**; can proc **multiple** extras (see below). |
+| **Sticky** | **Water** resistance (water-type monsters & water-themed danger) + **Sticky bonus**: extra copies of the same item whenever you get items — **higher tier = better odds & higher cap**. *Cold/ice → **Spicy**, not Sticky.* |
 
 **Remember:** **Chilly** = fire/heat · **Sticky** = water · **Bright** = blight — three different bottles.
 
@@ -119,7 +119,7 @@ Heal **budget** (how much you *could* heal toward missing HP) is a **fraction of
 
 ### Sticky Elixir — **plus** extra loot
 
-With an active Sticky buff, each time you **receive** items from **gathering**, **travel gathering**, a **`/loot` win**, a **successful `/steal`**, or **help wanted / monster hunt** loot, the bot rolls for **bonus copies of that same item** (not a random second item). **Basic / Mid / High** uses a higher **per-step** chance to add another extra (streak-style), so **Mid/High** tend to yield **more** extras on average; one activity can grant **up to 5** extra copies total (see `STICKY_BONUS_REPEAT_CHANCE` / `STICKY_BONUS_MAX_EXTRAS` in `elixirModule.js`).
+**Sticky bonus:** whenever an action **gives you items**, you might also get **extra copies of that same item** (not a random second item). **Tier** sets the **per-step chance** and **max extras per action**: **Basic** up to **2**, **Mid** up to **4**, **High** up to **5** (see `STICKY_BONUS_REPEAT_CHANCE` / `STICKY_BONUS_MAX_EXTRAS_BY_LEVEL` in `elixirModule.js`). **Water resistance** is separate — for **cold / ice**, drink **Spicy**, not Sticky.
 
 ### Other buff elixirs (Chilly, Spicy, Electro, Bright, Mighty, Tough, Sneaky, Hasty)
 
