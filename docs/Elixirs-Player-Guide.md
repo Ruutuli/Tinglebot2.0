@@ -10,10 +10,42 @@ Quick reference for **`/item`** (drink) and **`/crafting brew`** (Witch mixer). 
 | --- | --- |
 | **Use** an elixir | **`/item`** → your **character** + elixir from **autocomplete** (quantity **1**). Use it in **town hall**, **community board**, or **threads** under those channels. |
 | **Brew** an elixir | **`/crafting brew`** — **Witch** role, **village town hall** channel. |
+| **See every elixir in one place** | **Elixir master chart** (below). |
 | **Know which bottle to bring** | See **Pick an elixir for the situation** (below). |
 | **See numbers by tier** | See **Tiers: Basic, Mid, High** (below). |
 
 Use **autocomplete** for names so they match the bot.
+
+---
+
+## Elixir master chart
+
+Quick view of **every** elixir: what it does, how **tier** changes it, and when the bot **spends** an ongoing buff. Numbers follow **`elixirModule.js`** (Basic catalog → Mid **×1.15** → High **×1.3** on buff stats, rounded to **0.25**, unless the row says otherwise).
+
+### Ongoing buff elixirs (stay until spent)
+
+| Elixir | What it does (Basic) | Mid / High | Spent when (buff clears) | Extra |
+| --- | --- | --- | --- | --- |
+| **Chilly** | **Fire / heat resistance** — stat **×1.5** | Same | **Combat**, **help wanted**, **raid**, **loot** vs **fire / heat** (element or name patterns) | **Explore:** counts for **hot**-quadrant hazard if drunk during expedition |
+| **Spicy** | **Cold / ice resistance** — **×1.5** | Same | **Combat**, **HW**, **raid**, **loot** vs monsters with **Ice** in the name | **Explore:** **cold** quadrant |
+| **Electro** | **Electric resistance** — **×1.5** | Same | **Combat**, **HW**, **raid**, **loot** vs **Electric** in the name | **Explore:** **thunder** quadrant |
+| **Bright** | **Blight resistance** — **×1.5** | Same | **Blight rain:** **travel**, **gather**, **loot**, **HW**, **raid**; **blighted quadrant** entry (**explore** move); **Gloom Hands** post-raid blight roll | **Grotto maze:** **+1 / +2 / +3** extra revealed map rings (Basic / Mid / High; best party member wins) |
+| **Sticky** | **Water resistance** **×1.5** **and** **Sticky bonus** (extra **copies of the same item** when you earn items) | Water stat scales; **extra items** range is **1–2** / **3–4** / **4–5** by tier | **Travel**; **or** **combat**, **HW**, **raid**, **loot** vs **Water** in the name | Ice/cold threats → **Spicy**, not Sticky |
+| **Mighty** | **Attack** — **×1.5** on attack boost | Mid/High scale | **Combat**, **HW**, **raid**, **loot** when the buff applies | — |
+| **Tough** | **Defense** — **×1.5** | Same | **Combat**, **HW**, **raid**, **loot** | — |
+| **Sneaky** | **Stealth +1**, **Flee +1** | Mid/High on both | **Gather**, **loot**, **travel** | — |
+| **Hasty** | **Travel speed +1** | Mid/High on speed | **Travel** (when travel uses the buff) | — |
+
+### One-shot elixirs (no ongoing buff slot after `/item`)
+
+| Elixir | What it does | Basic / Mid / High |
+| --- | --- | --- |
+| **Hearty** | Adds **temporary extra current hearts** only (**max** unchanged). Gain **`ceil(max × M) − max`**, at least **+1**. | **M** = **1.2 / 1.4 / 1.7** — see **Tiers** |
+| **Fairy Tonic** | Heals **missing** HP only (never above real **max**). Heal **budget** = **`min(budget, missing)`**. | Budget **½ / ¾ / full** of max hearts (floored whole hearts) |
+| **Enduring** | Adds **temporary current stamina chunks** only (**max** unchanged). Same gain pattern as Hearty but on **stamina**. | **M** = **1.25 / 1.45 / 1.7** — see **Tiers** |
+| **Energizing** | Restores stamina chunks on drink — **no** attack/defense/resist buff. | **+5 / +7 / +9** chunks (capped at **max** stamina) |
+
+**Rules reminder:** Only **one** active **buff** elixir at a time; **Hearty**, **Fairy Tonic**, **Enduring**, **Energizing** don’t occupy that slot after drinking (see **The big rules**).
 
 ---
 
@@ -40,7 +72,7 @@ For almost everything in play, **current** cannot go **above** **max**. If you�
 | **Chilly** | Heat, **fire**, hot places, fire-themed threats |
 | **Spicy** | **Cold**, **ice**, frost, ice-themed threats |
 | **Electro** | **Lightning**, shock, storm-style danger |
-| **Bright** | **Blight** weather / infection-style conditions — and in **grotto maze** trials (**explore**), extra **fog** lifted on the maze map (**1 / 2 / 3** section rings by tier) while the buff is active |
+| **Bright** | **Blight** — better odds when the bot rolls **blight infection** (**blight rain**, **blighted** quadrants in **explore**, **Gloom Hands** raids). **Grotto maze:** extra **fog** cleared on the map (**1 / 2 / 3** rings by tier). |
 | **Sticky** | **Water** resistance (water-type monsters & water-themed danger) + **Sticky bonus**: extra copies of the same item whenever you get items — **higher tier = better odds & higher cap**. *Cold/ice → **Spicy**, not Sticky.* |
 
 **Remember:** **Chilly** = fire/heat · **Sticky** = water · **Bright** = blight — three different bottles.
@@ -161,9 +193,9 @@ Numbers and formulas match **`elixirModule.js`** and **`/item`** (Hearty, Fairy 
 
 ### Bright Elixir
 
-- **Effect:** **Blight resistance** — **×1** at Basic on **blightResistance**; Mid/High scale the same way (not the same base number as **×1.5** resists).
-- **Grotto mazes:** In **grotto maze** trials during **explore**, **Bright** lifts extra **fog-of-war** on the maze image: **Basic** **1** extra ring of map sections, **Mid** **2**, **High** **3** (whoever in the party has the active **Bright** buff — strongest tier wins). Drink before or during the maze so your buff is active when the map renders.
-- **When it’s spent:** **Only** when **blight-style weather** is active in context (**blight rain** in the bot’s checks). Then it can clear on **loot**, **gather**, **travel**, **help wanted**, or **raid**. If there’s no blight context, it **does not** auto-consume from those activities alone.
+- **Effect:** **Blight resistance** — **×1.5** at Basic on **blightResistance**; Mid/High scale the same way as other resist elixirs.
+- **Grotto mazes:** **Basic** **1** / **Mid** **2** / **High** **3** extra rings of map revealed (party member with **Bright**; highest tier wins). Drink before or when the maze map is shown.
+- **When it’s spent:** **Blight rain** (**loot**, **gather**, **travel**, **help wanted**, **raid**), **blighted quadrant** move (**explore**), or **Gloom Hands** after a raid.
 
 ---
 

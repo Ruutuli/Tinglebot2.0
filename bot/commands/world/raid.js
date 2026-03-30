@@ -3,7 +3,7 @@
 // ============================================================================
 const { SlashCommandBuilder, EmbedBuilder } = require('discord.js');
 const { handleInteractionError } = require('@/utils/globalErrorHandler');
-const { fetchAnyCharacterByNameAndUserId } = require('@/database/db');
+const { fetchAnyCharacterByNameAndUserId, updateCharacterById, updateModCharacterById } = require('@/database/db');
 const { joinRaid, processRaidTurn, checkRaidExpiration, leaveRaid, scheduleRaidTurnSkip } = require('../../modules/raidModule');
 const { createRaidKOEmbed, createBlightRaidParticipationEmbed, getExploreCommandId, getExploreOutcomeColor } = require('../../embeds/embeds.js');
 const { chatInputApplicationCommandMention } = require('@discordjs/formatters');
@@ -23,6 +23,7 @@ function normalizeRaidCharacterName(input) {
 const Party = require('@/models/PartyModel');
 const Grotto = require('@/models/GrottoModel');
 const { finalizeBlightApplication } = require('../../handlers/blightHandler');
+const { getActiveBuffEffects, shouldConsumeElixir, consumeElixirBuff } = require('../../modules/elixirModule');
 
 // ============================================================================
 // ---- Import Loot Functions ----
@@ -1032,6 +1033,9 @@ async function handleRaidVictory(interaction, raidData, monster) {
     const lootResults = [];
     const failedCharacters = [];
     const blightedCharacters = [];
+    // Gloom Hands post-raid blight: base 25%; Bright scales like blight rain (−0.3 × res / 75% → −0.1 × res / 25%)
+    const GLOOM_HANDS_BLIGHT_BASE = 0.25;
+    const GLOOM_HANDS_BRIGHT_FACTOR = 0.3 * (GLOOM_HANDS_BLIGHT_BASE / 0.75);
     const Character = require('@/models/CharacterModel');
     const User = require('@/models/UserModel');
     
@@ -1139,31 +1143,41 @@ async function handleRaidVictory(interaction, raidData, monster) {
         }
         
         // ------------------- Gloom Hands Blight Effect -------------------
-        // Check if this was a Gloom Hands raid and apply 25% blight chance
-        if (monster.nameMapping === 'gloomHands' && Math.random() < 0.25) {
-          // Only apply blight if character isn't already blighted
-          if (!character.blighted) {
-            // Use shared finalize helper - each step has its own try/catch for resilience
-            const finalizeResult = await finalizeBlightApplication(
-              character,
-              character.userId,
-              {
-                client: interaction.client,
-                guild: interaction.guild,
-                source: 'Gloom Hands encounter',
-                alreadySaved: false
+        if (monster.nameMapping === 'gloomHands') {
+          const buffEffects = getActiveBuffEffects(character);
+          let gloomBlightChance = GLOOM_HANDS_BLIGHT_BASE;
+          if (buffEffects?.blightResistance > 0) {
+            gloomBlightChance -= buffEffects.blightResistance * GLOOM_HANDS_BRIGHT_FACTOR;
+          }
+          gloomBlightChance = Math.max(0.05, Math.min(0.95, gloomBlightChance));
+          if (buffEffects?.blightResistance > 0 && shouldConsumeElixir(character, 'raid', { gloomHandsBlight: true })) {
+            consumeElixirBuff(character);
+            const updateFn = character.isModCharacter ? updateModCharacterById : updateCharacterById;
+            await updateFn(character._id, { buff: character.buff });
+          }
+          if (Math.random() < gloomBlightChance) {
+            if (!character.blighted) {
+              const finalizeResult = await finalizeBlightApplication(
+                character,
+                character.userId,
+                {
+                  client: interaction.client,
+                  guild: interaction.guild,
+                  source: 'Gloom Hands encounter',
+                  alreadySaved: false
+                }
+              );
+
+              if (finalizeResult.characterSaved) {
+                blightedCharacters.push(character.name);
+                console.log(`[raid.js]: 🧿 Character ${character.name} was blighted by Gloom Hands effect`);
+                console.log(`[raid.js]: Finalize result - Saved: ${finalizeResult.characterSaved}, Role: ${finalizeResult.roleAdded}, User: ${finalizeResult.userFlagSet}, DM: ${finalizeResult.dmSent}`);
+              } else {
+                console.error(`[raid.js]: ❌ Failed to save blight for ${character.name} - character may not be properly blighted`);
               }
-            );
-            
-            if (finalizeResult.characterSaved) {
-              blightedCharacters.push(character.name);
-              console.log(`[raid.js]: 🧿 Character ${character.name} was blighted by Gloom Hands effect`);
-              console.log(`[raid.js]: Finalize result - Saved: ${finalizeResult.characterSaved}, Role: ${finalizeResult.roleAdded}, User: ${finalizeResult.userFlagSet}, DM: ${finalizeResult.dmSent}`);
             } else {
-              console.error(`[raid.js]: ❌ Failed to save blight for ${character.name} - character may not be properly blighted`);
+              console.log(`[raid.js]: ⚠️ Character ${character.name} is already blighted, skipping Gloom Hands blight effect`);
             }
-          } else {
-            console.log(`[raid.js]: ⚠️ Character ${character.name} is already blighted, skipping Gloom Hands blight effect`);
           }
         }
         

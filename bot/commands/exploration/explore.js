@@ -43,7 +43,7 @@ const { SlashCommandBuilder } = require("@discordjs/builders");
 const { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, AttachmentBuilder } = require("discord.js");
 
 // ------------------- Database ------------------
-const { fetchAllItems, fetchItemsByMonster, createRelic, getCharacterInventoryCollection, getCharacterInventoryCollectionWithModSupport, fetchMonsterByName, fetchCharacterById, fetchItemByName, getMonstersAboveTier } = require('@/database/db.js');
+const { fetchAllItems, fetchItemsByMonster, createRelic, getCharacterInventoryCollection, getCharacterInventoryCollectionWithModSupport, fetchMonsterByName, fetchCharacterById, fetchItemByName, getMonstersAboveTier, updateCharacterById, updateModCharacterById } = require('@/database/db.js');
 
 // ------------------- Models ------------------
 const Raid = require("../../models/RaidModel.js");
@@ -72,6 +72,9 @@ const {
   elixirCountersExplorationHazard,
   isHazardResistanceElixir,
   rollStickyBonusExtraQuantity,
+  getActiveBuffEffects,
+  shouldConsumeElixir,
+  consumeElixirBuff,
 } = require("../../modules/elixirModule.js");
 const { isAprilFoolsEastern } = require("@/utils/aprilFoolsRoll.js");
 const { finalizeBlightApplication } = require("../../handlers/blightHandler.js");
@@ -2085,8 +2088,10 @@ if (trialType === "puzzle" && grottoDoc.puzzleState?.puzzleSubType) {
 // ------------------- applyBlightExposure ------------------
 // Roll blight chance for each party member when revealing/traveling through blighted quadrant.
 // Base chance: 15% per party member who isn't already blighted. Blight Candle halves the chance (7.5%).
+// Bright Elixir: same scaling as blight rain ( −0.3 × resistance per 75% base ) → −0.06 × resistance per 15% base.
 // Returns: { blightedMembers: [{ name, roll }], safeMembers: [{ name, roll }] }
 const BLIGHT_EXPOSURE_CHANCE = 0.15; // 15% chance to contract blight
+const BLIGHT_EXPOSURE_BRIGHT_FACTOR = 0.3 * (BLIGHT_EXPOSURE_CHANCE / 0.75); // match gather/loot blight-rain math
 
 async function applyBlightExposure(party, square, quadrant, reason, characterName, client = null, guild = null) {
  const location = `${square} ${quadrant}`;
@@ -2121,9 +2126,24 @@ async function applyBlightExposure(party, square, quadrant, reason, characterNam
    candleConsumer = partyChar;
   }
   
-  // Roll for blight (effective chance: 15% or 7.5% with Blight Candle)
+  // Per-character chance: candle + Bright Elixir (blightResistance)
+  let personalChance = effectiveChance;
+  if (charDoc) {
+   const buffEffects = getActiveBuffEffects(charDoc);
+   if (buffEffects?.blightResistance > 0) {
+    personalChance -= buffEffects.blightResistance * BLIGHT_EXPOSURE_BRIGHT_FACTOR;
+   }
+   personalChance = Math.max(0.01, Math.min(0.95, personalChance));
+   if (buffEffects?.blightResistance > 0 && shouldConsumeElixir(charDoc, 'explore', { blightExposure: true })) {
+    consumeElixirBuff(charDoc);
+    const updateFn = charDoc.isModCharacter ? updateModCharacterById : updateCharacterById;
+    await updateFn(charDoc._id, { buff: charDoc.buff });
+   }
+  }
+
+  // Roll for blight (effective chance: 15% or 7.5% with Blight Candle, then Bright)
   const roll = Math.random();
-  const contracted = roll < effectiveChance;
+  const contracted = roll < personalChance;
   const rollDisplay = Math.floor(roll * 100) + 1;
   
   if (contracted && charDoc) {

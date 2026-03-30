@@ -206,7 +206,7 @@ Numbers come from **`ELIXIR_EFFECTS`** in `elixirModule.js` — one static `effe
 | Item | `type` | Effects |
 | --- | --- | --- |
 | Chilly Elixir | `chilly` | `fireResistance: 1.5` |
-| Bright Elixir | `bright` | `blightResistance: 1` |
+| Bright Elixir | `bright` | `blightResistance: 1.5` |
 | Sticky Elixir | `sticky` | `waterResistance: 1.5`, `plusBoost: 1` |
 | Spicy Elixir | `spicy` | `coldResistance: 1.5` |
 | Electro Elixir | `electro` | `electricResistance: 1.5` |

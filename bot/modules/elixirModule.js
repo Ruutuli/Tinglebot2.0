@@ -112,9 +112,9 @@ const ELIXIR_EFFECTS = {
   },
   'Bright Elixir': {
     type: 'bright',
-    description: 'Blight — resist **×1** at Basic; Mid/High scale higher.',
+    description: 'Blight — resist **×1.5** at Basic; Mid/High scale higher.',
     effects: {
-      blightResistance: 1
+      blightResistance: 1.5
     }
   },
   'Sticky Elixir': {
@@ -575,6 +575,12 @@ const shouldConsumeElixir = (character, activity, context = {}) => {
           activity === 'helpWanted' ||
           activity === 'raid'
         );
+      }
+      if (context.blightExposure) {
+        return activity === 'explore';
+      }
+      if (context.gloomHandsBlight) {
+        return activity === 'raid';
       }
       return false;
 
