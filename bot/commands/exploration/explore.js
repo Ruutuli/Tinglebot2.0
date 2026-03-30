@@ -423,6 +423,9 @@ const CAMP_ATTACK_PROTECTION_THRESHOLD = 1; // If N or more were attacks, guaran
 const EXPLORATION_CHEST_RELIC_CHANCE = 0.02;
 
 // ------------------- Roll outcome chances (must sum to 1) ------------------
+// Same relative boost as resist elixirs' ×1.5 on element — applied to "explored" outcome weight when the roller has Hasty.
+const HASTY_EXPLORED_ROLL_MULTIPLIER = 1.5;
+
 const EXPLORATION_OUTCOME_CHANCES = {
   monster: 0.20,   // combat encounters
   item: 0.42,      // finding items (gather) — increased from 0.33
@@ -5224,12 +5227,27 @@ module.exports = {
       const adjustedItem = Math.max(0.05, baseItem - itemReduction);
       const adjustedExplored = Math.max(0.05, baseExplored - exploredReduction);
 
-      const adjustedChances = {
+      let adjustedChances = {
        ...EXPLORATION_OUTCOME_CHANCES,
        monster: adjustedMonster,
        item: adjustedItem,
        explored: adjustedExplored,
       };
+
+      // Hasty Elixir (roller): weight for "explored" (Quadrant Explored prompt) ×1.5, then renormalize
+      const rollerBuff = getActiveBuffEffects(character);
+      if (rollerBuff?.speedBoost > 0) {
+       adjustedChances = {
+        ...adjustedChances,
+        explored: adjustedChances.explored * HASTY_EXPLORED_ROLL_MULTIPLIER,
+       };
+       const sumW = Object.values(adjustedChances).reduce((a, b) => a + b, 0);
+       if (sumW > 0) {
+        for (const k of Object.keys(adjustedChances)) {
+         adjustedChances[k] /= sumW;
+        }
+       }
+      }
 
       const r = Math.random();
       let cum = 0;

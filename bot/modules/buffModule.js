@@ -73,14 +73,7 @@ function calculateSpeedBuff(character, baseSpeed) {
   // Apply elixir speed boost
   if (buffEffects && buffEffects.speedBoost > 0) {
     finalSpeed += buffEffects.speedBoost;
-    
-    // Consume hasty elixir after use
-    if (shouldConsumeElixir(character, 'travel')) {
-      consumeElixirBuff(character);
-    } else if (character.buff?.active) {
-      // Log when elixir is not used due to conditions not met
-      console.log(`[buffModule.js]: 🧪 Elixir not used for ${character.name} - conditions not met. Active buff: ${character.buff.type}`);
-    }
+    // Hasty travel charges are consumed in travel.js when a trip reduces duration — not here
   }
 
   return Math.max(1, finalSpeed); // Ensure minimum speed of 1

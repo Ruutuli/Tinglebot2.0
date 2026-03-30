@@ -71,7 +71,7 @@ const { handleInteractionError } = require('@/utils/globalErrorHandler.js');
 const { retrieveAllByType } = require('@/utils/storage.js');
 const TempData = require('@/models/TempDataModel');
 const { getWeatherWithoutGeneration } = require('@/services/weatherService');
-const { getActiveBuffEffects, shouldConsumeElixir, consumeElixirBuff } = require('../../modules/elixirModule');
+const { getActiveBuffEffects, shouldConsumeElixir, consumeElixirBuff, consumeElixirTravelChargeOrBuff } = require('../../modules/elixirModule');
 const { applyTravelWeatherBoost } = require('../../modules/boostIntegration');
 const { generateBoostFlavorText } = require('../../modules/flavorTextModule');
 const { retrieveBoostingRequestFromTempDataByCharacter, saveBoostingRequestToTempData, updateBoostAppliedMessage } = require('../jobs/boosting');
@@ -615,17 +615,21 @@ module.exports = {
       const originalDuration = calculateTravelDuration(startingVillage, destination, mode, { ...character, buff: { active: false } });
       if (totalTravelDuration < originalDuration) {
         try {
-          if (shouldConsumeElixir(character, 'travel')) {
-            const consumedElixirType = character.buff.type;
-            console.log(`[travel.js]: 🧪 ${consumedElixirType} elixir consumed for ${character.name} during travel`);
-            console.log(`[travel.js]: 🧪 Travel time reduced: ${originalDuration} → ${totalTravelDuration} days`);
-      
-            
-            if (consumedElixirType === 'hasty') {
-              console.log(`[travel.js]: 🏃 Hasty Elixir helped ${character.name} travel faster!`);
-            }
-            
-            consumeElixirBuff(character);
+          const travelBuffType =
+            character.buff?.type === 'fireproof' ? 'chilly' : character.buff?.type;
+          // Only Hasty reduces duration (speedBoost); charge Mid/High over multiple trips
+          if (
+            travelBuffType === 'hasty' &&
+            shouldConsumeElixir(character, 'travel')
+          ) {
+            console.log(
+              `[travel.js]: 🧪 hasty elixir consumed for ${character.name} during travel`
+            );
+            console.log(
+              `[travel.js]: 🧪 Travel time reduced: ${originalDuration} → ${totalTravelDuration} days`
+            );
+            console.log(`[travel.js]: 🏃 Hasty Elixir helped ${character.name} travel faster!`);
+            consumeElixirTravelChargeOrBuff(character);
             
             // Update character in database to persist the consumed elixir
             if (character.isModCharacter) {
@@ -634,9 +638,14 @@ module.exports = {
             } else {
               await Character.findByIdAndUpdate(character._id, { buff: character.buff });
             }
-          } else if (character.buff?.active) {
-            // Log when elixir is not used due to conditions not being met
-            console.log(`[travel.js]: 🧪 Elixir not used for ${character.name} - conditions not met. Active buff: ${character.buff.type}`);
+          } else if (
+            character.buff?.active &&
+            travelBuffType === 'hasty' &&
+            !shouldConsumeElixir(character, 'travel')
+          ) {
+            console.log(
+              `[travel.js]: 🧪 Hasty not consumed for ${character.name} — conditions not met`
+            );
           }
         } catch (elixirError) {
           console.error(`[travel.js]: ⚠️ Warning - Elixir consumption failed:`, elixirError);
@@ -960,9 +969,15 @@ async function processTravelDay(day, context) {
       character.traveling = false;
 
       // Consume elixirs that apply to the journey as a whole (Sticky, Sneaky, etc.).
+      // Hasty is charged when travel starts (duration reduced), not here — would double-dip.
       // Bright still needs { blightRain: true } in shouldConsumeElixir — not consumed here.
       try {
-        if (shouldConsumeElixir(character, 'travel')) {
+        const endType =
+          character.buff?.type === 'fireproof' ? 'chilly' : character.buff?.type;
+        if (
+          (endType === 'sticky' || endType === 'sneaky') &&
+          shouldConsumeElixir(character, 'travel')
+        ) {
           consumeElixirBuff(character);
         }
       } catch (elixirConsumeErr) {

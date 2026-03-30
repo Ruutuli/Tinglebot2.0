@@ -123,7 +123,8 @@ const characterSchema = new Schema({
       defenseBoost: { type: Number, default: 0 }, // Tough Elixir
       waterResistance: { type: Number, default: 0 }, // Sticky Elixir
       plusBoost: { type: Number, default: 0 }, // Sticky Elixir
-      fleeBoost: { type: Number, default: 0 } // Sneaky Elixir
+      fleeBoost: { type: Number, default: 0 }, // Sneaky Elixir
+      hastyTravelCharges: { type: Number, default: 0 } // Hasty: trips remaining
     }
   },
   failedStealAttempts: { type: Number, default: 0 },

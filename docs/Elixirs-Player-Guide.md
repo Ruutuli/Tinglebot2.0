@@ -67,7 +67,7 @@ Use **autocomplete** so names match the bot.
 | Harder hits (**attack**)                              | **Mighty**                                   |
 | Less damage taken (**defense**)                       | **Tough**                                    |
 | **Stealth** or better **flee** (gather, loot, travel) | **Sneaky**                                   |
-| **Faster / shorter travel**                           | **Hasty** (travel often **spends** the buff) |
+| **Faster / shorter travel**                           | **Hasty** — **Basic 1 / Mid 2 / High 3** travel legs before the buff clears |
 
 
 ### Hearts & stamina (one-shot)
@@ -100,7 +100,7 @@ Scaling note: most **lasting** buff stats use **Basic** values from the bot, the
 | **Mighty**  | Attack **×1.5**                                                                    | Scales                                                        | **Combat**, **HW**, **raid**, **loot**                                                                                                     | —                                                                                         |
 | **Tough**   | Defense **×1.5**                                                                   | Same                                                          | Same                                                                                                                                       | —                                                                                         |
 | **Sneaky**  | Stealth **+1**, Flee **+1**                                                        | Both scale                                                    | **Gather**, **loot**, **travel**                                                                                                           | —                                                                                         |
-| **Hasty**   | Travel speed **+1**                                                                | Scales                                                        | **Travel**                                                                                                                                 | —                                                                                         |
+| **Hasty**   | Travel speed **+1**                                                                | Scales                                                        | **Travel** — **1 / 2 / 3** trips (Basic / Mid / High) where Hasty actually shortens the leg; then the buff clears                                                      | **Explore:** **×1.5** chance weight for **Quadrant explored** (roller has Hasty)            |
 
 
 ### One-shots (effect on `/item`; buff slot frees up)
@@ -195,7 +195,7 @@ Whenever you **earn items** (gathering, `/loot`, travel rewards, exploration, st
 - **Mighty —** **Attack** boost **×1.5** at Basic (**attackBoost**); Mid/High scale with **×1.15** / **×1.3**. Spent in **combat**, **help wanted**, **raid**, **loot** when used.
 - **Tough —** **Defense** **×1.5** at Basic (**defenseBoost**); same scaling. Spent in **combat**, **help wanted**, **raid**, **loot**.
 - **Sneaky —** **Stealth** and **flee** **+1** each at Basic; Mid/High on both. Spent on **gather**, **loot**, **travel**.
-- **Hasty —** **Travel speed** **+1** at Basic; Mid/High on **speedBoost**. Spent on **travel**.
+- **Hasty —** **Travel speed** **+1** at Basic; Mid/High on **speedBoost**. Spent on **travel** (multi-charge). **Explore:** the **“Quadrant explored”** outcome weight is **×1.5** (same relative boost as resist elixirs’ **×1.5** on element) for whoever **rolls** while they have Hasty — helps parties get the prompt so they can **Move**.
 
 ### One-shots (Hearty, Fairy Tonic, Enduring, Energizing)
 

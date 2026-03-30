@@ -155,7 +155,8 @@ const ELIXIR_EFFECTS = {
   },
   'Hasty Elixir': {
     type: 'hasty',
-    description: 'Travel speed **+1** at Basic; Mid/High higher — spent when travel uses it.',
+    description:
+      'Travel speed **+1** at Basic; Mid/High higher. **1 / 2 / 3** travel legs (Basic/Mid/High) before the buff clears. **Explore:** **×1.5** weight for the **Quadrant explored** roll (roller has Hasty).',
     effects: {
       speedBoost: 1
     }
@@ -370,7 +371,14 @@ function getElixirItemUseBlurb(elixirName, elixirLevel, options = {}) {
         elixirQuotedEffectLine('Flee', `+${formatElixirStatDisplay(scaled.fleeBoost)}`),
       ].join('\n');
     case 'Hasty Elixir':
-      return elixirQuotedEffectLine('Travel Speed', `+${formatElixirStatDisplay(scaled.speedBoost)}`);
+      return [
+        elixirQuotedEffectLine('Travel Speed', `+${formatElixirStatDisplay(scaled.speedBoost)}`),
+        elixirQuotedEffectLine(
+          'Travel uses',
+          `${lv} trip(s) before buff ends (Basic 1 / Mid 2 / High 3)`
+        ),
+        elixirQuotedEffectLine('Explore roll', '×1.5 weight for Quadrant explored (you roll)'),
+      ].join('\n');
     case 'Energizing Elixir': {
       const arr = RESOURCE_ELIXIR_LEVEL_STATS['Energizing Elixir']?.staminaRecovery;
       const n = arr?.[lv - 1];
@@ -496,6 +504,12 @@ const applyElixirBuff = (character, elixirName, elixirLevel = 1) => {
     effects,
     elixirLevel: level
   };
+
+  // Hasty Elixir: Basic = 1 trip, Mid = 2, High = 3 before the buff clears
+  if (elixir.type === 'hasty') {
+    if (!character.buff.effects) character.buff.effects = {};
+    character.buff.effects.hastyTravelCharges = level;
+  }
 
   applyImmediateEffects(character, key, effects);
 
@@ -640,6 +654,44 @@ const shouldConsumeElixir = (character, activity, context = {}) => {
   }
 };
 
+/**
+ * After a travel leg where duration was reduced by Hasty: decrement travel charges.
+ * Basic=1 charge (buff clears after first trip); Mid=2; High=3. Other buffs: full consume.
+ * @returns {{ consumed: boolean, fullyRemoved: boolean }}
+ */
+const consumeElixirTravelChargeOrBuff = (character) => {
+  if (!character.buff?.active) return { consumed: false, fullyRemoved: false };
+
+  const buffType =
+    character.buff.type === 'fireproof' ? 'chilly' : character.buff.type;
+
+  if (buffType !== 'hasty') {
+    consumeElixirBuff(character);
+    return { consumed: true, fullyRemoved: true };
+  }
+
+  let charges = character.buff.effects?.hastyTravelCharges;
+  if (charges == null || !Number.isFinite(Number(charges)) || Number(charges) < 1) {
+    charges = 1; // legacy Hasty rows without the field
+  } else {
+    charges = Math.floor(Number(charges));
+  }
+
+  const next = charges - 1;
+  if (next > 0) {
+    character.buff.effects = character.buff.effects || {};
+    character.buff.effects.hastyTravelCharges = next;
+    const logName = character.name ?? 'unknown';
+    console.log(
+      `[elixirModule.js]: 🏃 Hasty Elixir — ${next} travel charge(s) remaining for ${logName}`
+    );
+    return { consumed: true, fullyRemoved: false };
+  }
+
+  consumeElixirBuff(character);
+  return { consumed: true, fullyRemoved: true };
+};
+
 // ------------------- Consume Elixir Buff -------------------
 // Consumes an elixir buff when its effects are used
 const consumeElixirBuff = (character) => {
@@ -682,7 +734,8 @@ const consumeElixirBuff = (character) => {
       iceEffectiveness: 0,
       defenseBoost: 0,
       waterResistance: 0,
-      plusBoost: 0
+      plusBoost: 0,
+      hastyTravelCharges: 0
     }
   };
 
@@ -991,6 +1044,7 @@ module.exports = {
   applyImmediateEffects,
   shouldConsumeElixir,
   consumeElixirBuff,
+  consumeElixirTravelChargeOrBuff,
   removeExpiredBuffs,
   getActiveBuffEffects,
   hasBuffType,
