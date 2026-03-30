@@ -167,6 +167,41 @@ function isInRevealedSection(x, y, revealedSections, cols, rows) {
 }
 
 /**
+ * Bright Elixir: expand fog-of-war section visibility by repeated Chebyshev-1 rings on the section grid.
+ * @param {Set<string>} revealedSections - keys "sx,sy"
+ * @param {number} steps - 1 = Basic, 2 = Mid, 3 = High (extra rings beyond normal reveal)
+ * @returns {Set<string>}
+ */
+function expandRevealedSectionsForBright(revealedSections, cols, rows, steps) {
+  if (!steps || steps < 1 || !revealedSections || revealedSections.size === 0) {
+    return revealedSections;
+  }
+  const n = getFogSectionCount(cols, rows);
+  let expanded = new Set(revealedSections);
+  for (let iter = 0; iter < steps; iter++) {
+    const next = new Set(expanded);
+    for (const key of expanded) {
+      const parts = String(key).split(",");
+      const sx = parseInt(parts[0], 10);
+      const sy = parseInt(parts[1], 10);
+      if (isNaN(sx) || isNaN(sy)) continue;
+      for (let dx = -1; dx <= 1; dx++) {
+        for (let dy = -1; dy <= 1; dy++) {
+          if (dx === 0 && dy === 0) continue;
+          const nx = sx + dx;
+          const ny = sy + dy;
+          if (nx >= 0 && nx < n && ny >= 0 && ny < n) {
+            next.add(`${nx},${ny}`);
+          }
+        }
+      }
+    }
+    expanded = next;
+  }
+  return expanded;
+}
+
+/**
  * Renders a grotto maze layout to a PNG buffer.
  * @param {Object} layout - grotto.mazeState.layout with { matrix, pathCells }
  * @param {number|Object} [optionsOrWallSize=15] - Wall size (number) or { currentNode, wallSize, viewMode, visitedCells }
@@ -175,6 +210,7 @@ function isInRevealedSection(x, y, revealedSections, cols, rows) {
  * @param {string[]} [optionsOrWallSize.openedChests] - Cell keys 'x,y' already opened
  * @param {string[]} [optionsOrWallSize.triggeredTraps] - Cell keys 'x,y' already triggered
  * @param {string[]} [optionsOrWallSize.usedScryingWalls] - Cell keys 'x,y' where Song of Scrying was used
+ * @param {number} [optionsOrWallSize.brightRevealSteps] - 0–3: Bright Elixir extra fog rings (Basic/Mid/High tier) in member view
  * @returns {Promise<Buffer>} PNG buffer suitable for Discord attachment
  */
 async function renderMazeToBuffer(layout, optionsOrWallSize = 15) {
@@ -196,7 +232,13 @@ async function renderMazeToBuffer(layout, optionsOrWallSize = 15) {
   const h = rows * wallSize;
 
   const useFogOfWar = viewMode === "member";
-  const revealedSections = useFogOfWar ? getRevealedSections(layout, opts.visitedCells, currentNode) : null;
+  const brightStepsRaw = Number(opts.brightRevealSteps);
+  const brightSteps =
+    Number.isFinite(brightStepsRaw) && brightStepsRaw > 0 ? Math.min(3, Math.floor(brightStepsRaw)) : 0;
+  let revealedSections = useFogOfWar ? getRevealedSections(layout, opts.visitedCells, currentNode) : null;
+  if (useFogOfWar && brightSteps > 0 && revealedSections) {
+    revealedSections = expandRevealedSectionsForBright(revealedSections, cols, rows, brightSteps);
+  }
 
   const image = await Jimp.create(w, h, useFogOfWar ? COLORS.fog : COLORS.background);
 

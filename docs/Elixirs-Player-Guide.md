@@ -8,8 +8,8 @@ Quick reference for **`/item`** (drink) and **`/crafting brew`** (Witch mixer). 
 
 | You want to… | Do this |
 | --- | --- |
-| **Use** an elixir | **`/item`** → your **character** + elixir from **autocomplete** (quantity **1**). Works in **town hall**, **community board**, or **threads** there (plus staff **test** channels if allowed). |
-| **Brew** an elixir | **`/crafting brew`** (usually **Witches**, in your **village town hall**). |
+| **Use** an elixir | **`/item`** → your **character** + elixir from **autocomplete** (quantity **1**). Use it in **town hall**, **community board**, or **threads** under those channels. |
+| **Brew** an elixir | **`/crafting brew`** — **Witch** role, **village town hall** channel. |
 | **Know which bottle to bring** | See **Pick an elixir for the situation** (below). |
 | **See numbers by tier** | See **Tiers: Basic, Mid, High** (below). |
 
@@ -21,7 +21,7 @@ Use **autocomplete** for names so they match the bot.
 
 1. **Only one elixir buff on your character at a time.** You can carry **many bottles** in inventory; they don’t stack as multiple buffs.
 2. **Buff elixirs don’t time out in real life.** After **`/item`**, the buff **stays** until the bot **spends** it in the right activity (travel, combat, gather, loot, etc.). Another buff elixir is blocked while one is active (see in-bot messages).
-3. **Hearty**, **Fairy Tonic**, and **Enduring** are **one-shot** on **`/item`** (no long buff). Most other elixirs set a **lasting buff** until spent. **Energizing** refills stamina **and** keeps a buff until spent.
+3. **Hearty**, **Fairy Tonic**, and **Enduring** resolve on **`/item`** without a **timed** buff (Hearty/Enduring can leave **extra current** until spent — see **Reminder**). **Energizing** only **refills stamina** (up to max); it does **not** grant an ongoing elixir buff. **Mighty**, **Chilly**, and most **other** elixirs set a **lasting buff** until spent.
 
 ### Reminder: current vs max (hearts and stamina)
 
@@ -40,7 +40,7 @@ For almost everything in play, **current** cannot go **above** **max**. If you�
 | **Chilly** | Heat, **fire**, hot places, fire-themed threats |
 | **Spicy** | **Cold**, **ice**, frost, ice-themed threats |
 | **Electro** | **Lightning**, shock, storm-style danger |
-| **Bright** | **Blight** weather / infection-style conditions |
+| **Bright** | **Blight** weather / infection-style conditions — and in **grotto maze** trials (**explore**), extra **fog** lifted on the maze map (**1 / 2 / 3** section rings by tier) while the buff is active |
 | **Sticky** | **Water** resistance (water-type monsters & water-themed danger) + **Sticky bonus**: extra copies of the same item whenever you get items — **higher tier = better odds & higher cap**. *Cold/ice → **Spicy**, not Sticky.* |
 
 **Remember:** **Chilly** = fire/heat · **Sticky** = water · **Bright** = blight — three different bottles.
@@ -61,7 +61,7 @@ For almost everything in play, **current** cannot go **above** **max**. If you�
 | **Hearty** | **Basic ×1.2 / Mid ×1.4 / High ×1.7** of your **max hearts** — temporary **extra current** only (**max** unchanged; see **Reminder** above). **`m`** Fairy mix-in heals **up to max**; the **tier** bonus can go past max. |
 | **Fairy Tonic** | Heals **missing** HP only (never above your real max). Heal **budget** by tier: **½ / ¾ / full max hearts** (floored whole hearts), then **`min(budget, missing)`**. **Fairy / Mock Fairy** extras add bonus heal. |
 | **Enduring** | **Basic ×1.25 / Mid ×1.45 / High ×1.7** of your **max stamina (chunks)** — extra **current** chunks only (**max** unchanged; see **Reminder** above). Formula below; tuned for **~5** chunks. One-shot on **`/item`**. |
-| **Energizing** | **+5 / +7 / +9** stamina chunks **refill** on **`/item`** by tier, **plus** an **active buff** until the bot uses it in stamina-related play (gather, loot, crafting hooks, etc.). |
+| **Energizing** | **+5 / +7 / +9** stamina chunks restored on **`/item`** by tier (capped at your **max** stamina; see **Reminder** above). |
 
 **Stamina chunks:** whole numbers; **5 chunks ≈ 1 wheel** if you think in wheels.
 
@@ -117,13 +117,115 @@ Heal **budget** (how much you *could* heal toward missing HP) is a **fraction of
 
 **Actual heal** = **`min(budget, missing hearts)`** — you never overheal above max.
 
-### Sticky Elixir — **plus** extra loot
+### Sticky Elixir — **plus** extra items (not only loot)
 
-**Sticky bonus:** whenever an action **gives you items**, you **always** get **extra copies of that same item** (not a random second item). **Tier** sets a **random range** for how many extras: **Basic** **1–2**, **Mid** **3–4**, **High** **4–5** (`STICKY_BONUS_EXTRA_RANGE_BY_LEVEL` in `elixirModule.js`). **Water resistance** is separate — for **cold / ice**, drink **Spicy**, not Sticky.
+**Sticky bonus:** whenever an action **gives you items** — gathering, `/loot`, travel rewards, exploration, steal, help wanted, and similar — you **always** get **extra copies of that same item** (not a random second item). **Tier** sets a **random range** for how many extras: **Basic** **1–2**, **Mid** **3–4**, **High** **4–5** (`STICKY_BONUS_EXTRA_RANGE_BY_LEVEL` in `elixirModule.js`). **Water resistance** is separate — for **cold / ice**, drink **Spicy**, not Sticky.
 
 ### Other buff elixirs (Chilly, Spicy, Electro, Bright, Mighty, Tough, Sneaky, Hasty)
 
 **Mid** multiplies the Basic stat by **×1.15**, **High** by **×1.3**, then rounds to **0.25**. **Sneaky** boosts **stealth** and **flee**.
+
+---
+
+## Each elixir in detail
+
+Numbers and formulas match **`elixirModule.js`** and **`/item`** (Hearty, Fairy Tonic, and Enduring use **`/item`**’s special path: they **do not** leave an active elixir buff after drinking; everything else that uses `applyElixirBuff` does).
+
+**Tier scaling** for most combat/resist elixirs: **Basic** uses the catalog value below; **Mid** = Basic **×1.15**; **High** = Basic **×1.3**, rounded to the nearest **0.25**. **Energizing**, **Hearty**, **Enduring**, **Fairy Tonic**, and **Sticky**’s extra-item range use the tables in **Tiers** (above).
+
+---
+
+### Chilly Elixir
+
+- **Effect:** **Heat & fire resistance** — multiplies how well you resist fire/heat (e.g. **×1.5** at Basic on the **fireResistance** stat; Mid/High scale as above).
+- **When it’s “spent”:** The buff clears when you fight in **combat**, **help wanted**, **raid**, or **loot** and the encounter is **fire/heat-themed** (e.g. monster element **fire**, or name patterns match fire/heat).
+- **Exploration:** Counts as the **hot**-quadrant hazard counter if you drink it during an expedition (explore flow).
+
+---
+
+### Spicy Elixir
+
+- **Effect:** **Cold & ice resistance** — **×1.5** at Basic on **coldResistance**; Mid/High scale the same way as other resist elixirs.
+- **When it’s spent:** **Combat**, **help wanted**, **raid**, or **loot** when the monster name includes **Ice** (ice-themed enemies).
+- **Exploration:** **Cold**-quadrant hazard counter if used during explore.
+
+---
+
+### Electro Elixir
+
+- **Effect:** **Electric resistance** — **×1.5** at Basic on **electricResistance**; Mid/High scale the same way.
+- **When it’s spent:** **Combat**, **help wanted**, **raid**, or **loot** when the monster name includes **Electric**.
+- **Exploration:** **Thunder**-quadrant hazard counter if used during explore.
+
+---
+
+### Bright Elixir
+
+- **Effect:** **Blight resistance** — **×1** at Basic on **blightResistance**; Mid/High scale the same way (not the same base number as **×1.5** resists).
+- **Grotto mazes:** In **grotto maze** trials during **explore**, **Bright** lifts extra **fog-of-war** on the maze image: **Basic** **1** extra ring of map sections, **Mid** **2**, **High** **3** (whoever in the party has the active **Bright** buff — strongest tier wins). Drink before or during the maze so your buff is active when the map renders.
+- **When it’s spent:** **Only** when **blight-style weather** is active in context (**blight rain** in the bot’s checks). Then it can clear on **loot**, **gather**, **travel**, **help wanted**, or **raid**. If there’s no blight context, it **does not** auto-consume from those activities alone.
+
+---
+
+### Sticky Elixir
+
+- **Effect:** Two parts: **water resistance** (**×1.5** at Basic on **waterResistance**, scaled at Mid/High like other resists) **and** the **Sticky bonus** — whenever you **earn items** (gathering, `/loot`, travel rewards, exploration, steal, help wanted, etc.), you roll **extra copies of the same item** (not a random second item). **Tier** sets the range: **Basic** **1–2**, **Mid** **3–4**, **High** **4–5** extras.
+- **When it’s spent:** **Travel** (buff can clear when travel uses it), **or** **combat** / **help wanted** / **raid** / **loot** against a monster whose **name** includes **Water** (water-themed enemies). **Cold/ice** threats use **Spicy**, not Sticky.
+
+---
+
+### Mighty Elixir
+
+- **Effect:** **Attack** — adds to your attack stat (e.g. **+1.5** at Basic as **attackBoost**; Mid/High scale with **×1.15** / **×1.3** on that bonus, rounded to **0.25**).
+- **When it’s spent:** **Combat**, **help wanted**, **raid**, or **loot** when the game uses that buff.
+
+---
+
+### Tough Elixir
+
+- **Effect:** **Defense** — same scaling pattern as Mighty (**+1.5** at Basic as **defenseBoost**); Mid/High use **×1.15** / **×1.3**.
+- **When it’s spent:** **Combat**, **help wanted**, **raid**, or **loot**.
+
+---
+
+### Sneaky Elixir
+
+- **Effect:** **Stealth** and **flee** — **+1** each at Basic; Mid/High scale both stats with **×1.15** / **×1.3** (rounded to **0.25**).
+- **When it’s spent:** **Gather**, **loot**, or **travel** (stealth/flee relevant to those flows).
+
+---
+
+### Hasty Elixir
+
+- **Effect:** **Travel speed** — **+1** at Basic; Mid/High scale with **×1.15** / **×1.3** on **speedBoost**.
+- **When it’s spent:** **Travel** (when travel consumes the buff).
+
+---
+
+### Hearty Elixir
+
+- **Effect:** Adds **temporary extra current hearts** only — **max** does not change. Gain is **`ceil(maxHearts × M) − maxHearts`**, at least **+1**, with **M** = **1.2 / 1.4 / 1.7** for Basic / Mid / High (see **Tiers**). **Fairy / Mock Fairy** mix-in on the stack can heal **up to your max** before the tier bonus is applied; pick the **`|mN`** line that matches your bottle.
+- **After `/item`:** No elixir **buff slot** is left (you can drink another elixir type immediately after, subject to rules). Extra **current** above **max** lasts until you **take damage** (not tracked as a timed buff).
+
+---
+
+### Fairy Tonic
+
+- **Effect:** Heals **missing** HP only — never above your **real max** hearts. **Heal budget** by tier: **½ / ¾ / full** max hearts (floored whole hearts), then **`min(budget, missing)`**. **Fairy / Mock Fairy** extras add to the heal budget on that stack.
+- **After `/item`:** No elixir buff slot — pure heal.
+
+---
+
+### Enduring Elixir
+
+- **Effect:** Adds **temporary stamina chunks** to **current** only — **`ceil(maxStamina × M) − maxStamina`**, at least **+1**, with **M** = **1.25 / 1.45 / 1.7** for Basic / Mid / High (see **Tiers**). **Max** stamina does not increase.
+- **After `/item`:** No elixir buff slot. Your **current** can sit above **max** until you spend stamina; the bot may clamp **current** down toward **max** when appropriate (see **Reminder**).
+
+---
+
+### Energizing Elixir
+
+- **Effect:** Restores **+5 / +7 / +9** stamina **chunks** (Basic / Mid / High) on **`/item`**, **capped at your max** stamina. There is **no** ongoing attack, defense, or resistance buff — only the refill.
 
 ---
 
@@ -132,10 +234,10 @@ Heal **budget** (how much you *could* heal toward missing HP) is a **fraction of
 | Command | Role |
 | --- | --- |
 | **`/item`** | Use elixirs and items (here: elixirs). |
-| **`/crafting brew`** | **Witches** make elixirs through the mixer. |
+| **`/crafting brew`** | **Witch** role — elixirs through the mixer. |
 | **`/crafting recipe`** | Other jobs’ fixed recipes — **not** the main elixir pipeline for Witches. |
 
-**Crafting** uses the channel the bot expects (usually **village town hall**).
+**`/crafting brew`** runs in **village town hall** (the bot’s crafting channel).
 
 ---
 
@@ -163,9 +265,9 @@ Each ingredient has **rarity** (often **1–10**). The mixer blends **critter + 
 
 - **One** active buff elixir at a time; many bottles in inventory is fine.
 - **Quantity 1** per **`/item`** for elixirs.
-- **Witches:** elixirs from **`/crafting brew`**.
+- **Witch** role: elixirs from **`/crafting brew`**.
 - **Chilly** = heat/fire · **Sticky** = water · **Bright** = blight.
-- Only items the mixer **menus** offer as labeled critters/parts will work; ask staff about odd items.
+- Only items the mixer **menus** offer as labeled critters/parts will work.
 
 ---
 

@@ -786,8 +786,43 @@ async function handleFight(interaction, character, encounterMessage, monster, tr
           } catch (lootLogError) {
             warn('TRAVEL', `Failed to log travel loot to InventoryLog: ${lootLogError.message}`);
           }
+
+          let stickyFightExtras = 0;
+          if (!isAprilFoolsEastern()) {
+            try {
+              const freshForSticky = await Character.findById(character._id).select('buff');
+              const stickySrc = freshForSticky?.buff?.active ? freshForSticky : character;
+              stickyFightExtras = rollStickyBonusExtraQuantity(stickySrc);
+            } catch (_) {
+              stickyFightExtras = 0;
+            }
+            if (stickyFightExtras > 0) {
+              await addItemInventoryDatabase(
+                character._id,
+                item.itemName,
+                stickyFightExtras,
+                interaction,
+                'Travel (Sticky Elixir)'
+              );
+              try {
+                const fightInteractionUrl = interaction ? `https://discord.com/channels/${interaction.guildId}/${interaction.channelId}/${interaction.id}` : '';
+                await logItemAcquisitionToDatabase(character, { ...lootItem, itemName: item.itemName }, {
+                  quantity: stickyFightExtras,
+                  obtain: 'Travel (Sticky Elixir)',
+                  location: character.currentVillage || character.homeVillage || 'Travel',
+                  link: fightInteractionUrl,
+                });
+              } catch (stickyLogErr) {
+                warn('TRAVEL', `Failed to log Sticky travel fight loot to InventoryLog: ${stickyLogErr.message}`);
+              }
+            }
+          }
+
           lootLine = `\nLooted ${item.itemName} × ${item.quantity}\n`;
           outcomeMessage = `${generateVictoryMessage(item)}${lootLine}`;
+          if (stickyFightExtras > 0) {
+            outcomeMessage += `\n✨ **Sticky Elixir:** +${stickyFightExtras} extra **${item.itemName}**.`;
+          }
           if (isAprilFoolsEastern()) {
             outcomeMessage += aprilFoolsMessageSuffix();
           }

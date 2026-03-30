@@ -1792,6 +1792,36 @@ async function partyHasLensOfTruth(party) {
   return partyHasLensOfTruthRelic(party.characters || [], getCharacterInventoryCollectionWithModSupport);
 }
 
+/** Bright Elixir on any party member: extra fog-of-war rings in grotto maze member view (tier 1–3). */
+async function getBrightRevealStepsForMazeParty(party) {
+  const chars = party?.characters || [];
+  if (!chars.length) return 0;
+  const ids = chars.map((c) => c._id).filter(Boolean);
+  if (!ids.length) return 0;
+  const [norm, mods] = await Promise.all([
+    Character.find({ _id: { $in: ids } }).select("buff").lean(),
+    ModCharacter.find({ _id: { $in: ids } }).select("buff").lean(),
+  ]);
+  const byId = new Map();
+  for (const d of norm || []) {
+    if (d?._id) byId.set(String(d._id), d);
+  }
+  for (const d of mods || []) {
+    if (d?._id && !byId.has(String(d._id))) byId.set(String(d._id), d);
+  }
+  let best = 0;
+  for (const slot of chars) {
+    if (!slot?._id) continue;
+    const doc = byId.get(String(slot._id));
+    const buff = doc?.buff;
+    if (!buff?.active || buff.type !== "bright") continue;
+    const lv = Number(buff.elixirLevel);
+    const steps = lv === 2 ? 2 : lv === 3 ? 3 : 1;
+    if (steps > best) best = steps;
+  }
+  return best;
+}
+
 // ------------------- handleGrottoCleanse ------------------
 // Plume + 1 stamina; create Grotto, roll trial; blessing = immediate Spirit Orbs
 async function handleGrottoCleanse(i, msg, party, expeditionId, characterIndex, location, disabledRow, nextCharacter, ruinRestRecovered) {
@@ -2005,7 +2035,7 @@ if (trialType === 'puzzle' && grottoDoc.puzzleState?.puzzleSubType) {
  let trialMazeImg = getExploreMapImageUrl(freshParty, { highlight: true });
  if (trialType === "maze" && grottoDoc.mazeState?.layout) {
   try {
-       const mazeBuf = await renderMazeToBuffer(grottoDoc.mazeState.layout, { viewMode: "member", currentNode: grottoDoc.mazeState.currentNode, visitedCells: grottoDoc.mazeState.visitedCells, openedChests: grottoDoc.mazeState.openedChests, triggeredTraps: grottoDoc.mazeState.triggeredTraps, usedScryingWalls: grottoDoc.mazeState.usedScryingWalls });
+       const mazeBuf = await renderMazeToBuffer(grottoDoc.mazeState.layout, { viewMode: "member", currentNode: grottoDoc.mazeState.currentNode, visitedCells: grottoDoc.mazeState.visitedCells, openedChests: grottoDoc.mazeState.openedChests, triggeredTraps: grottoDoc.mazeState.triggeredTraps, usedScryingWalls: grottoDoc.mazeState.usedScryingWalls, brightRevealSteps: await getBrightRevealStepsForMazeParty(freshParty) });
    trialMazeFiles = [new AttachmentBuilder(mazeBuf, { name: "maze.png" })];
    trialMazeImg = "attachment://maze.png";
    postGrottoMazeModVersion(i.client, grottoDoc.mazeState.layout, grottoDoc.mazeState.currentNode, grottoName, expeditionId, location, grottoDoc.mazeState);
@@ -2732,7 +2762,7 @@ module.exports = {
      let continueMazeImg = getExploreMapImageUrl(party, { highlight: true });
      if (grotto.trialType === "maze" && grotto.mazeState?.layout) {
       try {
-       const mazeBuf = await renderMazeToBuffer(grotto.mazeState.layout, { viewMode: "member", currentNode: grotto.mazeState.currentNode, visitedCells: grotto.mazeState.visitedCells, openedChests: grotto.mazeState.openedChests, triggeredTraps: grotto.mazeState.triggeredTraps, usedScryingWalls: grotto.mazeState.usedScryingWalls });
+       const mazeBuf = await renderMazeToBuffer(grotto.mazeState.layout, { viewMode: "member", currentNode: grotto.mazeState.currentNode, visitedCells: grotto.mazeState.visitedCells, openedChests: grotto.mazeState.openedChests, triggeredTraps: grotto.mazeState.triggeredTraps, usedScryingWalls: grotto.mazeState.usedScryingWalls, brightRevealSteps: await getBrightRevealStepsForMazeParty(party) });
        continueMazeFiles = [new AttachmentBuilder(mazeBuf, { name: "maze.png" })];
        continueMazeImg = "attachment://maze.png";
       } catch (err) {
@@ -3397,7 +3427,7 @@ module.exports = {
       let bypassMazeFiles = [];
       let bypassMazeImg = getExploreMapImageUrl(party, { highlight: true });
       try {
-       const mazeBuf = await renderMazeToBuffer(grotto.mazeState.layout, { viewMode: "member", currentNode: grotto.mazeState.currentNode, visitedCells: grotto.mazeState.visitedCells, openedChests: grotto.mazeState.openedChests, triggeredTraps: grotto.mazeState.triggeredTraps, usedScryingWalls: grotto.mazeState.usedScryingWalls });
+       const mazeBuf = await renderMazeToBuffer(grotto.mazeState.layout, { viewMode: "member", currentNode: grotto.mazeState.currentNode, visitedCells: grotto.mazeState.visitedCells, openedChests: grotto.mazeState.openedChests, triggeredTraps: grotto.mazeState.triggeredTraps, usedScryingWalls: grotto.mazeState.usedScryingWalls, brightRevealSteps: await getBrightRevealStepsForMazeParty(party) });
        bypassMazeFiles = [new AttachmentBuilder(mazeBuf, { name: "maze.png" })];
        bypassMazeImg = "attachment://maze.png";
       } catch (err) {
@@ -3467,7 +3497,7 @@ module.exports = {
          .setDescription(`${entryFlavor}\n\n↳ Use ${mazeCmd} with **action:** North, East, South, West, or Song of Scrying at a wall.`);
         let enterFiles = [];
         try {
-         const mazeBuf = await renderMazeToBuffer(grotto.mazeState.layout, { viewMode: "member", currentNode: grotto.mazeState.currentNode, visitedCells: grotto.mazeState.visitedCells, openedChests: grotto.mazeState.openedChests, triggeredTraps: grotto.mazeState.triggeredTraps, usedScryingWalls: grotto.mazeState.usedScryingWalls });
+         const mazeBuf = await renderMazeToBuffer(grotto.mazeState.layout, { viewMode: "member", currentNode: grotto.mazeState.currentNode, visitedCells: grotto.mazeState.visitedCells, openedChests: grotto.mazeState.openedChests, triggeredTraps: grotto.mazeState.triggeredTraps, usedScryingWalls: grotto.mazeState.usedScryingWalls, brightRevealSteps: await getBrightRevealStepsForMazeParty(party) });
          enterFiles = [new AttachmentBuilder(mazeBuf, { name: "maze.png" })];
          enterEmbed.setImage("attachment://maze.png");
          enterEmbed.setFooter({ text: GROTTO_MAZE_LEGEND });
@@ -3524,7 +3554,7 @@ module.exports = {
      let mazeImg = getExploreMapImageUrl(party, { highlight: true });
      if (grotto.mazeState?.layout) {
       try {
-       const mazeBuf = await renderMazeToBuffer(grotto.mazeState.layout, { viewMode: "member", currentNode: grotto.mazeState.currentNode, visitedCells: grotto.mazeState.visitedCells, openedChests: grotto.mazeState.openedChests, triggeredTraps: grotto.mazeState.triggeredTraps, usedScryingWalls: grotto.mazeState.usedScryingWalls });
+       const mazeBuf = await renderMazeToBuffer(grotto.mazeState.layout, { viewMode: "member", currentNode: grotto.mazeState.currentNode, visitedCells: grotto.mazeState.visitedCells, openedChests: grotto.mazeState.openedChests, triggeredTraps: grotto.mazeState.triggeredTraps, usedScryingWalls: grotto.mazeState.usedScryingWalls, brightRevealSteps: await getBrightRevealStepsForMazeParty(party) });
        mazeFiles = [new AttachmentBuilder(mazeBuf, { name: "maze.png" })];
        mazeImg = "attachment://maze.png";
       } catch (e) {
@@ -3615,7 +3645,7 @@ module.exports = {
        grotto.markModified("mazeState.layout.matrix");
        await grotto.save();
        try {
-        const mazeBuf = await renderMazeToBuffer(grotto.mazeState.layout, { viewMode: "member", currentNode: grotto.mazeState.currentNode, visitedCells: grotto.mazeState.visitedCells, openedChests: grotto.mazeState.openedChests, triggeredTraps: grotto.mazeState.triggeredTraps, usedScryingWalls: grotto.mazeState.usedScryingWalls });
+        const mazeBuf = await renderMazeToBuffer(grotto.mazeState.layout, { viewMode: "member", currentNode: grotto.mazeState.currentNode, visitedCells: grotto.mazeState.visitedCells, openedChests: grotto.mazeState.openedChests, triggeredTraps: grotto.mazeState.triggeredTraps, usedScryingWalls: grotto.mazeState.usedScryingWalls, brightRevealSteps: await getBrightRevealStepsForMazeParty(party) });
         mazeFiles = [new AttachmentBuilder(mazeBuf, { name: "maze.png" })];
         mazeImg = "attachment://maze.png";
        } catch (e) {}
@@ -3691,7 +3721,7 @@ module.exports = {
        }
        await grotto.save();
        try {
-        const mazeBuf = await renderMazeToBuffer(grotto.mazeState.layout, { viewMode: "member", currentNode: grotto.mazeState.currentNode, visitedCells: grotto.mazeState.visitedCells, openedChests: grotto.mazeState.openedChests, triggeredTraps: grotto.mazeState.triggeredTraps, usedScryingWalls: grotto.mazeState.usedScryingWalls });
+        const mazeBuf = await renderMazeToBuffer(grotto.mazeState.layout, { viewMode: "member", currentNode: grotto.mazeState.currentNode, visitedCells: grotto.mazeState.visitedCells, openedChests: grotto.mazeState.openedChests, triggeredTraps: grotto.mazeState.triggeredTraps, usedScryingWalls: grotto.mazeState.usedScryingWalls, brightRevealSteps: await getBrightRevealStepsForMazeParty(party) });
         mazeFiles = [new AttachmentBuilder(mazeBuf, { name: "maze.png" })];
         mazeImg = "attachment://maze.png";
        } catch (e) {}
@@ -3706,7 +3736,7 @@ module.exports = {
         grotto.mazeState.steps = steps.slice(0, Math.max(0, steps.length - 1));
         await grotto.save();
         try {
-         const mazeBuf = await renderMazeToBuffer(grotto.mazeState.layout, { viewMode: "member", currentNode: grotto.mazeState.currentNode, visitedCells: grotto.mazeState.visitedCells, openedChests: grotto.mazeState.openedChests, triggeredTraps: grotto.mazeState.triggeredTraps, usedScryingWalls: grotto.mazeState.usedScryingWalls });
+         const mazeBuf = await renderMazeToBuffer(grotto.mazeState.layout, { viewMode: "member", currentNode: grotto.mazeState.currentNode, visitedCells: grotto.mazeState.visitedCells, openedChests: grotto.mazeState.openedChests, triggeredTraps: grotto.mazeState.triggeredTraps, usedScryingWalls: grotto.mazeState.usedScryingWalls, brightRevealSteps: await getBrightRevealStepsForMazeParty(party) });
          mazeFiles = [new AttachmentBuilder(mazeBuf, { name: "maze.png" })];
          mazeImg = "attachment://maze.png";
         } catch (e) {}
@@ -3882,7 +3912,7 @@ module.exports = {
      if (!grotto.mazeState.visitedCells) grotto.mazeState.visitedCells = [];
      if (!grotto.mazeState.visitedCells.includes(nextKey)) grotto.mazeState.visitedCells.push(nextKey);
      try {
-      const mazeBuf = await renderMazeToBuffer(grotto.mazeState.layout, { viewMode: "member", currentNode: nextKey, visitedCells: grotto.mazeState.visitedCells, openedChests: grotto.mazeState.openedChests, triggeredTraps: grotto.mazeState.triggeredTraps, usedScryingWalls: grotto.mazeState.usedScryingWalls });
+      const mazeBuf = await renderMazeToBuffer(grotto.mazeState.layout, { viewMode: "member", currentNode: nextKey, visitedCells: grotto.mazeState.visitedCells, openedChests: grotto.mazeState.openedChests, triggeredTraps: grotto.mazeState.triggeredTraps, usedScryingWalls: grotto.mazeState.usedScryingWalls, brightRevealSteps: await getBrightRevealStepsForMazeParty(party) });
       mazeFiles = [new AttachmentBuilder(mazeBuf, { name: "maze.png" })];
       mazeImg = "attachment://maze.png";
      } catch (e) {}
@@ -4663,7 +4693,7 @@ module.exports = {
       let revisitMazeImg = getExploreMapImageUrl(party, { highlight: true });
       if (grotto.trialType === "maze" && grotto.mazeState?.layout) {
        try {
-        const mazeBuf = await renderMazeToBuffer(grotto.mazeState.layout, { viewMode: "member", currentNode: grotto.mazeState.currentNode, visitedCells: grotto.mazeState.visitedCells, openedChests: grotto.mazeState.openedChests, triggeredTraps: grotto.mazeState.triggeredTraps, usedScryingWalls: grotto.mazeState.usedScryingWalls });
+        const mazeBuf = await renderMazeToBuffer(grotto.mazeState.layout, { viewMode: "member", currentNode: grotto.mazeState.currentNode, visitedCells: grotto.mazeState.visitedCells, openedChests: grotto.mazeState.openedChests, triggeredTraps: grotto.mazeState.triggeredTraps, usedScryingWalls: grotto.mazeState.usedScryingWalls, brightRevealSteps: await getBrightRevealStepsForMazeParty(party) });
         revisitMazeFiles = [new AttachmentBuilder(mazeBuf, { name: "maze.png" })];
         revisitMazeImg = "attachment://maze.png";
        } catch (err) {

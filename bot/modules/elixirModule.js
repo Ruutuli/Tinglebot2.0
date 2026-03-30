@@ -113,7 +113,7 @@ const ELIXIR_EFFECTS = {
   },
   'Sticky Elixir': {
     type: 'sticky',
-    description: 'Water **×1.5**; extra **same-item** copies **+1–2 / 3–4 / 4–5** (Basic/Mid/High).',
+    description: 'Water **×1.5**; extra **same-item** copies **+1–2 / 3–4 / 4–5** (Basic/Mid/High) when you earn items (gather, loot, travel, exploration, steal, etc.).',
     effects: {
       waterResistance: 1.5,
       plusBoost: 1
@@ -334,7 +334,7 @@ function getElixirItemUseBlurb(elixirName, elixirLevel, options = {}) {
     case 'Sticky Elixir': {
       const w = scaled.waterResistance;
       const range = STICKY_BONUS_EXTRA_RANGE_BY_LEVEL[lv - 1] ?? STICKY_BONUS_EXTRA_RANGE_BY_LEVEL[0];
-      return `Water ×${formatElixirStatDisplay(w)}; **+${range[0]}–${range[1]}** extra copies of the same item when you earn loot.`;
+      return `Water ×${formatElixirStatDisplay(w)}; **+${range[0]}–${range[1]}** extra copies of the same item when you earn items (gathering, /loot, travel, exploration, steal, etc.).`;
     }
     case 'Chilly Elixir':
       return `Heat & fire resistance ×${formatElixirStatDisplay(scaled.fireResistance)}.`;
