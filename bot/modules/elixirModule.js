@@ -44,8 +44,14 @@ function computeGainFromMaxPoolMultiplier(baseMax, level, multipliers) {
 /** Not valid mixer ingredients (pet / compression / special use only). Keep in sync with `items` + ingredient-label seed. */
 const ELIXIR_MIXER_EXCLUDED_ITEM_NAMES = Object.freeze(['Chuchu Egg']);
 
+/**
+ * 1 = Basic, 2 = Mid, 3 = High.
+ * Legacy inventory rows with no label (`null` / `undefined` / missing), invalid numbers, or anything other than 2 or 3 → **Basic (1)**.
+ */
 function normalizeElixirLevel(raw) {
+  if (raw == null || raw === '') return 1;
   const n = Number(raw);
+  if (!Number.isFinite(n)) return 1;
   if (n === 2 || n === 3) return n;
   return 1;
 }
@@ -319,9 +325,14 @@ function formatElixirStatDisplay(n) {
   return Number.isInteger(t) ? String(t) : String(t);
 }
 
+/** Discord blockquote line: `> **Label** : value` */
+function elixirQuotedEffectLine(label, value) {
+  return `> **${label}** : ${value}`;
+}
+
 /**
  * Multi-line effect copy for `/item` and brew preview — uses **this bottle’s** level, not all tiers.
- * Format: `Label : value` per line (Discord field value; no "Effect:" header — embed field name is **Effect**).
+ * Each line is a blockquote with bold label (Discord embed field value).
  * @param {{ maxHeartsForFairyTonic?: number, maxHeartsForHearty?: number, maxStaminaForEnduring?: number }} [options]
  */
 function getElixirItemUseBlurb(elixirName, elixirLevel, options = {}) {
@@ -336,43 +347,59 @@ function getElixirItemUseBlurb(elixirName, elixirLevel, options = {}) {
     case 'Sticky Elixir': {
       const w = scaled.waterResistance;
       const range = STICKY_BONUS_EXTRA_RANGE_BY_LEVEL[lv - 1] ?? STICKY_BONUS_EXTRA_RANGE_BY_LEVEL[0];
-      return [`Water Resistance : ${x(w)}`, `Extra Items : +${range[0]}–${range[1]} (same item when you earn loot)`].join('\n');
+      return [
+        elixirQuotedEffectLine('Water Resistance', x(w)),
+        elixirQuotedEffectLine('Extra Items', `+${range[0]}–${range[1]} (same item when you earn loot)`),
+      ].join('\n');
     }
     case 'Chilly Elixir':
-      return `Heat & Fire Resistance : ${x(scaled.fireResistance)}`;
+      return elixirQuotedEffectLine('Heat & Fire Resistance', x(scaled.fireResistance));
     case 'Bright Elixir':
-      return `Blight Resistance : ${x(scaled.blightResistance)}`;
+      return elixirQuotedEffectLine('Blight Resistance', x(scaled.blightResistance));
     case 'Spicy Elixir':
-      return `Cold & Ice Resistance : ${x(scaled.coldResistance)}`;
+      return elixirQuotedEffectLine('Cold & Ice Resistance', x(scaled.coldResistance));
     case 'Electro Elixir':
-      return `Electric Resistance : ${x(scaled.electricResistance)}`;
+      return elixirQuotedEffectLine('Electric Resistance', x(scaled.electricResistance));
     case 'Mighty Elixir':
-      return `Attack : ${x(scaled.attackBoost)}`;
+      return elixirQuotedEffectLine('Attack', x(scaled.attackBoost));
     case 'Tough Elixir':
-      return `Defense : ${x(scaled.defenseBoost)}`;
+      return elixirQuotedEffectLine('Defense', x(scaled.defenseBoost));
     case 'Sneaky Elixir':
-      return [`Stealth : +${formatElixirStatDisplay(scaled.stealthBoost)}`, `Flee : +${formatElixirStatDisplay(scaled.fleeBoost)}`].join('\n');
+      return [
+        elixirQuotedEffectLine('Stealth', `+${formatElixirStatDisplay(scaled.stealthBoost)}`),
+        elixirQuotedEffectLine('Flee', `+${formatElixirStatDisplay(scaled.fleeBoost)}`),
+      ].join('\n');
     case 'Hasty Elixir':
-      return `Travel Speed : +${formatElixirStatDisplay(scaled.speedBoost)}`;
+      return elixirQuotedEffectLine('Travel Speed', `+${formatElixirStatDisplay(scaled.speedBoost)}`);
     case 'Energizing Elixir': {
       const arr = RESOURCE_ELIXIR_LEVEL_STATS['Energizing Elixir']?.staminaRecovery;
       const n = arr?.[lv - 1];
-      return typeof n === 'number' ? `Stamina Recovery : +${n} chunks (capped at max)` : 'Stamina Recovery : restores stamina';
+      return typeof n === 'number'
+        ? elixirQuotedEffectLine('Stamina Recovery', `+${n} chunks (capped at max)`)
+        : elixirQuotedEffectLine('Stamina Recovery', 'restores stamina');
     }
     case 'Hearty Elixir': {
       const ex = scaled.extraHearts;
-      return `Temporary Hearts : +${formatElixirStatDisplay(ex)}`;
+      return elixirQuotedEffectLine('Temporary Hearts', `+${formatElixirStatDisplay(ex)}`);
     }
     case 'Enduring Elixir': {
       const st = scaled.staminaBoost;
-      return `Temporary Stamina : +${formatElixirStatDisplay(st)} chunks`;
+      return elixirQuotedEffectLine('Temporary Stamina', `+${formatElixirStatDisplay(st)} chunks`);
     }
     case 'Fairy Tonic': {
       const h = scaled.healHearts;
-      return `Heal : up to ${formatElixirStatDisplay(h)} missing hearts (capped at max)`;
+      return elixirQuotedEffectLine('Heal', `up to ${formatElixirStatDisplay(h)} missing hearts (capped at max)`);
     }
-    default:
-      return (ELIXIR_EFFECTS[key].description || '').trim();
+    default: {
+      const d = (ELIXIR_EFFECTS[key].description || '').trim();
+      if (!d) return '';
+      return d
+        .split(/\n/)
+        .map((l) => l.trim())
+        .filter(Boolean)
+        .map((l) => `> ${l}`)
+        .join('\n');
+    }
   }
 }
 
@@ -393,7 +420,7 @@ function getBrewPreviewForElixir(elixirName, level, fairyHealHearts = 0, preview
   else parts.push(elixir.description.trim());
 
   if (fairyHealHearts > 0) {
-    parts.push(`Fairy Mix-In : +${fairyHealHearts} hearts (brew)`);
+    parts.push(elixirQuotedEffectLine('Fairy Mix-In', `+${fairyHealHearts} hearts (brew)`));
   }
 
   return {
@@ -978,6 +1005,7 @@ module.exports = {
   ELEMENTAL_ADVANTAGE_BONUS,
   ELEMENTAL_WEAKNESS_PENALTY,
   formatElixirStatDisplay,
+  elixirQuotedEffectLine,
   rollStickyBonusExtraQuantity,
   STICKY_BONUS_EXTRA_RANGE_BY_LEVEL,
 };

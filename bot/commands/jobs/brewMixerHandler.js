@@ -44,18 +44,18 @@ const {
   isMixerUniversalFairyCritterName,
   mixerFairyHealHeartsFromExtras,
 } = require('../../modules/elixirBrewModule');
-const { getBrewPreviewForElixir } = require('../../modules/elixirModule');
+const { getBrewPreviewForElixir, elixirQuotedEffectLine } = require('../../modules/elixirModule');
 const { createCraftingEmbed } = require('../../embeds/embeds.js');
 
 const EMBED_BORDER_IMAGE_URL = 'https://storage.googleapis.com/tinglebot/Graphics/border.png';
 const MAX_MIXER_EXTRAS = 3;
 
-/** Short brew summary for Discord (tier + mixer score) — same `Label : value` style as elixir Effect lines. */
+/** Short brew summary for Discord (tier + mixer score) — blockquote + bold labels, same style as Effect. */
 function formatUserFriendlyBrewBlend(mixOutcome, tierWord, brewedElixirLevel) {
   const combined = mixOutcome.combinedRounded;
   const lines = [
-    `Potency : ${tierWord} elixir · level ${brewedElixirLevel}`,
-    `Mixer score : ${combined}/10 → ${tierWord} potency`,
+    elixirQuotedEffectLine('Potency', `${tierWord} elixir · level ${brewedElixirLevel}`),
+    elixirQuotedEffectLine('Mixer score', `${combined}/10 → ${tierWord} potency`),
   ];
   const raw = lines.join('\n');
   return raw.length > 1024 ? `${raw.slice(0, 1020)}…` : raw;

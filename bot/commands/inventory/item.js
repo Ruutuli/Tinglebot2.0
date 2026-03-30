@@ -40,6 +40,7 @@ const {
   parseElixirTierFromItemOption,
   isElixirItemName,
   getElixirItemUseBlurb,
+  elixirQuotedEffectLine,
 } = require('../../modules/elixirModule');
 
 // ------------------- Utility Functions -------------------
@@ -1061,28 +1062,26 @@ module.exports = {
               (key) => ELIXIR_EFFECTS[key].type === typeForLookup
             ) || String(rawType || 'unknown');
           const currentElixirInfo = getElixirInfo(elixirDisplayName);
+          const activeBuffEffect =
+            currentElixirInfo &&
+            (getElixirItemUseBlurb(elixirDisplayName, normalizeElixirLevel(character.buff?.elixirLevel) || 1, {
+              maxHeartsForFairyTonic: character.maxHearts,
+              maxHeartsForHearty: character.maxHearts,
+              maxStaminaForEnduring: character.maxStamina,
+            }).trim() ||
+              currentElixirInfo.description);
           return void await interaction.editReply({
             embeds: [{
               color: 0x8B4513,
               title: '❌ Active elixir buff',
-              description: `${character.name} already has an active elixir buff and cannot drink another buff elixir until it is used up or cleared.`,
-              fields: [
-                { name: '🧪 Current buff', value: `**${elixirDisplayName}**`, inline: true },
-                ...(currentElixirInfo
-                  ? [
-                      {
-                        name: 'Effect',
-                        value:
-                          getElixirItemUseBlurb(elixirDisplayName, normalizeElixirLevel(character.buff?.elixirLevel) || 1, {
-                            maxHeartsForFairyTonic: character.maxHearts,
-                            maxHeartsForHearty: character.maxHearts,
-                            maxStaminaForEnduring: character.maxStamina,
-                          }).slice(0, 1024) || currentElixirInfo.description,
-                        inline: false,
-                      },
-                    ]
-                  : []),
-              ],
+              description: [
+                `${character.name} already has an active elixir buff and cannot drink another buff elixir until it is used up or cleared.`,
+                `**Current buff:** **${elixirDisplayName}**`,
+                activeBuffEffect ? `**Effect**\n${activeBuffEffect.slice(0, 3500)}` : null,
+              ]
+                .filter(Boolean)
+                .join('\n\n'),
+              fields: [],
               image: {
                 url: 'https://storage.googleapis.com/tinglebot/Graphics/border.png'
               },
@@ -1254,9 +1253,12 @@ module.exports = {
             maxStaminaForEnduring: originalMaxStamina,
           }).trim() || (elixirInfo.description || '').trim();
         if (item.itemName === 'Hearty Elixir' && fairyHealAppliedForDisplay > 0) {
-          effectValue += `\nFairy Mix-In : +${fairyHealAppliedForDisplay} hearts (up to max)`;
+          effectValue += `\n${elixirQuotedEffectLine('Fairy Mix-In', `+${fairyHealAppliedForDisplay} hearts (up to max)`)}`;
         }
-        const descParts = [`**${character.name}** drank **${item.itemName}** (${potencyLabel}, level ${invElixirLevel}).`];
+        const descParts = [
+          `**${character.name}** drank **${item.itemName}** (${potencyLabel}, level ${invElixirLevel}).`,
+          effectValue ? `**Effect**\n${effectValue.slice(0, 3500)}` : null,
+        ].filter(Boolean);
 
         const authorPayload = {
           name: character.name,
@@ -1269,19 +1271,14 @@ module.exports = {
           .setAuthor(authorPayload)
           .setTitle('🧪 Elixir consumed')
           .setDescription(descParts.join('\n\n'))
-          .addFields(
-            ...(effectValue
-              ? [{ name: 'Effect', value: effectValue.slice(0, 1024), inline: false }]
-              : []),
-            {
-              name: '❤️ · 🟩 Condition',
-              value: [
-                `**Hearts** — ${displayCurrentHearts} / ${displayMaxHearts}`,
-                `**Stamina** — ${displayCurrentStamina} / ${displayMaxStamina}`,
-              ].join('\n'),
-              inline: false,
-            }
-          )
+          .addFields({
+            name: '❤️ · 🟩 Condition',
+            value: [
+              `**Hearts** — ${displayCurrentHearts} / ${displayMaxHearts}`,
+              `**Stamina** — ${displayCurrentStamina} / ${displayMaxStamina}`,
+            ].join('\n'),
+            inline: false,
+          })
           .setThumbnail(item.image || character.icon)
           .setImage('https://storage.googleapis.com/tinglebot/Graphics/border.png');
 

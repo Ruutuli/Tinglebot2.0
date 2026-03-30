@@ -63,6 +63,7 @@ const { monsterMapping } = require('@/models/MonsterModel');
 // ------------------- Utility Functions -------------------
 const { handleInteractionError } = require('@/utils/globalErrorHandler');
 const { addItemInventoryDatabase, escapeRegExp } = require('@/utils/inventoryUtils');
+const { isElixirItemName } = require('../../modules/elixirModule');
 const { safeInteractionResponse, safeFollowUp, safeSendLongMessage, splitMessage } = require('@/utils/interactionUtils');
 const { generateUniqueId } = require('@/utils/uniqueIdUtils');
 const {
@@ -1711,12 +1712,15 @@ async function handleGive(interaction) {
     }
   
     // ------------------- Apply Inventory Update -------------------
+    const modGiveOptions =
+      isElixirItemName(item.itemName) ? { elixirLevel: 1 } : {};
     await addItemInventoryDatabase(
       character._id,
       itemName,
       quantity,
       interaction,
-      'Admin Give'
+      'Admin Give',
+      modGiveOptions
     );
 
     // Note: Google Sheets sync is handled by addItemInventoryDatabase
