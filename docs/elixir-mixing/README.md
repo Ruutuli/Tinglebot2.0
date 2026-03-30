@@ -155,10 +155,10 @@ Only as an **extra** on an otherwise valid brew: output family stays from critte
 | `chilly` | `fireResistance` | Heat + fire | combat, exploring, travel |
 | `spicy` | `coldResistance` | Cold + ice | combat, exploring, travel |
 | `electro` | `electricResistance` | Shock / lightning | combat, exploring |
-| `enduring` | `staminaBoost` | Extra max stamina (chunks) | exploring, gathering, looting, travel |
+| `enduring` | `staminaBoost` | Extra max stamina (chunks): **tier × max** at `/item` (Basic **×1.2**, Mid **×1.3**, High **×1.4** of pre-drink max; gain = `ceil(max×tier)−max`, min +1) | exploring, gathering, looting, travel |
 | `energizing` | `staminaRecovery` | Stamina refill (chunks) | crafting, gathering, looting |
 | `hasty` | `speedBoost` | Speed checks; travel can halve days | exploring, travel |
-| `hearty` | `extraHearts` | Temp max + current HP | combat, gathering, helpwantedquests, looting, raid |
+| `hearty` | `extraHearts` | Temporary hearts at `/item`: **tier × max hearts** (Basic **×1.2**, Mid **×1.3**, High **×1.4**; gain = `ceil(max×tier)−max`, min +1) — live `/item` adds to **current** only | combat, gathering, helpwantedquests, looting, raid |
 | `mighty` | `attackBoost` | Attack-weighted success | combat, helpwantedquests, looting, raid |
 | `tough` | `defenseBoost` | Defense (×1.5 floor in `buffModule`) | combat, helpwantedquests, looting, raid |
 | `sneaky` | `stealthBoost`, `fleeBoost` | Stealth + flee — **not** loot-job encounter rates | exploring, gathering, looting, travel |
@@ -209,10 +209,10 @@ Numbers come from **`ELIXIR_EFFECTS`** in `elixirModule.js` — one static `effe
 | Sticky Elixir | `sticky` | `waterResistance: 1.5`, `plusBoost: 1` |
 | Spicy Elixir | `spicy` | `coldResistance: 1.5` |
 | Electro Elixir | `electro` | `electricResistance: 1.5` |
-| Enduring Elixir | `enduring` | `staminaBoost: 1` |
+| Enduring Elixir | `enduring` | `staminaBoost` placeholder in `ELIXIR_EFFECTS`; **live `/item`** uses `scaleElixirEffects` + `maxStaminaForEnduring` → chunk delta per tier (**×1.2 / ×1.3 / ×1.4**) |
 | Energizing Elixir | `energizing` | `staminaRecovery: 2` |
 | Hasty Elixir | `hasty` | `speedBoost: 1` |
-| Hearty Elixir | `hearty` | `extraHearts: 3` |
+| Hearty Elixir | `hearty` | `extraHearts` placeholder in `ELIXIR_EFFECTS`; **live `/item`** uses `scaleElixirEffects` + `maxHeartsForHearty` → heart delta per tier (**×1.2 / ×1.3 / ×1.4**) |
 | Mighty Elixir | `mighty` | `attackBoost: 1.5` |
 | Tough Elixir | `tough` | `defenseBoost: 1.5` |
 | Sneaky Elixir | `sneaky` | `stealthBoost: 1`, `fleeBoost: 1` |
@@ -243,11 +243,13 @@ Tinglebot does **not** store BotW-style potency pots. Strength is driven by **`i
 | \* Heat (climate) | chilly (same stat) | 3 | 5 | — | mixer-only second track |
 | Cold / Shock / Blight / Sticky | spicy / electro / bright / sticky | 3–4 | 5–6 | 6–8 | see snapshot |
 
-### Hearty — extra full hearts (min `R_agg`)
+### Hearty — **max multiplier** tiers (live) + `R_agg` design sketch
 
-Live: **`extraHearts: 3`**. Targets for **other** totals: extras + rare parts, not cooking ingredients.
+**Live `/item`:** **`HEARTY_MAX_HEARTS_MULTIPLIERS`** in `elixirModule.js` (**×1.2 / ×1.3 / ×1.4** of max hearts before drink; `computeHeartyExtraHeartsFromMax` / shared `computeTieredGainFromMaxBase`). Same formula as **Enduring**, but hearts go to **temporary** current HP (not a persistent max change on the character sheet in the main `/item` path).
 
-| +Hearts | Min `R_agg` |
+The table below is a **historical design** for fixed **+1…+5** heart bands vs `R_agg` — **not** the live tier numbers; use it only as a rarity balance reference.
+
+| +Hearts (design sketch) | Min `R_agg` |
 | --- | ---: |
 | 1 | 4 |
 | 2 | 5 |
@@ -257,20 +259,20 @@ Live: **`extraHearts: 3`**. Targets for **other** totals: extras + rare parts, n
 
 **Critter anchors (critter-only path):** +3 → Hearty Blueshell Snail; +4 → Hearty Lizard (see [Item catalog](#item-catalog) `itemRarity`).
 
-### Energizing & Enduring — same chunk ladder
+### Energizing — fixed chunk ladder; Enduring — **max multiplier** tiers
 
-**Energizing** = refill (`staminaRecovery`). **Enduring** = extra max (`staminaBoost`). Both grant **integer chunks** only; **5 chunks = 1 wheel**; UI can show wheels as chunks ÷ 5.
+**Energizing** = refill (`staminaRecovery`): **Basic +5 / Mid +7 / High +9** chunks (fixed tier ladder). **Enduring** = extra max (`staminaBoost`): **not** the same fixed numbers — **Basic ×1.2 / Mid ×1.3 / High ×1.4** of the character’s **max stamina in chunks** *before* drinking; chunk gain = **`ceil(max × tier) − max`** (minimum **+1** chunk), applied to **max and current**. Both use **integer chunks** only; **5 chunks = 1 wheel**; UI can show wheels as chunks ÷ 5.
 
-Live: **`staminaRecovery: 2`**, **`staminaBoost: 1`**. Tables below are **future** `R_agg` bands.
+Live: **`staminaRecovery`** uses `RESOURCE_ELIXIR_LEVEL_STATS` (**5 / 7 / 9**). **Enduring** uses `ENDURING_MAX_STAMINA_MULTIPLIERS` in `elixirModule.js` (see `computeEnduringStaminaChunkBoost`). The chunk/wheel table below is mainly for **Energizing** and for **rough** display; Enduring’s chunk yield **scales with max stamina**.
 
-| Chunks (refill *or* extra max) | Wheels (display) |
+| Chunks (Energizing refill *or* rough scale) | Wheels (display) |
 | ---: | --- |
 | 1–4 | ⅕–⅘ wheel |
 | 5 | 1 wheel |
 | 6–9 | 1 + ⅕ … ⅘ |
 | 10 | 2 wheels |
 
-**`R_agg` bands (design):** Energizing refill — chunks 1–3 → R 1–4; 4–6 → R 4–7; 7–10 → R 7–10. Enduring max — chunks 1–5 → R 1–5; 6–10 → R 6–10. (**R** = aggregated ingredient rarity **1–10**, not chunk count.)
+**`R_agg` bands (design):** Energizing refill — chunks 1–3 → R 1–4; 4–6 → R 4–7; 7–10 → R 7–10. Enduring — historical sketch was **chunks 1–5 → R 1–5; 6–10 → R 6–10** when max gain was fixed; **live Enduring is max-multiplier-based**, so treat those bands as **optional** balance targets for mixer rarity, not a literal chunk ladder. (**R** = aggregated ingredient rarity **1–10**, not chunk count.)
 
 **Critter hints:** Restless Cricket → low refill band; Bright-Eyed Crab / Faron Grasshopper → mid; Golden Insect → upper mid; Energetic Rhino Beetle → high. **Tireless Frog** = enduring. BotW fish/shrooms for stamina are **out of scope** for the mixer; push tiers with **`R_agg`**.
 

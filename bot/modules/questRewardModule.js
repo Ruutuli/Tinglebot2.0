@@ -1731,8 +1731,16 @@ async function processArtQuestCompletionFromSubmission(submissionData, userId) {
             return { success: false, reason: `Quest is not an Art quest (type: ${quest.questType})` };
         }
         
-        // Complete the quest for this participant
-        const completionResult = await quest.completeFromArtSubmission(userId, submissionData);
+        // syncApprovedSubmissionsToParticipant may already mark this participant completed (same approved row).
+        // completeFromArtSubmission requires progress === 'active', so treat sync-completed as success and continue
+        // so collaborators on the same submission still get credit.
+        let completionResult;
+        if (participant && (participant.progress === 'completed' || participant.progress === 'rewarded')) {
+            completionResult = { success: true, participant };
+            console.log(`[questRewardModule.js] ✅ Submitting participant already completed via sync (${participant.characterName}, status: ${participant.progress}); proceeding to collab handling`);
+        } else {
+            completionResult = await quest.completeFromArtSubmission(userId, submissionData);
+        }
         
         if (!completionResult.success) {
             console.log(`[questRewardModule.js] ❌ Failed to complete art quest: ${completionResult.reason || completionResult.error}`);
@@ -1747,7 +1755,14 @@ async function processArtQuestCompletionFromSubmission(submissionData, userId) {
                 const collaboratorId = mention.replace(/[<@!>]/g, '').trim();
                 if (!collaboratorId || collaboratorId === userId) continue;
                 const collabParticipant = quest.getParticipant(collaboratorId);
-                if (!collabParticipant || collabParticipant.progress !== 'active') continue;
+                if (!collabParticipant) continue;
+                await syncApprovedSubmissionsToParticipant(quest, collabParticipant);
+                await quest.save();
+                if (collabParticipant.progress === 'completed' || collabParticipant.progress === 'rewarded') {
+                    console.log(`[questRewardModule.js] ✅ Art quest collab already completed via sync: ${collabParticipant.characterName} in quest ${questID}`);
+                    continue;
+                }
+                if (collabParticipant.progress !== 'active') continue;
                 const collabResult = await quest.completeFromArtSubmission(collaboratorId, submissionData);
                 if (collabResult.success) {
                     console.log(`[questRewardModule.js] ✅ Art quest collab credit: ${collabParticipant.characterName} in quest ${questID}`);
@@ -1830,8 +1845,13 @@ async function processWritingQuestCompletionFromSubmission(submissionData, userI
             return { success: false, reason: `Quest is not a Writing quest (type: ${quest.questType})` };
         }
         
-        // Complete the quest for this participant
-        const completionResult = await quest.completeFromWritingSubmission(userId, submissionData);
+        let completionResult;
+        if (participant && (participant.progress === 'completed' || participant.progress === 'rewarded')) {
+            completionResult = { success: true, participant };
+            console.log(`[questRewardModule.js] ✅ Submitting participant already completed via sync (${participant.characterName}, status: ${participant.progress}); proceeding to collab handling`);
+        } else {
+            completionResult = await quest.completeFromWritingSubmission(userId, submissionData);
+        }
         
         if (!completionResult.success) {
             console.log(`[questRewardModule.js] ❌ Failed to complete writing quest: ${completionResult.reason || completionResult.error}`);
@@ -1846,7 +1866,14 @@ async function processWritingQuestCompletionFromSubmission(submissionData, userI
                 const collaboratorId = mention.replace(/[<@!>]/g, '').trim();
                 if (!collaboratorId || collaboratorId === userId) continue;
                 const collabParticipant = quest.getParticipant(collaboratorId);
-                if (!collabParticipant || collabParticipant.progress !== 'active') continue;
+                if (!collabParticipant) continue;
+                await syncApprovedSubmissionsToParticipant(quest, collabParticipant);
+                await quest.save();
+                if (collabParticipant.progress === 'completed' || collabParticipant.progress === 'rewarded') {
+                    console.log(`[questRewardModule.js] ✅ Writing quest collab already completed via sync: ${collabParticipant.characterName} in quest ${questID}`);
+                    continue;
+                }
+                if (collabParticipant.progress !== 'active') continue;
                 const collabResult = await quest.completeFromWritingSubmission(collaboratorId, submissionData);
                 if (collabResult.success) {
                     console.log(`[questRewardModule.js] ✅ Writing quest collab credit: ${collabParticipant.characterName} in quest ${questID}`);

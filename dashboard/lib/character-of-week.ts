@@ -6,7 +6,12 @@
 import mongoose from "mongoose";
 import { connect } from "@/lib/db";
 import { getNextSundayMidnightEST, getCurrentWeekStartDate } from "@/lib/date-utils";
+import { tryAcquireLock, releaseLock } from "@/lib/distributed-lock";
 import { logger } from "@/utils/logger";
+
+/** Same key as character-of-week-rotation job — one rotation at a time across all callers */
+const ROTATION_LOCK_KEY = "character-of-week-rotation-run";
+const ROTATION_LOCK_TTL_MS = 5 * 60 * 1000;
 
 type CharacterOfWeekRecord = {
   _id: unknown;
@@ -157,32 +162,59 @@ export async function selectCharacterForWeek(): Promise<{
 /**
  * Rotate the Character of the Week
  * Deactivates current featured character and creates a new one
+ *
+ * Uses a distributed lock so Agenda, init, and API calls cannot interleave.
+ * Idempotent for the same week: if an active row already exists for this period, no-op (unless force).
  */
 export async function rotateCharacterOfWeek(
-  featuredReason: string = "Weekly rotation"
+  featuredReason: string = "Weekly rotation",
+  options?: { force?: boolean }
 ): Promise<void> {
   await connect();
-  
+
+  const acquired = await tryAcquireLock(ROTATION_LOCK_KEY, ROTATION_LOCK_TTL_MS);
+  if (!acquired) {
+    logger.info(
+      "character-of-week",
+      "Rotation lock not acquired (another instance is rotating), skipping"
+    );
+    return;
+  }
+
   const CharacterOfWeek = (await import("@/models/CharacterOfWeekModel.js")).default;
-  
+
   try {
+    const startDate = getCurrentWeekStartDate();
+    const endDate = getNextSundayMidnightEST();
+
+    if (!options?.force) {
+      const alreadyActive = await CharacterOfWeek.findOne({
+        startDate,
+        endDate,
+        isActive: true,
+      }).lean();
+      if (alreadyActive) {
+        logger.info(
+          "character-of-week",
+          "Active character of the week already exists for this week window, skipping duplicate rotation"
+        );
+        return;
+      }
+    }
+
     // Deactivate current featured character
     await CharacterOfWeek.updateMany(
       { isActive: true },
       { isActive: false }
     );
-    
+
     // Select new character
     const selected = await selectCharacterForWeek();
-    
+
     if (!selected) {
       throw new Error("Failed to select a character for the week");
     }
-    
-    // Calculate dates
-    const startDate = getCurrentWeekStartDate();
-    const endDate = getNextSundayMidnightEST();
-    
+
     // Create new Character of the Week record
     await CharacterOfWeek.create({
       characterId: selected.characterId,
@@ -194,7 +226,7 @@ export async function rotateCharacterOfWeek(
       featuredReason,
       views: 0,
     });
-    
+
     logger.success(
       "character-of-week",
       `Rotated to new character: ${selected.characterName} (${selected.characterId})`
@@ -205,11 +237,15 @@ export async function rotateCharacterOfWeek(
       `Error rotating character of the week: ${error instanceof Error ? error.message : String(error)}`
     );
     throw error;
+  } finally {
+    await releaseLock(ROTATION_LOCK_KEY);
   }
 }
 
 /**
  * Get the current featured character
+ * If multiple rows are active for the same week (duplicate rotations), keeps the first
+ * rotation (earliest createdAt) and deactivates the rest so reads are deterministic.
  */
 export async function getCurrentCharacterOfWeek(): Promise<CurrentCharacterOfWeek | null> {
   await connect();
@@ -218,8 +254,49 @@ export async function getCurrentCharacterOfWeek(): Promise<CurrentCharacterOfWee
   const Character = (await import("@/models/CharacterModel.js")).default;
   
   try {
-    const current = (await CharacterOfWeek.findOne({ isActive: true }).lean()) as unknown;
-    
+    const weekStart = getCurrentWeekStartDate();
+    const weekEnd = getNextSundayMidnightEST();
+    const ws = weekStart.getTime();
+    const we = weekEnd.getTime();
+
+    const actives = await CharacterOfWeek.find({ isActive: true }).lean();
+    type LeanDoc = CharacterOfWeekRecord & { _id: mongoose.Types.ObjectId; createdAt?: Date };
+    const sameWeek = (actives as LeanDoc[])
+      .filter((r) => {
+        const sd = new Date(r.startDate).getTime();
+        const ed = new Date(r.endDate).getTime();
+        return sd === ws && ed === we;
+      })
+      .sort((a, b) => {
+        const ta = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+        const tb = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+        return ta - tb;
+      });
+
+    if (sameWeek.length > 1) {
+      const [, ...dupes] = sameWeek;
+      await CharacterOfWeek.updateMany(
+        { _id: { $in: dupes.map((d) => d._id) } },
+        { $set: { isActive: false } }
+      );
+      logger.warn(
+        "character-of-week",
+        `Deactivated ${dupes.length} duplicate active character(s) for the same week window (kept first rotation)`
+      );
+    }
+
+    let current: unknown | null =
+      sameWeek.length > 0 ? sameWeek[0] : null;
+
+    if (!current && actives.length > 0) {
+      const fallback = [...(actives as LeanDoc[])].sort((a, b) => {
+        const ta = a.updatedAt ? new Date(a.updatedAt).getTime() : 0;
+        const tb = b.updatedAt ? new Date(b.updatedAt).getTime() : 0;
+        return tb - ta;
+      })[0];
+      current = fallback;
+    }
+
     if (!current || Array.isArray(current)) {
       return null;
     }
@@ -270,10 +347,19 @@ export async function setCharacterOfWeek(
   featuredReason: string = "Manual selection"
 ): Promise<void> {
   await connect();
-  
+
+  const acquired = await tryAcquireLock(ROTATION_LOCK_KEY, ROTATION_LOCK_TTL_MS);
+  if (!acquired) {
+    logger.info(
+      "character-of-week",
+      "Rotation lock not acquired (another instance is rotating), skipping manual set"
+    );
+    throw new Error("Character of the week update is in progress; try again shortly.");
+  }
+
   const Character = (await import("@/models/CharacterModel.js")).default;
   const CharacterOfWeek = (await import("@/models/CharacterOfWeekModel.js")).default;
-  
+
   try {
     // Verify character exists and is accepted
     type CharacterStatusDoc = {
@@ -326,6 +412,8 @@ export async function setCharacterOfWeek(
       `Error setting character of the week: ${error instanceof Error ? error.message : String(error)}`
     );
     throw error;
+  } finally {
+    await releaseLock(ROTATION_LOCK_KEY);
   }
 }
 

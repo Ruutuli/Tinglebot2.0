@@ -19,7 +19,7 @@ export async function POST(req: NextRequest) {
   try {
     await connect();
     
-    await rotateCharacterOfWeek("Random selection");
+    await rotateCharacterOfWeek("Random selection", { force: true });
     
     // Return the updated character of the week
     const current = await getCurrentCharacterOfWeek();

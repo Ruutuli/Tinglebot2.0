@@ -1111,7 +1111,8 @@ module.exports = {
             const scaledHearty = scaleElixirEffects(
               'Hearty Elixir',
               ELIXIR_EFFECTS['Hearty Elixir'].effects,
-              invElixirLevel
+              invElixirLevel,
+              { maxHeartsForHearty: originalMaxHearts }
             );
             const extraHearts = (scaledHearty.extraHearts || 0) + stackModifierHearts;
             character.currentHearts += extraHearts;
@@ -1143,7 +1144,8 @@ module.exports = {
             const scaledEnduring = scaleElixirEffects(
               'Enduring Elixir',
               ELIXIR_EFFECTS['Enduring Elixir'].effects,
-              invElixirLevel
+              invElixirLevel,
+              { maxStaminaForEnduring: originalMaxStamina }
             );
             const staminaBoost = scaledEnduring.staminaBoost || 1;
             character.maxStamina += staminaBoost;
@@ -1161,7 +1163,11 @@ module.exports = {
           
           // Update character in database
           const updateFunction = character.isModCharacter ? updateModCharacterById : updateCharacterById;
-          await updateFunction(character._id, { buff: character.buff });
+          const buffUpdate = { buff: character.buff };
+          if (item.itemName === 'Enduring Elixir') {
+            buffUpdate.maxStamina = character.maxStamina;
+          }
+          await updateFunction(character._id, buffUpdate);
           
           // Update hearts if they were modified by Hearty Elixir or Fairy Tonic
           if (item.itemName === 'Hearty Elixir' || item.itemName === 'Fairy Tonic') {
@@ -1276,9 +1282,6 @@ module.exports = {
         if (item.itemName === 'Hearty Elixir' || item.itemName === 'Fairy Tonic') {
           displayCurrentHearts = character.currentHearts;
           displayMaxHearts = originalMaxHearts;
-        } else if (item.itemName === 'Enduring Elixir') {
-          displayCurrentStamina = character.currentStamina;
-          displayMaxStamina = originalMaxStamina;
         }
 
         const potencyLabel = ELIXIR_LEVEL_NAMES[invElixirLevel];

@@ -1,4 +1,6 @@
-# Elixirs — simple player guide
+# Elixirs — player guide
+
+Quick reference for **`/item`** (drink) and **`/crafting brew`** (Witch mixer). Numbers match **`elixirModule.js`** (live bot).
 
 ---
 
@@ -50,31 +52,57 @@ Use **autocomplete** for names so they match the bot.
 
 | Bottle | What it does |
 | --- | --- |
-| **Hearty** | **+1 / +2 / +3** temporary hearts by tier, right away. **Fairy** mix-in on the bottle adds more hearts when you use **`/item`**. |
-| **Fairy Tonic** | Heals **missing** HP up to your tier cap (about **¼ / ½ / full missing** of max hearts). **Fairy / Mock Fairy** extras add bonus heal. |
-| **Enduring** | **+5 / +7 / +9** stamina chunks to **max and current** — one-shot on **`/item`**. |
-| **Energizing** | **+5 / +7 / +9** stamina **refill** on **`/item`**, **plus** an **active buff** until the bot uses it in stamina-related play (gather, loot, crafting hooks, etc.). |
+| **Hearty** | **Basic ×1.2 / Mid ×1.3 / High ×1.4** of your **max hearts** — adds that many **temporary** hearts to **current** right away (see **Max-pool multipliers** below). **Fairy** mix-in on the stack adds **extra hearts** on **`/item`**. |
+| **Fairy Tonic** | Heals **missing** HP only (never above your real max). Heal **budget** by tier: **½ / ¾ / full max hearts** (floored whole hearts), then **`min(budget, missing)`**. **Fairy / Mock Fairy** extras add bonus heal. |
+| **Enduring** | **Basic ×1.2 / Mid ×1.3 / High ×1.4** of your **max stamina (chunks)** — same **chunk gain** added to **max stamina** and **current stamina** (see **Max-pool multipliers**). One-shot on **`/item`**. |
+| **Energizing** | **+5 / +7 / +9** stamina chunks **refill** on **`/item`** by tier, **plus** an **active buff** until the bot uses it in stamina-related play (gather, loot, crafting hooks, etc.). |
 
-**Stamina chunks:** counts are whole numbers; **5 chunks ≈ 1 wheel** if you think in wheels.
+**Stamina chunks:** whole numbers; **5 chunks ≈ 1 wheel** if you think in wheels.
 
 ---
 
 ## Tiers: Basic, Mid, High
 
-Bottles are **Basic / Mid / High**. Autocomplete shows which stack you’re using, e.g. `Mighty Elixir [Mid]` or `Chilly Elixir [High|m2]` ( **`m`** = Fairy mix-in hearts — pick the line that matches **your** stack). If you care about potency, **pick the exact line** for the stack you want; otherwise the bot may use **lower tiers first**.
+Bottles are **Basic / Mid / High**. Autocomplete shows which stack you’re using, e.g. `Mighty Elixir [Mid]` or `Chilly Elixir [High|m2]` (**`m`** = Fairy **mix-in** hearts on that stack — pick the line that matches **your** inventory row). If you care about potency, **pick the exact line**; otherwise the bot may use **lower tiers first**.
 
-**Stronger tier → stronger effect.** The bot stores numbers **rounded** for consistency: **whole numbers** for hearts and stamina chunks; resist and combat-style stats to the nearest **0.25** (e.g. **×1.75**).
+**Stronger tier → stronger effect.** Whole numbers for hearts and stamina chunks; resist and combat-style buff stats use the nearest **0.25** (e.g. **×1.75**).
 
-### Fixed numbers (Hearty, Energizing, Enduring, Fairy Tonic)
+### Energizing (fixed chunk ladder)
 
-| Elixir | Basic | Mid | High |
-| --- | ---: | ---: | ---: |
-| **Hearty** | +1 heart | +2 | +3 |
-| **Energizing** | +5 chunks refill | +7 | +9 |
-| **Enduring** | +5 chunks to max & current | +7 | +9 |
-| **Fairy Tonic** | ~¼ max-hearts heal cap | ~½ | up to all missing |
+| Tier | Stamina refill (chunks) |
+| --- | ---: |
+| Basic | +5 |
+| Mid | +7 |
+| High | +9 |
 
-**Fairy Tonic** heal uses **max hearts** at **`/item`**; actual heal = **`min(budget, missing hearts)`**, never above max.
+### Hearty & Enduring — **max-pool multipliers** (same tier bands)
+
+Both use **×1.2 / ×1.3 / ×1.4** of your **max pool before drinking** (max **hearts** for Hearty, max **stamina chunks** for Enduring).
+
+**Gain (hearts or chunks):** **`ceil(max × M) − max`**, where **M** is **1.2**, **1.3**, or **1.4** for Basic / Mid / High. At least **+1** if that difference would otherwise be **0**.
+
+| Tier | Multiplier **M** |
+| --- | ---: |
+| Basic | 1.2 |
+| Mid | 1.3 |
+| High | 1.4 |
+
+- **Hearty:** adds the result to **current hearts** as temporary buffer (does not change your listed max hearts on the main **`/item`** path).
+- **Enduring:** adds the result to **max** and **current** stamina.
+
+Higher **max** pool → bigger gains at the same bottle tier.
+
+### Fairy Tonic (heal budget by tier)
+
+Heal **budget** (how much you *could* heal toward missing HP) is a **fraction of max hearts**, **floored** to whole hearts:
+
+| Tier | Budget (of max hearts) |
+| --- | ---: |
+| Basic | ½ |
+| Mid | ¾ |
+| High | 1× (full max) |
+
+**Actual heal** = **`min(budget, missing hearts)`** — you never overheal above max.
 
 ### Other buff elixirs (Chilly, Spicy, Electro, Bright, Sticky, Mighty, Tough, Sneaky, Hasty)
 
@@ -122,3 +150,8 @@ Each ingredient has **rarity** (often **1–10**). The mixer blends **critter + 
 - **Chilly** = heat/fire · **Sticky** = water · **Bright** = blight.
 - Only items the mixer **menus** offer as labeled critters/parts will work; ask staff about odd items.
 
+---
+
+## See also
+
+- Mixer design detail: **`docs/elixir-mixing/README.md`**

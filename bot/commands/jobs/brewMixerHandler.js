@@ -889,7 +889,10 @@ async function finalizeBrewMixerSession(interaction, session, critterName, partN
     critterItem.itemRarity != null && critterItem.itemRarity !== '' ? critterItem.itemRarity : 1;
   const tierNames = { 1: 'Basic', 2: 'Mid', 3: 'High' };
   const tierWord = tierNames[brewedElixirLevel] || String(brewedElixirLevel);
-  const brewPreview = getBrewPreviewForElixir(outputItem.itemName, brewedElixirLevel, fairyHealHearts);
+  const brewPreview = getBrewPreviewForElixir(outputItem.itemName, brewedElixirLevel, fairyHealHearts, {
+    maxHeartsForHearty: fresh.maxHearts,
+    maxStaminaForEnduring: fresh.maxStamina,
+  });
   const brewedElixirExtraFields = [];
   if (brewPreview.buffText) {
     brewedElixirExtraFields.push({
