@@ -958,6 +958,17 @@ async function processTravelDay(day, context) {
 
       // Travel completed, clear in-transit flag.
       character.traveling = false;
+
+      // Consume elixirs that apply to the journey as a whole (Sticky, Sneaky, etc.).
+      // Bright still needs { blightRain: true } in shouldConsumeElixir — not consumed here.
+      try {
+        if (shouldConsumeElixir(character, 'travel')) {
+          consumeElixirBuff(character);
+        }
+      } catch (elixirConsumeErr) {
+        console.warn(`[travel.js]: ⚠️ Elixir consume on travel end: ${elixirConsumeErr?.message || elixirConsumeErr}`);
+      }
+
       await character.save();
       const finalChannelId = PATH_CHANNELS[paths[paths.length - 1]] || currentChannel;
       const finalChannel = await interaction.client.channels.fetch(finalChannelId);

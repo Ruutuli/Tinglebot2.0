@@ -187,7 +187,15 @@ const recoverHearts = async (characterId, hearts, healerId = null, allowOneOverf
       const maxAllowed = allowOneOverflow ? character.maxHearts + 1 : character.maxHearts;
       character.currentHearts = Math.min(hearts, maxAllowed);
     } else {
-      character.currentHearts = Math.min(character.currentHearts + hearts, character.maxHearts);
+      const next = character.currentHearts + hearts;
+      if (hearts <= 0) {
+        character.currentHearts = Math.max(0, next);
+      } else if (character.currentHearts <= character.maxHearts) {
+        character.currentHearts = Math.min(next, character.maxHearts);
+      } else {
+        // Temporary overheal (e.g. Hearty Elixir): recovery adds without clamping to max
+        character.currentHearts = next;
+      }
     }
 
     await character.save();
@@ -206,8 +214,8 @@ const recoverHearts = async (characterId, hearts, healerId = null, allowOneOverf
 };
 
 // ------------------- Recover Stamina -------------------
-// Recovers stamina for a character by adding the specified stamina value,
-// ensuring it does not exceed the maximum stamina.
+// Recovers stamina for a character by adding the specified stamina value.
+// When current is at or below max, caps at max; when above max (Enduring overflow), adds without clamping down.
 const recoverStamina = async (characterId, stamina) => {
   try {
     // Check if this is a mod character first
@@ -220,7 +228,15 @@ const recoverStamina = async (characterId, stamina) => {
     const character = await Character.findById(characterId);
     if (!character) throw new Error('Character not found');
 
-    const newStamina = Math.min(character.currentStamina + stamina, character.maxStamina);
+    const next = character.currentStamina + stamina;
+    let newStamina;
+    if (stamina <= 0) {
+      newStamina = Math.max(0, next);
+    } else if (character.currentStamina <= character.maxStamina) {
+      newStamina = Math.min(next, character.maxStamina);
+    } else {
+      newStamina = next;
+    }
     await updateCurrentStamina(characterId, newStamina);
 
     return createSimpleCharacterEmbedSafe(character, `🟩 +${stamina} stamina recovered`);

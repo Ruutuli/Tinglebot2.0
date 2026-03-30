@@ -105,14 +105,14 @@ function getFairyTonicHealBudget(maxHearts, level) {
 const ELIXIR_EFFECTS = {
   'Chilly Elixir': {
     type: 'chilly',
-    description: 'Heat and fire resistance (hot climates, fire hazards, fire-type enemies) — one stat: fireResistance',
+    description: 'Helps vs **heat and fire** — hot places, fire hazards, and fire-type enemies.',
     effects: {
       fireResistance: 1.5
     }
   },
   'Bright Elixir': {
     type: 'bright',
-    description: 'Blight resistance for travel, gathering, looting, and raids during blight conditions',
+    description: 'Helps vs **blight** — bad weather, travel, gathering, loot, raids when blight matters.',
     effects: {
       blightResistance: 1
     }
@@ -120,7 +120,7 @@ const ELIXIR_EFFECTS = {
   'Sticky Elixir': {
     type: 'sticky',
     description:
-      '💧 **Water resistance** vs water-type monsters and water-themed danger. ✨ **Sticky bonus** — you may get **extra copies** of the same item whenever something gives you items; tier improves odds and max extras.',
+      '**Water** protection plus a **Sticky bonus** — sometimes extra copies of items you earn. For **ice/cold**, use **Spicy**.',
     effects: {
       waterResistance: 1.5,
       plusBoost: 1
@@ -128,14 +128,14 @@ const ELIXIR_EFFECTS = {
   },
   'Spicy Elixir': {
     type: 'spicy',
-    description: 'Provides resistance to cold attacks from ice enemies',
+    description: 'Helps vs **cold** and **ice**-type enemies.',
     effects: {
       coldResistance: 1.5
     }
   },
   'Electro Elixir': {
     type: 'electro',
-    description: 'Provides resistance to electrical attacks from electric enemies',
+    description: 'Helps vs **electric**-type enemies.',
     effects: {
       electricResistance: 1.5
     }
@@ -143,21 +143,21 @@ const ELIXIR_EFFECTS = {
   'Enduring Elixir': {
     type: 'enduring',
     description:
-      '**Temporary stamina chunks** — **Basic ×1.25** / **Mid ×1.45** / **High ×1.7** of your max; drinking adds that many extra chunks.',
+      'Temporary **extra stamina** on top of what you have. **Stronger bottle → more chunks.**',
     effects: {
       staminaBoost: 2
     }
   },
   'Energizing Elixir': {
     type: 'energizing',
-    description: 'Restores current stamina: **Basic** +5 / **Mid** +7 / **High** +9.',
+    description: '**Refills stamina** now; a buff stays until the right activity uses it up. **Stronger bottle → bigger refill.**',
     effects: {
       staminaRecovery: 5
     }
   },
   'Hasty Elixir': {
     type: 'hasty',
-    description: 'Cuts travel time in half',
+    description: '**Faster travel** — the buff lasts until travel spends it.',
     effects: {
       speedBoost: 1
     }
@@ -165,28 +165,28 @@ const ELIXIR_EFFECTS = {
   'Hearty Elixir': {
     type: 'hearty',
     description:
-      '**Temporary hearts** — **Basic ×1.2** / **Mid ×1.4** / **High ×1.7** of your max; adds that many extra hearts. **Fairy mix-in** heals up to max only; only the tier bonus can go past max.',
+      'Temporary **extra hearts**. **Stronger bottle → more.** Fairy mix-in only fills up to your max; the tier part can go past max.',
     effects: {
       extraHearts: 1
     }
   },
   'Mighty Elixir': {
     type: 'mighty',
-    description: 'Boosts attack power',
+    description: '**Hit harder** — buff lasts until combat-style use.',
     effects: {
       attackBoost: 1.5
     }
   },
   'Tough Elixir': {
     type: 'tough',
-    description: 'Boosts defense',
+    description: '**Take less damage** — buff lasts until combat-style use.',
     effects: {
       defenseBoost: 1.5
     }
   },
   'Sneaky Elixir': {
     type: 'sneaky',
-    description: 'Increases stealth ability for gathering, looting, and travel encounters, and boosts flee chance',
+    description: '**Stealthier** and better **flee** — buff lasts until gathering, loot, or travel uses it.',
     effects: {
       stealthBoost: 1,
       fleeBoost: 1
@@ -195,7 +195,7 @@ const ELIXIR_EFFECTS = {
   'Fairy Tonic': {
     type: 'fairy',
     description:
-      'Fairy-brewed tonic: **restores missing hearts only** (never above max). **Basic** up to **½** of max / **Mid** up to **¾** of max / **High** up to **full** missing hearts, plus Fairy mix-in — not bonus max hearts.',
+      '**Heals missing hearts only** — never above your max. **Stronger bottle → more recovery.**',
     effects: {
       healHearts: 0
     }
@@ -329,126 +329,36 @@ function formatElixirStatDisplay(n) {
   return Number.isInteger(t) ? String(t) : String(t);
 }
 
-const fmtScaledElixirDisplay = (n) => formatElixirStatDisplay(n);
-
-/** Push consumption-style lines from scaled effects (matches `/item` elixir embed). */
-function appendScaledBuffStyleLines(scaled, buffLines) {
-  if (!scaled || !buffLines) return;
-  if (scaled.blightResistance > 0) {
-    buffLines.push(`🧿 **Blight resistance** — ×${fmtScaledElixirDisplay(scaled.blightResistance)}`);
-  }
-  if (scaled.electricResistance > 0) {
-    buffLines.push(`⚡ **Electric resistance** — ×${fmtScaledElixirDisplay(scaled.electricResistance)}`);
-  }
-  if (scaled.staminaBoost > 0) {
-    buffLines.push(`🟩 **Stamina boost** — +${fmtScaledElixirDisplay(scaled.staminaBoost)}`);
-  }
-  if (scaled.staminaRecovery > 0) {
-    buffLines.push(`💚 **Stamina recovery** — +${fmtScaledElixirDisplay(scaled.staminaRecovery)}`);
-  }
-  if (scaled.fireResistance > 0) {
-    buffLines.push(`🌡️ **Heat & fire resistance** — ×${fmtScaledElixirDisplay(scaled.fireResistance)}`);
-  }
-  if (scaled.waterResistance > 0) {
-    buffLines.push(`💧 **Water resistance** — ×${fmtScaledElixirDisplay(scaled.waterResistance)}`);
-  }
-  if (scaled.plusBoost > 0) {
-    buffLines.push(`✨ **Plus boost** — ×${fmtScaledElixirDisplay(scaled.plusBoost)}`);
-  }
-  if (scaled.speedBoost > 0) {
-    buffLines.push(`🏃 **Speed boost** — +${fmtScaledElixirDisplay(scaled.speedBoost)}`);
-  }
-  if (scaled.extraHearts > 0) {
-    buffLines.push(`❤️ **Extra hearts** — +${fmtScaledElixirDisplay(scaled.extraHearts)}`);
-  }
-  if (scaled.attackBoost > 0) {
-    buffLines.push(`⚔️ **Attack** — ×${fmtScaledElixirDisplay(scaled.attackBoost)}`);
-  }
-  if (scaled.stealthBoost > 0) {
-    buffLines.push(`👻 **Stealth** — +${fmtScaledElixirDisplay(scaled.stealthBoost)}`);
-  }
-  if (scaled.fleeBoost > 0) {
-    buffLines.push(`🏃‍♂️ **Flee** — +${fmtScaledElixirDisplay(scaled.fleeBoost)}`);
-  }
-  if (scaled.coldResistance > 0) {
-    buffLines.push(`❄️ **Cold resistance** — ×${fmtScaledElixirDisplay(scaled.coldResistance)}`);
-  }
-  if (scaled.iceEffectiveness > 0) {
-    buffLines.push(`🧊 **Ice effectiveness** — +${fmtScaledElixirDisplay(scaled.iceEffectiveness)}`);
-  }
-  if (scaled.defenseBoost > 0) {
-    buffLines.push(`🛡️ **Defense** — ×${fmtScaledElixirDisplay(scaled.defenseBoost)}`);
-  }
-}
-
 /**
- * Brew result embed: predicted buffs vs immediate effects on consumption (future tense).
+ * Brew embed: short player-facing copy only (no stat math — numbers live in code / docs).
  * @returns {{ buffText: string | null, immediateText: string | null }}
  */
-function getBrewPreviewForElixir(elixirName, level, fairyHealHearts = 0, previewOptions = {}) {
+function getBrewPreviewForElixir(elixirName, level, fairyHealHearts = 0, _previewOptions = {}) {
   const key = resolveElixirItemName(elixirName);
   const elixir = ELIXIR_EFFECTS[key];
   if (!elixir) return { buffText: null, immediateText: null };
 
   const lv = normalizeElixirLevel(level);
-  const scaled = scaleElixirEffects(key, elixir.effects, lv, {
-    maxHeartsForFairyTonic: previewOptions.maxHeartsForFairyTonic,
-    maxHeartsForHearty: previewOptions.maxHeartsForHearty,
-    maxStaminaForEnduring: previewOptions.maxStaminaForEnduring,
-  });
-  const buffLines = [];
-  const immediateLines = [];
+  const tierWord = ELIXIR_LEVEL_NAMES[lv] || 'Basic';
 
-  if (key === 'Hearty Elixir') {
-    const mult = HEARTY_MAX_POOL_MULTIPLIERS[lv - 1];
-    if (scaled.extraHearts > 0) {
-      immediateLines.push(
-        `❤️ **+${scaled.extraHearts}** temporary hearts (**×${mult}** of your max)`
-      );
-    } else if (mult) {
-      immediateLines.push(
-        `❤️ **×${mult}** of max hearts — gain depends on your max when you drink`
-      );
-    }
-  } else if (key === 'Fairy Tonic') {
-    immediateLines.push(
-      lv === 3
-        ? `❤️ **Up to full** missing hearts restored (won't overfill)`
-        : lv === 2
-          ? `❤️ **Up to three-quarters** of your max hearts restored (won't overfill)`
-          : `❤️ **Up to half** of your max hearts restored (won't overfill)`
-    );
-  } else if (key === 'Enduring Elixir') {
-    const mult = ENDURING_MAX_POOL_MULTIPLIERS[lv - 1];
-    if (scaled.staminaBoost > 0) {
-      immediateLines.push(
-        `🟩 **+${scaled.staminaBoost}** temporary stamina chunks (**×${mult}** of your max)`
-      );
-    } else if (mult) {
-      immediateLines.push(
-        `🟩 **×${mult}** of max stamina — chunk gain depends on your max when you drink`
-      );
-    }
-  } else if (key === 'Sticky Elixir') {
-    immediateLines.push(
-      '💧 **Water resistance** — helps vs **water-type** monsters and other water-themed threats.\n\n' +
-        '✨ **Sticky bonus** — you may get **extra copies** of the same item from any action that gives you items (gathering, travel gather, loot, steal, quest loot, etc.). Higher tier improves odds and max extras per action.'
-    );
-  } else {
-    appendScaledBuffStyleLines(scaled, buffLines);
-  }
+  /** One-shot on `/item` — no lingering buff line in brew preview */
+  const instantNoPersistentBuff = ['Hearty Elixir', 'Fairy Tonic', 'Enduring Elixir'];
+  const buffText = instantNoPersistentBuff.includes(key)
+    ? null
+    : `**${tierWord}** — stronger than lower tiers. Buff stays until the right activity uses it.`;
 
+  const parts = [elixir.description.trim()];
   if (fairyHealHearts > 0) {
-    immediateLines.push(
+    parts.push(
       key === 'Hearty Elixir'
-        ? `❤️ **+${fairyHealHearts}** from Fairy mix-in (heals up to max only)`
-        : `❤️ **+${fairyHealHearts}** hearts when consumed (Fairy mix-in)`
+        ? `Fairy mix-in: **+${fairyHealHearts}** hearts (heals up to your max only).`
+        : `Fairy mix-in: **+${fairyHealHearts}** hearts.`
     );
   }
 
   return {
-    buffText: buffLines.length ? buffLines.join('\n') : null,
-    immediateText: immediateLines.length ? immediateLines.join('\n') : null,
+    buffText: buffText ? buffText.slice(0, 1024) : null,
+    immediateText: parts.join('\n\n').slice(0, 1024),
   };
 }
 
@@ -603,6 +513,7 @@ const shouldConsumeElixir = (character, activity, context = {}) => {
 
     case 'sticky':
       return (
+        activity === 'travel' ||
         (activity === 'combat' && context.monster?.name?.includes('Water')) ||
         (activity === 'helpWanted' && context.monster?.name?.includes('Water')) ||
         (activity === 'raid' && context.monster?.name?.includes('Water')) ||
@@ -660,6 +571,11 @@ const shouldConsumeElixir = (character, activity, context = {}) => {
 // Consumes an elixir buff when its effects are used
 const consumeElixirBuff = (character) => {
   if (!character.buff?.active) return false;
+
+  const consumedType = character.buff.type;
+  const consumedLevel = character.buff.elixirLevel;
+  const logName = character.name ?? 'unknown';
+  const logId = character._id != null ? String(character._id) : 'no-id';
   
   // Remove temporary hearts from Hearty Elixir (bonus was on current only, not max)
   if (character.buff.type === 'hearty' && character.buff.effects.extraHearts > 0) {
@@ -696,6 +612,10 @@ const consumeElixirBuff = (character) => {
       plusBoost: 0
     }
   };
+
+  console.log(
+    `[elixirModule.js]: 🧪 Elixir buff removed — ${logName} (${logId}) type=${consumedType ?? 'n/a'} level=${consumedLevel ?? 'n/a'}`
+  );
   
   return true; // Buff was consumed
 };

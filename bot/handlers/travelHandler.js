@@ -337,8 +337,8 @@ async function handleRecover(interaction, character, encounterMessage, travelLog
 
       if (actualHeartsRecovered > 0) {
         await recoverHearts(character._id, actualHeartsRecovered);
-        character.currentHearts = Math.min(character.maxHearts, character.currentHearts + actualHeartsRecovered);
-        await updateCurrentHearts(character._id, character.currentHearts);
+        const latestCharacter = await Character.findById(character._id);
+        if (latestCharacter) character.currentHearts = latestCharacter.currentHearts;
       }
 
       const heartLabel = actualHeartsRecovered === 1 ? 'heart' : 'hearts';

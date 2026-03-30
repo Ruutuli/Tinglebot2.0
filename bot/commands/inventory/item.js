@@ -1094,16 +1094,15 @@ module.exports = {
           
           // Apply immediate healing effects first
           if (stackModifierHearts > 0 && !healUsesTierPlusFairyMix) {
-            const healAmount = Math.min(
-              stackModifierHearts,
-              character.maxHearts - character.currentHearts
-            );
+            const roomHearts = Math.max(0, character.maxHearts - character.currentHearts);
+            const healAmount = Math.min(stackModifierHearts, roomHearts);
             character.currentHearts += healAmount;
             await updateCurrentHearts(character._id, character.currentHearts);
           }
           
           if (item.staminaRecovered) {
-            const staminaRecovered = Math.min(item.staminaRecovered, character.maxStamina - character.currentStamina);
+            const roomStamina = Math.max(0, character.maxStamina - character.currentStamina);
+            const staminaRecovered = Math.min(item.staminaRecovered, roomStamina);
             character.currentStamina += staminaRecovered;
             await updateCurrentStamina(character._id, character.currentStamina);
           }
@@ -1591,7 +1590,8 @@ module.exports = {
       const originalStamina = character.currentStamina;
 
       if (item.modifierHearts && item.modifierHearts > 0) {
-        healAmount = Math.min(item.modifierHearts * quantity, character.maxHearts - character.currentHearts);
+        const roomHearts = Math.max(0, character.maxHearts - character.currentHearts);
+        healAmount = Math.min(item.modifierHearts * quantity, roomHearts);
         if (healAmount > 0) {
           const newHearts = character.currentHearts + healAmount;
           await updateCurrentHearts(character._id, newHearts);
@@ -1600,7 +1600,8 @@ module.exports = {
       }
 
       if (item.staminaRecovered !== undefined && item.staminaRecovered !== null && item.staminaRecovered > 0) {
-        staminaRecovered = Math.min(item.staminaRecovered * quantity, character.maxStamina - character.currentStamina);
+        const roomStamina = Math.max(0, character.maxStamina - character.currentStamina);
+        staminaRecovered = Math.min(item.staminaRecovered * quantity, roomStamina);
         if (staminaRecovered > 0) {
           const newStamina = character.currentStamina + staminaRecovered;
           // Update database first, then update in-memory character object
