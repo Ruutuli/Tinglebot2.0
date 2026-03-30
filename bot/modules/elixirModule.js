@@ -70,9 +70,7 @@ function rollStickyBonusExtraQuantity(character) {
   if (!character?.buff?.active) return 0;
   const buffType = character.buff.type === 'fireproof' ? 'chilly' : character.buff.type;
   if (buffType !== 'sticky') return 0;
-  const effects = character.buff.effects || {};
-  const plus = Number(effects.plusBoost);
-  if (!Number.isFinite(plus) || plus <= 0) return 0;
+  // Extra copies are tier-based (Basic/Mid/High), not gated on effects.plusBoost — legacy rows may omit plusBoost.
   const lv = normalizeElixirLevel(character.buff.elixirLevel);
   const range = STICKY_BONUS_EXTRA_RANGE_BY_LEVEL[lv - 1] ?? STICKY_BONUS_EXTRA_RANGE_BY_LEVEL[0];
   const [min, max] = range;

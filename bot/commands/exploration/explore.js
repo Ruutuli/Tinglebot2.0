@@ -778,6 +778,17 @@ async function findCharacterByNameAndUser(characterName, userId) {
  return character || null;
 }
 
+/** Fresh `buff` from DB for Sticky loot rolls (same idea as /loot snapshot before consume). */
+async function getCharacterForStickyRoll(character) {
+ if (!character?._id) return character;
+ try {
+  if (character.isModCharacter) return character;
+  const fresh = await Character.findById(character._id).select("buff");
+  if (fresh?.buff?.active) return fresh;
+ } catch (_) {}
+ return character;
+}
+
 // ------------------- getPartyPoolCaps ------------------
 // Max party hearts/stamina = sum of each member's maxHearts/maxStamina. Pool must never exceed these when healing.
 async function getPartyPoolCaps(party) {
@@ -6830,7 +6841,8 @@ module.exports = {
           let stickyRaidExtras = 0;
           try {
            if (!isAprilFoolsEastern()) {
-            stickyRaidExtras = rollStickyBonusExtraQuantity(character);
+            const charSticky = await getCharacterForStickyRoll(character);
+            stickyRaidExtras = rollStickyBonusExtraQuantity(charSticky);
            }
           } catch (_) {
            stickyRaidExtras = 0;
@@ -7009,7 +7021,8 @@ module.exports = {
         let stickyExploreExtras = 0;
         try {
          if (!isAprilFoolsEastern()) {
-          stickyExploreExtras = rollStickyBonusExtraQuantity(character);
+          const charSticky = await getCharacterForStickyRoll(character);
+          stickyExploreExtras = rollStickyBonusExtraQuantity(charSticky);
          }
         } catch (_) {
          stickyExploreExtras = 0;
