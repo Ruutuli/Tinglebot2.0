@@ -2415,7 +2415,7 @@ async function submissionModReminder(client, _data = {}) {
   }
 }
 
-// ------------------- mod-todo-reminder (Every 30 minutes) -------------------
+// ------------------- mod-todo-reminder (every 30 min; repeat ping ≥6h apart) -------------------
 // Sends channel reminders for mod tasks that are overdue or due soon
 // Posts in the original channel (replying to original message) or fallback channel
 // Falls back to MOD_QUEUE_CHANNEL_ID if no source channel, or hardcoded default
@@ -2438,21 +2438,21 @@ async function modTodoReminder(client, _data = {}) {
     
     const now = new Date();
     const twoHoursFromNow = new Date(now.getTime() + 2 * 60 * 60 * 1000);
-    const oneHourAgo = new Date(now.getTime() - 60 * 60 * 1000);
+    const sixHoursAgo = new Date(now.getTime() - 6 * 60 * 60 * 1000);
     
     logger.info('SCHEDULED', `mod-todo-reminder: now=${now.toISOString()}, checking tasks due before ${twoHoursFromNow.toISOString()}`);
     
     // Find tasks that need reminders:
     // - Not done and not repeating
     // - Has a due date that's within 2 hours OR overdue
-    // - Haven't sent a reminder in the last hour
+    // - Haven't sent a reminder in the last 6 hours
     const tasksNeedingReminders = await ModTask.find({
       column: { $nin: ['done', 'repeating'] },
       isRepeating: { $ne: true },
       dueDate: { $ne: null, $lte: twoHoursFromNow },
       $or: [
         { lastReminderSent: null },
-        { lastReminderSent: { $lt: oneHourAgo } }
+        { lastReminderSent: { $lt: sixHoursAgo } }
       ]
     });
     
@@ -2895,7 +2895,7 @@ const TASKS = [
   { name: 'cleanup-boost-expirations', cron: '0 * * * *', handler: cleanupBoostExpirations }, // Every hour
   { name: 'blight-expiration-warnings', cron: '0 */6 * * *', handler: blightExpirationWarnings }, // Every 6 hours
   { name: 'submission-mod-reminder', cron: '0 * * * *', handler: submissionModReminder }, // Every hour - @mods if art/writing pending 12+ hours
-  { name: 'mod-todo-reminder', cron: '*/30 * * * *', handler: modTodoReminder }, // Every 30 minutes - channel reminders for overdue/due-soon mod tasks
+  { name: 'mod-todo-reminder', cron: '*/30 * * * *', handler: modTodoReminder }, // Every 30 min check; repeat channel ping at most every 6h for overdue/due-soon mod tasks
 
   // Relic Deadline Tasks
   { name: 'relic-appraisal-deadline', cron: '0 6 * * *', handler: relicAppraisalDeadline }, // Daily 6am UTC: deteriorate unappraised relics past 7 days

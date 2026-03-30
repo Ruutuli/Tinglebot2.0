@@ -203,14 +203,14 @@ ModTaskSchema.statics.findByMessageId = function(messageId) {
 ModTaskSchema.statics.getTasksNeedingReminders = function() {
     const now = new Date();
     const twoHoursFromNow = new Date(now.getTime() + 2 * 60 * 60 * 1000);
-    const oneHourAgo = new Date(now.getTime() - 60 * 60 * 1000);
+    const sixHoursAgo = new Date(now.getTime() - 6 * 60 * 60 * 1000);
     
     return this.find({
         column: { $nin: ['done'] },
         dueDate: { $ne: null, $lte: twoHoursFromNow },
         $or: [
             { lastReminderSent: null },
-            { lastReminderSent: { $lt: oneHourAgo } }
+            { lastReminderSent: { $lt: sixHoursAgo } }
         ]
     });
 };
