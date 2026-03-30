@@ -957,6 +957,7 @@ async function finalizeBrewMixerSession(interaction, session, critterName, partN
   const brewPreview = getBrewPreviewForElixir(outputItem.itemName, brewedElixirLevel, fairyHealHearts, {
     maxHeartsForHearty: fresh.maxHearts,
     maxStaminaForEnduring: fresh.maxStamina,
+    maxHeartsForFairyTonic: fresh.maxHearts,
   });
   const brewedElixirExtraFields = [];
   if (brewPreview.immediateText) {
