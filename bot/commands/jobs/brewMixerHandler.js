@@ -121,7 +121,7 @@ function buildBrewCompleteEphemeralFields({
 
   return [
     {
-      name: '🧪 Tier & score',
+      name: '🧪 **__Tier & score__**',
       value: tierBlock.slice(0, 1024),
       inline: false,
     },
@@ -1053,7 +1053,7 @@ async function finalizeBrewMixerSession(interaction, session, critterName, partN
       value: brewedElixirLevelValue,
       inline: false,
     });
-    if (brewedElixirExtraFieldsForEmbed) {
+    if (brewedElixirExtraFieldsForEmbed?.length) {
       for (const f of brewedElixirExtraFieldsForEmbed) {
         brewEmbed.addFields(f);
       }

@@ -1666,7 +1666,6 @@ const createCraftingEmbed = async (item, character, flavorText, materialsUsed, q
    inline: false,
   });
  }
- // Note: brewedElixirExtraFields may include 🧪 **__Effect__** (same line style as /item elixir embeds).
  if (Array.isArray(brewedElixirExtraFields) && brewedElixirExtraFields.length > 0) {
   for (const f of brewedElixirExtraFields) {
    if (f && f.name && f.value) elixirLevelFields.push({ name: f.name, value: f.value, inline: f.inline === true });
