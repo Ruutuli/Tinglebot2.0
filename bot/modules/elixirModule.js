@@ -51,18 +51,18 @@ function normalizeElixirLevel(raw) {
 }
 
 /**
- * Max extra copies from one Sticky Elixir streak per tier (Basic / Mid / High).
- * Higher tier = higher cap and higher per-step chance (`STICKY_BONUS_REPEAT_CHANCE`).
+ * Inclusive [min, max] extra copies of the **same** item per Sticky tier (Basic / Mid / High).
+ * Always rolls within this range when Sticky applies (no miss chance).
  */
-const STICKY_BONUS_MAX_EXTRAS_BY_LEVEL = Object.freeze([2, 4, 5]);
-/**
- * Per streak step by tier (Basic / Mid / High): chance to add **another** extra copy of the same item.
- */
-const STICKY_BONUS_REPEAT_CHANCE = Object.freeze([0.28, 0.38, 0.48]);
+const STICKY_BONUS_EXTRA_RANGE_BY_LEVEL = Object.freeze([
+  [1, 2],
+  [3, 4],
+  [4, 5],
+]);
 
 /**
- * Sticky Elixir: roll how many **extra** copies of the same item to grant (0 up to cap).
- * Uses streak rolls; tier sets repeat chance. Does not mutate character.
+ * Sticky Elixir: how many **extra** copies of the same item to grant (tiered random range).
+ * Does not mutate character.
  * @param {object} character
  * @returns {number}
  */
@@ -74,13 +74,9 @@ function rollStickyBonusExtraQuantity(character) {
   const plus = Number(effects.plusBoost);
   if (!Number.isFinite(plus) || plus <= 0) return 0;
   const lv = normalizeElixirLevel(character.buff.elixirLevel);
-  const p = STICKY_BONUS_REPEAT_CHANCE[lv - 1] ?? STICKY_BONUS_REPEAT_CHANCE[0];
-  const maxExtras = STICKY_BONUS_MAX_EXTRAS_BY_LEVEL[lv - 1] ?? STICKY_BONUS_MAX_EXTRAS_BY_LEVEL[0];
-  let extras = 0;
-  while (extras < maxExtras && Math.random() < p) {
-    extras++;
-  }
-  return extras;
+  const range = STICKY_BONUS_EXTRA_RANGE_BY_LEVEL[lv - 1] ?? STICKY_BONUS_EXTRA_RANGE_BY_LEVEL[0];
+  const [min, max] = range;
+  return min + Math.floor(Math.random() * (max - min + 1));
 }
 
 /**
@@ -120,7 +116,7 @@ const ELIXIR_EFFECTS = {
   'Sticky Elixir': {
     type: 'sticky',
     description:
-      '**Water** protection plus a **Sticky bonus** — sometimes extra copies of items you earn. For **ice/cold**, use **Spicy**.',
+      '**Water** protection plus a **Sticky bonus** — when you earn items, you **always** get extra copies of the **same** item (random amount by tier: Basic **1–2**, Mid **3–4**, High **4–5**). For **ice/cold**, use **Spicy**.',
     effects: {
       waterResistance: 1.5,
       plusBoost: 1
@@ -938,7 +934,6 @@ module.exports = {
   ELEMENTAL_WEAKNESS_PENALTY,
   formatElixirStatDisplay,
   rollStickyBonusExtraQuantity,
-  STICKY_BONUS_MAX_EXTRAS_BY_LEVEL,
-  STICKY_BONUS_REPEAT_CHANCE,
+  STICKY_BONUS_EXTRA_RANGE_BY_LEVEL,
 };
 

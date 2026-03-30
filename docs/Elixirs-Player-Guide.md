@@ -119,7 +119,7 @@ Heal **budget** (how much you *could* heal toward missing HP) is a **fraction of
 
 ### Sticky Elixir — **plus** extra loot
 
-**Sticky bonus:** whenever an action **gives you items**, you might also get **extra copies of that same item** (not a random second item). **Tier** sets the **per-step chance** and **max extras per action**: **Basic** up to **2**, **Mid** up to **4**, **High** up to **5** (see `STICKY_BONUS_REPEAT_CHANCE` / `STICKY_BONUS_MAX_EXTRAS_BY_LEVEL` in `elixirModule.js`). **Water resistance** is separate — for **cold / ice**, drink **Spicy**, not Sticky.
+**Sticky bonus:** whenever an action **gives you items**, you **always** get **extra copies of that same item** (not a random second item). **Tier** sets a **random range** for how many extras: **Basic** **1–2**, **Mid** **3–4**, **High** **4–5** (`STICKY_BONUS_EXTRA_RANGE_BY_LEVEL` in `elixirModule.js`). **Water resistance** is separate — for **cold / ice**, drink **Spicy**, not Sticky.
 
 ### Other buff elixirs (Chilly, Spicy, Electro, Bright, Mighty, Tough, Sneaky, Hasty)
 

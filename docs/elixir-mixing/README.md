@@ -165,7 +165,7 @@ Only as an **extra** on an otherwise valid brew: output family stays from critte
 | `sneaky` | `stealthBoost`, `fleeBoost` | Stealth + flee — **not** loot-job encounter rates | exploring, gathering, looting, travel |
 | `fairy` | `recoverHearts` | Heal toward existing max only | combat, gathering, helpwantedquests, looting, exploring, raid |
 | `bright` | `blightResistance` | Blight; light / maze angles (flags TBD) | exploring, gathering |
-| `sticky` | `waterResistance`, `plusBoost` | Water defense + **bonus copies** of the same item (`rollStickyBonusExtraQuantity` — tiered repeat chance; max **2 / 4 / 5** extras per action Basic/Mid/High) on gather, travel gather, loot win, steal, HWQ loot | combat, crafting, exploring, gathering, looting, travel |
+| `sticky` | `waterResistance`, `plusBoost` | Water defense + **bonus copies** of the same item (`rollStickyBonusExtraQuantity` — **guaranteed** extras by tier: **1–2 / 3–4 / 4–5** Basic/Mid/High) on gather, travel gather, loot win, steal, HWQ loot | combat, crafting, exploring, gathering, looting, travel |
 
 **Hearty vs Fairy:** `extraHearts` vs `recoverHearts` — different on purpose. On **Hearty** bottles, **`modifierHearts`** (Fairy mix-in on the inventory row) heals **up to max** only; tier **`extraHearts`** is applied **after** and can exceed max. **Sneaky vs Sticky:** stealth/flee vs water + yield. **Blight:** only on Bright, not Chilly.
 
