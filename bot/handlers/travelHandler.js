@@ -53,6 +53,7 @@ const { capitalizeFirstLetter, capitalizeWords } = require('../modules/formattin
 
 // ------------------- Utility Functions -------------------
 const { addItemInventoryDatabase, logItemAcquisitionToDatabase, syncToInventoryDatabase, SOURCE_TYPES } = require('@/utils/inventoryUtils');
+const { rollStickyBonusExtraQuantity } = require('../modules/elixirModule');
 const {
   isAprilFoolsEastern,
   aprilFoolsMessageSuffix,
@@ -547,8 +548,36 @@ async function handleGather(interaction, character, currentPath, encounterMessag
       } catch (logError) {
         warn('TRAVEL', `Failed to log travel gather to InventoryLog: ${logError.message}`);
       }
+
+      let stickyTravelExtras = 0;
+      if (!isAprilFoolsEastern()) {
+        stickyTravelExtras = rollStickyBonusExtraQuantity(character);
+        if (stickyTravelExtras > 0) {
+          await addItemInventoryDatabase(
+            character._id,
+            formattedItem.itemName,
+            stickyTravelExtras,
+            interaction,
+            'Travel (Sticky Elixir)'
+          );
+          try {
+            const interactionUrl = interaction ? `https://discord.com/channels/${interaction.guildId}/${interaction.channelId}/${interaction.id}` : '';
+            await logItemAcquisitionToDatabase(character, { ...formattedItem, itemName: formattedItem.itemName }, {
+              quantity: stickyTravelExtras,
+              obtain: 'Travel (Sticky Elixir)',
+              location: character.currentVillage || character.homeVillage || 'Travel',
+              link: interactionUrl
+            });
+          } catch (stickyLogErr) {
+            warn('TRAVEL', `Failed to log Sticky travel gather to InventoryLog: ${stickyLogErr.message}`);
+          }
+        }
+      }
       
       outcomeMessage = `Gathered ${formattedItem.quantity}× ${formattedItem.itemName}.`;
+      if (stickyTravelExtras > 0) {
+        outcomeMessage += `\n✨ **Sticky Elixir:** +${stickyTravelExtras} extra **${formattedItem.itemName}**.`;
+      }
 
       if (fieldLessonSummary) {
         outcomeMessage += `\n📘 Field Lesson: first roll **${fieldLessonSummary.first}** ➜ second roll **${fieldLessonSummary.second}** ➜ kept **${fieldLessonSummary.chosen}**.`;

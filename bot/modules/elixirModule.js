@@ -50,6 +50,36 @@ function normalizeElixirLevel(raw) {
   return 1;
 }
 
+/** Max extra copies from one Sticky Elixir streak (gather / travel / loot / steal). */
+const STICKY_BONUS_MAX_EXTRAS = 5;
+/**
+ * Per streak step by tier (Basic / Mid / High): chance to add **another** extra copy of the same item.
+ * Higher tier → higher chance each step → more extras on average (capped at STICKY_BONUS_MAX_EXTRAS).
+ */
+const STICKY_BONUS_REPEAT_CHANCE = Object.freeze([0.28, 0.38, 0.48]);
+
+/**
+ * Sticky Elixir: roll how many **extra** copies of the same item to grant (0 up to cap).
+ * Uses streak rolls; tier sets repeat chance. Does not mutate character.
+ * @param {object} character
+ * @returns {number}
+ */
+function rollStickyBonusExtraQuantity(character) {
+  if (!character?.buff?.active) return 0;
+  const buffType = character.buff.type === 'fireproof' ? 'chilly' : character.buff.type;
+  if (buffType !== 'sticky') return 0;
+  const effects = character.buff.effects || {};
+  const plus = Number(effects.plusBoost);
+  if (!Number.isFinite(plus) || plus <= 0) return 0;
+  const lv = normalizeElixirLevel(character.buff.elixirLevel);
+  const p = STICKY_BONUS_REPEAT_CHANCE[lv - 1] ?? STICKY_BONUS_REPEAT_CHANCE[0];
+  let extras = 0;
+  while (extras < STICKY_BONUS_MAX_EXTRAS && Math.random() < p) {
+    extras++;
+  }
+  return extras;
+}
+
 /**
  * Fairy Tonic: heal budget is a fraction of **max hearts** by tier (still capped by missing hearts in `item.js`).
  * Basic = ½ max, Mid = ¾ max, High = full max.
@@ -87,7 +117,7 @@ const ELIXIR_EFFECTS = {
   'Sticky Elixir': {
     type: 'sticky',
     description:
-      'Takes the edge off water-type attacks, and helps you walk away with a little more from harvests and rewards.',
+      'Water resistance in combat. While active, **gathering, travel gather, loot wins, and successful steals** can grant **extra copies** of the same item — chance goes **Basic → Mid → High**; you can get **more than one** extra at once.',
     effects: {
       waterResistance: 1.5,
       plusBoost: 1
@@ -396,6 +426,13 @@ function getBrewPreviewForElixir(elixirName, level, fairyHealHearts = 0, preview
         `🟩 **×${mult}** of max stamina — chunk gain depends on your max when you drink`
       );
     }
+  } else if (key === 'Sticky Elixir') {
+    appendScaledBuffStyleLines(scaled, buffLines);
+    const p = STICKY_BONUS_REPEAT_CHANCE[lv - 1] ?? STICKY_BONUS_REPEAT_CHANCE[0];
+    const pct = Math.round(p * 100);
+    immediateLines.push(
+      `✨ **Extra copies** (same item) — **~${pct}%** chance per extra at this tier (up to **${STICKY_BONUS_MAX_EXTRAS}** per action) on gather, travel gather, loot, steal, quest loot`
+    );
   } else {
     appendScaledBuffStyleLines(scaled, buffLines);
   }
@@ -979,5 +1016,8 @@ module.exports = {
   ELEMENTAL_ADVANTAGE_BONUS,
   ELEMENTAL_WEAKNESS_PENALTY,
   formatElixirStatDisplay,
+  rollStickyBonusExtraQuantity,
+  STICKY_BONUS_MAX_EXTRAS,
+  STICKY_BONUS_REPEAT_CHANCE,
 };
 

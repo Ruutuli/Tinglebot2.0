@@ -41,7 +41,7 @@ For almost everything in play, **current** cannot go **above** **max**. If you�
 | **Spicy** | **Cold**, **ice**, frost, ice-themed threats |
 | **Electro** | **Lightning**, shock, storm-style danger |
 | **Bright** | **Blight** weather / infection-style conditions |
-| **Sticky** | **Water** danger + a little extra on harvest/reward-style outcomes (**plus boost**) |
+| **Sticky** | **Water** resistance in combat + **chance for extra copies** of the same item when you gather, travel-gather, loot, steal, or get quest loot — **higher tier = better odds**; can proc **multiple** extras (see below). |
 
 **Remember:** **Chilly** = fire/heat · **Sticky** = water · **Bright** = blight — three different bottles.
 
@@ -117,9 +117,13 @@ Heal **budget** (how much you *could* heal toward missing HP) is a **fraction of
 
 **Actual heal** = **`min(budget, missing hearts)`** — you never overheal above max.
 
-### Other buff elixirs (Chilly, Spicy, Electro, Bright, Sticky, Mighty, Tough, Sneaky, Hasty)
+### Sticky Elixir — **plus** extra loot
 
-**Mid** multiplies the Basic stat by **×1.15**, **High** by **×1.3**, then rounds to **0.25**. **Sticky** boosts **water resistance** and **plus boost**. **Sneaky** boosts **stealth** and **flee**.
+With an active Sticky buff, each time you **receive** items from **gathering**, **travel gathering**, a **`/loot` win**, a **successful `/steal`**, or **help wanted / monster hunt** loot, the bot rolls for **bonus copies of that same item** (not a random second item). **Basic / Mid / High** uses a higher **per-step** chance to add another extra (streak-style), so **Mid/High** tend to yield **more** extras on average; one activity can grant **up to 5** extra copies total (see `STICKY_BONUS_REPEAT_CHANCE` / `STICKY_BONUS_MAX_EXTRAS` in `elixirModule.js`).
+
+### Other buff elixirs (Chilly, Spicy, Electro, Bright, Mighty, Tough, Sneaky, Hasty)
+
+**Mid** multiplies the Basic stat by **×1.15**, **High** by **×1.3**, then rounds to **0.25**. **Sneaky** boosts **stealth** and **flee**.
 
 ---
 

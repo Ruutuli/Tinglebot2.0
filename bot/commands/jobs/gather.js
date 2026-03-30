@@ -1186,6 +1186,21 @@ module.exports = {
           interaction,
           "Gathering"
         );
+
+        let stickyGatherExtras = 0;
+        if (!isAprilFoolsEastern()) {
+          const { rollStickyBonusExtraQuantity } = require('../../modules/elixirModule');
+          stickyGatherExtras = rollStickyBonusExtraQuantity(character);
+          if (stickyGatherExtras > 0) {
+            await addItemInventoryDatabase(
+              character._id,
+              randomItem.itemName,
+              stickyGatherExtras,
+              interaction,
+              'Gathering (Sticky Elixir)'
+            );
+          }
+        }
         
         // Add bonus item if Entertainer boost is active
         if (bonusItem && isEntertainerBoost) {
@@ -1220,6 +1235,12 @@ module.exports = {
         // Debug info removed to reduce log bloat
         
         const embed = await createGatherEmbed(character, randomItem, bonusItem, isDivineItemWithPriestBoost, boosterCharacter, scholarTargetVillage, villageBonusInfo, quantity);
+        if (stickyGatherExtras > 0) {
+          const prev = embed.data?.description || '';
+          embed.setDescription(
+            `${prev}\n\n✨ **Sticky Elixir:** +${stickyGatherExtras} extra **${randomItem.itemName}**.`
+          );
+        }
         if (isAprilFoolsEastern()) {
           const prev = embed.data?.description || '';
           embed.setDescription(prev + aprilFoolsMessageSuffix());

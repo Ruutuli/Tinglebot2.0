@@ -29,7 +29,7 @@ const { capitalizeWords } = require('../../modules/formattingModule');
 const { applyStealingBoost, applyStealingJailBoost, applyStealingLootBoost } = require('../../modules/boostIntegration');
 const { generateBoostFlavorText } = require('../../modules/flavorTextModule');
 const { getBoostInfo, addBoostFlavorText, buildFooterText } = require('../../embeds/embeds');
-const { getActiveBuffEffects } = require('../../modules/elixirModule');
+const { getActiveBuffEffects, rollStickyBonusExtraQuantity } = require('../../modules/elixirModule');
 const logger = require('@/utils/logger');
 const { retrieveBoostingRequestFromTempDataByCharacter, saveBoostingRequestToTempData, clearBoostAfterUse } = require('../jobs/boosting');
 const { checkJailStatus, sendToJail, formatJailTimeLeftDaysHours, DEFAULT_JAIL_DURATION_MS } = require('@/utils/jailCheck');
@@ -1725,6 +1725,8 @@ async function handleStealSuccess(thiefCharacter, targetCharacter, selectedItem,
         obtain: isNPC ? `Stolen from NPC ${targetCharacter}` : `Stolen from ${targetCharacter.name}`,
         date: new Date()
     };
+
+    const stickyStealExtras = rollStickyBonusExtraQuantity(thiefCharacter);
     
     try {
         // Perform the inventory sync
@@ -1739,6 +1741,23 @@ async function handleStealSuccess(thiefCharacter, targetCharacter, selectedItem,
             link: stealInteractionUrl,
             dateTime: stolenItem.date
         });
+
+        if (stickyStealExtras > 0) {
+            await addItemInventoryDatabase(
+                thiefCharacter._id,
+                selectedItem.itemName,
+                stickyStealExtras,
+                interaction,
+                'Stealing (Sticky Elixir)'
+            );
+            await logItemAcquisitionToDatabase(thiefCharacter, { itemName: selectedItem.itemName, quantity: stickyStealExtras }, {
+                quantity: stickyStealExtras,
+                obtain: 'Stealing (Sticky Elixir)',
+                location: thiefCharacter.currentLocation || thiefCharacter.homeVillage || thiefCharacter.currentVillage || '',
+                link: stealInteractionUrl,
+                dateTime: new Date()
+            });
+        }
         
         // For player steals, also remove item from target's inventory
         if (!isNPC) {
@@ -1762,6 +1781,14 @@ async function handleStealSuccess(thiefCharacter, targetCharacter, selectedItem,
         // Create and send the embed
         const embedBoostDetails = await getBoostInfo(thiefCharacter, 'Stealing');
         const embed = await createStealResultEmbed(thiefCharacter, targetCharacter, selectedItem, finalQuantity, roll, failureThreshold, true, isNPC, embedBoostDetails);
+
+        if (stickyStealExtras > 0) {
+            embed.addFields({
+                name: '✨ Sticky Elixir',
+                value: `> +${stickyStealExtras} extra **${selectedItem.itemName}** (bonus copies; not taken from target)`,
+                inline: false
+            });
+        }
         
         // Add boost flavor and impact summary (if any)
         if (boostInfo && boostInfo.boosterJob) {

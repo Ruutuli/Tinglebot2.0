@@ -1245,6 +1245,20 @@ async function processLootingLogic(
   let elixirBuffInfo = null;
   let boostUnused = false;
 
+  // Sticky Elixir: snapshot bonus **before** consume (water fight clears buff before loot is granted)
+  const { rollStickyBonusExtraQuantity } = require('../../modules/elixirModule');
+  let stickyLootExtras = 0;
+  try {
+    if (outcome.canLoot && weightedItems.length > 0) {
+      stickyLootExtras = rollStickyBonusExtraQuantity(character);
+    }
+  } catch (_) {
+    stickyLootExtras = 0;
+  }
+  if (isAprilFoolsEastern()) {
+    stickyLootExtras = 0;
+  }
+
   // ------------------- Elixir Consumption Logic -------------------
   // Check if elixirs should be consumed based on the monster encounter
   try {
@@ -1743,7 +1757,10 @@ async function processLootingLogic(
     await updateCharacterLootTimestamp(character, damageWasTaken, interaction.client);
     
 
-   await handleInventoryUpdate(interaction, character, lootedItems, encounteredMonster, bloodMoonActive);
+   await handleInventoryUpdate(interaction, character, lootedItems, encounteredMonster, bloodMoonActive, stickyLootExtras);
+    if (stickyLootExtras > 0 && lootedItems && lootedItems.length > 0) {
+      outcomeMessage += `\n✨ **Sticky Elixir:** +${stickyLootExtras} extra **${lootedItems[0].itemName}**!`;
+    }
   }
 
   // ------------------- Like Like Special Case - Chance to get extra item from chest -------------------
@@ -1851,7 +1868,7 @@ async function processLootingLogic(
 }
 
 // New helper function for inventory updates
-async function handleInventoryUpdate(interaction, character, lootedItems, encounteredMonster, bloodMoonActive) {
+async function handleInventoryUpdate(interaction, character, lootedItems, encounteredMonster, bloodMoonActive, stickyLootExtras = 0) {
   // Handle both single item (backward compatibility) and array of items
   const itemsArray = Array.isArray(lootedItems) ? lootedItems : [lootedItems];
   
@@ -1864,6 +1881,18 @@ async function handleInventoryUpdate(interaction, character, lootedItems, encoun
       interaction,
       "Looted"
     );
+  }
+
+  if (stickyLootExtras > 0 && itemsArray.length > 0) {
+    const first = itemsArray[0];
+    await addItemInventoryDatabase(
+      character._id,
+      first.itemName,
+      stickyLootExtras,
+      interaction,
+      "Looted (Sticky Elixir)"
+    );
+    logger.info('ELIXIR', `Sticky Elixir: +${stickyLootExtras} extra ${first.itemName} for ${character.name}`);
   }
 
   // Note: Google Sheets sync is handled by addItemInventoryDatabase

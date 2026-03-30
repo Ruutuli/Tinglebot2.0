@@ -1416,6 +1416,20 @@ async function processMonsterEncounter(character, monsterName, heartsRemaining) 
     if (elixirBuffs.defenseBoost > 0) buffInfo += `\n• Defense Boost: +${elixirBuffs.defenseBoost}`;
     outcomeMessage += buffInfo;
   }
+
+  // Sticky Elixir bonus quantity — snapshot before consume (e.g. water fight clears buff before loot)
+  const { rollStickyBonusExtraQuantity } = require('../../modules/elixirModule');
+  let stickyHelpWantedExtras = 0;
+  try {
+    if (outcome.canLoot && items.length > 0) {
+      const weightedForSticky = createWeightedItemList(items, adjustedRandomValue);
+      if (weightedForSticky.length > 0) {
+        stickyHelpWantedExtras = rollStickyBonusExtraQuantity(character);
+      }
+    }
+  } catch (_) {
+    stickyHelpWantedExtras = 0;
+  }
   
   // Check if elixirs should be consumed based on the encounter
   if (shouldConsumeElixir(character, 'helpWanted', { monster: monster })) {
@@ -1469,6 +1483,10 @@ async function processMonsterEncounter(character, monsterName, heartsRemaining) 
       }
     }
   }
+
+  if (lootedItem && stickyHelpWantedExtras > 0 && !isAprilFoolsEastern()) {
+    outcomeMessage += `\n✨ **Sticky Elixir:** +${stickyHelpWantedExtras} extra **${lootedItem.itemName}**!`;
+  }
   
   return {
     monster,
@@ -1477,7 +1495,8 @@ async function processMonsterEncounter(character, monsterName, heartsRemaining) 
     newHeartsRemaining,
     lootedItem,
     adjustedRandomValue,
-    elixirBuffs
+    elixirBuffs,
+    stickyHelpWantedExtras
   };
 }
 
@@ -1773,6 +1792,16 @@ async function handleMonsterHunt(interaction, questId, characterName) {
               interaction,
               "Quest Loot"
             );
+            const stickyHwq = encounterResult.stickyHelpWantedExtras || 0;
+            if (stickyHwq > 0 && !isAprilFoolsEastern()) {
+              await addItemInventoryDatabase(
+                character._id,
+                encounterResult.lootedItem.itemName,
+                stickyHwq,
+                interaction,
+                "Quest Loot (Sticky Elixir)"
+              );
+            }
           } catch (error) {
             console.error(`[helpWanted.js]: ❌ Failed to add loot to inventory:`, error);
           }
