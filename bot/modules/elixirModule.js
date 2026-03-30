@@ -110,7 +110,7 @@ const ELIXIR_EFFECTS = {
   'Enduring Elixir': {
     type: 'enduring',
     description:
-      '**Temporary** stamina: **Basic ×1.25** / **Mid ×1.45** / **High ×1.7** of your usual max (chunks) — gain added to **current only** (can read above max until spent; real max unchanged).',
+      '**Temporary stamina chunks** — **Basic ×1.25** / **Mid ×1.45** / **High ×1.7** of your max; drinking adds that many extra chunks.',
     effects: {
       staminaBoost: 2
     }
@@ -389,7 +389,7 @@ function getBrewPreviewForElixir(elixirName, level, fairyHealHearts = 0, preview
     const mult = ENDURING_MAX_POOL_MULTIPLIERS[lv - 1];
     if (scaled.staminaBoost > 0) {
       immediateLines.push(
-        `🟩 **×${mult}** of max stamina — **+${scaled.staminaBoost}** stamina chunks (current only; can read above max until spent)`
+        `🟩 **+${scaled.staminaBoost}** temporary stamina chunks (**×${mult}** of your max)`
       );
     } else if (mult) {
       immediateLines.push(
