@@ -110,7 +110,7 @@ const ELIXIR_EFFECTS = {
   'Enduring Elixir': {
     type: 'enduring',
     description:
-      'Extends max stamina: **Basic ×1.25** / **Mid ×1.45** / **High ×1.7** of your max (chunks) — same chunk gain added to max and current.',
+      '**Temporary** stamina: **Basic ×1.25** / **Mid ×1.45** / **High ×1.7** of your usual max (chunks) — gain added to **current only** (can read above max until spent; real max unchanged).',
     effects: {
       staminaBoost: 2
     }
@@ -132,7 +132,7 @@ const ELIXIR_EFFECTS = {
   'Hearty Elixir': {
     type: 'hearty',
     description:
-      'Adds temporary hearts: **Basic ×1.2** / **Mid ×1.4** / **High ×1.7** of your max hearts — plus Fairy mix-in on the bottle.',
+      '**Temporary** hearts: **Basic ×1.2** / **Mid ×1.4** / **High ×1.7** of your max — added to **current only** (can exceed max until lost; real max unchanged). Plus Fairy mix-in on the bottle.',
     effects: {
       extraHearts: 1
     }
@@ -389,7 +389,7 @@ function getBrewPreviewForElixir(elixirName, level, fairyHealHearts = 0, preview
     const mult = ENDURING_MAX_POOL_MULTIPLIERS[lv - 1];
     if (scaled.staminaBoost > 0) {
       immediateLines.push(
-        `🟩 **×${mult}** of max stamina — **+${scaled.staminaBoost}** stamina chunks (adds to max and current)`
+        `🟩 **×${mult}** of max stamina — **+${scaled.staminaBoost}** stamina chunks (current only; can read above max until spent)`
       );
     } else if (mult) {
       immediateLines.push(
@@ -503,18 +503,16 @@ const applyImmediateEffects = (character, elixirKey, scaledEffects) => {
     case 'Enduring Elixir':
       if (scaledEffects?.staminaBoost) {
         const staminaBoost = scaledEffects.staminaBoost;
-        character.maxStamina = (character.maxStamina || 3) + staminaBoost;
         character.currentStamina = (character.currentStamina || 0) + staminaBoost;
-        console.log(`[elixirModule.js]: 🏃 Enduring Elixir extended stamina by +${staminaBoost} for ${character.name}`);
+        console.log(`[elixirModule.js]: 🏃 Enduring Elixir added +${staminaBoost} temporary stamina (current only) for ${character.name}`);
       }
       break;
 
     case 'Hearty Elixir':
       if (scaledEffects?.extraHearts) {
         const extraHearts = scaledEffects.extraHearts;
-        character.maxHearts = (character.maxHearts || 3) + extraHearts;
         character.currentHearts = (character.currentHearts || 3) + extraHearts;
-        console.log(`[elixirModule.js]: ❤️ Hearty Elixir added +${extraHearts} temporary hearts for ${character.name}`);
+        console.log(`[elixirModule.js]: ❤️ Hearty Elixir added +${extraHearts} temporary hearts (current only) for ${character.name}`);
       }
       break;
 
@@ -577,8 +575,8 @@ const shouldConsumeElixir = (character, activity, context = {}) => {
              activity === 'loot' && context.monster?.name?.includes('Electric');
       
     case 'enduring':
-      // Consume when using stamina for movement or actions
-      return activity === 'travel' || activity === 'gather' || activity === 'loot';
+      // One-shot from /item clears buff; if a legacy active buff exists, do not auto-consume on travel (temp is spent from current naturally)
+      return false;
       
     case 'energizing':
       // Consume when performing physical actions
@@ -621,16 +619,15 @@ const shouldConsumeElixir = (character, activity, context = {}) => {
 const consumeElixirBuff = (character) => {
   if (!character.buff?.active) return false;
   
-  // Remove temporary hearts from Hearty Elixir
+  // Remove temporary hearts from Hearty Elixir (bonus was on current only, not max)
   if (character.buff.type === 'hearty' && character.buff.effects.extraHearts > 0) {
-    character.currentHearts = Math.max(character.maxHearts, character.currentHearts - character.buff.effects.extraHearts);
+    const lost = character.buff.effects.extraHearts;
+    character.currentHearts = Math.max(0, character.currentHearts - lost);
+    character.currentHearts = Math.min(character.currentHearts, character.maxHearts);
   }
   
-  // Remove temporary stamina boost from Enduring Elixir
+  // Enduring Elixir: bonus was on current only — drop any stamina still above real max (spent temp is already gone)
   if (character.buff.type === 'enduring' && character.buff.effects.staminaBoost > 0) {
-    // Reduce maxStamina back to original value
-    character.maxStamina = Math.max(1, character.maxStamina - character.buff.effects.staminaBoost);
-    // Ensure currentStamina doesn't exceed the new maxStamina
     character.currentStamina = Math.min(character.currentStamina, character.maxStamina);
   }
   
@@ -718,18 +715,7 @@ const calculateBuffedStats = (character) => {
       stats.defense += effects.defenseBoost;
     }
     
-    // Apply stamina boost
-    if (effects.staminaBoost > 0) {
-      stats.maxStamina += effects.staminaBoost;
-      // Note: staminaBoost only affects maxStamina, not currentStamina
-      // This creates the "temporary extra stamina" effect
-    }
-    
-    // Apply extra hearts
-    if (effects.extraHearts > 0) {
-      stats.maxHearts += effects.extraHearts;
-      stats.currentHearts += effects.extraHearts;
-    }
+    // Hearty / Enduring: bonus is stored on character.current* only (never add buff.effects here — would double-count)
   }
 
   return stats;

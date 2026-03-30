@@ -261,7 +261,7 @@ The table below is an older **design sketch** for heart bands vs `R_agg` — opt
 
 ### Energizing — fixed ladder; Enduring — **× max** chunks
 
-**Energizing** = refill (`staminaRecovery`): **Basic +5 / Mid +7 / High +9** from `RESOURCE_ELIXIR_LEVEL_STATS`. **Enduring** = **`staminaBoost`** from **`ENDURING_MAX_POOL_MULTIPLIERS`** (**×1.25 / ×1.45 / ×1.7**), applied to **max and current**. **Integer chunks** only; **5 chunks = 1 wheel**.
+**Energizing** = refill (`staminaRecovery`): **Basic +5 / Mid +7 / High +9** from `RESOURCE_ELIXIR_LEVEL_STATS`. **Enduring** = **`staminaBoost`** from **`ENDURING_MAX_POOL_MULTIPLIERS`** (**×1.25 / ×1.45 / ×1.7**), applied to **current** stamina only (can read above max until spent; **max** unchanged). **Integer chunks** only; **5 chunks = 1 wheel**.
 
 Live: **`staminaRecovery`** in `RESOURCE_ELIXIR_LEVEL_STATS`. **Enduring** uses `scaleElixirEffects` + `maxStaminaForEnduring`.
 

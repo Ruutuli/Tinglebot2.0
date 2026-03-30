@@ -1148,7 +1148,7 @@ module.exports = {
               { maxStaminaForEnduring: originalMaxStamina }
             );
             const staminaBoost = scaledEnduring.staminaBoost || 1;
-            character.maxStamina += staminaBoost;
+            // Temporary only: current can exceed max until spent (never persist higher max)
             character.currentStamina += staminaBoost;
             
             // Don't set a buff, just apply the immediate effects
@@ -1163,11 +1163,7 @@ module.exports = {
           
           // Update character in database
           const updateFunction = character.isModCharacter ? updateModCharacterById : updateCharacterById;
-          const buffUpdate = { buff: character.buff };
-          if (item.itemName === 'Enduring Elixir') {
-            buffUpdate.maxStamina = character.maxStamina;
-          }
-          await updateFunction(character._id, buffUpdate);
+          await updateFunction(character._id, { buff: character.buff });
           
           // Update hearts if they were modified by Hearty Elixir or Fairy Tonic
           if (item.itemName === 'Hearty Elixir' || item.itemName === 'Fairy Tonic') {
@@ -1177,7 +1173,6 @@ module.exports = {
           // Update stamina if it was modified by Enduring Elixir
           if (item.itemName === 'Enduring Elixir') {
             await updateCurrentStamina(character._id, character.currentStamina);
-            // Note: maxStamina update would need a separate function, but for now this shows the effect
           }
         } catch (error) {
           handleInteractionError(error, 'item.js', {
