@@ -6,6 +6,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import mongoose from "mongoose";
 import { connect } from "@/lib/db";
+import { postQuestModCompletionAnnouncement } from "@/lib/discord";
 import { getSession, isAdminUser } from "@/lib/session";
 import { logger } from "@/utils/logger";
 
@@ -170,6 +171,19 @@ export async function PATCH(
     }
 
     await quest.save();
+
+    if (rewarded.length > 0) {
+      const posted = await postQuestModCompletionAnnouncement({
+        questTitle,
+        mentionUserIds: rewarded,
+      });
+      if (!posted) {
+        logger.warn(
+          "api/admin/quests/[id]/participants",
+          "Participants updated but failed to post mod-completion announcement to Discord (check DISCORD_TOKEN and channel permissions)."
+        );
+      }
+    }
 
     return NextResponse.json({
       updated: rewarded.length,

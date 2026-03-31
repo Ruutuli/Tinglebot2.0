@@ -451,6 +451,39 @@ export async function discordApiRequest<T = unknown>(
   }
 }
 
+/** Public channel for “mod marked you complete” quest announcements (dashboard actions). */
+export const QUEST_MOD_COMPLETION_ANNOUNCE_CHANNEL_ID = "641858948802150400";
+
+/**
+ * Announce in Discord when a mod marks participant(s) complete for a quest via the dashboard.
+ * Returns false if the message could not be sent; does not throw.
+ */
+export async function postQuestModCompletionAnnouncement(opts: {
+  questTitle: string;
+  mentionUserIds: string[];
+}): Promise<boolean> {
+  const ids = [
+    ...new Set(
+      opts.mentionUserIds
+        .map((id) => String(id).trim())
+        .filter((id) => id.length > 0)
+    ),
+  ];
+  if (ids.length === 0) return true;
+
+  const rawTitle = (opts.questTitle || "Quest").trim() || "Quest";
+  const safeTitle = rawTitle.replace(/\\/g, "\\\\").replace(/\*/g, "\\*");
+  const mentions = ids.map((id) => `<@${id}>`).join(" ");
+  const content = `${mentions} A mod marked you as completed for **${safeTitle}**!`;
+
+  const result = await discordApiRequest<{ id: string }>(
+    `channels/${QUEST_MOD_COMPLETION_ANNOUNCE_CHANNEL_ID}/messages`,
+    "POST",
+    { content }
+  );
+  return Boolean(result?.id);
+}
+
 /** Fallback explore command ID when Discord API fetch fails */
 const EXPLORE_CMD_ID_FALLBACK = "1471454947089580107";
 
