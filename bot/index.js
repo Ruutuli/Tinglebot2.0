@@ -534,7 +534,7 @@ async function initializeClient() {
         const { registerScheduledTasks, postUnpostedQuestsOnStartup } = require('./tasks/tasks');
         registerScheduledTasks(scheduler);
         await scheduler.initializeScheduler(client);
-        logger.info('SYSTEM', 'Scheduler initialized (daily weather at 8am EST)');
+        logger.info('SYSTEM', 'Scheduler initialized (daily weather at 8am Eastern)');
         
         // Post any unposted quests from today on startup
         await postUnpostedQuestsOnStartup(client);

@@ -7,6 +7,7 @@
 
 const path = require('path');
 const fs = require('fs');
+const moment = require('moment-timezone');
 const logger = require('@/utils/logger');
 const {
   getCurrentWeather,
@@ -127,7 +128,7 @@ function buildWeatherDamageCause(weather, damageBreakdown) {
   return parts.length > 0 ? `Weather: **${parts.join(', ')}**` : 'Weather';
 }
 
-// ------------------- daily-weather (1pm UTC = 13:00 UTC) -------------------
+// ------------------- daily-weather (8am Eastern) -------------------
 async function dailyWeather(client, _data = {}) {
   if (!client?.channels) {
     logger.error('SCHEDULED', 'daily-weather: Discord client not available');
@@ -269,7 +270,7 @@ async function weatherFallbackCheck(client, _data = {}) {
   logger.success('SCHEDULED', 'weather-fallback-check: done');
 }
 
-// ------------------- weather-reminder (8pm EST = 01:00 UTC) -------------------
+// ------------------- weather-reminder (8pm Eastern) -------------------
 async function weatherReminder(client, _data = {}) {
   if (!client?.channels) {
     logger.error('SCHEDULED', 'weather-reminder: Discord client not available');
@@ -277,7 +278,7 @@ async function weatherReminder(client, _data = {}) {
   }
   logger.info('SCHEDULED', 'weather-reminder: starting');
 
-  // 8pm EST repost: read-only, never regenerate. Must repost the saved record for the day.
+  // 8pm Eastern repost: read-only, never regenerate. Must repost the saved record for the day.
   for (const village of VILLAGES) {
     const channelId = VILLAGE_CHANNELS[village];
     if (!channelId) {
@@ -977,27 +978,18 @@ async function weeklyInventorySnapshot(_client, _data = {}) {
 // ------------------- Monthly Tasks -------------------
 // ============================================================================
 
-// Helper function to check if today is the first of the month
+const SCHEDULE_TZ_EASTERN = 'America/New_York';
+
+// Helper function to check if today is the first of the month (Eastern date)
 function isFirstOfMonth() {
-  const now = new Date();
-  // EST is UTC-5
-  const estNow = new Date(now.getTime() - 5 * 60 * 60 * 1000);
-  return estNow.getUTCDate() === 1;
+  return moment.tz(SCHEDULE_TZ_EASTERN).date() === 1;
 }
 
-// Helper function to check if yesterday was the last day of the month (for processing at 11:59pm EST = 04:59 UTC next day)
-function wasYesterdayLastDayOfMonth() {
-  const now = new Date();
-  // EST is UTC-5, so 04:59 UTC = 11:59pm EST previous day
-  // Check if yesterday (in EST) was the last day of the month
-  const estNow = new Date(now.getTime() - 5 * 60 * 60 * 1000);
-  const yesterday = new Date(estNow);
-  yesterday.setUTCDate(yesterday.getUTCDate() - 1);
-  
-  const year = yesterday.getUTCFullYear();
-  const month = yesterday.getUTCMonth();
-  const lastDay = new Date(Date.UTC(year, month + 1, 0)).getUTCDate();
-  return yesterday.getUTCDate() === lastDay;
+/** True when Eastern calendar date is the last day of that month (for jobs at 11:59pm Eastern). */
+function isTodayLastDayOfMonthEastern() {
+  const m = moment.tz(SCHEDULE_TZ_EASTERN);
+  const lastDay = m.clone().endOf('month').date();
+  return m.date() === lastDay;
 }
 
 // ------------------- monthly-vending-stock (1st of month 12am EST = 05:00 UTC) -------------------
@@ -1527,12 +1519,11 @@ async function questPostingCheck(client, _data = {}) {
   }
 }
 
-// ------------------- monthly-quest-reward-payout (Last day of month 11:59pm EST = 04:59 UTC next day) -------------------
+// ------------------- monthly-quest-reward-payout (11:59pm Eastern on last day of month) -------------------
 async function monthlyQuestRewardPayout(_client, _data = {}) {
   try {
-    // Run at 04:59 UTC on 1st-4th of month, check if yesterday was last day
-    if (!wasYesterdayLastDayOfMonth()) {
-      logger.debug('SCHEDULED', 'monthly-quest-reward-payout: Yesterday was not last day of month, skipping');
+    if (!isTodayLastDayOfMonthEastern()) {
+      logger.debug('SCHEDULED', 'monthly-quest-reward-payout: Not last day of month (Eastern), skipping');
       return;
     }
     
@@ -2834,45 +2825,45 @@ async function blupeeAutoSpawn(client, _data = {}) {
 // ------------------- Task Registry -------------------
 // ============================================================================
 
-// All tasks with their cron expressions (UTC times)
+// Eastern community times use IANA America/New_York so 8pm stays 8pm through EST/EDT. Others stay UTC.
 const TASKS = [
   // Weather Tasks
-  { name: 'daily-weather', cron: '0 13 * * *', handler: dailyWeather }, // 1pm UTC = 13:00 UTC
-  { name: 'weather-fallback-check', cron: '15 13 * * *', handler: weatherFallbackCheck }, // 8:15am EST = 13:15 UTC
-  { name: 'weather-reminder', cron: '0 1 * * *', handler: weatherReminder }, // 8pm EST = 01:00 UTC
-  
+  { name: 'daily-weather', cron: '0 8 * * *', handler: dailyWeather, timezone: SCHEDULE_TZ_EASTERN }, // 8am Eastern
+  { name: 'weather-fallback-check', cron: '15 8 * * *', handler: weatherFallbackCheck, timezone: SCHEDULE_TZ_EASTERN }, // 8:15am Eastern
+  { name: 'weather-reminder', cron: '0 20 * * *', handler: weatherReminder, timezone: SCHEDULE_TZ_EASTERN }, // 8pm Eastern
+
   // Blood Moon Tasks
-  { name: 'bloodmoon-start-announcement', cron: '0 1 * * *', handler: bloodmoonStartAnnouncement }, // 8pm EST = 01:00 UTC
-  { name: 'bloodmoon-end-announcement', cron: '0 13 * * *', handler: bloodmoonEndAnnouncement }, // 8am EST = 13:00 UTC (day after blood moon)
-  { name: 'bloodmoon-channel-revert', cron: '0 13 * * *', handler: bloodmoonChannelRevert }, // 8am EST = 13:00 UTC
-  { name: 'bloodmoon-cleanup', cron: '0 6 * * *', handler: bloodmoonCleanup }, // 1am EST = 06:00 UTC
-  
+  { name: 'bloodmoon-start-announcement', cron: '0 20 * * *', handler: bloodmoonStartAnnouncement, timezone: SCHEDULE_TZ_EASTERN },
+  { name: 'bloodmoon-end-announcement', cron: '0 8 * * *', handler: bloodmoonEndAnnouncement, timezone: SCHEDULE_TZ_EASTERN },
+  { name: 'bloodmoon-channel-revert', cron: '0 8 * * *', handler: bloodmoonChannelRevert, timezone: SCHEDULE_TZ_EASTERN },
+  { name: 'bloodmoon-cleanup', cron: '0 1 * * *', handler: bloodmoonCleanup, timezone: SCHEDULE_TZ_EASTERN }, // 1am Eastern
+
   // Blight Tasks
-  { name: 'blight-roll-call', cron: '0 1 * * *', handler: blightRollCall }, // 8pm EST = 01:00 UTC
-  { name: 'blight-roll-call-check', cron: '59 0 * * *', handler: blightRollCallCheck }, // 7:59pm EST = 00:59 UTC, 1 min before call
-  
-  // Birthday Tasks (all at 12am EST = 05:00 UTC)
-  { name: 'birthday-assign-role', cron: '0 5 * * *', handler: birthdayAssignRole },
-  { name: 'birthday-remove-role', cron: '0 5 * * *', handler: birthdayRemoveRole },
-  { name: 'birthday-announcements', cron: '0 5 * * *', handler: birthdayAnnouncements },
-  
-  // Daily Reset Tasks (gather/loot daily roll at 8am EST = 13:00 UTC; others at 12am EST = 05:00 UTC)
-  { name: 'reset-daily-rolls', cron: '0 13 * * *', handler: resetDailyRolls }, // 8am EST
-  { name: 'reset-pet-roll-dates', cron: '0 5 * * *', handler: resetPetRollDates },
-  { name: 'recover-daily-stamina', cron: '0 13 * * *', handler: recoverDailyStaminaTask }, // 8am EST = 13:00 UTC
-  { name: 'generate-daily-quests', cron: '0 5 * * *', handler: generateDailyQuests },
-  { name: 'reset-global-steal-protections', cron: '0 5 * * *', handler: resetGlobalStealProtections },
-  { name: 'boost-cleanup', cron: '0 5 * * *', handler: boostCleanup },
-  
-  // Weekly Tasks (Sunday 12am EST = 05:00 UTC)
-  { name: 'weekly-pet-rolls-reset', cron: '0 5 * * 0', handler: weeklyPetRollsReset },
-  { name: 'weekly-inventory-snapshot', cron: '0 5 * * 0', handler: weeklyInventorySnapshot },
-  
+  { name: 'blight-roll-call', cron: '0 20 * * *', handler: blightRollCall, timezone: SCHEDULE_TZ_EASTERN },
+  { name: 'blight-roll-call-check', cron: '59 19 * * *', handler: blightRollCallCheck, timezone: SCHEDULE_TZ_EASTERN }, // 7:59pm Eastern
+
+  // Birthday Tasks (midnight Eastern)
+  { name: 'birthday-assign-role', cron: '0 0 * * *', handler: birthdayAssignRole, timezone: SCHEDULE_TZ_EASTERN },
+  { name: 'birthday-remove-role', cron: '0 0 * * *', handler: birthdayRemoveRole, timezone: SCHEDULE_TZ_EASTERN },
+  { name: 'birthday-announcements', cron: '0 0 * * *', handler: birthdayAnnouncements, timezone: SCHEDULE_TZ_EASTERN },
+
+  // Daily Reset Tasks
+  { name: 'reset-daily-rolls', cron: '0 8 * * *', handler: resetDailyRolls, timezone: SCHEDULE_TZ_EASTERN },
+  { name: 'reset-pet-roll-dates', cron: '0 0 * * *', handler: resetPetRollDates, timezone: SCHEDULE_TZ_EASTERN },
+  { name: 'recover-daily-stamina', cron: '0 8 * * *', handler: recoverDailyStaminaTask, timezone: SCHEDULE_TZ_EASTERN },
+  { name: 'generate-daily-quests', cron: '0 0 * * *', handler: generateDailyQuests, timezone: SCHEDULE_TZ_EASTERN },
+  { name: 'reset-global-steal-protections', cron: '0 0 * * *', handler: resetGlobalStealProtections, timezone: SCHEDULE_TZ_EASTERN },
+  { name: 'boost-cleanup', cron: '0 0 * * *', handler: boostCleanup, timezone: SCHEDULE_TZ_EASTERN },
+
+  // Weekly Tasks (Sunday midnight Eastern)
+  { name: 'weekly-pet-rolls-reset', cron: '0 0 * * 0', handler: weeklyPetRollsReset, timezone: SCHEDULE_TZ_EASTERN },
+  { name: 'weekly-inventory-snapshot', cron: '0 0 * * 0', handler: weeklyInventorySnapshot, timezone: SCHEDULE_TZ_EASTERN },
+
   // Monthly Tasks
-  { name: 'monthly-vending-stock', cron: '0 5 1 * *', handler: monthlyVendingStock }, // 1st of month 12am EST = 05:00 UTC
-  { name: 'monthly-nitro-boost-rewards', cron: '0 5 1 * *', handler: monthlyNitroBoostRewards }, // 1st of month 12am EST = 05:00 UTC
-  { name: 'quest-posting-check', cron: '0 5 1 * *', handler: questPostingCheck }, // 1st of month 12am EST = 05:00 UTC
-  { name: 'monthly-quest-reward-payout', cron: '59 4 1-4 * *', handler: monthlyQuestRewardPayout }, // Last day of month 11:59pm EST = 04:59 UTC next day (runs on 1st-4th, checks if yesterday was last day)
+  { name: 'monthly-vending-stock', cron: '0 0 1 * *', handler: monthlyVendingStock, timezone: SCHEDULE_TZ_EASTERN },
+  { name: 'monthly-nitro-boost-rewards', cron: '0 0 1 * *', handler: monthlyNitroBoostRewards, timezone: SCHEDULE_TZ_EASTERN },
+  { name: 'quest-posting-check', cron: '0 0 1 * *', handler: questPostingCheck, timezone: SCHEDULE_TZ_EASTERN },
+  { name: 'monthly-quest-reward-payout', cron: '59 23 28-31 * *', handler: monthlyQuestRewardPayout, timezone: SCHEDULE_TZ_EASTERN },
   
   // Quest/Help Wanted Tasks
   { name: 'help-wanted-board-check', cron: '0 * * * *', handler: helpWantedBoardCheck }, // Every hour
@@ -2919,8 +2910,11 @@ const TASKS = [
  * @param {object} scheduler - utils/scheduler module (registerTask, etc.)
  */
 function registerScheduledTasks(scheduler) {
-  for (const { name, cron, handler } of TASKS) {
-    scheduler.registerTask(name, cron, handler);
+  for (const task of TASKS) {
+    const { name, cron, handler, timezone } = task;
+    const opts = {};
+    if (timezone) opts.timezone = timezone;
+    scheduler.registerTask(name, cron, handler, opts);
   }
 }
 

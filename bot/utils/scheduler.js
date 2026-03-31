@@ -21,7 +21,7 @@ let agenda = null;
 let client = null;
 let initialized = false;
 
-/** @type {Map<string, { cronExpression: string, taskFunction: Function, options?: object }>} */
+/** @type {Map<string, { cronExpression: string, taskFunction: Function, jobData: object, timezone: string }>} */
 const taskRegistry = new Map();
 
 // ============================================================================
@@ -33,7 +33,7 @@ const taskRegistry = new Map();
  * @param {string} name - Unique job name (Agenda job name)
  * @param {string} cronExpression - Cron expression (e.g. '0 13 * * *' for daily 13:00 UTC)
  * @param {Function} taskFunction - Async function(client, data) invoked when job runs
- * @param {object} [options] - Optional. { data?: object } passed to taskFunction as second arg
+ * @param {object} [options] - Optional. { data?: object, timezone?: string } IANA zone for cron (default UTC)
  */
 function registerTask(name, cronExpression, taskFunction, options = {}) {
   if (initialized) {
@@ -43,13 +43,15 @@ function registerTask(name, cronExpression, taskFunction, options = {}) {
   if (taskRegistry.has(name)) {
     logger.warn('SCHEDULER', `Overwriting existing task "${name}"`);
   }
+  const timezone = options.timezone || 'UTC';
   taskRegistry.set(name, {
     cronExpression,
     taskFunction,
-    options: options.data ? { data: options.data } : {}
+    jobData: options.data || {},
+    timezone
   });
   logger.info('SCHEDULER', cronExpression != null
-    ? `Registered task "${name}" (${cronExpression})`
+    ? `Registered task "${name}" (${cronExpression}, ${timezone})`
     : `Registered one-time task "${name}"`);
 }
 
@@ -83,7 +85,7 @@ async function initializeScheduler(discordClient, mongoConnectionString) {
     agenda.on('error', (err) => logger.error('SCHEDULER', `Agenda error: ${err.message}`));
 
     for (const [name, config] of taskRegistry) {
-      const { taskFunction, options } = config;
+      const { taskFunction } = config;
       agenda.define(
         name,
         { concurrency: 1, lockLifetime: 10 * 60 * 1000 },
@@ -103,12 +105,11 @@ async function initializeScheduler(discordClient, mongoConnectionString) {
     await agenda.start();
 
     for (const [name, config] of taskRegistry) {
-      const { cronExpression, options } = config;
+      const { cronExpression, jobData, timezone } = config;
       // Only schedule recurring jobs (skip one-time jobs with null cron)
       if (cronExpression) {
-        // Ensure cron expressions are interpreted in UTC (EST/EDT is user-facing only).
-        await agenda.every(cronExpression, name, options.data || {}, { skipImmediate: true, timezone: 'UTC' });
-        logger.info('SCHEDULER', `Scheduled "${name}" every ${cronExpression}`);
+        await agenda.every(cronExpression, name, jobData || {}, { skipImmediate: true, timezone });
+        logger.info('SCHEDULER', `Scheduled "${name}" every ${cronExpression} (${timezone})`);
       } else {
         logger.info('SCHEDULER', `Registered one-time job "${name}" (will be scheduled manually)`);
       }
@@ -163,7 +164,8 @@ async function stopAllTasks() {
 function getTaskStatus() {
   return Array.from(taskRegistry.entries()).map(([name, config]) => ({
     name,
-    cronExpression: config.cronExpression
+    cronExpression: config.cronExpression,
+    timezone: config.timezone || 'UTC'
   }));
 }
 
