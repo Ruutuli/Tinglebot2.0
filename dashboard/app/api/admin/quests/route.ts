@@ -295,6 +295,10 @@ export async function POST(req: NextRequest) {
       posted,
       postedAt,
       botNotes: typeof body.botNotes === "string" ? body.botNotes.trim() || null : null,
+      timeLimitEndDate:
+        typeof body.timeLimitEndDate === "string" && /^\d{4}-\d{2}-\d{2}$/.test(body.timeLimitEndDate.trim())
+          ? body.timeLimitEndDate.trim()
+          : null,
     };
 
     const QuestModel = Quest as unknown as new (data: Record<string, unknown>) => { save: () => Promise<unknown>; toObject: () => Record<string, unknown> };

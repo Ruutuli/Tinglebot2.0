@@ -28,6 +28,8 @@ const basicQuestFields = {
     itemRewardQty: { type: Number, default: null },
     itemRewards: [{ name: String, quantity: Number }], // Multiple items support
     signupDeadline: { type: String, default: null },
+    /** YYYY-MM-DD; when set, quest ends last ms of that civil day in America/New_York (overrides duration math for expiration). */
+    timeLimitEndDate: { type: String, default: null },
     participantCap: { type: Number, default: null },
     postRequirement: { type: Number, default: null },
     specialNote: { type: String, default: null }
@@ -257,9 +259,77 @@ const COMPLETION_REASONS = {
 const TIME_MULTIPLIERS = {
     HOUR: 60 * 60 * 1000,
     DAY: 24 * 60 * 60 * 1000,
-    WEEK: 7 * 24 * 60 * 60 * 1000,
-    MONTH: 30 * 24 * 60 * 60 * 1000
+    WEEK: 7 * 24 * 60 * 60 * 1000
 };
+
+const QUEST_TIMEZONE = 'America/New_York';
+
+function getEasternCalendarParts(date) {
+    const parts = new Intl.DateTimeFormat('en-US', {
+        timeZone: QUEST_TIMEZONE,
+        year: 'numeric',
+        month: 'numeric'
+    }).formatToParts(new Date(date));
+    const y = +parts.find(p => p.type === 'year').value;
+    const m = +parts.find(p => p.type === 'month').value;
+    return { year: y, month0: m - 1 };
+}
+
+function addCalendarMonths(year, month0, addMonths) {
+    const total = month0 + addMonths;
+    const y = year + Math.floor(total / 12);
+    const month0norm = ((total % 12) + 12) % 12;
+    return { year: y, month0: month0norm };
+}
+
+/** Last UTC millisecond of a civil calendar day in America/New_York (23:59:59.999 local). */
+function endOfCivilDayAmericaNewYorkUTC(year, month0to11, day) {
+    const lastInMonth = new Date(year, month0to11 + 1, 0).getDate();
+    if (day < 1 || day > lastInMonth) return null;
+    const targetYmd = `${year}-${String(month0to11 + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+    const fmtYmd = new Intl.DateTimeFormat('en-CA', {
+        timeZone: QUEST_TIMEZONE,
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit'
+    });
+    const ymd = (utcMs) => fmtYmd.format(new Date(utcMs));
+    let lo = Date.UTC(year, month0to11, day - 1, 4, 0, 0, 0);
+    let hi = Date.UTC(year, month0to11, day + 1, 6, 0, 0, 0);
+    while (lo < hi) {
+        const mid = Math.floor((lo + hi) / 2);
+        if (ymd(mid) < targetYmd) lo = mid + 1;
+        else hi = mid;
+    }
+    const firstMs = lo;
+    lo = firstMs;
+    hi = firstMs + 27 * 60 * 60 * 1000;
+    while (lo < hi) {
+        const mid = Math.floor((lo + hi + 1) / 2);
+        if (ymd(mid) === targetYmd) lo = mid;
+        else hi = mid - 1;
+    }
+    return lo;
+}
+
+/** Last UTC millisecond of civil calendar month in America/New_York (23:59:59.999 local). */
+function endOfMonthAmericaNewYorkUTC(year, month0to11) {
+    const lastDay = new Date(year, month0to11 + 1, 0).getDate();
+    return endOfCivilDayAmericaNewYorkUTC(year, month0to11, lastDay);
+}
+
+function parseTimeLimitEndDateYyyyMmDd(s) {
+    const m = String(s || '').trim().match(/^(\d{4})-(\d{2})-(\d{2})$/);
+    if (!m) return null;
+    const year = parseInt(m[1], 10);
+    const month = parseInt(m[2], 10);
+    const day = parseInt(m[3], 10);
+    if (month < 1 || month > 12) return null;
+    const month0 = month - 1;
+    const lastDay = new Date(year, month0 + 1, 0).getDate();
+    if (day < 1 || day > lastDay) return null;
+    return { year, month0, day };
+}
 
 // ============================================================================
 // ------------------- Helper Functions -------------------
@@ -1382,30 +1452,40 @@ questSchema.methods.checkTimeExpiration = function() {
         return false;
     }
     
-    // Convert current time to EST-equivalent (UTC-5) for consistent timezone handling
     const now = new Date();
-    const nowEST = new Date(now.getTime() - 5 * 60 * 60 * 1000);
     const startDateTime = new Date(startDate);
     const timeLimit = this.timeLimit.toLowerCase();
     
-    let durationMs = 0;
-    
-    if (timeLimit.includes('day')) {
-        const days = parseInt(timeLimit.match(/(\d+)/)?.[1] || '1');
-        durationMs = days * TIME_MULTIPLIERS.DAY;
-    } else if (timeLimit.includes('week')) {
-        const weeks = parseInt(timeLimit.match(/(\d+)/)?.[1] || '1');
-        durationMs = weeks * TIME_MULTIPLIERS.WEEK;
-    } else if (timeLimit.includes('month')) {
-        const months = parseInt(timeLimit.match(/(\d+)/)?.[1] || '1');
-        durationMs = months * TIME_MULTIPLIERS.MONTH;
-    } else if (timeLimit.includes('hour')) {
-        const hours = parseInt(timeLimit.match(/(\d+)/)?.[1] || '1');
-        durationMs = hours * TIME_MULTIPLIERS.HOUR;
+    const explicitEnd = parseTimeLimitEndDateYyyyMmDd(this.timeLimitEndDate);
+    if (explicitEnd) {
+        const endMs = endOfCivilDayAmericaNewYorkUTC(explicitEnd.year, explicitEnd.month0, explicitEnd.day);
+        if (endMs != null) {
+            return now.getTime() > endMs;
+        }
     }
     
-    const expirationTime = new Date(startDateTime.getTime() + durationMs);
-    return nowEST > expirationTime;
+    let expirationMs;
+    if (timeLimit.includes('month')) {
+        const months = parseInt(timeLimit.match(/(\d+)/)?.[1] || '1');
+        const { year: py, month0: pm0 } = getEasternCalendarParts(startDate);
+        const { year: ey, month0: em0 } = addCalendarMonths(py, pm0, months - 1);
+        expirationMs = endOfMonthAmericaNewYorkUTC(ey, em0);
+    } else {
+        let durationMs = 0;
+        if (timeLimit.includes('day')) {
+            const days = parseInt(timeLimit.match(/(\d+)/)?.[1] || '1');
+            durationMs = days * TIME_MULTIPLIERS.DAY;
+        } else if (timeLimit.includes('week')) {
+            const weeks = parseInt(timeLimit.match(/(\d+)/)?.[1] || '1');
+            durationMs = weeks * TIME_MULTIPLIERS.WEEK;
+        } else if (timeLimit.includes('hour')) {
+            const hours = parseInt(timeLimit.match(/(\d+)/)?.[1] || '1');
+            durationMs = hours * TIME_MULTIPLIERS.HOUR;
+        }
+        expirationMs = startDateTime.getTime() + durationMs;
+    }
+    
+    return now.getTime() > expirationMs;
 };
 
 // ------------------- Token Reward Normalization ------------------

@@ -2559,6 +2559,12 @@ export const MODEL_CONFIGS: Record<string, ModelConfig> = {
             helpText: "Time limit for the quest",
           },
           {
+            key: "timeLimitEndDate",
+            label: "Time Limit End Date",
+            type: "text",
+            helpText: "Optional YYYY-MM-DD; quest ends at 11:59 PM US Eastern that day (overrides duration for bot expiration)",
+          },
+          {
             key: "participantCap",
             label: "Participant Cap",
             type: "number",

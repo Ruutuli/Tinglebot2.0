@@ -170,6 +170,18 @@ function formatEndDate(d: Date): string {
   return d.toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" });
 }
 
+/** Civil YYYY-MM-DD → display line matching formatEndDateWithTime (11:59 pm label). */
+function formatEndDateFromYyyyMmDd(ymd: string): string {
+  const m = String(ymd).trim().match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (!m) return ymd;
+  const y = parseInt(m[1], 10);
+  const mo = parseInt(m[2], 10);
+  const d = parseInt(m[3], 10);
+  const dt = new Date(y, mo - 1, d);
+  if (Number.isNaN(dt.getTime())) return ymd;
+  return formatEndDateWithTime(dt);
+}
+
 /** Format end date for Duration line: "April 30th 11:59 pm" */
 function formatEndDateWithTime(d: Date): string {
   const day = d.getDate();
@@ -267,6 +279,11 @@ function viewQuestToPreviewBody(q: QuestRecord): Record<string, unknown> {
     questID: q.questID ?? "",
     location: location ?? "",
     timeLimit: timeLimit ?? "1 month",
+    timeLimitEndDate: (() => {
+      const raw = (q as { timeLimitEndDate?: string }).timeLimitEndDate;
+      if (typeof raw !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(raw.trim())) return null;
+      return raw.trim();
+    })(),
     signupDeadline: signupDeadline ?? null,
     status: q.status ?? "active",
     tokenReward: q.tokenReward ?? "N/A",
@@ -292,6 +309,8 @@ type FormState = {
   locationOther: string;
   timeLimit: string;
   timeLimitCustom: string;
+  /** YYYY-MM-DD; quest ends 11:59:59.999 PM US Eastern on this civil day (overrides duration for bot expiration). */
+  timeLimitEndDate: string;
   signupDeadline: string;
   participantCap: string;
   postRequirement: string;
@@ -332,6 +351,7 @@ const emptyForm: FormState = {
   locationOther: "",
   timeLimit: "1 month",
   timeLimitCustom: "",
+  timeLimitEndDate: "",
   signupDeadline: "",
   participantCap: "",
   postRequirement: "",
@@ -428,6 +448,11 @@ function questToForm(q: QuestRecord): FormState {
     locationOther,
     timeLimit,
     timeLimitCustom,
+    timeLimitEndDate: (() => {
+      const raw = (q as { timeLimitEndDate?: string }).timeLimitEndDate;
+      if (typeof raw !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(raw.trim())) return "";
+      return raw.trim();
+    })(),
     signupDeadline: (() => {
       const s = String(q.signupDeadline ?? "").trim();
       if (!s) return "";
@@ -502,6 +527,10 @@ function formToBody(f: FormState, isEdit: boolean): Record<string, unknown> {
     questType: f.questType,
     location: locationValue,
     timeLimit: timeLimitValue,
+    timeLimitEndDate:
+      f.timeLimitEndDate.trim() && /^\d{4}-\d{2}-\d{2}$/.test(f.timeLimitEndDate.trim())
+        ? f.timeLimitEndDate.trim()
+        : null,
     signupDeadline: f.signupDeadline.trim() || null,
     status: f.status,
     tokenReward,
@@ -705,12 +734,14 @@ function QuestEmbedPreview({ form }: { form: FormState }) {
             <div><span className="font-semibold">Location:</span> {locationPreview}</div>
             <div>
               <span className="font-semibold">Duration:</span>{" "}
-              {form.date && effectiveTimeLimit && effectiveTimeLimit !== "Custom"
-                ? (() => {
-                    const end = getEndDateFromDuration(form.date, effectiveTimeLimit);
-                    return end ? `${effectiveTimeLimit} | Ends ${formatEndDateWithTime(end)}` : effectiveTimeLimit;
-                  })()
-                : (effectiveTimeLimit.trim() || "—")}
+              {form.timeLimitEndDate.trim() && /^\d{4}-\d{2}-\d{2}$/.test(form.timeLimitEndDate.trim())
+                ? `${effectiveTimeLimit.trim() || "—"} | Ends ${formatEndDateFromYyyyMmDd(form.timeLimitEndDate.trim())} (US Eastern)`
+                : form.date && effectiveTimeLimit && effectiveTimeLimit !== "Custom"
+                  ? (() => {
+                      const end = getEndDateFromDuration(form.date, effectiveTimeLimit);
+                      return end ? `${effectiveTimeLimit} | Ends ${formatEndDateWithTime(end)}` : effectiveTimeLimit;
+                    })()
+                  : (effectiveTimeLimit.trim() || "—")}
             </div>
             <div><span className="font-semibold">Date:</span> {form.date ? (yyyyMmToDisplay(form.date) || form.date) : "—"}</div>
             {form.signupDeadline.trim() && (() => {
@@ -1342,12 +1373,29 @@ export default function AdminQuestsPage() {
                           {form.timeLimit === "Custom" && (
                             <input type="text" value={form.timeLimitCustom} onChange={(e) => setField("timeLimitCustom", e.target.value)} placeholder="e.g. 3 weeks" className="mt-2 w-full rounded border border-[var(--totk-dark-ocher)] bg-[var(--botw-warm-black)] px-3 py-2 text-[var(--totk-ivory)]" />
                           )}
-                          {form.date && form.timeLimit !== "Custom" && (() => {
+                          <div className="mt-3">
+                            <label className="mb-1 block text-sm font-medium text-[var(--totk-grey-200)]">End date (optional)</label>
+                            <input
+                              type="date"
+                              value={form.timeLimitEndDate}
+                              onChange={(e) => setField("timeLimitEndDate", e.target.value)}
+                              className="w-full rounded border border-[var(--totk-dark-ocher)] bg-[var(--botw-warm-black)] px-3 py-2 text-[var(--totk-ivory)] quest-date-input"
+                            />
+                            <p className="mt-1 text-xs text-[var(--totk-grey-200)]">
+                              When set, the quest ends at <strong className="text-[var(--totk-ivory)]">11:59 PM US Eastern</strong> on that calendar day. This overrides duration-based end times for automated completion.
+                            </p>
+                          </div>
+                          {form.timeLimitEndDate.trim() && /^\d{4}-\d{2}-\d{2}$/.test(form.timeLimitEndDate.trim()) && (
+                            <p className="mt-1.5 text-xs text-[var(--totk-mid-ocher)]">
+                              Effective end: {formatEndDateFromYyyyMmDd(form.timeLimitEndDate.trim())} US Eastern
+                            </p>
+                          )}
+                          {form.date && form.timeLimit !== "Custom" && !form.timeLimitEndDate.trim() && (() => {
                             const endDate = getEndDateFromDuration(form.date, form.timeLimit);
                             if (!endDate) return null;
                             return (
                               <p className="mt-1.5 text-xs text-[var(--totk-grey-200)]">
-                                {form.timeLimit} | Ends on {formatEndDate(endDate)}
+                                {form.timeLimit} | Ends on {formatEndDate(endDate)} (estimate; use End date above for an exact day)
                               </p>
                             );
                           })()}
@@ -1974,7 +2022,7 @@ export default function AdminQuestsPage() {
                         <div><dt className="text-[var(--totk-grey-200)]">Type</dt><dd className="mt-0.5 font-medium text-[var(--totk-ivory)]">{viewQuest.questType ?? "—"}</dd></div>
                         <div><dt className="text-[var(--totk-grey-200)]">Status</dt><dd className="mt-0.5 font-medium text-[var(--totk-ivory)]">{statusDisplay(viewQuest.status)}</dd></div>
                         <div><dt className="text-[var(--totk-grey-200)]">Location</dt><dd className="mt-0.5 font-medium text-[var(--totk-ivory)]">{(viewQuest as QuestRecord & { location?: string }).location ?? "—"}</dd></div>
-                        <div><dt className="text-[var(--totk-grey-200)]">Time limit</dt><dd className="mt-0.5 font-medium text-[var(--totk-ivory)]">{(viewQuest as QuestRecord & { timeLimit?: string }).timeLimit ?? "—"}</dd></div>
+                        <div><dt className="text-[var(--totk-grey-200)]">Time limit</dt><dd className="mt-0.5 font-medium text-[var(--totk-ivory)]">{(viewQuest as QuestRecord & { timeLimit?: string; timeLimitEndDate?: string }).timeLimit ?? "—"}{(viewQuest as { timeLimitEndDate?: string }).timeLimitEndDate && /^\d{4}-\d{2}-\d{2}$/.test(String((viewQuest as { timeLimitEndDate?: string }).timeLimitEndDate).trim()) ? ` · Ends ${formatEndDateFromYyyyMmDd(String((viewQuest as { timeLimitEndDate?: string }).timeLimitEndDate).trim())} US Eastern` : ""}</dd></div>
                         <div><dt className="text-[var(--totk-grey-200)]">Signup deadline</dt><dd className="mt-0.5 font-medium text-[var(--totk-ivory)]">{(viewQuest as QuestRecord & { signupDeadline?: string }).signupDeadline ?? "—"}</dd></div>
                         <div><dt className="text-[var(--totk-grey-200)]">Participation cap</dt><dd className="mt-0.5 font-medium text-[var(--totk-ivory)]">{viewQuest.participantCap != null ? viewQuest.participantCap : "—"}</dd></div>
                         <div><dt className="text-[var(--totk-grey-200)]">Participants</dt><dd className="mt-0.5 font-medium text-[var(--totk-ivory)]">{Object.keys(viewQuest.participants ?? {}).length}</dd></div>

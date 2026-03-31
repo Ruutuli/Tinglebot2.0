@@ -404,6 +404,15 @@ export async function PUT(
       botNotes: typeof body.botNotes === "string" ? body.botNotes.trim() || null : null,
     };
 
+    if (body.timeLimitEndDate !== undefined) {
+      (update as Record<string, unknown>).timeLimitEndDate =
+        typeof body.timeLimitEndDate === "string" && body.timeLimitEndDate.trim()
+          ? /^\d{4}-\d{2}-\d{2}$/.test(body.timeLimitEndDate.trim())
+            ? body.timeLimitEndDate.trim()
+            : null
+          : null;
+    }
+
     const updated = await Quest.findByIdAndUpdate(
       id,
       { $set: update },

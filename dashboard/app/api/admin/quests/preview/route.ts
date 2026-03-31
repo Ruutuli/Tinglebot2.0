@@ -201,11 +201,18 @@ async function buildQuestPreviewEmbed(body: Record<string, unknown>) {
   const dateStr = (body.date as string)?.trim() || "";
   const dateYYYYMM = dateToYYYYMM(dateStr);
   const durationStr = timeLimit === "Custom" ? (body.timeLimitCustom as string)?.trim() || "" : timeLimit;
-  const endDate = dateYYYYMM && durationStr && timeLimit !== "Custom"
-    ? getEndDateFromDuration(dateYYYYMM, durationStr)
-    : null;
+  const endDateExplicit = (() => {
+    const raw = typeof body.timeLimitEndDate === "string" ? body.timeLimitEndDate.trim() : "";
+    if (!raw || !/^\d{4}-\d{2}-\d{2}$/.test(raw)) return null;
+    const [y, mo, d] = raw.split("-").map(Number);
+    const dt = new Date(y, mo - 1, d);
+    return Number.isNaN(dt.getTime()) ? null : dt;
+  })();
+  const endDate =
+    endDateExplicit ??
+    (dateYYYYMM && durationStr && timeLimit !== "Custom" ? getEndDateFromDuration(dateYYYYMM, durationStr) : null);
   const durationDisplay = endDate
-    ? `${durationStr} | Ends ${formatEndDateWithTime(endDate)}`
+    ? `${durationStr || timeLimit} | Ends ${formatEndDateWithTime(endDate)}`
     : timeLimit;
   const signupDeadlineDisplay = formatSignupDeadline(body.signupDeadline);
 

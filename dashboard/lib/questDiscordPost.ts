@@ -100,6 +100,8 @@ type QuestDoc = {
   questType?: string | null;
   location?: string | null;
   timeLimit?: string | null;
+  /** YYYY-MM-DD; end of that civil day US Eastern (matches QuestModel). */
+  timeLimitEndDate?: string | null;
   questID?: string | null;
   tokenReward?: string | null;
   collabAllowed?: boolean;
@@ -142,7 +144,15 @@ export function buildQuestEmbed(quest: QuestDoc): Record<string, unknown> {
 
   const dateYYYYMM = dateToYYYYMM(dateStr);
   const durationStr = timeLimit === "Custom" ? "" : timeLimit;
-  const endDate = dateYYYYMM && durationStr ? getEndDateFromDuration(dateYYYYMM, durationStr) : null;
+  const endDateExplicit = (() => {
+    const raw = quest.timeLimitEndDate?.trim();
+    if (!raw || !/^\d{4}-\d{2}-\d{2}$/.test(raw)) return null;
+    const [y, mo, d] = raw.split("-").map(Number);
+    const dt = new Date(y, mo - 1, d);
+    return Number.isNaN(dt.getTime()) ? null : dt;
+  })();
+  const endDate =
+    endDateExplicit ?? (dateYYYYMM && durationStr ? getEndDateFromDuration(dateYYYYMM, durationStr) : null);
   const durationDisplay = endDate ? `${timeLimit} | Ends ${formatEndDateWithTime(endDate)}` : timeLimit;
   const signupDeadlineDisplay = formatSignupDeadline(quest.signupDeadline);
 

@@ -880,7 +880,7 @@ export async function PUT(req: NextRequest) {
       ];
     } else if (model === "Quest") {
       allowedFields = [
-        "questID", "title", "description", "questType", "status", "location", "date", "timeLimit",
+        "questID", "title", "description", "questType", "status", "location", "date", "timeLimit", "timeLimitEndDate",
         "participantCap", "minRequirements", "tableroll", "itemReward", "itemRewardQty", "itemRewards",
         "signupDeadline", "postRequirement", "specialNote", "tokenReward",
         "targetChannel", "posted", "postedAt", "botNotes", "messageID", "roleID", "guildId",
