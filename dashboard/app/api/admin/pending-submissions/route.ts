@@ -51,7 +51,7 @@ export async function GET() {
 
     const now = new Date();
 
-    const [docs, approvedRows] = await Promise.all([
+    const [docs, approvedRowsRaw] = await Promise.all([
       TempData.find({
         type: "submission",
         expiresAt: { $gt: now },
@@ -60,11 +60,12 @@ export async function GET() {
         },
       })
         .sort({ createdAt: -1 })
-        .lean() as Promise<SubmissionDoc[]>,
-      ApprovedSubmission.find({}, { submissionId: 1 }).lean() as Promise<
-        { submissionId: string }[]
-      >,
+        .lean(),
+      ApprovedSubmission.find({}, { submissionId: 1 }).lean(),
     ]);
+
+    const docsList = docs as unknown as SubmissionDoc[];
+    const approvedRows = approvedRowsRaw as unknown as { submissionId?: string }[];
 
     const approvedIds = new Set(
       approvedRows
@@ -91,7 +92,7 @@ export async function GET() {
       questBonus?: string;
     }[] = [];
 
-    for (const doc of docs) {
+    for (const doc of docsList) {
       const d = doc.data || {};
       if (!hasValidDiscordMessageUrl(d)) continue;
 

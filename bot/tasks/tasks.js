@@ -3002,7 +3002,7 @@ const TASKS = [
   // Quest/Help Wanted Tasks
   { name: 'help-wanted-board-check', cron: '0 * * * *', handler: helpWantedBoardCheck }, // Every hour
 
-  // Blupee (April, UTC): 6 random spawn waves per day in each town hall when BLUPEE_ENABLED (see BLUPEE_AUTO_SPAWN)
+  // Blupee (April, UTC): 6 random spawn waves per day in each town hall
   { name: 'blupee-auto-spawn', cron: '* * * * *', handler: blupeeAutoSpawn }, // Every minute (no-op outside April / when disabled)
   
   // Raid/Village Tasks

@@ -8,10 +8,7 @@ const { handleInteractionError } = require('@/utils/globalErrorHandler');
 const {
   postBlupeeSpawn,
   getBlupeeStatusSnapshot,
-  isBlupeeGloballyEnabled,
-  isBlupeeAutoSpawnEnabled,
   BLUPEE_AUTO_SPAWNS_PER_DAY,
-  testChannelRequiresSpawn,
   getBlupeeStateKeyForDiscordChannel,
   TEST_CHANNEL_ID
 } = require('../../modules/blupeeModule');
@@ -76,8 +73,13 @@ async function execute(interaction) {
       try {
         const { message, stateKey, sessionId, threadId } = await postBlupeeSpawn(target, { forcedVillage });
         const villageSuffix = forcedVillage ? ` · village **${forcedVillage}**` : '';
+        const guildId = target.guildId;
+        const threadJump =
+          guildId && threadId
+            ? ` · [Jump to thread](https://discord.com/channels/${guildId}/${threadId})`
+            : '';
         return interaction.editReply({
-          content: `✅ Blupee spawned in ${target} (${stateKey})${villageSuffix} · session \`${sessionId}\`${threadId ? ` · thread \`${threadId}\`` : ''}. [Jump to message](${message.url})`
+          content: `✅ Blupee spawned in ${target} (${stateKey})${villageSuffix} · session \`${sessionId}\`${threadJump} · [Jump to message](${message.url})`
         });
       } catch (err) {
         handleInteractionError(err, 'mod-blupee.js', {
@@ -96,10 +98,8 @@ async function execute(interaction) {
       const stateKey = getBlupeeStateKeyForDiscordChannel(channel);
       const snap = await getBlupeeStatusSnapshot(stateKey);
       const lines = [
-        `**BLUPEE_ENABLED:** ${isBlupeeGloballyEnabled() ? 'true' : 'false'}`,
-        `**April auto-spawn (UTC):** ${isBlupeeAutoSpawnEnabled() ? `on — ${BLUPEE_AUTO_SPAWNS_PER_DAY} random times/day per town hall` : 'off (needs BLUPEE_ENABLED; set BLUPEE_AUTO_SPAWN=false to disable only auto)'}`,
+        `**April auto-spawn (UTC):** ${BLUPEE_AUTO_SPAWNS_PER_DAY} random times/day per town hall (April only)`,
         `**Test channel ID:** \`${TEST_CHANNEL_ID}\` (this channel matches: ${channel.id === TEST_CHANNEL_ID || channel.parentId === TEST_CHANNEL_ID ? 'yes' : 'no'})`,
-        `**BLUPEE_TEST_REQUIRE_SPAWN:** ${testChannelRequiresSpawn() ? 'true' : 'false'} (legacy; real spawn always required)`,
         '**Rupees:** internal tally only (no inventory item)',
         `**State key (this context):** \`${stateKey}\``,
         `**Active spawn doc:** ${snap.active ? 'yes' : 'no'}`,

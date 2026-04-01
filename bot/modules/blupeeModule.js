@@ -38,31 +38,27 @@ const BLUPEE_IMAGES = [
 ];
 const BLUPEE_FALLBACK_IMAGE = 'https://storage.googleapis.com/tinglebot/Graphics/border.png';
 
+function normalizeSnowflake(id) {
+  if (id == null || id === '') return null;
+  return String(id).trim();
+}
+
 function getTownHallIdSet() {
   const ids = new Set(
-    [process.env.RUDANIA_TOWNHALL, process.env.INARIKO_TOWNHALL, process.env.VHINTL_TOWNHALL].filter(Boolean)
+    [process.env.RUDANIA_TOWNHALL, process.env.INARIKO_TOWNHALL, process.env.VHINTL_TOWNHALL]
+      .filter(Boolean)
+      .map((x) => normalizeSnowflake(x))
   );
   return ids;
 }
 
 function getBlupeeVillageFromStateKey(stateKey) {
-  if (!stateKey) return null;
-  if (stateKey === process.env.RUDANIA_TOWNHALL) return 'Rudania';
-  if (stateKey === process.env.INARIKO_TOWNHALL) return 'Inariko';
-  if (stateKey === process.env.VHINTL_TOWNHALL) return 'Vhintl';
+  const sk = normalizeSnowflake(stateKey);
+  if (!sk) return null;
+  if (sk === normalizeSnowflake(process.env.RUDANIA_TOWNHALL)) return 'Rudania';
+  if (sk === normalizeSnowflake(process.env.INARIKO_TOWNHALL)) return 'Inariko';
+  if (sk === normalizeSnowflake(process.env.VHINTL_TOWNHALL)) return 'Vhintl';
   return null;
-}
-
-function isBlupeeGloballyEnabled() {
-  return String(process.env.BLUPEE_ENABLED || '').toLowerCase() === 'true';
-}
-
-/** April auto-spawns require BLUPEE_ENABLED; optional BLUPEE_AUTO_SPAWN=false to disable only the scheduler. */
-function isBlupeeAutoSpawnEnabled() {
-  if (!isBlupeeGloballyEnabled()) return false;
-  const v = process.env.BLUPEE_AUTO_SPAWN;
-  if (v === undefined || v === '') return true;
-  return String(v).toLowerCase() === 'true';
 }
 
 function isAprilUtc(date) {
@@ -121,11 +117,11 @@ async function getOrCreateDailyScheduleDoc() {
 }
 
 /**
- * Agenda: every minute. In April, when BLUPEE_ENABLED (+ BLUPEE_AUTO_SPAWN), spawns at 6 random UTC times per day in each town hall.
+ * Agenda: every minute. In April, spawns at 6 random UTC times per day in each town hall.
  */
 async function runBlupeeAutoSpawnTick(client) {
   const now = new Date();
-  if (!isAprilUtc(now) || !isBlupeeAutoSpawnEnabled()) return;
+  if (!isAprilUtc(now)) return;
 
   await connectToTinglebot();
 
@@ -173,10 +169,6 @@ async function runBlupeeAutoSpawnTick(client) {
     { $set: { 'data.fired': fired } }
   );
   logger.success('BLUPEE', `Auto-spawn wave ${idx + 1}/${slots.length} (${utcDateKey(now)} UTC)`);
-}
-
-function testChannelRequiresSpawn() {
-  return String(process.env.BLUPEE_TEST_REQUIRE_SPAWN || '').toLowerCase() === 'true';
 }
 
 function getRupeeTallySeasonKey(now = new Date()) {
@@ -289,32 +281,75 @@ async function awardBlupeeCatchTokens(userId) {
 /** Consolidate threads with their town hall / test channel parent for one shared round. */
 function getBlupeeStateKeyFromIds(channelId, parentId) {
   const halls = getTownHallIdSet();
-  if (parentId && halls.has(parentId)) return parentId;
-  if (halls.has(channelId)) return channelId;
-  if (channelId === TEST_CHANNEL_ID) return channelId;
-  if (parentId === TEST_CHANNEL_ID) return TEST_CHANNEL_ID;
-  return channelId;
+  const cid = normalizeSnowflake(channelId);
+  const pid = normalizeSnowflake(parentId);
+  const testId = normalizeSnowflake(TEST_CHANNEL_ID);
+  if (pid && halls.has(pid)) return pid;
+  if (cid && halls.has(cid)) return cid;
+  if (cid && testId && cid === testId) return cid;
+  if (pid && testId && pid === testId) return testId;
+  return cid || channelId;
+}
+
+/** True if channel or parent is a configured town hall or test channel (including thread → hall). */
+function isBlupeeHallGeography(channelId, parentId) {
+  const halls = getTownHallIdSet();
+  const cid = normalizeSnowflake(channelId);
+  const pid = normalizeSnowflake(parentId);
+  const testId = normalizeSnowflake(TEST_CHANNEL_ID);
+  if (!cid) return false;
+  return (
+    halls.has(cid) ||
+    (pid && halls.has(pid)) ||
+    (testId && (cid === testId || pid === testId))
+  );
 }
 
 /**
  * Slash commands in threads often omit parentId on interaction.channel (partial / cache).
- * Fetch the channel so parent = town hall resolves and matches blupeeSpawn state keys.
+ * Only skip API fetch when used directly in a town hall or test channel (not a thread under it).
  */
 async function resolveBlupeeChannelIdsForInteraction(interaction) {
   const channelId = interaction.channelId;
-  let parentId = interaction.channel?.parentId ?? null;
   if (!channelId) return { channelId: null, parentId: null };
 
   const halls = getTownHallIdSet();
-  const alreadyValid =
-    halls.has(channelId) ||
-    channelId === TEST_CHANNEL_ID ||
-    (parentId && (halls.has(parentId) || parentId === TEST_CHANNEL_ID));
+  const cid = normalizeSnowflake(channelId);
+  const testId = normalizeSnowflake(TEST_CHANNEL_ID);
+  let parentId = normalizeSnowflake(interaction.channel?.parentId ?? null);
 
-  if (!alreadyValid && interaction.client?.channels?.fetch) {
+  // Used in the town hall or test channel itself (not a thread) — key is this channel
+  if (halls.has(cid) || (testId && cid === testId)) {
+    return { channelId, parentId };
+  }
+
+  const client = interaction.client;
+  let guild = interaction.guild;
+  if (!guild && interaction.guildId) {
+    guild = await client.guilds.fetch(interaction.guildId).catch(() => null);
+  }
+
+  const fetchChannel = async () => {
+    if (guild?.channels?.fetch) {
+      const ch = await guild.channels.fetch(channelId).catch(() => null);
+      if (ch?.parentId != null) return ch;
+    }
+    if (client?.channels?.fetch) {
+      const ch = await client.channels.fetch(channelId).catch(() => null);
+      if (ch?.parentId != null) return ch;
+    }
+    return null;
+  };
+
+  const fetched = await fetchChannel();
+  if (fetched?.parentId != null) {
+    parentId = normalizeSnowflake(fetched.parentId);
+  }
+
+  if (parentId == null && interaction.channel && typeof interaction.channel.fetch === 'function') {
     try {
-      const fetched = await interaction.client.channels.fetch(channelId);
-      if (fetched?.parentId != null) parentId = fetched.parentId;
+      const refetched = await interaction.channel.fetch();
+      if (refetched?.parentId != null) parentId = normalizeSnowflake(refetched.parentId);
     } catch (_) {
       /* ignore */
     }
@@ -329,13 +364,15 @@ async function getBlupeeStateKey(interaction) {
 }
 
 function isTestContextIds(channelId, parentId) {
-  return channelId === TEST_CHANNEL_ID || parentId === TEST_CHANNEL_ID;
+  const testId = normalizeSnowflake(TEST_CHANNEL_ID);
+  const cid = normalizeSnowflake(channelId);
+  const pid = normalizeSnowflake(parentId);
+  return (testId && cid === testId) || (testId && pid === testId);
 }
 
 function canUseBlupeeAt(channelId, parentId) {
   if (isTestContextIds(channelId, parentId)) return true;
-  const halls = getTownHallIdSet();
-  if (halls.has(channelId) || (parentId && halls.has(parentId))) return isBlupeeGloballyEnabled();
+  if (isBlupeeHallGeography(channelId, parentId)) return true;
   return false;
 }
 
@@ -587,7 +624,7 @@ async function rollBlupee(interaction, character, requestedSessionId) {
   if (!canUseBlupeeAt(channelId, parentId)) {
     return interaction.editReply({
       content:
-        '❌ **Blupee** can only be rolled in a village town hall (when the event is enabled) or in the designated test channel.'
+        '❌ **Blupee** can only be rolled in a village town hall or in the designated test channel — including **threads** under those halls.'
     });
   }
 
@@ -886,6 +923,54 @@ function getBlupeeStateKeyForDiscordChannel(channel) {
   return getBlupeeStateKeyFromIds(channel.id, channel.parentId);
 }
 
+/** Discord thread name max length */
+const BLUPEE_THREAD_NAME_MAX = 100;
+const BLUPEE_THREAD_CREATE_ATTEMPTS = 3;
+const BLUPEE_THREAD_RETRY_DELAY_MS = 500;
+
+/**
+ * Creates a public thread on the spawn message. Retries startThread, then falls back to channel.threads.create.
+ * Returns null only if every path fails (caller should clean up the spawn message).
+ */
+async function createBlupeeSessionThread(channel, msg, sessionId, villageName) {
+  const threadName = `Blupee ${villageName || '—'} (${sessionId})`.slice(0, BLUPEE_THREAD_NAME_MAX);
+  const baseOpts = {
+    name: threadName,
+    autoArchiveDuration: 60,
+    reason: 'Blupee session thread'
+  };
+
+  for (let i = 0; i < BLUPEE_THREAD_CREATE_ATTEMPTS; i++) {
+    if (i > 0) await new Promise((r) => setTimeout(r, BLUPEE_THREAD_RETRY_DELAY_MS));
+    try {
+      if (typeof msg.startThread === 'function') {
+        const t = await msg.startThread(baseOpts);
+        if (t?.id) return t;
+      }
+    } catch (e) {
+      logger.warn(
+        'BLUPEE',
+        `startThread attempt ${i + 1}/${BLUPEE_THREAD_CREATE_ATTEMPTS} failed (${sessionId}): ${e.message || e}`
+      );
+    }
+  }
+
+  const parent = msg.channel?.isTextBased?.() ? msg.channel : channel;
+  try {
+    if (parent?.threads?.create && msg.id) {
+      const t = await parent.threads.create({
+        ...baseOpts,
+        startMessageId: msg.id
+      });
+      if (t?.id) return t;
+    }
+  } catch (e) {
+    logger.warn('BLUPEE', `threads.create fallback failed (${sessionId}): ${e.message || e}`);
+  }
+
+  return null;
+}
+
 async function postBlupeeSpawn(channel, options = {}) {
   const imageUrl = getRandomBlupeeImageUrl();
   const stateKey = getBlupeeStateKeyForDiscordChannel(channel);
@@ -906,23 +991,19 @@ async function postBlupeeSpawn(channel, options = {}) {
     .setTimestamp();
 
   const msg = await channel.send({ embeds: [embed] });
-  let thread = null;
-  try {
-    if (typeof msg.startThread === 'function') {
-      thread = await msg.startThread({
-        name: `Blupee ${villageName || '—'} (${sessionId})`,
-        autoArchiveDuration: 60,
-        reason: 'Blupee session thread'
-      });
-    }
-  } catch (e) {
-    logger.warn('BLUPEE', `Failed to start Blupee thread for session ${sessionId}: ${e.message || e}`);
+  const thread = await createBlupeeSessionThread(channel, msg, sessionId, villageName);
+
+  if (!thread?.id) {
+    await msg.delete().catch(() => {});
+    throw new Error(
+      'Could not create a Blupee session thread. Grant the bot **Create Public Threads** and **Send Messages** in this channel (and use a text or announcement channel).'
+    );
   }
 
   const guildId = channel.guildId || msg.guildId;
   const spawnUrl = typeof msg.url === 'string' ? msg.url : null;
   const linkBits = [];
-  if (thread && guildId) {
+  if (guildId) {
     linkBits.push(`🧵 [**Jump to session thread**](https://discord.com/channels/${guildId}/${thread.id})`);
   }
   if (spawnUrl) {
@@ -935,7 +1016,7 @@ async function postBlupeeSpawn(channel, options = {}) {
     });
   }
 
-  const noticeChannel = thread || channel;
+  const noticeChannel = thread;
 
   const expiresAt = new Date(Date.now() + BLUPEE_SPAWN_DURATION_MS);
   await TempData.findOneAndUpdate(
@@ -947,7 +1028,7 @@ async function postBlupeeSpawn(channel, options = {}) {
         expiresAt,
         data: {
           sessionId,
-          threadId: thread?.id || null,
+          threadId: thread.id,
           village: villageName,
           messageId: msg.id,
           virtual: false,
@@ -961,7 +1042,7 @@ async function postBlupeeSpawn(channel, options = {}) {
 
   scheduleBlupeeTimeoutNotice(noticeChannel, stateKey, sessionId);
 
-  return { message: msg, stateKey, sessionId, threadId: thread?.id || null };
+  return { message: msg, stateKey, sessionId, threadId: thread.id };
 }
 
 async function getBlupeeStatusSnapshot(stateKey) {
@@ -1015,10 +1096,7 @@ module.exports = {
   postBlupeeSpawn,
   getBlupeeStateKeyForDiscordChannel,
   getBlupeeStatusSnapshot,
-  isBlupeeGloballyEnabled,
-  isBlupeeAutoSpawnEnabled,
   runBlupeeAutoSpawnTick,
-  testChannelRequiresSpawn,
   getBlupeeStateKey,
   getBlupeeStatsSnapshot
 };
