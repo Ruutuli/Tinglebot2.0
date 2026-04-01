@@ -1426,6 +1426,45 @@ async function initializeClient() {
     
     // Note: http is already required above for error handling
     const healthcheckServer = http.createServer((req, res) => {
+      // Dashboard → bot: approve/deny pending art/writing submissions (same logic as /mod approve)
+      if (req.method === 'POST' && req.url === '/internal/pending-submissions') {
+        const secret = process.env.BOT_INTERNAL_API_SECRET;
+        const headerSecret = req.headers['x-bot-internal-secret'];
+        if (!secret || headerSecret !== secret) {
+          res.writeHead(403, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ ok: false, error: 'Forbidden' }));
+          return;
+        }
+        let body = '';
+        req.on('data', (chunk) => { body += chunk; });
+        req.on('end', async () => {
+          try {
+            const payload = JSON.parse(body || '{}');
+            const { runSubmissionApproval } = require('./commands/moderation/mod');
+            const result = await runSubmissionApproval(client, {
+              submissionId: payload.submissionId,
+              action: payload.action,
+              reason: payload.reason ?? null,
+              moderatorTag: payload.moderatorTag,
+              moderatorId: payload.moderatorId,
+              approvalInteractionId: payload.approvalInteractionId ?? null
+            });
+            res.writeHead(200, { 'Content-Type': 'application/json' });
+            // Do not JSON.stringify Discord embeds (non-serializable); dashboard only needs ok / error.
+            if (result.ok) {
+              res.end(JSON.stringify({ ok: true }));
+            } else {
+              res.end(JSON.stringify({ ok: false, error: result.error }));
+            }
+          } catch (err) {
+            logger.error('INTERNAL', `pending-submissions: ${err.message}`);
+            res.writeHead(500, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ ok: false, error: err.message || 'Internal error' }));
+          }
+        });
+        return;
+      }
+
       // Log all healthcheck requests for debugging
       if (req.url === '/health' || req.url === '/healthcheck') {
         logger.info('HEALTHCHECK', `Healthcheck request received from ${req.headers['user-agent'] || 'unknown'}`);

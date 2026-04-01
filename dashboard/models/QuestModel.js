@@ -339,6 +339,28 @@ function parseTimeLimitEndDateYyyyMmDd(s) {
     return { year, month0, day };
 }
 
+/** Parse quest `date` field: "March 2026" or "2026-03" → { year, month0 }. Used so month-based expiry matches the labeled month, not postedAt. */
+function parseQuestDateStringToYearMonth0(dateStr) {
+    const s = String(dateStr || '').trim();
+    if (!s) return null;
+    const ymd = s.match(/^(\d{4})-(\d{2})$/);
+    if (ymd) {
+        const year = parseInt(ymd[1], 10);
+        const month = parseInt(ymd[2], 10);
+        if (month < 1 || month > 12) return null;
+        return { year, month0: month - 1 };
+    }
+    const MONTH_NAMES = ['january', 'february', 'march', 'april', 'may', 'june', 'july', 'august', 'september', 'october', 'november', 'december'];
+    const label = s.match(/^([A-Za-z]+)\s+(\d{4})$/);
+    if (label) {
+        const idx = MONTH_NAMES.indexOf(label[1].toLowerCase());
+        if (idx < 0) return null;
+        const year = parseInt(label[2], 10);
+        return { year, month0: idx };
+    }
+    return null;
+}
+
 // ============================================================================
 // ------------------- Helper Functions -------------------
 // ============================================================================
@@ -1508,15 +1530,7 @@ questSchema.methods.checkTimeExpiration = function() {
         return false;
     }
     
-    // Use postedAt if available, otherwise fall back to createdAt
-    // This handles quests that were created but never officially "posted"
-    const startDate = this.postedAt || this.createdAt;
-    if (!startDate) {
-        return false;
-    }
-    
     const now = new Date();
-    const startDateTime = new Date(startDate);
     const timeLimit = this.timeLimit.toLowerCase();
     
     const explicitEnd = parseTimeLimitEndDateYyyyMmDd(this.timeLimitEndDate);
@@ -1530,10 +1544,25 @@ questSchema.methods.checkTimeExpiration = function() {
     let expirationMs;
     if (timeLimit.includes('month')) {
         const months = parseInt(timeLimit.match(/(\d+)/)?.[1] || '1');
-        const { year: py, month0: pm0 } = getEasternCalendarParts(startDate);
-        const { year: ey, month0: em0 } = addCalendarMonths(py, pm0, months - 1);
-        expirationMs = endOfMonthAmericaNewYorkUTC(ey, em0);
+        const labeled = parseQuestDateStringToYearMonth0(this.date);
+        if (labeled) {
+            const { year: ey, month0: em0 } = addCalendarMonths(labeled.year, labeled.month0, months - 1);
+            expirationMs = endOfMonthAmericaNewYorkUTC(ey, em0);
+        } else {
+            const startDate = this.postedAt || this.createdAt;
+            if (!startDate) {
+                return false;
+            }
+            const { year: py, month0: pm0 } = getEasternCalendarParts(startDate);
+            const { year: ey, month0: em0 } = addCalendarMonths(py, pm0, months - 1);
+            expirationMs = endOfMonthAmericaNewYorkUTC(ey, em0);
+        }
     } else {
+        const startDate = this.postedAt || this.createdAt;
+        if (!startDate) {
+            return false;
+        }
+        const startDateTime = new Date(startDate);
         let durationMs = 0;
         if (timeLimit.includes('day')) {
             const days = parseInt(timeLimit.match(/(\d+)/)?.[1] || '1');

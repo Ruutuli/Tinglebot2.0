@@ -190,6 +190,24 @@ function getEndDateFromDuration(startYYYYMM: string, duration: string): Date | n
   return end;
 }
 
+/** Last day YYYY-MM-DD of the month that ends an N-month window starting at quest `date` (YYYY-MM or parsed label). Matches bot QuestModel month expiry. */
+function computeDefaultTimeLimitEndDateYyyyMmDd(f: FormState): string | null {
+  const tl = f.timeLimit === "Custom" ? f.timeLimitCustom.trim() : f.timeLimit;
+  const monthMatch = tl.toLowerCase().match(/(\d+)\s*month/);
+  if (!monthMatch) return null;
+  const n = Math.max(1, parseInt(monthMatch[1], 10));
+  const ym = parseDateToYYYYMM(f.date.trim());
+  if (!ym || !/^\d{4}-\d{2}$/.test(ym)) return null;
+  const [yStr, mStr] = ym.split("-");
+  const y = parseInt(yStr, 10);
+  const month0 = parseInt(mStr, 10) - 1;
+  const total = month0 + (n - 1);
+  const ey = y + Math.floor(total / 12);
+  const em0 = ((total % 12) + 12) % 12;
+  const lastDay = new Date(ey, em0 + 1, 0).getDate();
+  return `${ey}-${String(em0 + 1).padStart(2, "0")}-${String(lastDay).padStart(2, "0")}`;
+}
+
 function formatEndDate(d: Date): string {
   return d.toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" });
 }
@@ -558,6 +576,12 @@ function formToBody(f: FormState, isEdit: boolean): Record<string, unknown> {
   const timeLimitValue = f.timeLimit === "Custom" ? f.timeLimitCustom.trim() : f.timeLimit;
   const tokenReward = buildTokenRewardFromForm(f);
   const dateForApi = /^\d{4}-\d{2}$/.test(f.date.trim()) ? yyyyMmToDisplay(f.date.trim()) : f.date.trim();
+  const explicitEnd =
+    f.timeLimitEndDate.trim() && /^\d{4}-\d{2}-\d{2}$/.test(f.timeLimitEndDate.trim())
+      ? f.timeLimitEndDate.trim()
+      : null;
+  const resolvedEndDate = explicitEnd ?? computeDefaultTimeLimitEndDateYyyyMmDd(f);
+
   const body: Record<string, unknown> = {
     title: f.title.trim(),
     description: f.description.trim(),
@@ -566,10 +590,7 @@ function formToBody(f: FormState, isEdit: boolean): Record<string, unknown> {
     questType: f.questType,
     location: locationValue,
     timeLimit: timeLimitValue,
-    timeLimitEndDate:
-      f.timeLimitEndDate.trim() && /^\d{4}-\d{2}-\d{2}$/.test(f.timeLimitEndDate.trim())
-        ? f.timeLimitEndDate.trim()
-        : null,
+    timeLimitEndDate: resolvedEndDate,
     signupDeadline: f.signupDeadline.trim() || null,
     status: f.status,
     tokenReward,
@@ -1258,12 +1279,16 @@ export default function AdminQuestsPage() {
         setError("Quest ID is required when editing.");
         return;
       }
-      if (
-        editingId &&
-        (!form.timeLimitEndDate.trim() || !/^\d{4}-\d{2}-\d{2}$/.test(form.timeLimitEndDate.trim()))
-      ) {
-        setError("End date is required when editing a quest.");
-        return;
+      if (editingId) {
+        const hasExplicitEnd =
+          form.timeLimitEndDate.trim() && /^\d{4}-\d{2}-\d{2}$/.test(form.timeLimitEndDate.trim());
+        const hasComputedEnd = computeDefaultTimeLimitEndDateYyyyMmDd(form) != null;
+        if (!hasExplicitEnd && !hasComputedEnd) {
+          setError(
+            "End date is required when editing a quest (set the date field, or pick a month-based duration so an end date can be derived)."
+          );
+          return;
+        }
       }
       setSubmitting(true);
       setError(null);

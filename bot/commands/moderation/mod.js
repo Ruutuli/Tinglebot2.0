@@ -311,10 +311,10 @@ async function updateSubmissionEmbedFooter(message, status, moderatorTag, reason
 }
 
 // ------------------- Approval Notification Message Update Helper -------------------
-async function updateApprovalNotificationMessage(interaction, submissionId, status, reason = null) {
+async function updateApprovalNotificationMessage(client, moderatorTag, submissionId, status, reason = null) {
   try {
     // Find the approval notification message in the approval channel
-    const approvalChannel = interaction.client.channels.cache.get('1381479893090566144');
+    const approvalChannel = client.channels.cache.get('1381479893090566144');
     if (!approvalChannel?.isTextBased()) {
       console.warn('[mod.js]: Approval channel not found or not text-based');
       return;
@@ -355,8 +355,8 @@ async function updateApprovalNotificationMessage(interaction, submissionId, stat
     // Update the footer
     updatedEmbed.footer = {
       text: status === 'approved' 
-        ? `✅ Approved by ${interaction.user.tag}`
-        : `❌ Denied by ${interaction.user.tag}${reason ? ` - ${reason}` : ''}`,
+        ? `✅ Approved by ${moderatorTag}`
+        : `❌ Denied by ${moderatorTag}${reason ? ` - ${reason}` : ''}`,
       iconURL: undefined
     };
 
@@ -528,6 +528,13 @@ async function createModApprovalConfirmationEmbed(submissionId, title, tokenAmou
       }
     );
   }
+
+  const dashboardBase = `${(process.env.DASHBOARD_URL || process.env.APP_URL || 'https://tinglebot.xyz').replace(/\/$/, '')}`;
+  embed.addFields({
+    name: '🔗 Moderation',
+    value: `Approve or deny submissions on the [dashboard](${dashboardBase}/admin/art-submissions).`,
+    inline: false
+  });
   
   return embed;
 }
@@ -535,7 +542,14 @@ async function createModApprovalConfirmationEmbed(submissionId, title, tokenAmou
 // ------------------- Function: createModDenialConfirmationEmbed -------------------
 // Creates mod denial confirmation embed
 function createModDenialConfirmationEmbed(submissionId, title, userId, reason) {
-  return createSubmissionEmbed('modDenial', { submissionId, title, userId, reason });
+  const embed = createSubmissionEmbed('modDenial', { submissionId, title, userId, reason });
+  const dashboardBase = `${(process.env.DASHBOARD_URL || process.env.APP_URL || 'https://tinglebot.xyz').replace(/\/$/, '')}`;
+  embed.addFields({
+    name: '🔗 Moderation',
+    value: `Approve or deny submissions on the [dashboard](${dashboardBase}/admin/art-submissions).`,
+    inline: false
+  });
+  return embed;
 }
 
 // ============================================================================
@@ -2022,23 +2036,21 @@ async function handleQuestCompletionFromSubmission(submission, userId) {
   }
 }
 
-// ------------------- Function: handleApprove -------------------
-// Approves or denies a user submission and handles token updates, notifications, and reactions.
-async function handleApprove(interaction) {
-    const submissionId = interaction.options.getString('submission_id');
-    const action = interaction.options.getString('action');
-    const reason = interaction.options.getString('reason') || null;
-  
-    if (!submissionId || typeof submissionId !== 'string') {
-      return interaction.editReply({ content: '❌ Invalid submission ID provided.', ephemeral: true });
+// ------------------- Function: runSubmissionApproval -------------------
+// Approves or denies a user submission (shared by /mod and dashboard internal API).
+async function runSubmissionApproval(client, { submissionId, action, reason, moderatorTag, moderatorId: _moderatorId, approvalInteractionId }) {
+  const reasonOrNull = reason || null;
+
+  if (!submissionId || typeof submissionId !== 'string') {
+    return { ok: false, error: '❌ Invalid submission ID provided.' };
+  }
+
+  try {
+    const submission = await retrieveSubmissionFromStorage(submissionId);
+    if (!submission) {
+      return { ok: false, error: `⚠️ Submission with ID \`${submissionId}\` not found.` };
     }
-  
-    try {
-      const submission = await retrieveSubmissionFromStorage(submissionId);
-      if (!submission) {
-        return interaction.editReply({ content: `⚠️ Submission with ID \`${submissionId}\` not found.`, ephemeral: true });
-      }
-  
+
     const { userId, collab, finalTokenAmount, title, messageUrl } = submission;
     
     // finalTokenAmount is the canonical post-boost per-person total (Scholar Research Stipend, Teacher art, etc.).
@@ -2051,10 +2063,10 @@ async function handleApprove(interaction) {
             0);
   
     if (!messageUrl) {
-      return interaction.editReply({ 
-        content: `❌ This submission is missing a message URL and cannot be approved/denied. Submission ID: \`${submissionId}\`\n\nThis may be a corrupted or incomplete submission. Please contact the bot developer if this issue persists.`, 
-        ephemeral: true 
-      });
+      return {
+        ok: false,
+        error: `❌ This submission is missing a message URL and cannot be approved/denied. Submission ID: \`${submissionId}\`\n\nThis may be a corrupted or incomplete submission. Please contact the bot developer if this issue persists.`
+      };
     }
 
     // Validate and parse message URL
@@ -2063,42 +2075,42 @@ async function handleApprove(interaction) {
     const messageId = urlParts[6];
     
     if (!channelId || !messageId) {
-      return interaction.editReply({ 
-        content: `❌ The message URL for this submission is invalid. Submission ID: \`${submissionId}\`\n\nMessage URL: \`${messageUrl}\`\n\nThis may be a corrupted or incomplete submission. Please contact the bot developer if this issue persists.`, 
-        ephemeral: true 
-      });
+      return {
+        ok: false,
+        error: `❌ The message URL for this submission is invalid. Submission ID: \`${submissionId}\`\n\nMessage URL: \`${messageUrl}\`\n\nThis may be a corrupted or incomplete submission. Please contact the bot developer if this issue persists.`
+      };
     }
 
     // Fetch the channel and message
-    const channel = await interaction.client.channels.fetch(channelId).catch(() => null);
+    const channel = await client.channels.fetch(channelId).catch(() => null);
     if (!channel) {
-      return interaction.editReply({ 
-        content: `❌ Could not find the channel for this submission. The channel may have been deleted. Submission ID: \`${submissionId}\``, 
-        ephemeral: true 
-      });
+      return {
+        ok: false,
+        error: `❌ Could not find the channel for this submission. The channel may have been deleted. Submission ID: \`${submissionId}\``
+      };
     }
 
     const message = await channel.messages.fetch(messageId).catch(() => null);
     if (!message) {
-      return interaction.editReply({ 
-        content: `❌ Could not find the message for this submission. The message may have been deleted. Submission ID: \`${submissionId}\``, 
-        ephemeral: true 
-      });
+      return {
+        ok: false,
+        error: `❌ Could not find the message for this submission. The message may have been deleted. Submission ID: \`${submissionId}\``
+      };
     }
   
-            if (action === 'approve') {
+    if (action === 'approve') {
         const user = await getOrCreateToken(userId);
         if (!user) {
-          return interaction.editReply({ content: `❌ User with ID \`${userId}\` not found.`, ephemeral: true });
+          return { ok: false, error: `❌ User with ID \`${userId}\` not found.` };
         }
 
         await message.react('☑️');
 
         // Update the embed footer to show approval status
-        await updateSubmissionEmbedFooter(message, 'approved', interaction.user.tag);
+        await updateSubmissionEmbedFooter(message, 'approved', moderatorTag);
 
         // Update the approval notification message in the approval channel
-        await updateApprovalNotificationMessage(interaction, submissionId, 'approved', null);
+        await updateApprovalNotificationMessage(client, moderatorTag, submissionId, 'approved', null);
 
         // Save approved submission to database
         const approvedSubmissionData = {
@@ -2131,9 +2143,9 @@ async function handleApprove(interaction) {
           isGroupMeme: submission.isGroupMeme === true,
           memeMode: submission.memeMode || null,
           memeTemplate: submission.memeTemplate || null,
-          approvedBy: interaction.user.tag,
+          approvedBy: moderatorTag,
           approvedAt: new Date(),
-          approvalMessageId: interaction.id,
+          approvalMessageId: approvalInteractionId || null,
           pendingNotificationMessageId: submission.pendingNotificationMessageId || null,
           submittedAt: submission.submittedAt || new Date()
         };
@@ -2189,7 +2201,7 @@ async function handleApprove(interaction) {
           // Send embed DM to main user
           try {
             const mainUserEmbed = createApprovalDMEmbed(submissionId, title, tokensPerPerson, true);
-            await interaction.client.users.send(userId, { embeds: [mainUserEmbed] });
+            await client.users.send(userId, { embeds: [mainUserEmbed] });
           } catch (dmError) {
             if (dmError.code === 50007) {
               console.warn(`[mod.js]: ⚠️ Cannot send DM to main user ${userId} - user has DMs disabled or blocked the bot`);
@@ -2204,7 +2216,7 @@ async function handleApprove(interaction) {
             
             try {
               const collabUserEmbed = createCollaborationApprovalDMEmbed(submissionId, title, tokensPerPerson);
-              await interaction.client.users.send(collaboratorId, { embeds: [collabUserEmbed] });
+              await client.users.send(collaboratorId, { embeds: [collabUserEmbed] });
             } catch (dmError) {
               if (dmError.code === 50007) {
                 console.warn(`[mod.js]: ⚠️ Cannot send DM to collaborator ${collaboratorId} - user has DMs disabled or blocked the bot`);
@@ -2229,7 +2241,7 @@ async function handleApprove(interaction) {
           // Send embed DM to user
           try {
             const userEmbed = createApprovalDMEmbed(submissionId, title, tokensPerPerson, false);
-            await interaction.client.users.send(userId, { embeds: [userEmbed] });
+            await client.users.send(userId, { embeds: [userEmbed] });
           } catch (dmError) {
             if (dmError.code === 50007) {
               console.warn(`[mod.js]: ⚠️ Cannot send DM to user ${userId} - user has DMs disabled or blocked the bot`);
@@ -2253,12 +2265,12 @@ async function handleApprove(interaction) {
           try {
             // Update submission data with message URL and approval info
             submission.messageUrl = messageUrl;
-            submission.approvedBy = interaction.user.tag;
+            submission.approvedBy = moderatorTag;
             submission.approvedSubmissionData = true; // Flag to skip approval check
             
             // Try Help Wanted Quest completion first
             const { checkAndCompleteQuestFromSubmission } = require('../../modules/helpWantedModule');
-            await checkAndCompleteQuestFromSubmission(submission, interaction.client);
+            await checkAndCompleteQuestFromSubmission(submission, client);
             
             // Check if this is an HWQ (starts with "X") - if so, skip main Quest system processing
             const isHWQ = submission.questEvent.startsWith('X');
@@ -2350,26 +2362,28 @@ async function handleApprove(interaction) {
           warningMessage = `⚠️ **Note:** Submission approved, but there were issues updating token balances for: ${tokenErrors.join(', ')}. Please try again or contact an admin if it persists.`;
         }
         
-        return interaction.editReply({ 
-          content: warningMessage,
-          embeds: [modConfirmationEmbed], 
-          ephemeral: true 
-        });
+        return {
+          ok: true,
+          reply: {
+            content: warningMessage,
+            embeds: [modConfirmationEmbed]
+          }
+        };
       }
   
       if (action === 'deny') {
         await message.react('❌');
   
         // Update the embed footer to show denial status
-        await updateSubmissionEmbedFooter(message, 'denied', interaction.user.tag, reason);
+        await updateSubmissionEmbedFooter(message, 'denied', moderatorTag, reasonOrNull);
 
         // Update the approval notification message in the approval channel
-        await updateApprovalNotificationMessage(interaction, submissionId, 'denied', reason);
+        await updateApprovalNotificationMessage(client, moderatorTag, submissionId, 'denied', reasonOrNull);
   
                 // Send embed DM to user for denial
         try {
-          const denialEmbed = createDenialDMEmbed(submissionId, title, reason);
-          await interaction.client.users.send(userId, { embeds: [denialEmbed] });
+          const denialEmbed = createDenialDMEmbed(submissionId, title, reasonOrNull);
+          await client.users.send(userId, { embeds: [denialEmbed] });
         } catch (dmError) {
           if (dmError.code === 50007) {
             console.warn(`[mod.js]: ⚠️ Cannot send denial DM to user ${userId} - user has DMs disabled or blocked the bot`);
@@ -2381,19 +2395,41 @@ async function handleApprove(interaction) {
         await deleteSubmissionFromStorage(submissionId);
         
         // Create improved mod denial confirmation message
-        const modDenialEmbed = createModDenialConfirmationEmbed(submissionId, title, userId, reason);
-        return interaction.editReply({ embeds: [modDenialEmbed], ephemeral: true });
+        const modDenialEmbed = createModDenialConfirmationEmbed(submissionId, title, userId, reasonOrNull);
+        return { ok: true, reply: { embeds: [modDenialEmbed] } };
       }
   
-      return interaction.editReply({ content: '❌ Invalid action specified. Use `approve` or `deny`.', ephemeral: true });
+      return { ok: false, error: '❌ Invalid action specified. Use `approve` or `deny`.' };
     } catch (error) {
       handleInteractionError(error, 'mod.js');
       console.error('[mod.js]: Error during approve/deny logic', error);
-      return interaction.editReply({ content: '⚠️ An error occurred while processing the submission.', ephemeral: true });
+      return { ok: false, error: '⚠️ An error occurred while processing the submission.' };
     }
-  }
+}
 
-  // ------------------- Function: handleApproveEdit -------------------
+// ------------------- Function: handleApprove -------------------
+// Slash command wrapper for runSubmissionApproval.
+async function handleApprove(interaction) {
+  const submissionId = interaction.options.getString('submission_id');
+  const action = interaction.options.getString('action');
+  const reason = interaction.options.getString('reason') || null;
+
+  const result = await runSubmissionApproval(interaction.client, {
+    submissionId,
+    action,
+    reason,
+    moderatorTag: interaction.user.tag,
+    moderatorId: interaction.user.id,
+    approvalInteractionId: interaction.id
+  });
+
+  if (!result.ok) {
+    return interaction.editReply({ content: result.error, ephemeral: true });
+  }
+  return interaction.editReply({ ...result.reply, ephemeral: true });
+}
+
+// ------------------- Function: handleApproveEdit -------------------
 async function handleApproveEdit(interaction) {
   try {
     let requestId = sanitizeRequestId(interaction.options.getString('requestid'));
@@ -6472,5 +6508,6 @@ async function handleLevel(interaction) {
 
 module.exports = {
   data: modCommand,
-  execute
+  execute,
+  runSubmissionApproval
 };

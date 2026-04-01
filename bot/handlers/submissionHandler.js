@@ -544,10 +544,12 @@ async function handleSubmissionCompletion(interaction) {
           });
         }
 
+        const dashboardArtSubmissionsUrl = `${(process.env.DASHBOARD_URL || process.env.APP_URL || 'https://tinglebot.xyz').replace(/\/$/, '')}/admin/art-submissions`;
+
         const notificationEmbed = new EmbedBuilder()
           .setColor(typeColor)
           .setTitle(`${typeEmoji} PENDING ${submissionType} SUBMISSION!`)
-          .setDescription('⏳ **Please approve within 24 hours!**')
+          .setDescription(`⏳ **Please approve within 24 hours!**\n\n✅ Approve or deny on the [dashboard](${dashboardArtSubmissionsUrl}).`)
           .addFields(notificationFields)
           .setImage('https://storage.googleapis.com/tinglebot/Graphics/border.png')
           .setFooter({ text: `${submissionType} Submission Approval Required` })

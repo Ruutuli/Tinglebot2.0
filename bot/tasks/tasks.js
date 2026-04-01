@@ -1035,7 +1035,7 @@ async function monthlyNitroBoostRewards(client, _data = {}) {
     // Get all members with nitro boost
     const members = await guild.members.fetch();
     const boosters = members.filter(member => member.premiumSince !== null);
-    const boosterUsernames = [...boosters.values()].map(m => m.user?.username || 'Unknown').filter(Boolean);
+    const boosterIds = [...boosters.values()].map(m => m.user?.id).filter(Boolean);
     
     const currentMonth = new Date().toISOString().slice(0, 7); // YYYY-MM
     
@@ -1105,8 +1105,7 @@ async function monthlyNitroBoostRewards(client, _data = {}) {
     if (communityBoardChannel) {
       const descriptionParts = rewardedCount > 0
         ? [
-            `Thank you to our **${boosters.size}** server booster${boosters.size !== 1 ? 's' : ''}! Each has received **1000 tokens** for boosting this month.`,
-            boosterUsernames.length ? '\n\n' + boosterUsernames.map(u => `• ${u}`).join('\n') : ''
+            `Thank you to our **${boosters.size}** server booster${boosters.size !== 1 ? 's' : ''}! Each has received **1000 tokens** for boosting this month.`
           ]
         : ['No new boost rewards were distributed this month. Thank you to everyone who boosts the server!'];
       const embed = new EmbedBuilder()
@@ -1114,7 +1113,17 @@ async function monthlyNitroBoostRewards(client, _data = {}) {
         .setTitle('💜 Monthly Nitro Boost Rewards')
         .setDescription(descriptionParts.join(''))
         .setTimestamp();
-      await communityBoardChannel.send({ embeds: [embed] }).catch(err => {
+      const boosterMentionLine =
+        rewardedCount > 0 && boosterIds.length > 0
+          ? boosterIds.map(id => `<@${id}>`).join(' ')
+          : null;
+      await communityBoardChannel.send({
+        ...(boosterMentionLine && {
+          content: boosterMentionLine,
+          allowedMentions: { users: boosterIds }
+        }),
+        embeds: [embed]
+      }).catch(err => {
         logger.error('SCHEDULED', `monthly-nitro-boost-rewards: Failed to post to community board: ${err.message}`);
       });
     } else {

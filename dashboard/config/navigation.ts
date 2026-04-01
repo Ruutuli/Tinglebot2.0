@@ -63,6 +63,7 @@ export const navItems: NavItem[] = [
     icon: "fa-shield-halved",
     children: [
       { href: "/characters/moderation", label: "Approvals", icon: "fa-check-circle" },
+      { href: "/admin/art-submissions", label: "Art submissions", icon: "fa-palette" },
       { href: "/admin/todo", label: "Todo List", icon: "fa-list-check" },
       { href: "/admin/database", label: "Database Editor", icon: "fa-database" },
       { href: "/admin/quests", label: "Quests", icon: "fa-scroll" },

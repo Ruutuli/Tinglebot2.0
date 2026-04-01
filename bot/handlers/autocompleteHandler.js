@@ -870,7 +870,7 @@ async function handleAutocompleteInternal(interaction, commandName, focusedOptio
               const questSubcommand = interaction.options.getSubcommand();
               if (questSubcommand === "join") {
                 if (focusedOption.name === "questid") {
-                  await handleQuestIdAutocomplete(interaction, focusedOption);
+                  await handleQuestIdAutocomplete(interaction, focusedOption, { joinOnly: true });
                 } else if (focusedOption.name === "charactername") {
                   await handleCharacterBasedCommandsAutocomplete(interaction, focusedOption, "quest");
                 }
@@ -4360,19 +4360,64 @@ async function handleGearAutocomplete(interaction, focusedOption) {
 }
 
 // ------------------- Quest ID Autocomplete -------------------
-async function handleQuestIdAutocomplete(interaction, focusedOption) {
+// Aligns /quest join questid suggestions with quest.js validateQuest (signup window + current-or-future quest month).
+const QUEST_AUTOCOMPLETE_MONTH_NAMES = [
+  'January', 'February', 'March', 'April', 'May', 'June',
+  'July', 'August', 'September', 'October', 'November', 'December'
+];
+
+function getCurrentQuestMonthYYYYMM_Eastern() {
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'America/New_York',
+    year: 'numeric',
+    month: '2-digit'
+  }).formatToParts(new Date());
+  const y = parts.find((p) => p.type === 'year').value;
+  const m = parts.find((p) => p.type === 'month').value;
+  return `${y}-${m}`;
+}
+
+function normalizeQuestDateToYYYYMM(dateStr) {
+  const s = (dateStr ?? '').trim();
+  if (/^\d{4}-\d{2}$/.test(s)) return s;
+  const monthIdx = QUEST_AUTOCOMPLETE_MONTH_NAMES.findIndex((mn) => s.startsWith(mn));
+  if (monthIdx < 0) return null;
+  const rest = s.slice(QUEST_AUTOCOMPLETE_MONTH_NAMES[monthIdx].length).trim();
+  const yearMatch = rest.match(/^\d{4}$/);
+  if (yearMatch) return `${yearMatch[0]}-${String(monthIdx + 1).padStart(2, '0')}`;
+  return null;
+}
+
+function shouldShowQuestInJoinAutocomplete(quest, questCommand) {
+  const now = new Date();
+  if (quest.signupDeadline) {
+    const deadline = questCommand.parseDeadlineEST(quest.signupDeadline);
+    if (!deadline || now > deadline) return false;
+  }
+  const ym = normalizeQuestDateToYYYYMM(quest.date);
+  if (ym && /^\d{4}-\d{2}$/.test(ym)) {
+    const current = getCurrentQuestMonthYYYYMM_Eastern();
+    if (ym < current) return false;
+  }
+  return true;
+}
+
+async function handleQuestIdAutocomplete(interaction, focusedOption, options = {}) {
+  const { joinOnly = false } = options;
   try {
-      // Fetch active quests from the database
-      const quests = await Quest.find({ status: 'active' }).lean();
-      
-      // Format quest choices for autocomplete
+      let quests = await Quest.find({ status: 'active' }).lean();
+
+      if (joinOnly) {
+        const questCommand = require('@/commands/world/quest.js');
+        quests = quests.filter((q) => shouldShowQuestInJoinAutocomplete(q, questCommand));
+      }
+
       const choices = quests.map(quest => ({
           name: `${quest.questID} - ${quest.title} (${quest.location})`,
           value: quest.questID
       }));
-      
-      // Respond with filtered quest choices
-                await respondWithFilteredChoices(interaction, focusedOption, choices);
+
+      await respondWithFilteredChoices(interaction, focusedOption, choices);
   } catch (error) {
       handleError(error, "autocompleteHandler.js");
       console.error("[autocompleteHandler.js]❌ Error in handleQuestIdAutocomplete:", error);
