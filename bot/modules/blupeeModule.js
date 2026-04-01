@@ -15,6 +15,8 @@ const logger = require('@/utils/logger');
 const { handleInteractionError } = require('@/utils/globalErrorHandler');
 
 const BLUPEE_TABLE_NAME = 'blupee';
+/** Interactive Blupee season quests are recognized by title (not quest table-roll metadata). */
+const BLUPEE_QUEST_TITLE_RE = /\bblupee\b/i;
 const TEST_CHANNEL_ID = '1391812848099004578';
 const SYSTEM_CREATOR = 'blupee-system';
 const BLUPEE_CATCH_TOKEN_REWARD = 25;
@@ -576,18 +578,25 @@ function buildBlupeeRollLine(rollResult, outcome = null, ticketOverride = null) 
 }
 
 /**
- * Active Interactive quest using the Blupee table, with this user as an active participant.
- * Mirrors tableroll quest lookup (status active, tableRollName blupee).
+ * Blupee season quests: active Interactive quests whose title includes “Blupee”.
+ * Catching uses `/minigame blupee` only; no `/tableroll` or quest `tableRollName` is involved in eligibility.
+ */
+function isBlupeeHuntInteractiveQuest(quest) {
+  return BLUPEE_QUEST_TITLE_RE.test(String(quest?.title ?? ''));
+}
+
+/**
+ * Active Interactive Blupee (title-matched) quest with this user as an active participant.
  */
 async function findActiveBlupeeQuestParticipation(userId) {
   try {
     const quests = await Quest.find({
       status: 'active',
       questType: 'Interactive',
-      tableRollName: BLUPEE_TABLE_NAME,
       [`participants.${userId}`]: { $exists: true }
     });
     for (const quest of quests) {
+      if (!isBlupeeHuntInteractiveQuest(quest)) continue;
       const participant = quest.participants.get(userId);
       if (participant && participant.progress === 'active') {
         return { quest, participant };
@@ -631,11 +640,39 @@ async function rollBlupee(interaction, character, requestedSessionId) {
   if (!isTestContextIds(channelId, parentId)) {
     const questCtx = await findActiveBlupeeQuestParticipation(userId);
     if (!questCtx) {
-      return interaction.editReply({
-        content:
-          '❌ You must **join the Blupee quest** on the quest board before you can try to catch Blupees.\n\n' +
-          'Use `/quest join` with this event’s quest ID and your character name (the Interactive quest that uses the Blupee hunt).'
-      });
+      const joinQuestEmbed = new EmbedBuilder()
+        .setColor(0xff4d4f)
+        .setTitle('❌ Join the Blupee Quest First')
+        .setDescription(
+          'Town-hall Blupee catches require an **active** **Interactive** quest on the board whose title includes **Blupee** ' +
+          '(e.g. “One Blupee, Two Blupee”). Use **`/minigame blupee`** to catch — not `/tableroll`.\n\n' +
+          'We could not find a matching quest participation for your account.'
+        )
+        .addFields(
+          {
+            name: '1 · Find the quest',
+            value:
+              'On the **quest board**, join this event’s **Interactive** quest — the listing whose **title includes Blupee**.',
+            inline: false
+          },
+          {
+            name: '2 · Enroll with `/quest join`',
+            value:
+              'Run **`/quest join`** and provide:\n' +
+              '• **Quest ID** — copy the ID from the board entry for this event’s Blupee quest\n' +
+              '• **Character name** — the character you will use with `/minigame blupee` (must match when you catch)',
+            inline: false
+          },
+          {
+            name: '3 · Try again here',
+            value:
+              'Once the quest shows you as **active**, return to this town hall (or the correct channel) and use `/minigame blupee` with the session ID from the spawn message.',
+            inline: false
+          }
+        )
+        .setTimestamp()
+        .setFooter({ text: 'Blupee' });
+      return interaction.editReply({ embeds: [joinQuestEmbed] });
     }
     const qChar = String(questCtx.participant.characterName || '').trim().toLowerCase();
     const rollChar = String(actorLabel || '').trim().toLowerCase();
@@ -932,8 +969,8 @@ const BLUPEE_THREAD_RETRY_DELAY_MS = 500;
  * Creates a public thread on the spawn message. Retries startThread, then falls back to channel.threads.create.
  * Returns null only if every path fails (caller should clean up the spawn message).
  */
-async function createBlupeeSessionThread(channel, msg, sessionId, villageName) {
-  const threadName = `Blupee ${villageName || '—'} (${sessionId})`.slice(0, BLUPEE_THREAD_NAME_MAX);
+async function createBlupeeSessionThread(channel, msg, sessionId) {
+  const threadName = `🐰 | Blupee ${sessionId}`.slice(0, BLUPEE_THREAD_NAME_MAX);
   const baseOpts = {
     name: threadName,
     autoArchiveDuration: 60,
@@ -991,7 +1028,7 @@ async function postBlupeeSpawn(channel, options = {}) {
     .setTimestamp();
 
   const msg = await channel.send({ embeds: [embed] });
-  const thread = await createBlupeeSessionThread(channel, msg, sessionId, villageName);
+  const thread = await createBlupeeSessionThread(channel, msg, sessionId);
 
   if (!thread?.id) {
     await msg.delete().catch(() => {});
