@@ -1,6 +1,9 @@
 // ============================================================================
 // PATCH /api/admin/quests/[id]/participants - Mark participants completed and reward (admin only)
 // Body: { userIds: string[] } - Discord IDs to mark as completed and reward
+//
+// PUT /api/admin/quests/[id]/participants - Set one participant's progress only (no token payout)
+// Body: { userId: string, progress: "active" | "completed" | "failed" | "rewarded" | "disqualified" }
 // ============================================================================
 
 import { NextRequest, NextResponse } from "next/server";
@@ -10,12 +13,143 @@ import { postQuestModCompletionAnnouncement } from "@/lib/discord";
 import { getSession, isAdminUser } from "@/lib/session";
 import { logger } from "@/utils/logger";
 
+const PARTICIPANT_PROGRESS = [
+  "active",
+  "completed",
+  "failed",
+  "rewarded",
+  "disqualified",
+] as const;
+
 function normalizeDiscordId(raw: unknown): string {
   const s = String(raw ?? "").trim();
   if (!s) return "";
   const unwrapped = s.replace(/[<@!>]/g, "").trim();
   const digitsOnly = unwrapped.replace(/\D/g, "");
   return digitsOnly.length >= 16 ? digitsOnly : unwrapped;
+}
+
+// ----------------------------------------------------------------------------
+// PUT - Set participant progress (staff correction; does not mint tokens)
+// ----------------------------------------------------------------------------
+export async function PUT(
+  req: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  try {
+    const session = await getSession();
+    const user = session.user ?? null;
+    if (!user?.id) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+    const admin = await isAdminUser(user.id);
+    if (!admin) {
+      return NextResponse.json(
+        { error: "Forbidden", message: "Admin access required" },
+        { status: 403 }
+      );
+    }
+
+    const { id } = await params;
+    if (!id || !mongoose.Types.ObjectId.isValid(id)) {
+      return NextResponse.json({ error: "Invalid quest id" }, { status: 400 });
+    }
+
+    let body: { userId?: unknown; progress?: unknown };
+    try {
+      body = await req.json();
+    } catch {
+      return NextResponse.json(
+        { error: "Invalid JSON body" },
+        { status: 400 }
+      );
+    }
+
+    const userIdRaw = typeof body.userId === "string" ? body.userId.trim() : "";
+    const progressRaw = typeof body.progress === "string" ? body.progress.trim() : "";
+    if (!userIdRaw || !progressRaw) {
+      return NextResponse.json(
+        { error: "userId and progress are required" },
+        { status: 400 }
+      );
+    }
+    if (!PARTICIPANT_PROGRESS.includes(progressRaw as (typeof PARTICIPANT_PROGRESS)[number])) {
+      return NextResponse.json(
+        {
+          error: "Invalid progress",
+          message: `progress must be one of: ${PARTICIPANT_PROGRESS.join(", ")}`,
+        },
+        { status: 400 }
+      );
+    }
+
+    await connect();
+    const Quest = (await import("@/models/QuestModel.js")).default;
+
+    const quest = await Quest.findById(id);
+    if (!quest) {
+      return NextResponse.json({ error: "Quest not found" }, { status: 404 });
+    }
+
+    const participants = quest.participants;
+    if (!participants || typeof participants.get !== "function") {
+      return NextResponse.json(
+        { error: "Quest has no participants map" },
+        { status: 500 }
+      );
+    }
+
+    const key = userIdRaw;
+    const participant =
+      participants.get(key) ?? participants.get(normalizeDiscordId(key));
+    if (!participant) {
+      return NextResponse.json(
+        { error: "Participant not found on this quest" },
+        { status: 404 }
+      );
+    }
+
+    const now = new Date();
+    participant.progress = progressRaw;
+    participant.updatedAt = now;
+
+    if (progressRaw === "active" || progressRaw === "failed") {
+      participant.completedAt = null;
+      participant.rewardedAt = null;
+      participant.disqualifiedAt = null;
+      participant.disqualificationReason = null;
+    } else if (progressRaw === "completed") {
+      if (!participant.completedAt) participant.completedAt = now;
+      participant.disqualifiedAt = null;
+      participant.disqualificationReason = null;
+    } else if (progressRaw === "rewarded") {
+      if (!participant.rewardedAt) participant.rewardedAt = now;
+      participant.disqualifiedAt = null;
+      participant.disqualificationReason = null;
+    } else if (progressRaw === "disqualified") {
+      if (!participant.disqualifiedAt) participant.disqualifiedAt = now;
+      if (participant.disqualificationReason == null || participant.disqualificationReason === "") {
+        participant.disqualificationReason = "dashboard";
+      }
+    }
+
+    await quest.save();
+
+    return NextResponse.json({
+      ok: true,
+      userId: String(participant.userId ?? key),
+      progress: progressRaw,
+    });
+  } catch (e) {
+    logger.error(
+      "api/admin/quests/[id]/participants PUT",
+      e instanceof Error ? e.message : String(e)
+    );
+    return NextResponse.json(
+      { error: "Failed to update participant progress" },
+      { status: 500 }
+    );
+  }
 }
 
 // ----------------------------------------------------------------------------

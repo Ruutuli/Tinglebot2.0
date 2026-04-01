@@ -98,6 +98,50 @@ function getParticipantUserIds(quest: Record<string, unknown>): string[] {
   return [];
 }
 
+function normalizeDiscordId(raw: unknown): string {
+  const s = String(raw ?? "").trim();
+  if (!s) return "";
+  const unwrapped = s.replace(/[<@!>]/g, "").trim();
+  const digitsOnly = unwrapped.replace(/\D/g, "");
+  return digitsOnly.length >= 16 ? digitsOnly : unwrapped;
+}
+
+/** Attach Discord username from User collection for admin participant management UI. */
+async function enrichParticipantsWithUsernames(quest: Record<string, unknown>): Promise<void> {
+  const participants = quest.participants;
+  if (!participants || typeof participants !== "object" || participants === null) return;
+  const map = participants as Record<string, Record<string, unknown>>;
+  const ids = new Set<string>();
+  for (const [key, p] of Object.entries(map)) {
+    if (!p || typeof p !== "object") continue;
+    const id = normalizeDiscordId(p.userId ?? key);
+    if (id) ids.add(id);
+  }
+  if (ids.size === 0) return;
+
+  const User = (await import("@/models/UserModel.js")).default;
+  const users = await User.find({ discordId: { $in: Array.from(ids) } })
+    .select({ discordId: 1, username: 1 })
+    .lean()
+    .exec();
+
+  const byId = new Map<string, string>();
+  for (const u of users) {
+    const rec = u as { discordId?: string; username?: string };
+    if (rec.discordId) {
+      const un = String(rec.username ?? "").trim();
+      byId.set(String(rec.discordId), un);
+    }
+  }
+
+  for (const [key, p] of Object.entries(map)) {
+    if (!p || typeof p !== "object") continue;
+    const id = normalizeDiscordId(p.userId ?? key);
+    const un = id ? byId.get(id) : undefined;
+    p.username = un && un.length > 0 ? un : null;
+  }
+}
+
 // ----------------------------------------------------------------------------
 // GET - Get one quest by _id
 // ----------------------------------------------------------------------------
@@ -132,6 +176,7 @@ export async function GET(
     }
 
     const converted = convertParticipantsMapToObject(quest as Record<string, unknown>);
+    await enrichParticipantsWithUsernames(converted);
     return NextResponse.json(converted);
   } catch (e) {
     logger.error("api/admin/quests/[id] GET", e instanceof Error ? e.message : String(e));

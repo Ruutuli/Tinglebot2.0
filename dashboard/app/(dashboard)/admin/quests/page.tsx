@@ -1,7 +1,9 @@
 "use client";
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import ReactMarkdown from "react-markdown";
+import { TOP_BAR_HEIGHT } from "@/components/layout/top-bar";
 import { useSession } from "@/hooks/use-session";
 import { Loading, Tabs } from "@/components/ui";
 
@@ -108,6 +110,28 @@ function statusDisplay(s: string | undefined): string {
   if (!s) return "—";
   const o = STATUS_OPTIONS.find((x) => x.value === s);
   return o ? o.label : s;
+}
+
+const PARTICIPANT_PROGRESS_VALUES = ["active", "completed", "failed", "rewarded", "disqualified"] as const;
+
+/** Row background tint in the manage-participants table (scannable at a glance). */
+function participantProgressRowClass(progress: string): string {
+  const base =
+    "border-b border-[var(--totk-dark-ocher)]/30 last:border-b-0 transition-colors";
+  switch (progress) {
+    case "active":
+      return `${base} bg-cyan-500/10`;
+    case "completed":
+      return `${base} bg-amber-500/12`;
+    case "failed":
+      return `${base} bg-red-500/12`;
+    case "rewarded":
+      return `${base} bg-emerald-500/12`;
+    case "disqualified":
+      return `${base} bg-violet-500/12`;
+    default:
+      return `${base} bg-[var(--botw-black)]/20`;
+  }
 }
 
 const LOCATION_PRESETS = ["Rudania", "Inariko", "Vhintl", "ALL"] as const;
@@ -223,7 +247,7 @@ type QuestRecord = {
   itemRewardQty?: number;
   tableRollName?: string;
   requiredRolls?: number;
-  participants?: Record<string, { userId?: string; characterName?: string; progress?: string; completedAt?: string; rewardedAt?: string; tokensEarned?: number; rpPostCount?: number }>;
+  participants?: Record<string, { userId?: string; username?: string | null; characterName?: string; progress?: string; completedAt?: string; rewardedAt?: string; tokensEarned?: number; rpPostCount?: number }>;
   participantCap?: number | null;
   createdByUserId?: string | null;
   createdByUsername?: string | null;
@@ -851,6 +875,7 @@ export default function AdminQuestsPage() {
   const [manageParticipantsError, setManageParticipantsError] = useState<string | null>(null);
   const [manageParticipantsSuccess, setManageParticipantsSuccess] = useState<string | null>(null);
   const [selectedParticipantIds, setSelectedParticipantIds] = useState<string[]>([]);
+  const [participantProgressSavingId, setParticipantProgressSavingId] = useState<string | null>(null);
   const [completingQuestId, setCompletingQuestId] = useState<string | null>(null);
   const [completeConfirmQuestId, setCompleteConfirmQuestId] = useState<string | null>(null);
   const [viewQuestId, setViewQuestId] = useState<string | null>(null);
@@ -862,6 +887,10 @@ export default function AdminQuestsPage() {
   const [viewPreviewPosting, setViewPreviewPosting] = useState(false);
   const [tablerollNames, setTablerollNames] = useState<string[]>([]);
   const [sortDateOrder, setSortDateOrder] = useState<"newest" | "oldest">("newest");
+  const [manageModalMounted, setManageModalMounted] = useState(false);
+  useEffect(() => {
+    setManageModalMounted(true);
+  }, []);
 
   const sortedQuests = useMemo(() => {
     const key = (q: QuestRecord) => getQuestSortKey(q) + (q.createdAt ?? "");
@@ -973,6 +1002,7 @@ export default function AdminQuestsPage() {
     setManageParticipantsError(null);
     setManageParticipantsSuccess(null);
     setSelectedParticipantIds([]);
+    setParticipantProgressSavingId(null);
     try {
       const res = await fetch(`/api/admin/quests/${id}`);
       if (!res.ok) throw new Error("Failed to load quest");
@@ -990,6 +1020,7 @@ export default function AdminQuestsPage() {
     setManageParticipantsSuccess(null);
     setSelectedParticipantIds([]);
     setSyncRewardProgressLoading(false);
+    setParticipantProgressSavingId(null);
   }, []);
 
   const openViewModal = useCallback(async (id: string) => {
@@ -1131,6 +1162,38 @@ export default function AdminQuestsPage() {
       setManageParticipantsSaving(false);
     }
   }, [manageQuestId, selectedParticipantIds, fetchQuests]);
+
+  const updateParticipantProgress = useCallback(
+    async (userId: string, progress: string) => {
+      if (!manageQuestId) return;
+      setParticipantProgressSavingId(userId);
+      setManageParticipantsError(null);
+      setManageParticipantsSuccess(null);
+      try {
+        const res = await fetch(`/api/admin/quests/${manageQuestId}/participants`, {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ userId, progress }),
+        });
+        const data = (await res.json()) as { error?: string; message?: string };
+        if (!res.ok) {
+          throw new Error(data.message ?? data.error ?? "Failed to update status");
+        }
+        setManageParticipantsSuccess("Participant status saved.");
+        const refetchRes = await fetch(`/api/admin/quests/${manageQuestId}`);
+        if (refetchRes.ok) {
+          const q = (await refetchRes.json()) as QuestRecord;
+          setManageQuest(q);
+        }
+        await fetchQuests();
+      } catch (e) {
+        setManageParticipantsError(e instanceof Error ? e.message : String(e));
+      } finally {
+        setParticipantProgressSavingId(null);
+      }
+    },
+    [manageQuestId, fetchQuests]
+  );
 
   const syncRewardProgressFromQuest = useCallback(async () => {
     if (!manageQuestId) return;
@@ -1327,71 +1390,6 @@ export default function AdminQuestsPage() {
           </div>
         )}
 
-        <details className="mb-6 rounded-lg border border-[var(--totk-dark-ocher)]/50 bg-[var(--botw-black)]/30 px-4 py-3 text-sm text-[var(--totk-grey-200)]">
-          <summary className="cursor-pointer select-none font-semibold text-[var(--totk-ivory)]">
-            Status guide (quest list &amp; participants)
-          </summary>
-          <div className="mt-3 space-y-4 border-t border-[var(--totk-dark-ocher)]/40 pt-3">
-            <div>
-              <h4 className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-[var(--totk-grey-200)]">
-                Quest list — Status
-              </h4>
-              <ul className="list-inside list-disc space-y-1 pl-1">
-                <li>
-                  <span className="text-[var(--totk-ivory)]">Draft</span> — Not published yet; safe to edit before players see it.
-                </li>
-                <li>
-                  <span className="text-[var(--totk-ivory)]">Pending</span> — Waiting to go live or scheduled; not treated as an active run yet.
-                </li>
-                <li>
-                  <span className="text-[var(--totk-ivory)]">Active</span> — The quest is open; participants can sign up and progress.
-                </li>
-                <li>
-                  <span className="text-[var(--totk-ivory)]">Complete</span> — The quest run is closed out on the dashboard (period ended or staff marked done). Participant rows may still show rewards in progress.
-                </li>
-              </ul>
-            </div>
-            <div>
-              <h4 className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-[var(--totk-grey-200)]">
-                Quest list — Posted
-              </h4>
-              <ul className="list-inside list-disc space-y-1 pl-1">
-                <li>
-                  <span className="text-[var(--totk-ivory)]">Yes</span> — The bot posted this quest to the Discord quest board.
-                </li>
-                <li>
-                  <span className="text-[var(--totk-ivory)]">No</span> — Not announced there yet (quest can still be draft/pending/active in the dashboard).
-                </li>
-              </ul>
-            </div>
-            <div>
-              <h4 className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-[var(--totk-grey-200)]">
-                Manage participants — Status
-              </h4>
-              <p className="mb-2 text-xs text-[var(--totk-grey-200)]">
-                These come from the bot&apos;s participant <code className="rounded bg-[var(--botw-warm-black)] px-1 font-mono text-[var(--totk-ivory)]">progress</code> field. Token amounts are mirrored from payouts when recorded.
-              </p>
-              <ul className="list-inside list-disc space-y-1 pl-1">
-                <li>
-                  <span className="text-[var(--totk-ivory)]">active</span> — Still in the quest; requirements not finished (or not synced yet).
-                </li>
-                <li>
-                  <span className="text-[var(--totk-ivory)]">completed</span> — Requirements met. If <strong>Tokens</strong> is still empty, the bot may not have written <code className="rounded bg-[var(--botw-warm-black)] px-1 font-mono text-[11px]">tokensEarned</code> yet, or tokens were paid only in Sheikah (submission). Use <strong>Sync reward status</strong> to align the row without paying again.
-                </li>
-                <li>
-                  <span className="text-[var(--totk-ivory)]">rewarded</span> — Stored as rewarded, <em>or</em> the dashboard shows this when progress is <code className="rounded bg-[var(--botw-warm-black)] px-1 font-mono text-[11px]">completed</code> but <strong>Tokens</strong> is already set (paid / recorded).
-                </li>
-                <li>
-                  <span className="text-[var(--totk-ivory)]">failed</span> — Did not complete (e.g. time ran out or they dropped).
-                </li>
-                <li>
-                  <span className="text-[var(--totk-ivory)]">disqualified</span> — Removed for breaking rules or location requirements.
-                </li>
-              </ul>
-            </div>
-          </div>
-        </details>
-
         <div className="mb-6">
           <Tabs<QuestTab>
             tabs={QUEST_TABS}
@@ -1433,9 +1431,9 @@ export default function AdminQuestsPage() {
                   </p>
                   <form onSubmit={handleSubmit} className="admin-quests-form space-y-6 min-w-0">
                     {/* Basics */}
-                    <fieldset className="rounded-lg border border-[var(--totk-dark-ocher)]/60 p-4 space-y-4">
+                    <fieldset className="rounded-lg border border-[var(--totk-dark-ocher)]/55 bg-[var(--totk-dark-ocher)]/[0.22] p-4 shadow-[inset_0_0_0_1px_rgba(0,0,0,0.25)] space-y-3">
                       <legend className="text-sm font-semibold text-[var(--totk-ivory)] px-1">Basics</legend>
-                      <div className="grid gap-4 sm:grid-cols-2">
+                      <div className="grid gap-3 sm:grid-cols-2 sm:gap-4">
                         <div className="sm:col-span-2">
                           <label className="mb-1 block text-sm font-medium text-[var(--totk-grey-200)]">Title *</label>
                           <input type="text" value={form.title} onChange={(e) => setField("title", e.target.value)} className="w-full rounded border border-[var(--totk-dark-ocher)] bg-[var(--botw-warm-black)] px-3 py-2 text-[var(--totk-ivory)]" required />
@@ -1479,6 +1477,16 @@ export default function AdminQuestsPage() {
                           {form.timeLimit === "Custom" && (
                             <input type="text" value={form.timeLimitCustom} onChange={(e) => setField("timeLimitCustom", e.target.value)} placeholder="e.g. 3 weeks" className="mt-2 w-full rounded border border-[var(--totk-dark-ocher)] bg-[var(--botw-warm-black)] px-3 py-2 text-[var(--totk-ivory)]" />
                           )}
+                          <details className="mt-2 rounded-md border border-[var(--totk-mid-ocher)]/45 bg-[var(--botw-warm-black)]/55 px-2.5 py-1.5 text-[11px] leading-snug text-[var(--totk-grey-200)] shadow-sm">
+                            <summary className="cursor-pointer select-none font-medium text-[var(--totk-ivory)] hover:text-[var(--totk-mid-ocher)]">
+                              Run length, US Eastern &amp; failures
+                            </summary>
+                            <p className="mt-2 border-t border-[var(--totk-dark-ocher)]/25 pt-2">
+                              With <strong className="text-[var(--totk-ivory)]">Month &amp; Year</strong>, this sets how long the quest period runs. End-of-run times use{" "}
+                              <strong className="text-[var(--totk-ivory)]">US Eastern</strong>. After the run closes, players who haven&apos;t finished may be marked{" "}
+                              <code className="rounded bg-[var(--botw-black)]/80 px-1 font-mono text-[10px] text-[var(--totk-ivory)]">failed</code>.
+                            </p>
+                          </details>
                           <div className="mt-3">
                             <label className="mb-1 block text-sm font-medium text-[var(--totk-grey-200)]">End date (optional)</label>
                             <input
@@ -1487,12 +1495,12 @@ export default function AdminQuestsPage() {
                               onChange={(e) => setField("timeLimitEndDate", e.target.value)}
                               className="w-full rounded border border-[var(--totk-dark-ocher)] bg-[var(--botw-warm-black)] px-3 py-2 text-[var(--totk-ivory)] quest-date-input"
                             />
-                            <p className="mt-1 text-xs text-[var(--totk-grey-200)]">
-                              When set, the quest ends at <strong className="text-[var(--totk-ivory)]">11:59 PM US Eastern</strong> on that calendar day. This overrides duration-based end times for automated completion.
+                            <p className="mt-1 text-[11px] leading-snug text-[var(--totk-grey-200)]">
+                              If set: ends <strong className="text-[var(--totk-ivory)]">11:59 PM US Eastern</strong> that day and overrides duration-based auto-completion.
                             </p>
                           </div>
                           {form.timeLimitEndDate.trim() && /^\d{4}-\d{2}-\d{2}$/.test(form.timeLimitEndDate.trim()) && (
-                            <p className="mt-1.5 text-xs text-[var(--totk-mid-ocher)]">
+                            <p className="mt-1.5 text-[11px] text-[var(--totk-mid-ocher)]">
                               Effective end: {formatEndDateFromYyyyMmDd(form.timeLimitEndDate.trim())} US Eastern
                             </p>
                           )}
@@ -1500,8 +1508,8 @@ export default function AdminQuestsPage() {
                             const endDate = getEndDateFromDuration(form.date, form.timeLimit);
                             if (!endDate) return null;
                             return (
-                              <p className="mt-1.5 text-xs text-[var(--totk-grey-200)]">
-                                {form.timeLimit} | Ends on {formatEndDate(endDate)} (estimate; use End date above for an exact day)
+                              <p className="mt-1.5 text-[11px] leading-snug text-[var(--totk-grey-200)]">
+                                {form.timeLimit} · Est. ends {formatEndDate(endDate)} — use End date above for an exact day.
                               </p>
                             );
                           })()}
@@ -1510,19 +1518,44 @@ export default function AdminQuestsPage() {
                     </fieldset>
 
                     {/* Details */}
-                    <fieldset className="rounded-lg border border-[var(--totk-dark-ocher)]/60 p-4 space-y-4">
+                    <fieldset className="rounded-lg border border-[var(--totk-light-green)]/40 bg-[var(--totk-light-green)]/[0.09] p-4 shadow-[inset_0_0_0_1px_rgba(0,0,0,0.2)] space-y-3">
                       <legend className="text-sm font-semibold text-[var(--totk-ivory)] px-1">Details</legend>
-                      <div className="grid gap-4 sm:grid-cols-2">
+                      <div className="grid gap-3 sm:grid-cols-2 sm:gap-4">
                         <div>
                           <label className="mb-1 block text-sm font-medium text-[var(--totk-grey-200)]">Signup Deadline</label>
                           <input type="date" value={form.signupDeadline} onChange={(e) => setField("signupDeadline", e.target.value)} className="quest-date-input w-full rounded border border-[var(--totk-dark-ocher)] bg-[var(--botw-warm-black)] px-3 py-2 text-[var(--totk-ivory)]" />
+                          <p className="mt-1 text-[11px] leading-snug text-[var(--totk-grey-200)]">
+                            Last day for <code className="rounded bg-[var(--botw-black)]/70 px-1 font-mono text-[10px]">/quest join</code> — not duration or run end.
+                          </p>
                         </div>
                         <div>
                           <label className="mb-1 block text-sm font-medium text-[var(--totk-grey-200)]">Status</label>
                           <select value={form.status} onChange={(e) => setField("status", e.target.value)} className="w-full rounded border border-[var(--totk-dark-ocher)] bg-[var(--botw-warm-black)] pl-3 pr-8 py-2 text-[var(--totk-ivory)]">
                             {STATUS_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
                           </select>
+                          <p className="mt-1 text-[11px] leading-snug text-[var(--totk-grey-200)]">
+                            This quest&apos;s lifecycle — not per-character rows (<strong className="text-[var(--totk-ivory)]/90">Manage participants</strong>).
+                          </p>
                         </div>
+                        <details className="sm:col-span-2 rounded-md border border-[var(--totk-light-green)]/35 bg-[var(--botw-black)]/40 px-2.5 py-1.5 text-[11px] leading-snug text-[var(--totk-grey-200)] shadow-sm">
+                          <summary className="cursor-pointer select-none font-medium text-[var(--totk-ivory)] hover:text-[var(--totk-mid-ocher)]">
+                            What Draft / Pending / Active / Complete mean
+                          </summary>
+                          <ul className="mt-2 space-y-1 border-t border-[var(--totk-dark-ocher)]/25 pt-2">
+                            <li>
+                              <span className="text-[var(--totk-ivory)]">Draft</span> — Not published yet; safe to edit before players see it.
+                            </li>
+                            <li>
+                              <span className="text-[var(--totk-ivory)]">Pending</span> — Waiting to go live or scheduled; not an active run yet.
+                            </li>
+                            <li>
+                              <span className="text-[var(--totk-ivory)]">Active</span> — Open; participants can sign up and progress.
+                            </li>
+                            <li>
+                              <span className="text-[var(--totk-ivory)]">Complete</span> — Run closed on the dashboard; some participant rows may still be finishing rewards.
+                            </li>
+                          </ul>
+                        </details>
                         {editingId && form.questID && (
                           <p className="text-sm text-[var(--totk-grey-200)] sm:col-span-2">Quest ID: <span className="font-mono text-[var(--totk-ivory)]">{form.questID}</span></p>
                         )}
@@ -1530,7 +1563,7 @@ export default function AdminQuestsPage() {
                     </fieldset>
 
                     {/* Rewards */}
-                    <fieldset className="rounded-lg border border-[var(--totk-dark-ocher)]/60 p-4 space-y-4">
+                    <fieldset className="rounded-lg border border-[var(--totk-mid-ocher)]/50 bg-[var(--totk-mid-ocher)]/[0.14] p-4 shadow-[inset_0_0_0_1px_rgba(0,0,0,0.22)] space-y-4">
                       <legend className="text-sm font-semibold text-[var(--totk-ivory)] px-1">Rewards (all optional)</legend>
                       <p className="text-xs text-[var(--totk-grey-200)] mb-2">Fill in only what this quest uses. Most quests just need &quot;Base tokens&quot; (and maybe &quot;Collab bonus&quot; if collabs are allowed).</p>
                       <div className="grid gap-4 sm:grid-cols-2">
@@ -1586,7 +1619,7 @@ export default function AdminQuestsPage() {
                     </fieldset>
 
                     {/* Participation */}
-                    <fieldset className="rounded-lg border border-[var(--totk-dark-ocher)]/60 p-4 space-y-4">
+                    <fieldset className="rounded-lg border border-[var(--totk-dark-ocher)]/50 bg-[var(--totk-light-green)]/[0.06] p-4 shadow-[inset_0_0_0_1px_rgba(0,0,0,0.18)] space-y-4">
                       <legend className="text-sm font-semibold text-[var(--totk-ivory)] px-1">Participation</legend>
                       <div className="grid gap-4 sm:grid-cols-2">
                         <div>
@@ -1668,7 +1701,7 @@ export default function AdminQuestsPage() {
                     </fieldset>
 
                     {/* Rules and collab */}
-                    <fieldset className="rounded-lg border border-[var(--totk-dark-ocher)]/60 p-4 space-y-4">
+                    <fieldset className="rounded-lg border border-[var(--totk-dark-ocher)]/60 bg-[var(--botw-warm-black)]/[0.72] p-4 shadow-[inset_0_0_0_1px_rgba(255,255,255,0.03)] space-y-4">
                       <legend className="text-sm font-semibold text-[var(--totk-ivory)] px-1">Rules and collab</legend>
                       <div className="grid gap-4 sm:grid-cols-2">
                         <div className="flex items-center gap-2 sm:col-span-2">
@@ -1689,9 +1722,19 @@ export default function AdminQuestsPage() {
 
                     {/* Meta (edit only) */}
                     {editingId && (
-                      <fieldset className="rounded-lg border border-[var(--totk-dark-ocher)]/60 p-4 space-y-4">
+                      <fieldset className="rounded-lg border border-[var(--totk-mid-ocher)]/55 bg-[var(--totk-mid-ocher)]/[0.16] p-4 shadow-[inset_0_0_0_1px_rgba(0,0,0,0.25)] space-y-3">
                         <legend className="text-sm font-semibold text-[var(--totk-ivory)] px-1">Meta</legend>
-                        <div className="grid gap-4 sm:grid-cols-2">
+                        <details className="rounded-md border border-[var(--totk-mid-ocher)]/50 bg-[var(--botw-black)]/45 px-2.5 py-1.5 text-[11px] leading-snug text-[var(--totk-grey-200)] shadow-sm">
+                          <summary className="cursor-pointer select-none font-medium text-[var(--totk-ivory)] hover:text-[var(--totk-mid-ocher)]">
+                            Posted vs dashboard status
+                          </summary>
+                          <p className="mt-2 border-t border-[var(--totk-dark-ocher)]/25 pt-2">
+                            <strong className="text-[var(--totk-ivory)]">Posted</strong> means the bot announced this on the Discord quest board. If unchecked,
+                            it wasn&apos;t posted there yet — <strong className="text-[var(--totk-ivory)]">Status</strong> above can still be draft, pending, or
+                            active.
+                          </p>
+                        </details>
+                        <div className="grid gap-3 sm:grid-cols-2 sm:gap-4">
                           <div className="flex items-center gap-2">
                             <input type="checkbox" id="posted" checked={form.posted} onChange={(e) => setField("posted", e.target.checked)} className="rounded border-[var(--totk-dark-ocher)]" />
                             <label htmlFor="posted" className="text-sm text-[var(--totk-ivory)]">Posted</label>
@@ -1756,7 +1799,7 @@ export default function AdminQuestsPage() {
           <section className="rounded-xl border-2 border-[var(--totk-dark-ocher)] bg-gradient-to-br from-[var(--botw-warm-black)] to-[var(--botw-black)] p-5 sm:p-6 shadow-lg">
             <h2 className="mb-2 text-xl font-semibold text-[var(--totk-ivory)]">View / Edit quests</h2>
             <p className="mb-4 text-sm text-[var(--totk-grey-200)]">
-              Click a title to view, or <strong>Edit</strong> to load a quest into the Create tab and update it. Open <strong>Status guide</strong> above for what each status means.
+              Click a title to view, or <strong>Edit</strong> to load a quest into the Create tab and update it.
             </p>
             {quests.length > 0 && (
               <div className="mb-4 flex flex-wrap items-center gap-3">
@@ -1856,17 +1899,23 @@ export default function AdminQuestsPage() {
           </section>
         )}
 
-        {/* Manage participants modal */}
-        {manageQuestId && (
-          <div
-            className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4"
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="manage-participants-title"
-          >
-            <div className="max-h-[90vh] w-full max-w-2xl overflow-hidden rounded-xl border-2 border-[var(--totk-dark-ocher)] bg-[var(--botw-warm-black)] shadow-2xl flex flex-col">
-              <div className="border-b border-[var(--totk-dark-ocher)]/60 p-4 shrink-0">
-                <h2 id="manage-participants-title" className="text-lg font-semibold text-[var(--totk-ivory)]">
+        {/* Manage participants modal (portal + z-[100] so it sits above the fixed top bar) */}
+        {manageQuestId &&
+          manageModalMounted &&
+          createPortal(
+            <div
+              className="fixed inset-0 z-[100] flex items-start justify-center overflow-y-auto bg-black/60 px-4 pb-4"
+              style={{ paddingTop: TOP_BAR_HEIGHT + 10 }}
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="manage-participants-title"
+            >
+              <div
+                className="my-auto w-full max-w-5xl overflow-hidden rounded-xl border-2 border-[var(--totk-dark-ocher)] bg-[var(--botw-warm-black)] shadow-2xl flex flex-col"
+                style={{ maxHeight: `min(85vh, calc(100vh - ${TOP_BAR_HEIGHT + 28}px))` }}
+              >
+              <div className="border-b border-[var(--totk-dark-ocher)]/60 p-3 shrink-0">
+                <h2 id="manage-participants-title" className="text-base font-semibold text-[var(--totk-ivory)]">
                   Manage participants{manageQuest ? ` – ${manageQuest.title ?? "Quest"}` : ""}
                 </h2>
                 {manageQuest && (
@@ -1877,27 +1926,38 @@ export default function AdminQuestsPage() {
                     )}
                   </p>
                 )}
-                <details className="mt-2 rounded border border-[var(--totk-dark-ocher)]/40 bg-[var(--botw-black)]/40 px-3 py-2 text-xs text-[var(--totk-grey-200)]">
+                <details className="mt-2 rounded-md border border-[var(--totk-light-green)]/35 bg-[var(--totk-dark-ocher)]/[0.18] px-3 py-2 text-xs text-[var(--totk-grey-200)] shadow-sm">
                   <summary className="cursor-pointer select-none font-medium text-[var(--totk-ivory)]">
-                    What do participant statuses mean?
+                    Participant status (from bot progress)
                   </summary>
-                  <ul className="mt-2 list-inside list-disc space-y-1 border-t border-[var(--totk-dark-ocher)]/30 pt-2 pl-1">
+                  <p className="mt-2 border-t border-[var(--totk-dark-ocher)]/30 pt-2 leading-relaxed">
+                    Values come from the bot&apos;s <code className="rounded bg-[var(--botw-black)] px-1 font-mono text-[10px] text-[var(--totk-ivory)]">progress</code>{" "}
+                    field. Token amounts mirror payouts when recorded.
+                  </p>
+                  <ul className="mt-2 list-inside list-disc space-y-1 pl-1 leading-relaxed">
                     <li>
-                      <span className="text-[var(--totk-ivory)]">active</span> — Still participating.
+                      <span className="text-[var(--totk-ivory)]">active</span> — Still in the quest; requirements not finished (or not synced yet).
                     </li>
                     <li>
-                      <span className="text-[var(--totk-ivory)]">completed</span> — Done; if tokens show &quot;—&quot;, sync or wait for the bot.
+                      <span className="text-[var(--totk-ivory)]">completed</span> — Requirements met. If <strong className="text-[var(--totk-ivory)]">Tokens</strong> is
+                      empty, the bot may not have written <code className="rounded bg-[var(--botw-black)] px-1 font-mono text-[10px]">tokensEarned</code> yet, or
+                      tokens were paid only in Sheikah. Use <strong className="text-[var(--totk-ivory)]">Sync reward status</strong> to align the row without paying
+                      again.
                     </li>
                     <li>
-                      <span className="text-[var(--totk-ivory)]">rewarded</span> — Payout recorded on this row (or completed + tokens set).
+                      <span className="text-[var(--totk-ivory)]">rewarded</span> — Stored as rewarded, or progress is completed and tokens are already set (paid /
+                      recorded).
                     </li>
                     <li>
-                      <span className="text-[var(--totk-ivory)]">failed</span> / <span className="text-[var(--totk-ivory)]">disqualified</span> — Did not finish or removed.
+                      <span className="text-[var(--totk-ivory)]">failed</span> — Did not complete (e.g. time ran out or dropped).
+                    </li>
+                    <li>
+                      <span className="text-[var(--totk-ivory)]">disqualified</span> — Removed for rules or location issues.
                     </li>
                   </ul>
                 </details>
               </div>
-              <div className="flex-1 overflow-y-auto p-4">
+              <div className="flex-1 overflow-y-auto p-3 sm:p-4">
                 {!manageQuest ? (
                   <div className="flex items-center justify-center py-12">
                     <Loading message="Loading participants..." variant="inline" size="lg" />
@@ -1920,42 +1980,54 @@ export default function AdminQuestsPage() {
                         </div>
                       )}
                       <p className="mb-3 text-xs text-[var(--totk-grey-200)]">
-                        Check &quot;Mark completed&quot; for participants who finished the quest, then click the button below to grant tokens and log completion.
-                        If the bot already paid tokens but someone still shows as completed here, use{" "}
-                        <span className="text-[var(--totk-ivory)]">Sync reward status</span> below (updates the quest row only; does not send tokens again).
+                        Use each row&apos;s <strong className="text-[var(--totk-ivory)]">Status</strong> menu to fix progress (e.g.{" "}
+                        <span className="text-[var(--totk-ivory)]">failed</span> → <span className="text-[var(--totk-ivory)]">active</span>) without paying tokens.
+                        Check &quot;Mark completed&quot; for participants who finished the quest, then use{" "}
+                        <strong className="text-[var(--totk-ivory)]">Mark N completed</strong> to grant tokens and log completion.
+                        If the bot already paid tokens but the row is wrong, use{" "}
+                        <span className="text-[var(--totk-ivory)]">Sync reward status</span> (updates the quest row only; does not send tokens again).
+                      </p>
+                      <p className="mb-3 text-[10px] leading-relaxed text-[var(--totk-grey-200)]">
+                        Row tint:{" "}
+                        <span className="text-cyan-300/90">active</span> ·{" "}
+                        <span className="text-amber-300/90">completed</span> ·{" "}
+                        <span className="text-red-300/90">failed</span> ·{" "}
+                        <span className="text-emerald-300/90">rewarded</span> ·{" "}
+                        <span className="text-violet-300/90">disqualified</span>
                       </p>
                       <div className="overflow-x-auto rounded-lg border border-[var(--totk-dark-ocher)]/40">
                         <table className="w-full text-left text-sm">
                           <thead>
                             <tr className="border-b border-[var(--totk-dark-ocher)]/60 bg-[var(--botw-black)]/60">
                               <th className="py-2 pl-3 pr-2 text-[var(--totk-grey-200)] font-semibold">Mark completed</th>
+                              <th className="py-2 pr-3 text-[var(--totk-grey-200)] font-semibold">User</th>
                               <th className="py-2 pr-3 text-[var(--totk-grey-200)] font-semibold">Character</th>
                               {manageQuest.questType === "RP" && (
                                 <th className="py-2 pr-3 text-[var(--totk-grey-200)] font-semibold">Posts (min)</th>
                               )}
-                              <th className="py-2 pr-3 text-[var(--totk-grey-200)] font-semibold">Status</th>
+                              <th className="py-2 pr-3 text-[var(--totk-grey-200)] font-semibold min-w-[10rem]">Status</th>
                               <th className="py-2 pr-3 text-[var(--totk-grey-200)] font-semibold">Tokens</th>
                             </tr>
                           </thead>
                           <tbody>
                             {entries.map(([userId, p]) => {
-                              const progress = (p?.progress ?? "active") as string;
+                              const progressRaw = (p?.progress ?? "active") as string;
+                              const progress = PARTICIPANT_PROGRESS_VALUES.includes(
+                                progressRaw as (typeof PARTICIPANT_PROGRESS_VALUES)[number]
+                              )
+                                ? progressRaw
+                                : "active";
                               const tokensEarned = p?.tokensEarned;
                               const hasQuestTokens =
                                 typeof tokensEarned === "number" && tokensEarned > 0;
-                              const displayProgress =
-                                progress === "completed" && hasQuestTokens
-                                  ? "rewarded"
-                                  : progress;
                               const canMark =
                                 progress !== "rewarded" && !hasQuestTokens;
                               const isSelected = selectedParticipantIds.includes(userId);
+                              const statusBusy = participantProgressSavingId !== null;
                               return (
                                 <tr
                                   key={userId}
-                                  className={`border-b border-[var(--totk-dark-ocher)]/30 last:border-b-0 ${
-                                    progress === "failed" ? "bg-red-500/5" : "bg-[var(--botw-black)]/20"
-                                  }`}
+                                  className={participantProgressRowClass(progress)}
                                 >
                                   <td className="py-2 pl-3 pr-2">
                                     {canMark ? (
@@ -1972,6 +2044,13 @@ export default function AdminQuestsPage() {
                                       <span className="text-[var(--totk-grey-200)]">—</span>
                                     )}
                                   </td>
+                                  <td className="py-2 pr-3 text-[var(--totk-grey-200)]">
+                                    {p?.username?.trim() ? (
+                                      <span className="text-[var(--totk-ivory)]">{p.username}</span>
+                                    ) : (
+                                      "—"
+                                    )}
+                                  </td>
                                   <td className="py-2 pr-3 font-medium text-[var(--totk-ivory)]">
                                     {p?.characterName ?? "—"}
                                   </td>
@@ -1984,22 +2063,34 @@ export default function AdminQuestsPage() {
                                       </td>
                                     );
                                   })()}
-                                  <td className="py-2 pr-3">
-                                    <span
-                                      className={`inline-block rounded px-2 py-0.5 text-xs font-medium ${
-                                        displayProgress === "rewarded"
-                                          ? "bg-[var(--totk-light-green)]/20 text-[var(--totk-light-green)]"
-                                          : progress === "failed"
-                                          ? "bg-red-500/20 text-red-200"
-                                          : progress === "completed"
-                                          ? "bg-amber-500/20 text-amber-200"
-                                          : progress === "disqualified"
-                                          ? "bg-red-500/10 text-red-300"
-                                          : "bg-[var(--totk-dark-ocher)]/30 text-[var(--totk-ivory)]"
-                                      }`}
-                                    >
-                                      {displayProgress}
-                                    </span>
+                                  <td className="py-2 pr-3 align-top">
+                                    <div className="flex flex-col gap-1">
+                                      <select
+                                        value={progress}
+                                        disabled={statusBusy}
+                                        title="Updates bot participant progress only; does not send tokens."
+                                        onChange={(e) => {
+                                          const next = e.target.value;
+                                          if (next === progress) return;
+                                          void updateParticipantProgress(userId, next);
+                                        }}
+                                        className="w-full min-w-[9rem] max-w-[14rem] rounded border border-[var(--totk-dark-ocher)] bg-[var(--botw-warm-black)] px-2 py-1.5 text-xs font-medium text-[var(--totk-ivory)] disabled:opacity-50"
+                                      >
+                                        {PARTICIPANT_PROGRESS_VALUES.map((v) => (
+                                          <option key={v} value={v}>
+                                            {v}
+                                          </option>
+                                        ))}
+                                      </select>
+                                      {participantProgressSavingId === userId && (
+                                        <span className="text-[10px] text-[var(--totk-grey-200)]">Saving…</span>
+                                      )}
+                                      {progress === "completed" && hasQuestTokens && (
+                                        <span className="text-[10px] leading-snug text-[var(--totk-grey-200)]">
+                                          Tokens on row: pick <span className="text-[var(--totk-ivory)]">rewarded</span> to align with payout, or run Sync.
+                                        </span>
+                                      )}
+                                    </div>
                                   </td>
                                   <td className="py-2 pr-3 text-[var(--totk-grey-200)]">
                                     {hasQuestTokens ? (
@@ -2018,7 +2109,7 @@ export default function AdminQuestsPage() {
                   );
                 })()}
               </div>
-              <div className="flex shrink-0 flex-wrap items-center justify-end gap-2 border-t border-[var(--totk-dark-ocher)]/60 p-4">
+              <div className="flex shrink-0 flex-wrap items-center justify-end gap-2 border-t border-[var(--totk-dark-ocher)]/60 p-3">
                 <button
                   type="button"
                   onClick={closeManageModal}
@@ -2049,8 +2140,9 @@ export default function AdminQuestsPage() {
                 )}
               </div>
             </div>
-          </div>
-        )}
+            </div>,
+            document.body
+          )}
 
         {/* Mark quest completed confirmation modal */}
         {completeConfirmQuestId && (
