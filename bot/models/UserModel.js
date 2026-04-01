@@ -692,7 +692,7 @@ userSchema.methods.recordQuestCompletion = async function({
   
   // ------------------- Validate questId -------------------
   const hasValidQuestId = questId && typeof questId === 'string' && questId.trim() !== '';
-  const realQuestSources = ['immediate', 'pending', 'monthly', 'dashboard_manual'];
+  const realQuestSources = ['immediate', 'pending', 'monthly', 'dashboard_manual', 'submission'];
   if (!hasValidQuestId) {
     logger.warn('QUEST', `Quest completion recorded without questId for user ${this.discordId}. This may cause tracking issues.`);
   }

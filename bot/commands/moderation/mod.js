@@ -509,7 +509,7 @@ async function createModApprovalConfirmationEmbed(submissionId, title, tokenAmou
     
     // Add field for each collaborator
     for (const collaboratorMention of collaborators) {
-      const collaboratorId = collaboratorMention.replace(/[<@>]/g, '');
+      const collaboratorId = collaboratorMention.replace(/[<@!>]/g, '').trim();
       
       embed.addFields(
         { 
@@ -2172,7 +2172,7 @@ async function handleApprove(interaction) {
 
           // Update tokens for each collaborator
           for (const collaboratorMention of collaborators) {
-            const collaboratorId = collaboratorMention.replace(/[<@>]/g, '');
+            const collaboratorId = collaboratorMention.replace(/[<@!>]/g, '').trim();
             
             try {
               await updateTokenBalance(collaboratorId, tokensPerPerson, {
@@ -2200,7 +2200,7 @@ async function handleApprove(interaction) {
 
           // Send embed DM to each collaborator
           for (const collaboratorMention of collaborators) {
-            const collaboratorId = collaboratorMention.replace(/[<@>]/g, '');
+            const collaboratorId = collaboratorMention.replace(/[<@!>]/g, '').trim();
             
             try {
               const collabUserEmbed = createCollaborationApprovalDMEmbed(submissionId, title, tokensPerPerson);

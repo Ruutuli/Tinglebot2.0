@@ -137,7 +137,13 @@ const participantSchema = {
     updatedAt: { type: Date, default: Date.now },
     // Completion tracking
     completionProcessed: { type: Boolean, default: false }, // Prevents duplicate reward processing
-    lastCompletionCheck: { type: Date, default: null } // Tracks when completion was last checked
+    lastCompletionCheck: { type: Date, default: null }, // Tracks when completion was last checked
+    // Art/Writing: mod approval already paid tokens (submission category); skip duplicate quest_reward at quest end
+    questTokensPaidViaSubmission: { type: Boolean, default: false },
+    submissionRewardTokenAmount: { type: Number, default: null },
+    rewardProcessed: { type: Boolean, default: false },
+    rewardSource: { type: String, default: null },
+    lastRewardCheck: { type: Date, default: null }
 };
 
 // ------------------- Left Participant Schema ------------------
@@ -460,6 +466,25 @@ function markParticipantCompleted(participant) {
     participant.questSubmissionInfo = null; // Clear quest submission info
 }
 
+/** Per-person token amount from submission flow (mod approval); used to skip duplicate quest_reward minting. */
+function getSubmissionPerPersonTokenAmount(submissionData) {
+    if (!submissionData || typeof submissionData !== 'object') return 0;
+    const fromFinal = Number(submissionData.finalTokenAmount);
+    if (Number.isFinite(fromFinal) && fromFinal > 0) return Math.floor(fromFinal);
+    const tc = submissionData.tokenCalculation;
+    if (tc && typeof tc === 'object') {
+        if (Number.isFinite(tc.tokensPerPerson) && tc.tokensPerPerson > 0) return Math.floor(tc.tokensPerPerson);
+        if (Number.isFinite(tc.finalTotal) && tc.finalTotal > 0) return Math.floor(tc.finalTotal);
+    }
+    return 0;
+}
+
+function markParticipantQuestTokensPaidViaSubmission(participant, submissionData) {
+    const amt = getSubmissionPerPersonTokenAmount(submissionData);
+    participant.questTokensPaidViaSubmission = true;
+    participant.submissionRewardTokenAmount = amt > 0 ? amt : null;
+}
+
 // ============================================================================
 // ------------------- Instance Methods -------------------
 // ============================================================================
@@ -704,6 +729,7 @@ questSchema.methods.completeFromArtSubmission = async function(userId, submissio
         const submission = createQuestSubmission('art', submissionData);
         participant.submissions.push(submission);
         markParticipantCompleted(participant);
+        markParticipantQuestTokensPaidViaSubmission(participant, submissionData);
         
         // SAFEGUARD: Record quest completion immediately to ensure quest count is updated
         try {
@@ -749,6 +775,7 @@ questSchema.methods.completeFromWritingSubmission = async function(userId, submi
         const submission = createQuestSubmission('writing', submissionData);
         participant.submissions.push(submission);
         markParticipantCompleted(participant);
+        markParticipantQuestTokensPaidViaSubmission(participant, submissionData);
         
         // SAFEGUARD: Record quest completion immediately to ensure quest count is updated
         try {

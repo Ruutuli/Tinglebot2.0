@@ -10,12 +10,14 @@
 //   node bot/scripts/auditQuestParticipantRewardConsistency.js
 //   node bot/scripts/auditQuestParticipantRewardConsistency.js --apply
 //   node bot/scripts/auditQuestParticipantRewardConsistency.js --verify-tx --limit 30
+//   node bot/scripts/auditQuestParticipantRewardConsistency.js --verify-empty-rewarded --limit 50
 //
 // Flags:
-//   --apply          Set progress to "rewarded" when completed + tokensEarned > 0
-//   --verify-tx      For each mismatch, check TokenTransaction (quest_reward) for that user
-//   --limit <n>      Cap --verify-tx lookups (default 40)
-//   --json           One JSON object per line for mismatches
+//   --apply                  Set progress to "rewarded" when completed + tokensEarned > 0
+//   --verify-tx              For paid_wrong_progress rows only, check TokenTransaction
+//   --verify-empty-rewarded  For rewarded + no tokens/items on quest doc, check if Sheikah still has quest_reward tx
+//   --limit <n>              Cap --verify-* lookups (default 40)
+//   --json                   One JSON object per line for paid_wrong_progress mismatches only
 // ============================================================================
 const path = require("path");
 const fs = require("fs");
@@ -105,6 +107,7 @@ async function main() {
 
   const apply = process.argv.includes("--apply");
   const verifyTx = process.argv.includes("--verify-tx");
+  const verifyEmptyRewarded = process.argv.includes("--verify-empty-rewarded");
   const asJson = process.argv.includes("--json");
   const txLimit = parseNumberFlag("limit", 40);
 
@@ -119,11 +122,16 @@ async function main() {
     participantsFixed: 0,
     verifyTxChecked: 0,
     verifyTxFound: 0,
+    verifyEmptyChecked: 0,
+    verifyEmptyWithTx: 0,
+    verifyEmptyNoTx: 0,
     errors: 0,
   };
 
   const mismatches = [];
   const rewardedNoLootSamples = [];
+  /** @type {Array<{ questId: string, questTitle: string, characterName: string, userId: string }>} */
+  const rewardedNoLootAll = [];
 
   try {
     const cursor = Quest.find(
@@ -150,13 +158,15 @@ async function main() {
           });
         } else if (isRewardedWithoutRecordedLoot(p)) {
           stats.rewardedNoLoot++;
+          const row = {
+            questId: q.questID,
+            questTitle: q.title,
+            characterName: p.characterName,
+            userId: p.userId,
+          };
+          rewardedNoLootAll.push(row);
           if (rewardedNoLootSamples.length < 20) {
-            rewardedNoLootSamples.push({
-              questId: q.questID,
-              questTitle: q.title,
-              characterName: p.characterName,
-              userId: p.userId,
-            });
+            rewardedNoLootSamples.push(row);
           }
         }
       }
@@ -192,10 +202,13 @@ async function main() {
         );
       }
 
-      if (stats.paidWrongProgress === 0 && !asJson) {
+      if (!asJson) {
         console.log(
-          "No rows with progress=completed AND tokensEarned>0. If dashboard still disagrees with Sheikah Slate,\n" +
-            "the participant doc may be missing tokensEarned; spot-check TokenTransaction (quest_reward) for that user.\n"
+          "\n--- How to read this ---\n" +
+            `• paid_wrong_progress = 0 means: no participant has BOTH progress "completed" AND tokensEarned>0 on the quest document.\n` +
+            `• rewarded_no_tokens_no_items = ${stats.rewardedNoLoot}: progress is already "rewarded" but the quest row has no tokensEarned and no itemsEarned.\n` +
+            "  That is normal for true 0-token quests, OR it can mean tokens were paid (Sheikah) but never copied onto the quest participant.\n" +
+            "  To check: node bot/scripts/auditQuestParticipantRewardConsistency.js --verify-empty-rewarded --limit 100\n\n"
         );
       }
 
@@ -210,6 +223,46 @@ async function main() {
           console.log(`... and ${mismatches.length - 50} more (use --json for full list)\n`);
         }
       }
+    }
+
+    if (verifyEmptyRewarded && rewardedNoLootAll.length && !asJson) {
+      let checked = 0;
+      for (const row of rewardedNoLootAll) {
+        if (checked >= txLimit) break;
+        checked++;
+        stats.verifyEmptyChecked++;
+        const uid = String(row.userId || "").trim();
+        if (!uid) continue;
+        const title = String(row.questTitle || "").trim();
+        const descRegex = title
+          ? new RegExp(escapeRegex(`Quest: ${title}`), "i")
+          : /quest_reward/i;
+        const found = await TokenTransaction.findOne({
+          userId: uid,
+          category: "quest_reward",
+          description: descRegex,
+        })
+          .sort({ timestamp: -1 })
+          .lean();
+        if (found) {
+          stats.verifyEmptyWithTx++;
+          console.log(
+            `empty-rewarded + TX: ${row.questId} | ${row.characterName} | userId=${uid} | ledger amount=${found.amount} | desc snippet=${String(found.description || "").slice(0, 60)}`
+          );
+        } else {
+          stats.verifyEmptyNoTx++;
+          console.log(
+            `empty-rewarded no TX: ${row.questId} | ${row.characterName} | userId=${uid} (no matching quest_reward for this quest title)`
+          );
+        }
+      }
+      if (rewardedNoLootAll.length > txLimit) {
+        console.log(`\n(--verify-empty-rewarded capped at --limit ${txLimit}; ${rewardedNoLootAll.length} total in this bucket)\n`);
+      }
+      logger.info(
+        "QUEST_AUDIT",
+        `--verify-empty-rewarded: checked ${stats.verifyEmptyChecked}, had ledger tx: ${stats.verifyEmptyWithTx}, no tx: ${stats.verifyEmptyNoTx}`
+      );
     }
 
     if (verifyTx && mismatches.length) {

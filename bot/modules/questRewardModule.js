@@ -74,6 +74,17 @@ async function sendIndividualRewardNotification(quest, participant, rewardResult
             return { success: false, error: 'Sheikah Slate channel not found' };
         }
 
+        const tokenBreakdownPre = rewardResult.tokenBreakdown || {};
+        const hasQuestItems =
+            (quest.itemRewards && quest.itemRewards.length > 0) ||
+            (quest.itemReward && quest.itemRewardQty > 0);
+        if (tokenBreakdownPre.skippedDuplicateQuestReward && !hasQuestItems) {
+            console.log(
+                `[questRewardModule] ℹ️ Skipping Sheikah quest reward embed for ${participant.characterName} — tokens already credited at submission approval; no item rewards.`
+            );
+            return { success: true, skipped: true };
+        }
+
         // Create reward notification embed
         const rewardEmbed = createBaseEmbed(
             '🎉 Quest Reward Received!',
@@ -84,7 +95,7 @@ async function sendIndividualRewardNotification(quest, participant, rewardResult
         const rewardFields = [];
         const tokenBreakdown = rewardResult.tokenBreakdown || {};
         
-        if (rewardResult.tokensAdded > 0) {
+        if (!tokenBreakdown.skippedDuplicateQuestReward && rewardResult.tokensAdded > 0) {
             rewardFields.push({
                 name: '💰 Tokens',
                 value: `${rewardResult.tokensAdded} tokens${tokenBreakdown.entertainerBonus ? ' (Entertainer bonus applied)' : ''}`,
@@ -621,6 +632,44 @@ function parseTokenReward(tokenReward) {
     return result;
 }
 
+function escapeRegexQuestId(s) {
+    return String(s || "").replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+function normalizeUserIdQuest(uid) {
+    const s = String(uid ?? "").trim();
+    if (!s) return "";
+    const digits = s.replace(/[<@!>]/g, "").replace(/\D/g, "");
+    return digits.length >= 16 ? digits : s.replace(/[<@!>]/g, "").trim();
+}
+
+/**
+ * Submitter or collaborator on a collab submission for this quest — used for
+ * optional collab_bonus tokenReward (each qualifying person gets base + collab_bonus).
+ */
+async function participantQualifiesForQuestCollabBonus(quest, participant) {
+    const uid = normalizeUserIdQuest(participant.userId);
+    if (!uid || !quest.questID) return false;
+    const subs = await ApprovedSubmission.find({
+        questEvent: new RegExp(`^${escapeRegexQuestId(quest.questID)}$`, "i"),
+    }).lean();
+    for (const s of subs) {
+        const raw = s.collab;
+        const arr =
+            raw == null ? [] : raw === "N/A" ? [] : Array.isArray(raw) ? raw : [raw];
+        const hasCollab = arr.some((x) => {
+            const t = String(x || "").trim();
+            return t && t !== "N/A";
+        });
+        if (!hasCollab) continue;
+        if (normalizeUserIdQuest(s.userId) === uid) return true;
+        for (const m of arr) {
+            if (normalizeUserIdQuest(m) === uid) return true;
+        }
+    }
+    return false;
+}
+
 // Count participant "units" for per_unit token calculation. unit:submission = count approved submissions (by quest type); cap by max.
 function computeParticipantUnits(quest, participant) {
     const parsed = parseTokenReward(quest.tokenReward);
@@ -903,8 +952,8 @@ async function processParticipantReward(quest, participant, rewardContext = {}) 
 
         const rewardResult = await distributeRewards(quest, participant, rewardContext);
         if (rewardResult.success) {
-            updateParticipantRewardData(participant, quest, rewardResult, 'immediate');
-            await recordUserQuestCompletion(participant, quest, rewardResult, 'immediate');
+            updateParticipantRewardData(participant, quest, rewardResult, rewardResult.rewardSource || 'immediate');
+            await recordUserQuestCompletion(participant, quest, rewardResult, rewardResult.rewardSource || 'immediate');
             
             // Send individual notification to the participant
             await sendIndividualRewardNotification(quest, participant, rewardResult);
@@ -927,6 +976,7 @@ function updateParticipantRewardData(participant, quest, rewardResult, rewardSou
     participant.progress = PROGRESS_STATUS.REWARDED;
     participant.rewardedAt = new Date();
     participant.tokensEarned = rewardResult.tokensAdded;
+    participant.rewardSource = rewardSource;
     
     // Use itemsDistributed from rewardResult if available, otherwise use quest.itemRewards or fallback to single item
     if (rewardResult.itemsDistributed && rewardResult.itemsDistributed.length > 0) {
@@ -941,7 +991,6 @@ function updateParticipantRewardData(participant, quest, rewardResult, rewardSou
     
     participant.rewardProcessed = true;
     participant.lastRewardCheck = new Date();
-    participant.rewardSource = rewardSource;
 }
 
 // ============================================================================
@@ -957,36 +1006,64 @@ async function distributeRewards(quest, participant, rewardContext = {}) {
             tokensAdded: 0,
             itemsAdded: 0,
             itemsDistributed: [],
+            rewardSource: 'immediate',
             tokenBreakdown: {
                 base: 0
             }
         };
 
-        const baseTokensToAward = computeTokensForParticipant(quest, participant);
-        results.tokenBreakdown.base = baseTokensToAward;
+        // Mod approval already paid tokens (category: submission) incl. quest bonus in breakdown; do not mint duplicate quest_reward.
+        if (participant.questTokensPaidViaSubmission === true) {
+            const displayAmt = Math.max(
+                0,
+                Math.floor(Number(participant.submissionRewardTokenAmount) || 0)
+            );
+            results.rewardSource = 'submission';
+            results.tokenBreakdown.skippedDuplicateQuestReward = true;
+            results.tokenBreakdown.base = displayAmt;
+            results.tokenBreakdown.total = displayAmt;
+            results.tokensAdded = displayAmt;
+            console.log(
+                `[questRewardModule.js] ℹ️ Skipping quest_reward mint for ${participant.characterName} — tokens already paid at submission approval (${displayAmt} on quest doc; no duplicate tx).`
+            );
+        } else {
+            const baseFlat = computeTokensForParticipant(quest, participant);
+            results.tokenBreakdown.base = baseFlat;
 
-        const entertainerBonusActive = rewardContext?.entertainerBonus?.enabled === true;
-        const entertainerBonusAmount = entertainerBonusActive ? rewardContext.entertainerBonus.amountPerParticipant : 0;
-
-        if (entertainerBonusActive) {
-            results.tokenBreakdown.entertainerBonus = entertainerBonusAmount;
-        }
-
-        const totalTokensToAward = baseTokensToAward + entertainerBonusAmount;
-        results.tokenBreakdown.total = totalTokensToAward;
-        
-        if (totalTokensToAward > 0) {
-            const tokenResult = await distributeTokens(participant.userId, totalTokensToAward, {
-                category: 'quest_reward',
-                description: quest.title ? `Quest: ${quest.title}` : `Quest ${quest.questID || 'reward'}`
-            });
-            if (tokenResult.success) {
-                results.tokensAdded = tokenResult.tokensAdded;
-                if (entertainerBonusActive && entertainerBonusAmount > 0) {
-                    console.log(`[questRewardModule.js] 🎭 Added Entertainer bonus of +${entertainerBonusAmount} tokens for ${participant.characterName} (${participant.userId})`);
+            const parsedReward = parseTokenReward(quest.tokenReward);
+            let collabQuestBonus = 0;
+            if (parsedReward.collabBonus > 0) {
+                const qualifies = await participantQualifiesForQuestCollabBonus(quest, participant);
+                if (qualifies) {
+                    collabQuestBonus = parsedReward.collabBonus;
+                    results.tokenBreakdown.collabQuestBonus = collabQuestBonus;
                 }
-            } else {
-                results.errors.push(tokenResult.error);
+            }
+
+            const entertainerBonusActive = rewardContext?.entertainerBonus?.enabled === true;
+            const entertainerBonusAmount = entertainerBonusActive ? rewardContext.entertainerBonus.amountPerParticipant : 0;
+
+            if (entertainerBonusActive) {
+                results.tokenBreakdown.entertainerBonus = entertainerBonusAmount;
+            }
+
+            const baseTokensToAward = baseFlat + collabQuestBonus;
+            const totalTokensToAward = baseTokensToAward + entertainerBonusAmount;
+            results.tokenBreakdown.total = totalTokensToAward;
+
+            if (totalTokensToAward > 0) {
+                const tokenResult = await distributeTokens(participant.userId, totalTokensToAward, {
+                    category: 'quest_reward',
+                    description: quest.title ? `Quest: ${quest.title}` : `Quest ${quest.questID || 'reward'}`
+                });
+                if (tokenResult.success) {
+                    results.tokensAdded = tokenResult.tokensAdded;
+                    if (entertainerBonusActive && entertainerBonusAmount > 0) {
+                        console.log(`[questRewardModule.js] 🎭 Added Entertainer bonus of +${entertainerBonusAmount} tokens for ${participant.characterName} (${participant.userId})`);
+                    }
+                } else {
+                    results.errors.push(tokenResult.error);
+                }
             }
         }
 
@@ -1681,6 +1758,124 @@ async function getQuestRewardSummary() {
 // ------------------- Art Quest Completion from Submission -------------------
 // ============================================================================
 
+/** Normalize Discord mention or raw id to user id string */
+function normalizeCollabMentionId(mention) {
+    if (!mention || typeof mention !== 'string') return '';
+    const t = mention.trim();
+    if (!t || t === 'N/A') return '';
+    return mention.replace(/[<@!>]/g, '').trim();
+}
+
+/**
+ * Credit all quest participants tied to this submission: collab mentions + tagged character names.
+ * Each must be on the quest map; completes from submission when still active.
+ */
+async function creditCollabAndTaggedParticipantsForArt(quest, submissionData, submitterUserId) {
+    const questID = quest.questID;
+    const collabList = submissionData.collab
+        ? Array.isArray(submissionData.collab)
+            ? submissionData.collab
+            : [submissionData.collab]
+        : [];
+    const creditedIds = new Set([String(submitterUserId || '').trim()]);
+
+    for (const mention of collabList) {
+        const collaboratorId = normalizeCollabMentionId(mention);
+        if (!collaboratorId || creditedIds.has(collaboratorId)) continue;
+        creditedIds.add(collaboratorId);
+        const collabParticipant = quest.getParticipant(collaboratorId);
+        if (!collabParticipant) continue;
+        await syncApprovedSubmissionsToParticipant(quest, collabParticipant);
+        await quest.save();
+        if (collabParticipant.progress === 'completed' || collabParticipant.progress === 'rewarded') {
+            console.log(`[questRewardModule.js] ✅ Art quest collab already completed via sync: ${collabParticipant.characterName} in quest ${questID}`);
+            continue;
+        }
+        if (collabParticipant.progress !== 'active') continue;
+        const collabResult = await quest.completeFromArtSubmission(collaboratorId, submissionData);
+        if (collabResult.success) {
+            console.log(`[questRewardModule.js] ✅ Art quest collab credit: ${collabParticipant.characterName} in quest ${questID}`);
+        }
+    }
+
+    const tagged = Array.isArray(submissionData.taggedCharacters) ? submissionData.taggedCharacters : [];
+    for (const tag of tagged) {
+        const name = String(tag || '').trim();
+        if (!name) continue;
+        const taggedParticipant = Array.from(quest.participants.values()).find(
+            (p) => p.characterName && p.characterName.trim().toLowerCase() === name.toLowerCase()
+        );
+        if (!taggedParticipant) continue;
+        const pid = String(taggedParticipant.userId || '').trim();
+        if (!pid || creditedIds.has(pid)) continue;
+        creditedIds.add(pid);
+        await syncApprovedSubmissionsToParticipant(quest, taggedParticipant);
+        await quest.save();
+        if (taggedParticipant.progress === 'completed' || taggedParticipant.progress === 'rewarded') {
+            console.log(`[questRewardModule.js] ✅ Art quest tagged char already completed via sync: ${taggedParticipant.characterName} in quest ${questID}`);
+            continue;
+        }
+        if (taggedParticipant.progress !== 'active') continue;
+        const tagResult = await quest.completeFromArtSubmission(pid, submissionData);
+        if (tagResult.success) {
+            console.log(`[questRewardModule.js] ✅ Art quest tagged credit: ${taggedParticipant.characterName} in quest ${questID}`);
+        }
+    }
+}
+
+async function creditCollabAndTaggedParticipantsForWriting(quest, submissionData, submitterUserId) {
+    const questID = quest.questID;
+    const collabList = submissionData.collab
+        ? Array.isArray(submissionData.collab)
+            ? submissionData.collab
+            : [submissionData.collab]
+        : [];
+    const creditedIds = new Set([String(submitterUserId || '').trim()]);
+
+    for (const mention of collabList) {
+        const collaboratorId = normalizeCollabMentionId(mention);
+        if (!collaboratorId || creditedIds.has(collaboratorId)) continue;
+        creditedIds.add(collaboratorId);
+        const collabParticipant = quest.getParticipant(collaboratorId);
+        if (!collabParticipant) continue;
+        await syncApprovedSubmissionsToParticipant(quest, collabParticipant);
+        await quest.save();
+        if (collabParticipant.progress === 'completed' || collabParticipant.progress === 'rewarded') {
+            console.log(`[questRewardModule.js] ✅ Writing quest collab already completed via sync: ${collabParticipant.characterName} in quest ${questID}`);
+            continue;
+        }
+        if (collabParticipant.progress !== 'active') continue;
+        const collabResult = await quest.completeFromWritingSubmission(collaboratorId, submissionData);
+        if (collabResult.success) {
+            console.log(`[questRewardModule.js] ✅ Writing quest collab credit: ${collabParticipant.characterName} in quest ${questID}`);
+        }
+    }
+
+    const tagged = Array.isArray(submissionData.taggedCharacters) ? submissionData.taggedCharacters : [];
+    for (const tag of tagged) {
+        const name = String(tag || '').trim();
+        if (!name) continue;
+        const taggedParticipant = Array.from(quest.participants.values()).find(
+            (p) => p.characterName && p.characterName.trim().toLowerCase() === name.toLowerCase()
+        );
+        if (!taggedParticipant) continue;
+        const pid = String(taggedParticipant.userId || '').trim();
+        if (!pid || creditedIds.has(pid)) continue;
+        creditedIds.add(pid);
+        await syncApprovedSubmissionsToParticipant(quest, taggedParticipant);
+        await quest.save();
+        if (taggedParticipant.progress === 'completed' || taggedParticipant.progress === 'rewarded') {
+            console.log(`[questRewardModule.js] ✅ Writing quest tagged char already completed via sync: ${taggedParticipant.characterName} in quest ${questID}`);
+            continue;
+        }
+        if (taggedParticipant.progress !== 'active') continue;
+        const tagResult = await quest.completeFromWritingSubmission(pid, submissionData);
+        if (tagResult.success) {
+            console.log(`[questRewardModule.js] ✅ Writing quest tagged credit: ${taggedParticipant.characterName} in quest ${questID}`);
+        }
+    }
+}
+
 // ------------------- Process Art Quest Completion from Submission ------------------
 async function processArtQuestCompletionFromSubmission(submissionData, userId) {
     try {
@@ -1706,29 +1901,33 @@ async function processArtQuestCompletionFromSubmission(submissionData, userId) {
         
         // Get participant before checking quest status
         const participant = quest.getParticipant(userId);
-        
-        // SAFEGUARD: Sync approved submissions even if quest is not active
-        // This handles cases where quest expired but submission was approved
-        if (participant && (quest.questType === 'Art' || quest.questType === 'Art / Writing')) {
-            await syncApprovedSubmissionsToParticipant(quest, participant);
-            await quest.save(); // Save after syncing
-        }
-        
-        // Check if quest is active
-        if (quest.status !== 'active') {
-            console.log(`[questRewardModule.js] ⚠️ Quest ${questID} is not active (status: ${quest.status})`);
-            // Even if quest is not active, if we synced submissions and participant is now completed, return success
-            if (participant && (participant.progress === 'completed' || participant.progress === 'rewarded')) {
-                console.log(`[questRewardModule.js] ✅ Participant ${participant.characterName} was marked as completed via submission sync`);
-                return { success: true, questCompleted: false, synced: true };
-            }
-            return { success: false, reason: 'Quest not active' };
-        }
-        
+
         // Validate quest type before attempting completion
         if (quest.questType !== 'Art' && quest.questType !== 'Art / Writing') {
             console.log(`[questRewardModule.js] ⚠️ Quest ${questID} is not an Art quest (type: ${quest.questType})`);
             return { success: false, reason: `Quest is not an Art quest (type: ${quest.questType})` };
+        }
+
+        // SAFEGUARD: Sync approved submissions even if quest is not active
+        if (participant && (quest.questType === 'Art' || quest.questType === 'Art / Writing')) {
+            await syncApprovedSubmissionsToParticipant(quest, participant);
+            await quest.save();
+        }
+
+        // Quest no longer active: still credit collab + tagged participants (was skipped before)
+        if (quest.status !== 'active') {
+            console.log(`[questRewardModule.js] ⚠️ Quest ${questID} is not active (status: ${quest.status}) — crediting collab/tagged participants if any`);
+            await creditCollabAndTaggedParticipantsForArt(quest, submissionData, userId);
+            await quest.save();
+            if (participant && (participant.progress === 'completed' || participant.progress === 'rewarded')) {
+                console.log(`[questRewardModule.js] ✅ Submitting participant ${participant.characterName} completed/rewarded via sync`);
+            }
+            try {
+                await processQuestCompletion(questID);
+            } catch (pcErr) {
+                console.warn(`[questRewardModule.js] processQuestCompletion (inactive art path): ${pcErr.message}`);
+            }
+            return { success: true, questCompleted: false, synced: true };
         }
         
         // syncApprovedSubmissionsToParticipant may already mark this participant completed (same approved row).
@@ -1746,30 +1945,10 @@ async function processArtQuestCompletionFromSubmission(submissionData, userId) {
             console.log(`[questRewardModule.js] ❌ Failed to complete art quest: ${completionResult.reason || completionResult.error}`);
             return completionResult;
         }
-        
-        // Credit tagged collaborators who are active participants (not gated on collabAllowed — that flag is for token/collab bonus rules)
-        if (submissionData.collab) {
-            const collabList = Array.isArray(submissionData.collab) ? submissionData.collab : (submissionData.collab ? [submissionData.collab] : []);
-            for (const mention of collabList) {
-                if (!mention || typeof mention !== 'string') continue;
-                const collaboratorId = mention.replace(/[<@!>]/g, '').trim();
-                if (!collaboratorId || collaboratorId === userId) continue;
-                const collabParticipant = quest.getParticipant(collaboratorId);
-                if (!collabParticipant) continue;
-                await syncApprovedSubmissionsToParticipant(quest, collabParticipant);
-                await quest.save();
-                if (collabParticipant.progress === 'completed' || collabParticipant.progress === 'rewarded') {
-                    console.log(`[questRewardModule.js] ✅ Art quest collab already completed via sync: ${collabParticipant.characterName} in quest ${questID}`);
-                    continue;
-                }
-                if (collabParticipant.progress !== 'active') continue;
-                const collabResult = await quest.completeFromArtSubmission(collaboratorId, submissionData);
-                if (collabResult.success) {
-                    console.log(`[questRewardModule.js] ✅ Art quest collab credit: ${collabParticipant.characterName} in quest ${questID}`);
-                }
-            }
-        }
-        
+
+        await creditCollabAndTaggedParticipantsForArt(quest, submissionData, userId);
+        await quest.save();
+
         // Check if the entire quest should be completed
         // Note: checkAutoCompletion now requires time expiration before completing
         // This prevents premature completion when submissions are approved before quest period ends
@@ -1820,29 +1999,32 @@ async function processWritingQuestCompletionFromSubmission(submissionData, userI
         
         // Get participant before checking quest status
         const participant = quest.getParticipant(userId);
-        
-        // SAFEGUARD: Sync approved submissions even if quest is not active
-        // This handles cases where quest expired but submission was approved
-        if (participant && (quest.questType === 'Writing' || quest.questType === 'Art / Writing')) {
-            await syncApprovedSubmissionsToParticipant(quest, participant);
-            await quest.save(); // Save after syncing
-        }
-        
-        // Check if quest is active
-        if (quest.status !== 'active') {
-            console.log(`[questRewardModule.js] ⚠️ Quest ${questID} is not active (status: ${quest.status})`);
-            // Even if quest is not active, if we synced submissions and participant is now completed, return success
-            if (participant && (participant.progress === 'completed' || participant.progress === 'rewarded')) {
-                console.log(`[questRewardModule.js] ✅ Participant ${participant.characterName} was marked as completed via submission sync`);
-                return { success: true, questCompleted: false, synced: true };
-            }
-            return { success: false, reason: 'Quest not active' };
-        }
-        
+
         // Validate quest type before attempting completion
         if (quest.questType !== 'Writing' && quest.questType !== 'Art / Writing') {
             console.log(`[questRewardModule.js] ⚠️ Quest ${questID} is not a Writing quest (type: ${quest.questType})`);
             return { success: false, reason: `Quest is not a Writing quest (type: ${quest.questType})` };
+        }
+
+        // SAFEGUARD: Sync approved submissions even if quest is not active
+        if (participant && (quest.questType === 'Writing' || quest.questType === 'Art / Writing')) {
+            await syncApprovedSubmissionsToParticipant(quest, participant);
+            await quest.save();
+        }
+
+        if (quest.status !== 'active') {
+            console.log(`[questRewardModule.js] ⚠️ Quest ${questID} is not active (status: ${quest.status}) — crediting collab/tagged participants if any`);
+            await creditCollabAndTaggedParticipantsForWriting(quest, submissionData, userId);
+            await quest.save();
+            if (participant && (participant.progress === 'completed' || participant.progress === 'rewarded')) {
+                console.log(`[questRewardModule.js] ✅ Submitting participant ${participant.characterName} completed/rewarded via sync`);
+            }
+            try {
+                await processQuestCompletion(questID);
+            } catch (pcErr) {
+                console.warn(`[questRewardModule.js] processQuestCompletion (inactive writing path): ${pcErr.message}`);
+            }
+            return { success: true, questCompleted: false, synced: true };
         }
         
         let completionResult;
@@ -1857,49 +2039,29 @@ async function processWritingQuestCompletionFromSubmission(submissionData, userI
             console.log(`[questRewardModule.js] ❌ Failed to complete writing quest: ${completionResult.reason || completionResult.error}`);
             return completionResult;
         }
-        
-        // Credit tagged collaborators who are active participants (not gated on collabAllowed — that flag is for token/collab bonus rules)
-        if (submissionData.collab) {
-            const collabList = Array.isArray(submissionData.collab) ? submissionData.collab : (submissionData.collab ? [submissionData.collab] : []);
-            for (const mention of collabList) {
-                if (!mention || typeof mention !== 'string') continue;
-                const collaboratorId = mention.replace(/[<@!>]/g, '').trim();
-                if (!collaboratorId || collaboratorId === userId) continue;
-                const collabParticipant = quest.getParticipant(collaboratorId);
-                if (!collabParticipant) continue;
-                await syncApprovedSubmissionsToParticipant(quest, collabParticipant);
-                await quest.save();
-                if (collabParticipant.progress === 'completed' || collabParticipant.progress === 'rewarded') {
-                    console.log(`[questRewardModule.js] ✅ Writing quest collab already completed via sync: ${collabParticipant.characterName} in quest ${questID}`);
-                    continue;
-                }
-                if (collabParticipant.progress !== 'active') continue;
-                const collabResult = await quest.completeFromWritingSubmission(collaboratorId, submissionData);
-                if (collabResult.success) {
-                    console.log(`[questRewardModule.js] ✅ Writing quest collab credit: ${collabParticipant.characterName} in quest ${questID}`);
-                }
-            }
-        }
-        
+
+        await creditCollabAndTaggedParticipantsForWriting(quest, submissionData, userId);
+        await quest.save();
+
         // Check if the entire quest should be completed
         // Note: checkAutoCompletion now requires time expiration before completing
         // This prevents premature completion when submissions are approved before quest period ends
         const autoCompletionResult = await quest.checkAutoCompletion();
-        
+
         if (autoCompletionResult.completed && autoCompletionResult.needsRewardProcessing) {
             console.log(`[questRewardModule.js] ✅ Quest ${questID} completed: ${autoCompletionResult.reason}`);
-            
+
             // Process quest completion and distribute rewards
             await processQuestCompletion(questID);
-            
+
             // Mark completion as processed to prevent duplicates
             await quest.markCompletionProcessed();
         } else if (autoCompletionResult.reason && autoCompletionResult.reason.includes('quest period has not ended')) {
             console.log(`[questRewardModule.js] ⏳ Quest ${questID} participant completed, but quest period has not ended yet. Completion will be processed when period expires.`);
         }
-        
+
         return { success: true, questCompleted: autoCompletionResult.completed };
-        
+
     } catch (error) {
         console.error(`[questRewardModule.js] ❌ Error processing writing quest completion:`, error);
         return { success: false, error: error.message };

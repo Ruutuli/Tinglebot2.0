@@ -1324,6 +1324,71 @@ export default function AdminQuestsPage() {
           </div>
         )}
 
+        <details className="mb-6 rounded-lg border border-[var(--totk-dark-ocher)]/50 bg-[var(--botw-black)]/30 px-4 py-3 text-sm text-[var(--totk-grey-200)]">
+          <summary className="cursor-pointer select-none font-semibold text-[var(--totk-ivory)]">
+            Status guide (quest list &amp; participants)
+          </summary>
+          <div className="mt-3 space-y-4 border-t border-[var(--totk-dark-ocher)]/40 pt-3">
+            <div>
+              <h4 className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-[var(--totk-grey-200)]">
+                Quest list — Status
+              </h4>
+              <ul className="list-inside list-disc space-y-1 pl-1">
+                <li>
+                  <span className="text-[var(--totk-ivory)]">Draft</span> — Not published yet; safe to edit before players see it.
+                </li>
+                <li>
+                  <span className="text-[var(--totk-ivory)]">Pending</span> — Waiting to go live or scheduled; not treated as an active run yet.
+                </li>
+                <li>
+                  <span className="text-[var(--totk-ivory)]">Active</span> — The quest is open; participants can sign up and progress.
+                </li>
+                <li>
+                  <span className="text-[var(--totk-ivory)]">Complete</span> — The quest run is closed out on the dashboard (period ended or staff marked done). Participant rows may still show rewards in progress.
+                </li>
+              </ul>
+            </div>
+            <div>
+              <h4 className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-[var(--totk-grey-200)]">
+                Quest list — Posted
+              </h4>
+              <ul className="list-inside list-disc space-y-1 pl-1">
+                <li>
+                  <span className="text-[var(--totk-ivory)]">Yes</span> — The bot posted this quest to the Discord quest board.
+                </li>
+                <li>
+                  <span className="text-[var(--totk-ivory)]">No</span> — Not announced there yet (quest can still be draft/pending/active in the dashboard).
+                </li>
+              </ul>
+            </div>
+            <div>
+              <h4 className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-[var(--totk-grey-200)]">
+                Manage participants — Status
+              </h4>
+              <p className="mb-2 text-xs text-[var(--totk-grey-200)]">
+                These come from the bot&apos;s participant <code className="rounded bg-[var(--botw-warm-black)] px-1 font-mono text-[var(--totk-ivory)]">progress</code> field. Token amounts are mirrored from payouts when recorded.
+              </p>
+              <ul className="list-inside list-disc space-y-1 pl-1">
+                <li>
+                  <span className="text-[var(--totk-ivory)]">active</span> — Still in the quest; requirements not finished (or not synced yet).
+                </li>
+                <li>
+                  <span className="text-[var(--totk-ivory)]">completed</span> — Requirements met. If <strong>Tokens</strong> is still empty, the bot may not have written <code className="rounded bg-[var(--botw-warm-black)] px-1 font-mono text-[11px]">tokensEarned</code> yet, or tokens were paid only in Sheikah (submission). Use <strong>Sync reward status</strong> to align the row without paying again.
+                </li>
+                <li>
+                  <span className="text-[var(--totk-ivory)]">rewarded</span> — Stored as rewarded, <em>or</em> the dashboard shows this when progress is <code className="rounded bg-[var(--botw-warm-black)] px-1 font-mono text-[11px]">completed</code> but <strong>Tokens</strong> is already set (paid / recorded).
+                </li>
+                <li>
+                  <span className="text-[var(--totk-ivory)]">failed</span> — Did not complete (e.g. time ran out or they dropped).
+                </li>
+                <li>
+                  <span className="text-[var(--totk-ivory)]">disqualified</span> — Removed for breaking rules or location requirements.
+                </li>
+              </ul>
+            </div>
+          </div>
+        </details>
+
         <div className="mb-6">
           <Tabs<QuestTab>
             tabs={QUEST_TABS}
@@ -1679,7 +1744,7 @@ export default function AdminQuestsPage() {
           <section className="rounded-xl border-2 border-[var(--totk-dark-ocher)] bg-gradient-to-br from-[var(--botw-warm-black)] to-[var(--botw-black)] p-5 sm:p-6 shadow-lg">
             <h2 className="mb-2 text-xl font-semibold text-[var(--totk-ivory)]">View / Edit quests</h2>
             <p className="mb-4 text-sm text-[var(--totk-grey-200)]">
-              Click a title to view, or <strong>Edit</strong> to load a quest into the Create tab and update it.
+              Click a title to view, or <strong>Edit</strong> to load a quest into the Create tab and update it. Open <strong>Status guide</strong> above for what each status means.
             </p>
             {quests.length > 0 && (
               <div className="mb-4 flex flex-wrap items-center gap-3">
@@ -1800,6 +1865,25 @@ export default function AdminQuestsPage() {
                     )}
                   </p>
                 )}
+                <details className="mt-2 rounded border border-[var(--totk-dark-ocher)]/40 bg-[var(--botw-black)]/40 px-3 py-2 text-xs text-[var(--totk-grey-200)]">
+                  <summary className="cursor-pointer select-none font-medium text-[var(--totk-ivory)]">
+                    What do participant statuses mean?
+                  </summary>
+                  <ul className="mt-2 list-inside list-disc space-y-1 border-t border-[var(--totk-dark-ocher)]/30 pt-2 pl-1">
+                    <li>
+                      <span className="text-[var(--totk-ivory)]">active</span> — Still participating.
+                    </li>
+                    <li>
+                      <span className="text-[var(--totk-ivory)]">completed</span> — Done; if tokens show &quot;—&quot;, sync or wait for the bot.
+                    </li>
+                    <li>
+                      <span className="text-[var(--totk-ivory)]">rewarded</span> — Payout recorded on this row (or completed + tokens set).
+                    </li>
+                    <li>
+                      <span className="text-[var(--totk-ivory)]">failed</span> / <span className="text-[var(--totk-ivory)]">disqualified</span> — Did not finish or removed.
+                    </li>
+                  </ul>
+                </details>
               </div>
               <div className="flex-1 overflow-y-auto p-4">
                 {!manageQuest ? (
