@@ -21,6 +21,8 @@ if (require('fs').existsSync(envSpecificPath)) {
 
 const { handleError } = require('@/utils/globalErrorHandler');
 const logger = require('@/utils/logger');
+const moment = require('moment-timezone');
+const SCHEDULE_TZ_EASTERN = 'America/New_York';
 // ============================================================================
 // Discord.js Components
 // ------------------- Importing Discord.js components -------------------
@@ -111,14 +113,12 @@ async function sendBloodMoonAnnouncement(client, channelId, message) {
       return;
     }
 
-    // Determine the correct date for the Blood Moon announcement
-    // Use EST-equivalent date (UTC-5)
-    const now = new Date();
-    // EST is UTC-5, subtract 5 hours
-    const estTime = new Date(now.getTime() - 5 * 60 * 60 * 1000);
-    const today = normalizeDate(estTime);
-    
-    logger.info('BLOODMOON', `Checking announcement for channel ${channelId} - EST date: ${today.toDateString()} (${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')})`);
+    // Day-before check uses Eastern calendar date (handles EST/EDT)
+    const m = moment.tz(SCHEDULE_TZ_EASTERN);
+    const today = m.clone().startOf('day');
+    const todayDate = new Date(m.year(), m.month(), m.date());
+
+    logger.info('BLOODMOON', `Checking announcement for channel ${channelId} - Eastern date: ${todayDate.toDateString()} (${m.format('YYYY-MM-DD')})`);
     
     // SAFETY CHECK: Only send announcements if today is specifically the DAY BEFORE a Blood Moon
     // (not during the actual Blood Moon period)
@@ -127,16 +127,14 @@ async function sendBloodMoonAnnouncement(client, channelId, message) {
     
     for (const { realDate } of bloodmoonDates) {
       const [month, day] = realDate.split('-').map(Number);
-      const currentBloodMoonDate = normalizeDate(new Date(today.getFullYear(), month - 1, day));
-      const dayBefore = new Date(currentBloodMoonDate);
-      dayBefore.setDate(currentBloodMoonDate.getDate() - 1);
-      const normalizedDayBefore = normalizeDate(dayBefore);
-      
-      logger.info('BLOODMOON', `Comparing: Today ${today.toDateString()} (${today.getTime()}) vs Day Before ${normalizedDayBefore.toDateString()} (${normalizedDayBefore.getTime()}) for Blood Moon ${realDate}`);
-      
-      if (today.getTime() === normalizedDayBefore.getTime()) {
+      const currentBloodMoonDate = moment.tz([m.year(), month - 1, day], SCHEDULE_TZ_EASTERN).startOf('day');
+      const normalizedDayBefore = currentBloodMoonDate.clone().subtract(1, 'day');
+
+      logger.info('BLOODMOON', `Comparing: Today ${today.format('YYYY-MM-DD')} vs Day Before ${normalizedDayBefore.format('YYYY-MM-DD')} for Blood Moon ${realDate}`);
+
+      if (today.isSame(normalizedDayBefore, 'day')) {
         isDayBeforeBloodMoon = true;
-        bloodMoonDate = currentBloodMoonDate;
+        bloodMoonDate = new Date(m.year(), month - 1, day);
         logger.info('BLOODMOON', `Match found! Today is the day before Blood Moon ${realDate}`);
         break;
       }
@@ -153,24 +151,20 @@ async function sendBloodMoonAnnouncement(client, channelId, message) {
     
     for (const { realDate } of bloodmoonDates) {
       const [month, day] = realDate.split('-').map(Number);
-      const currentBloodMoonDate = normalizeDate(new Date(today.getFullYear(), month - 1, day));
-      const dayBefore = new Date(currentBloodMoonDate);
-      dayBefore.setDate(currentBloodMoonDate.getDate() - 1);
-      const dayAfter = new Date(currentBloodMoonDate);
-      dayAfter.setDate(currentBloodMoonDate.getDate() + 1);
-      
-      if (today >= dayBefore && today <= dayAfter) {
-        // We're in a Blood Moon period
+      const currentBloodMoonDate = moment.tz([m.year(), month - 1, day], SCHEDULE_TZ_EASTERN).startOf('day');
+      const dayBefore = currentBloodMoonDate.clone().subtract(1, 'day');
+      const dayAfter = currentBloodMoonDate.clone().add(1, 'day');
+
+      if (today.isSameOrAfter(dayBefore, 'day') && today.isSameOrBefore(dayAfter, 'day')) {
         foundBloodMoonPeriod = true;
         if (!bloodMoonDate) {
-          bloodMoonDate = currentBloodMoonDate;
+          bloodMoonDate = new Date(m.year(), month - 1, day);
         }
         break;
       }
     }
-    
-    // Use current date for the announcement (when the announcement is posted)
-    const announcementDate = today;
+
+    const announcementDate = todayDate;
     const realWorldDate = announcementDate.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
     const hyruleanDate = convertToHyruleanDate(announcementDate);
     
@@ -206,7 +200,7 @@ async function sendBloodMoonAnnouncement(client, channelId, message) {
 
 // ------------------- sendBloodMoonEndAnnouncement -------------------
 // Sends an embed message announcing the end of the Blood Moon event.
-// Only runs at 8am EST on the day AFTER the blood moon date (scheduled task runs at 13:00 UTC).
+// Only runs at 8am Eastern on the day AFTER the blood moon date (scheduled task).
 async function sendBloodMoonEndAnnouncement(client, channelId) {
   try {
     // Check if end announcement was already sent today
@@ -214,35 +208,29 @@ async function sendBloodMoonEndAnnouncement(client, channelId) {
       return;
     }
 
-    // Use EST date so we only send when today is the day-after-blood-moon (8am EST)
-    const now = new Date();
-    const estOffset = 5 * 60 * 60 * 1000; // EST = UTC-5
-    const estTime = new Date(now.getTime() - estOffset);
-    const todayEst = normalizeDate(new Date(estTime.getUTCFullYear(), estTime.getUTCMonth(), estTime.getUTCDate()));
-    
-    // Only send when today (EST) is exactly the day AFTER a blood moon date
+    const m = moment.tz(SCHEDULE_TZ_EASTERN);
+    const todayEst = m.clone().startOf('day');
+
     let bloodMoonDate = null;
-    
+
     for (const { realDate } of bloodmoonDates) {
       const [month, day] = realDate.split('-').map(Number);
-      const currentBloodMoonDate = normalizeDate(new Date(todayEst.getFullYear(), month - 1, day));
-      const dayAfter = new Date(currentBloodMoonDate);
-      dayAfter.setDate(currentBloodMoonDate.getDate() + 1);
-      
-      if (todayEst.getTime() === dayAfter.getTime()) {
-        bloodMoonDate = currentBloodMoonDate;
-        logger.info('BLOODMOON', `Today (EST) is day after Blood Moon ${realDate} - sending end announcement`);
+      const currentBloodMoonDate = moment.tz([m.year(), month - 1, day], SCHEDULE_TZ_EASTERN).startOf('day');
+      const dayAfter = currentBloodMoonDate.clone().add(1, 'day');
+
+      if (todayEst.isSame(dayAfter, 'day')) {
+        bloodMoonDate = new Date(m.year(), month - 1, day);
+        logger.info('BLOODMOON', `Today (Eastern) is day after Blood Moon ${realDate} - sending end announcement`);
         break;
       }
     }
-    
+
     if (!bloodMoonDate) {
-      logger.info('BLOODMOON', 'Today (EST) is not the day after a Blood Moon - skipping end announcement');
+      logger.info('BLOODMOON', 'Today (Eastern) is not the day after a Blood Moon - skipping end announcement');
       return;
     }
-    
-    // Use current EST date for the announcement (when the announcement is posted)
-    const announcementDate = todayEst;
+
+    const announcementDate = new Date(m.year(), m.month(), m.date());
     const realWorldDate = announcementDate.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
     const hyruleanDate = convertToHyruleanDate(announcementDate);
     
@@ -294,20 +282,15 @@ function isBloodMoonPeriod() {
     return false;
   }
 
-  const now = new Date();
-  const today = normalizeDate(now);
-  
-  // Check if it's within the Blood Moon period (day before, blood moon date, day after)
+  const today = moment.tz(SCHEDULE_TZ_EASTERN).startOf('day');
+  const year = today.year();
+
   for (const { realDate } of bloodmoonDates) {
     const [month, day] = realDate.split('-').map(Number);
-    const bloodMoonDate = normalizeDate(new Date(today.getFullYear(), month - 1, day));
-    const dayBefore = new Date(bloodMoonDate);
-    dayBefore.setDate(bloodMoonDate.getDate() - 1);
-    const dayAfter = new Date(bloodMoonDate);
-    dayAfter.setDate(bloodMoonDate.getDate() + 1);
-    const isInRange = today >= dayBefore && today <= dayAfter;
-    
-    if (isInRange) {
+    const bloodMoonDate = moment.tz([year, month - 1, day], SCHEDULE_TZ_EASTERN).startOf('day');
+    const dayBefore = bloodMoonDate.clone().subtract(1, 'day');
+    const dayAfter = bloodMoonDate.clone().add(1, 'day');
+    if (today.isSameOrAfter(dayBefore, 'day') && today.isSameOrBefore(dayAfter, 'day')) {
       return true;
     }
   }
@@ -317,65 +300,51 @@ function isBloodMoonPeriod() {
 
 // ------------------- isBloodMoonDay -------------------
 // Checks if Blood Moon is currently active.
-// Blood Moon starts at 8 PM EST on the day BEFORE the blood moon date and ends at 8 AM EST the day AFTER.
-// For example: September 3 at 8 PM EST until September 5 at 8 AM EST.
+// Blood Moon starts at 8 PM Eastern on the day BEFORE the blood moon date and ends at 8 AM Eastern the day AFTER.
+// For example: September 3 at 8 PM Eastern until September 5 at 8 AM Eastern.
 function isBloodMoonDay() {
   if (!bloodmoonDates || !Array.isArray(bloodmoonDates)) {
     logger.error('BLOODMOON', "'bloodmoonDates' is not defined or not an array");
     return false;
   }
 
-  // Get current time in EST-equivalent (UTC-5)
-  const now = new Date();
-  // EST is UTC-5, subtract 5 hours
-  const estTime = new Date(now.getTime() - 5 * 60 * 60 * 1000);
-  const estDate = new Date(estTime.getUTCFullYear(), estTime.getUTCMonth(), estTime.getUTCDate());
-  const estHour = estTime.getUTCHours();
-  
-  // Find the Blood Moon period we're in
-  let bloodMoonDate = null;
-  
+  const m = moment.tz(SCHEDULE_TZ_EASTERN);
+  const estHour = m.hour();
+  const today = m.clone().startOf('day');
+  const year = m.year();
+
+  let bloodMoonMoment = null;
+
   for (const { realDate } of bloodmoonDates) {
     const [month, day] = realDate.split('-').map(Number);
-    const currentYearBloodMoonDate = new Date(estDate.getFullYear(), month - 1, day);
-    const dayBefore = new Date(currentYearBloodMoonDate);
-    dayBefore.setDate(currentYearBloodMoonDate.getDate() - 1);
-    const dayAfter = new Date(currentYearBloodMoonDate);
-    dayAfter.setDate(currentYearBloodMoonDate.getDate() + 1);
-    
-    // Check if current EST date is within the 3-day blood moon window
-    if (estDate >= dayBefore && estDate <= dayAfter) {
-      bloodMoonDate = currentYearBloodMoonDate;
+    const bm = moment.tz([year, month - 1, day], SCHEDULE_TZ_EASTERN).startOf('day');
+    const dayBefore = bm.clone().subtract(1, 'day');
+    const dayAfter = bm.clone().add(1, 'day');
+
+    if (today.isSame(dayBefore, 'day') || today.isSame(bm, 'day') || today.isSame(dayAfter, 'day')) {
+      bloodMoonMoment = bm;
       break;
     }
   }
-  
-  // If we're not in a Blood Moon period, return false
-  if (!bloodMoonDate) {
+
+  if (!bloodMoonMoment) {
     return false;
   }
-  
-  // Calculate the start and end dates for this blood moon
-  const dayBefore = new Date(bloodMoonDate);
-  dayBefore.setDate(bloodMoonDate.getDate() - 1);
-  const dayAfter = new Date(bloodMoonDate);
-  dayAfter.setDate(bloodMoonDate.getDate() + 1);
-  
-  // Check if we're in the Blood Moon period and at the right time
-  let isActive = false;
-  
-  if (estDate.getTime() === dayBefore.getTime()) {
-    // We're on the day before the Blood Moon date - check if it's 8 PM or later
-    isActive = estHour >= 20;
-  } else if (estDate.getTime() === bloodMoonDate.getTime()) {
-    // We're on the actual Blood Moon date - always active
-    isActive = true;
-  } else if (estDate.getTime() === dayAfter.getTime()) {
-    // We're on the day after the Blood Moon date - check if it's before 8 AM
-    isActive = estHour < 8;
+
+  const bm = bloodMoonMoment.clone();
+  const dayBefore = bm.clone().subtract(1, 'day');
+  const dayAfter = bm.clone().add(1, 'day');
+
+  if (today.isSame(dayBefore, 'day')) {
+    return estHour >= 20;
   }
-  
-  return isActive;
+  if (today.isSame(bm, 'day')) {
+    return true;
+  }
+  if (today.isSame(dayAfter, 'day')) {
+    return estHour < 8;
+  }
+  return false;
 }
 
 

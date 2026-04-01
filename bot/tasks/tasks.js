@@ -405,7 +405,7 @@ async function bloodmoonChannelRevert(client, _data = {}) {
 // ------------------- Blight Tasks -------------------
 // ============================================================================
 
-// ------------------- blight-roll-call (8pm EST = 01:00 UTC) -------------------
+// ------------------- blight-roll-call (8pm Eastern) -------------------
 async function blightRollCall(client, _data = {}) {
   if (!client?.channels) {
     logger.error('SCHEDULED', 'blight-roll-call: Discord client not available');
@@ -420,7 +420,7 @@ async function blightRollCall(client, _data = {}) {
   }
 }
 
-// ------------------- blight-roll-call-check (7:59pm EST = 00:59 UTC, 1 min before call) -------------------
+// ------------------- blight-roll-call-check (7:59pm Eastern, 1 min before call) -------------------
 async function blightRollCallCheck(client, _data = {}) {
   if (!client?.channels) {
     logger.error('SCHEDULED', 'blight-roll-call-check: Discord client not available');

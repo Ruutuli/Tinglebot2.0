@@ -328,7 +328,7 @@ async function sendBlightCallNotifications() {
     
     const embed = {
       title: '📢 Blight Roll Call Reminder!',
-      description: 'The daily Blight roll call will begin in **15 minutes** at 8:00 PM EST!',
+      description: 'The daily Blight roll call will begin in **15 minutes** at 8:00 PM Eastern (US)!',
       color: 0xAD1457, // Blight pink/magenta
       fields: [
         {
@@ -612,7 +612,7 @@ async function sendNotificationEnabledConfirmation(userId, notificationType) {
         emoji: '📢',
         title: 'Blight Call Notifications Enabled!',
         description: 'You will now receive reminders 15 minutes before the daily Blight roll call.',
-        details: 'Never miss a Blight roll call! You\'ll be notified at 7:45 PM EST daily.'
+        details: 'Never miss a Blight roll call! You\'ll be notified at 7:45 PM Eastern (US) daily.'
       },
       debuffEndNotifications: {
         emoji: '✅',

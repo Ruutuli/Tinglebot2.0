@@ -69,61 +69,50 @@ const {
   deleteBlightRequestFromStorage
 } = require('@/utils/storage.js');
 const { generateUniqueId } = require('@/utils/uniqueIdUtils');
+const moment = require('moment-timezone');
+const BLIGHT_TZ = 'America/New_York';
 const { syncInventory } = require('./syncHandler');
 const { checkInventorySync } = require('@/utils/characterUtils');
 const { sendUserDM } = require('@/utils/messageUtils');
 
 // ============================================================================
 // ------------------- Timezone Helper Functions -------------------
-// Functions for consistent timezone handling (using UTC)
+// Blight daily reset aligns with 8:00 PM America/New_York (EST/EDT), not fixed UTC.
 // ============================================================================
 
-// ------------------- Function: getHourInUTC -------------------
-// Gets the hour in UTC from a date
-function getHourInUTC(date = new Date()) {
-  return date.getUTCHours();
+// Start of the current blight roll window (most recent 8:00 PM Eastern not after reference).
+function getBlightRollWindowStart(referenceDate = new Date()) {
+  const m = moment.tz(referenceDate, BLIGHT_TZ);
+  const todayEight = m.clone().startOf('day').hour(20).minute(0).second(0).millisecond(0);
+  if (m.isBefore(todayEight)) {
+    return todayEight.clone().subtract(1, 'day').toDate();
+  }
+  return todayEight.toDate();
 }
 
-// ------------------- Function: get8PMUTC -------------------
-// Returns 8:00 PM UTC (20:00 UTC) for the given date
-function get8PMUTC(date = new Date()) {
-  // Get the date components in UTC
-  const year = date.getUTCFullYear();
-  const month = date.getUTCMonth();
-  const day = date.getUTCDate();
-  
-  // Create date at 8 PM UTC (20:00 UTC)
-  const utcDate = new Date(Date.UTC(year, month, day, 20, 0, 0));
-  
-  return utcDate;
+// Next 8:00 PM Eastern after reference (when rolls reset / next call).
+function getNextBlightRollWindowStart(referenceDate = new Date()) {
+  const m = moment.tz(referenceDate, BLIGHT_TZ);
+  const todayEight = m.clone().startOf('day').hour(20).minute(0).second(0).millisecond(0);
+  if (m.isBefore(todayEight)) {
+    return todayEight.toDate();
+  }
+  return todayEight.clone().add(1, 'day').toDate();
 }
 
-// ------------------- Function: get1AMUTC -------------------
-// Returns 1:00 AM UTC (01:00 UTC) for the given date
-// This corresponds to 8:00 PM EST (20:00 EST) the previous day
-function get1AMUTC(date = new Date()) {
-  // Get the date components in UTC
-  const year = date.getUTCFullYear();
-  const month = date.getUTCMonth();
-  const day = date.getUTCDate();
-  
-  // Create date at 1 AM UTC (01:00 UTC) - this is 8:00 PM EST the previous day
-  const utcDate = new Date(Date.UTC(year, month, day, 1, 0, 0));
-  
-  return utcDate;
+function getPreviousBlightRollWindowStart(windowStartDate) {
+  return moment.tz(windowStartDate, BLIGHT_TZ).clone().subtract(1, 'day').toDate();
 }
 
-// First 1:00 AM UTC boundary for the roll window where daily /blight rolls first apply after infection.
+// First roll-window start (8:00 PM Eastern) where daily blight rolls apply after infection.
 function getFirstBlightRollObligationBoundary(blightedAt) {
   if (!blightedAt) return null;
   const at = new Date(blightedAt);
-  let boundary = get1AMUTC(at);
-  if (at.getTime() >= boundary.getTime()) {
-    const next = new Date(at);
-    next.setUTCDate(next.getUTCDate() + 1);
-    boundary = get1AMUTC(next);
+  const windowStart = getBlightRollWindowStart(at);
+  if (at.getTime() >= windowStart.getTime()) {
+    return getNextBlightRollWindowStart(at);
   }
-  return boundary;
+  return windowStart;
 }
 
 // ============================================================================
@@ -2267,39 +2256,13 @@ async function rollForBlightProgression(interaction, characterName) {
 
     // ------------------- Enhanced Blight Call Timing Logic -------------------
     const now = new Date();
-    
-    // Get current hour in UTC
-    const utcHour = getHourInUTC(now);
-    
-    // Calculate 1:00 AM UTC today (which is 8:00 PM EST the previous day)
-    const today1AMUTC = get1AMUTC(now);
-    
-    // Calculate current and next call windows
-    const currentCallStart = new Date(today1AMUTC);
-    const nextCallStart = new Date(currentCallStart);
-    if (utcHour >= 1) {
-      nextCallStart.setDate(currentCallStart.getDate() + 1);
-    }
+
+    const rollBoundary = getBlightRollWindowStart(now);
+    const nextCallStart = getNextBlightRollWindowStart(now);
 
     const lastRollDate = character.lastRollDate || new Date(0);
-    
-    // Determine which 1:00 AM UTC boundary to check against (8:00 PM EST)
-    // If we're before 1 AM today, check against yesterday's 1 AM
-    // If we're after 1 AM today, check against today's 1 AM
-    let rollBoundary;
-    if (utcHour < 1) {
-      // Before 1 AM today - check against yesterday's 1 AM
-      // Subtract one day from now and get 1 AM UTC for that date
-      const yesterday = new Date(now);
-      yesterday.setUTCDate(yesterday.getUTCDate() - 1);
-      rollBoundary = get1AMUTC(yesterday);
-    } else {
-      // After 1 AM today - check against today's 1 AM
-      rollBoundary = today1AMUTC;
-    }
-    
-    // Check if character has already rolled since the roll boundary
-    // A character can only roll once per "day" (1 AM UTC to 1 AM UTC window, which is 8 PM EST to 8 PM EST)
+
+    // One roll per Eastern "blight day" (8:00 PM Eastern → next 8:00 PM Eastern)
     if (character.lastRollDate && character.lastRollDate > rollBoundary) {
       // Debug logging
       console.log(`[blightHandler]: ${characterName} already rolled - Last roll: ${character.lastRollDate.toISOString()}, Roll boundary: ${rollBoundary.toISOString()}, Current time: ${now.toISOString()}`);
@@ -2313,7 +2276,7 @@ async function rollForBlightProgression(interaction, characterName) {
         .setTitle('⏰ Already Rolled for Blight')
         .setDescription(
           `**${characterName}** has already rolled today.\n\n` +
-          `🎯 **Rolls reset at 8:00 PM EST (1:00 AM UTC) every day!**\n\n` +
+          `🎯 **Rolls reset every day at 8:00 PM Eastern** (same time the roll call posts).\n\n` +
           `You can roll again in **${hoursUntilNextRoll} hours and ${minutesUntilNextRoll} minutes**.\n\n` +
           `*Remember to roll daily to prevent automatic blight progression!*`
         )
@@ -2337,16 +2300,7 @@ async function rollForBlightProgression(interaction, characterName) {
     if (character.lastRollDate) {
       const DAY_MS = 24 * 60 * 60 * 1000;
 
-      // Determine the rolling window start (1:00 AM UTC) for the last time they rolled.
-      const lastRollUtcHour = getHourInUTC(character.lastRollDate);
-      let lastWindowStart;
-      if (lastRollUtcHour < 1) {
-        const d = new Date(character.lastRollDate);
-        d.setUTCDate(d.getUTCDate() - 1);
-        lastWindowStart = get1AMUTC(d);
-      } else {
-        lastWindowStart = get1AMUTC(character.lastRollDate);
-      }
+      const lastWindowStart = getBlightRollWindowStart(character.lastRollDate);
 
       const obligationBoundary = getFirstBlightRollObligationBoundary(character.blightedAt);
       if (obligationBoundary && lastWindowStart.getTime() < obligationBoundary.getTime()) {
@@ -2535,7 +2489,7 @@ async function rollForBlightProgression(interaction, characterName) {
 }
 
 // ------------------- Function: postBlightRollCall -------------------
-// Sends daily roll reminder at 8:00 PM UTC to the configured channel.
+// Sends daily roll reminder at 8:00 PM Eastern to the configured channel.
 async function postBlightRollCall(client) {
   try {
     const channelId = process.env.BLIGHT_NOTIFICATIONS_CHANNEL_ID;
@@ -2587,13 +2541,13 @@ async function postBlightRollCall(client) {
         `**~~────────────────────~~**  \n` +
         `▹ [Blight Information](https://rootsofthewild.com/world/blight 'Blight Information')  \n` +
         `**~~────────────────────~~**  \n` +
-        `:clock8: Blight calls happen every day around 8:00 PM UTC!  \n` +
+        `:clock8: Blight calls happen every day at **8:00 PM Eastern**!  \n` +
         `:alarm_clock: You must complete your roll before the next call for it to be counted!  \n` +
         `:warning: Remember, if you miss a roll you __automatically progress to the next stage__.  \n` +
         `▹To request blight healing, please use </blight heal:1306176789634355241>`
       )
       .setImage('https://storage.googleapis.com/tinglebot/border%20blight.png')
-      .setFooter({ text: 'Blight calls happen daily at 8:00 PM UTC!' })
+      .setFooter({ text: 'Blight calls happen daily at 8:00 PM Eastern (US)' })
       .setTimestamp();
 
     // Send role ping if roleId is configured
@@ -2629,7 +2583,7 @@ async function postBlightRollCall(client) {
 
 // ============================================================================
 // ------------------- Function: checkAndPostMissedBlightPing -------------------
-// Checks if the blight ping was sent since the last 8pm UTC boundary.
+// Checks if the blight ping was sent since the last 8:00 PM Eastern roll call.
 // If not, and we're past that boundary, posts the ping.
 // This is a fallback mechanism to ensure the ping is sent even if the bot was offline.
 // ============================================================================
@@ -2638,20 +2592,20 @@ async function checkAndPostMissedBlightPing(client) {
   try {
     logger.info('BLIGHT', 'checkAndPostMissedBlightPing called at ' + new Date().toISOString());
     
-    // Skip this check at exactly 1:00 AM UTC
-    // Note: 1:00 AM UTC = 8:00 PM EST (the previous day)
     const now = new Date();
+    const m = moment.tz(now, BLIGHT_TZ);
     const utcHour = now.getUTCHours();
     const utcMinute = now.getUTCMinutes();
-    
-    logger.info('BLIGHT', `Current UTC time: ${utcHour}:${utcMinute.toString().padStart(2, '0')} UTC`);
-    
-    // Skip if we're at exactly 1:00 AM UTC (when the main job runs)
-    if (utcHour === 1 && utcMinute === 0) {
-      logger.info('BLIGHT', 'Skipping missed blight ping check at 1:00 AM UTC');
+
+    logger.info('BLIGHT', `checkAndPostMissedBlightPing: Eastern ${m.format('YYYY-MM-DD HH:mm')} (${utcHour}:${utcMinute.toString().padStart(2, '0')} UTC)`);
+
+    const windowStart = getBlightRollWindowStart(now);
+    const earliestCheckAfter = moment.tz(windowStart, BLIGHT_TZ).add(5, 'minutes');
+    if (m.isBefore(earliestCheckAfter)) {
+      logger.info('BLIGHT', 'Still within 5 minutes after 8:00 PM Eastern window start — skipping backup ping check');
       return;
     }
-    
+
     const channelId = process.env.BLIGHT_NOTIFICATIONS_CHANNEL_ID;
     
     if (!client || !client.channels) {
@@ -2680,29 +2634,9 @@ async function checkAndPostMissedBlightPing(client) {
       return;
     }
     
-    // Calculate today's 1:00 AM UTC boundary (which is 8:00 PM EST the previous day)
-    // The backup check runs at 1:57 AM UTC, so we should check if a message was posted
-    // after today's 1:00 AM UTC (which is when the main job should have run at 8:00 PM EST)
-    const today1AMUTC = get1AMUTC(now);
-    
-    // The boundary we're checking against is today's 1:00 AM UTC
-    // (the main job should have run at this time, 57 minutes ago)
-    const last1AMBoundary = today1AMUTC;
-    
-    // Only proceed if we're past today's 1:00 AM UTC boundary
-    // (i.e., it's at least 1:00 AM UTC today, so the main job should have already run)
-    if (now < last1AMBoundary) {
-      logger.info('BLIGHT', 'Not yet past today\'s 1:00 AM UTC boundary (8:00 PM EST) - skipping check');
-      return;
-    }
-    
-    // Additional safety check: if we're before 1:57 AM UTC
-    if (utcHour < 1 || (utcHour === 1 && utcMinute < 57)) {
-      logger.info('BLIGHT', 'Before 1:57 AM UTC - main job may still be running, skipping backup check');
-      return;
-    }
-    
-    logger.info('BLIGHT', `Backup check running at ${utcHour}:${utcMinute.toString().padStart(2, '0')} UTC - checking if main job posted at 1:00 AM UTC (8:00 PM EST)`);
+    const lastEightPmBoundary = getBlightRollWindowStart(now);
+
+    logger.info('BLIGHT', `Backup check — looking for ping after ${moment.tz(lastEightPmBoundary, BLIGHT_TZ).format('YYYY-MM-DD HH:mm z')}`);
     
       // Fetch recent messages from the channel (last 50 messages should be enough)
       // We'll look for messages from the bot that contain the blight ping
@@ -2729,18 +2663,16 @@ async function checkAndPostMissedBlightPing(client) {
           return false;
         });
         
-        // Check if any blight ping message was sent after the last 1:00 AM UTC boundary (8:00 PM EST)
-        const pingSentAfterBoundary = blightPingMessages.some(msg => 
-          msg.createdTimestamp >= last1AMBoundary.getTime()
+        const pingSentAfterBoundary = blightPingMessages.some(msg =>
+          msg.createdTimestamp >= lastEightPmBoundary.getTime()
         );
-        
+
         if (pingSentAfterBoundary) {
-          logger.info('BLIGHT', 'Blight ping already sent since last 1:00 AM UTC boundary (8:00 PM EST) - skipping');
+          logger.info('BLIGHT', 'Blight ping already sent since last 8:00 PM Eastern boundary — skipping');
           return;
         }
-        
-        // Blight ping was not sent since the last 1:00 AM UTC boundary (8:00 PM EST) - send it now
-        logger.info('BLIGHT', 'Posting missed blight ping (fallback) - no ping found since last 1:00 AM UTC boundary');
+
+        logger.info('BLIGHT', 'Posting missed blight ping (fallback) — no ping found since last 8:00 PM Eastern boundary');
         await postBlightRollCall(client);
       
     } catch (fetchError) {
@@ -2910,22 +2842,11 @@ async function viewBlightStatus(interaction, characterName) {
       });
     }
 
-    // Add next roll reminder
-    let nextRollTime = new Date();
-    // Calculate next 1:00 AM UTC (8:00 PM EST)
-    const next1AMUTC = get1AMUTC(new Date());
-    if (next1AMUTC <= new Date()) {
-      // If it's already past 1 AM today, get tomorrow's 1 AM
-      const tomorrow = new Date();
-      tomorrow.setUTCDate(tomorrow.getUTCDate() + 1);
-      nextRollTime = get1AMUTC(tomorrow);
-    } else {
-      nextRollTime = next1AMUTC;
-    }
-    
+    const nextRollTime = getNextBlightRollWindowStart(new Date());
+
     embed.addFields({
       name: '⏰ Next Roll Call',
-      value: `<t:${Math.floor(nextRollTime.getTime() / 1000)}:R> at 8:00 PM UTC`,
+      value: `<t:${Math.floor(nextRollTime.getTime() / 1000)}:R> — **8:00 PM Eastern** (<t:${Math.floor(nextRollTime.getTime() / 1000)}:F>)`,
       inline: false
     });
 
@@ -3751,47 +3672,11 @@ async function checkMissedRolls(client) {
       const lastRollDate = character.lastRollDate || new Date(0);
       const timeSinceLastRoll = Date.now() - lastRollDate.getTime();
       
-      // ---- Calculate blight call boundaries for robust checking ----
-      // This uses the same logic as rollForBlightProgression to ensure consistency
+      // ---- Calculate blight call boundaries (same as rollForBlightProgression: 8:00 PM Eastern) ----
       const now = new Date();
-      
-      // Get current hour and minute in UTC (check runs at 00:59, 1 min before 01:00 call)
-      const utcHour = getHourInUTC(now);
-      const utcMinute = now.getUTCMinutes();
-      
-      // Calculate today's 1 AM UTC (which is 8:00 PM EST the previous day)
-      const today1AMUTC = get1AMUTC(now);
-      
-      // Determine the current roll boundary (same logic as rollForBlightProgression)
-      // If we're before 1 AM today, check against yesterday's 1 AM
-      // If we're after 1 AM today, check against today's 1 AM
-      let currentRollBoundary;
-      if (utcHour < 1) {
-        // Before 1 AM today - check against yesterday's 1 AM
-        const yesterday = new Date(now);
-        yesterday.setUTCDate(yesterday.getUTCDate() - 1);
-        currentRollBoundary = get1AMUTC(yesterday);
-      } else {
-        // After 1 AM today - check against today's 1 AM
-        currentRollBoundary = today1AMUTC;
-      }
-      
-      // Calculate the previous blight call period (for missed roll detection)
-      // This is the period that just ended (the one we're checking if they missed)
-      // If we're at or after 1 AM today, the previous period was yesterday's 1 AM to today's 1 AM
-      // If we're before 1 AM today, the previous period was the day before yesterday's 1 AM to yesterday's 1 AM
-      let previousBlightCall;
-      if (utcHour >= 1) {
-        // At or after 1 AM today - previous period ended at today's 1 AM, started at yesterday's 1 AM
-        const yesterday = new Date(now);
-        yesterday.setUTCDate(yesterday.getUTCDate() - 1);
-        previousBlightCall = get1AMUTC(yesterday); // Yesterday's 1 AM (start of the period we're checking)
-      } else {
-        // Before 1 AM today - previous period ended at yesterday's 1 AM, started at day before yesterday's 1 AM
-        const dayBeforeYesterday = new Date(now);
-        dayBeforeYesterday.setUTCDate(dayBeforeYesterday.getUTCDate() - 2);
-        previousBlightCall = get1AMUTC(dayBeforeYesterday); // Day before yesterday's 1 AM
-      }
+
+      const currentRollBoundary = getBlightRollWindowStart(now);
+      const previousBlightCall = getPreviousBlightRollWindowStart(currentRollBoundary);
       
       // Enhanced logging for debugging
       logger.info('BLIGHT', `Checking ${character.name} - UTC Time: ${now.toISOString()}, Last roll: ${lastRollDate.toISOString()}, Current boundary: ${currentRollBoundary.toISOString()}, Previous call: ${previousBlightCall.toISOString()}, Time since roll: ${Math.floor(timeSinceLastRoll / (1000 * 60 * 60))} hours`);
@@ -4060,14 +3945,13 @@ async function checkMissedRolls(client) {
       // ========================================================================
       // ------------------- Missed Roll → Auto Progression -------------------
       // ========================================================================
-      // Check if someone missed their roll; if so, auto-advance their blight stage.
+      // checkMissedRolls runs only at 7:59 PM Eastern (blight-roll-call-check cron).
       // A character has missed a roll if:
-      // 1. We're at or past 12:59 AM UTC (check runs 1 min before 1 AM call = 8 PM EST)
-      // 2. Their last roll was BEFORE the previous blight call boundary (they didn't roll in the period)
-      // 3. They're not at stage 5 yet
+      // 1. Their last roll was not after the current window start (currentRollBoundary)
+      // 2. They're not at stage 5 yet
       //
       // We've already skipped above: rolled in period, paused, or stage 5.
-      const isPastBlightCallTime = (utcHour === 0 && utcMinute >= 59) || utcHour >= 1;
+      const isPastBlightCallTime = true;
       // Auto-advance if they didn't roll during the current rolling window.
       const lastRollBeforeCurrentWindow = !character.lastRollDate || character.lastRollDate <= currentRollBoundary;
       const shouldProgress = isPastBlightCallTime && lastRollBeforeCurrentWindow && character.blightStage < 5;
