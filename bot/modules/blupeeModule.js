@@ -513,22 +513,25 @@ function buildTableEntries() {
 
 async function ensureBlupeeTable() {
   const entries = buildTableEntries();
-  let table = await TableRoll.findOne({ name: BLUPEE_TABLE_NAME });
-  if (!table) {
-    table = new TableRoll({
-      name: BLUPEE_TABLE_NAME,
-      entries,
-      createdBy: SYSTEM_CREATOR,
-      isActive: true,
-      maxRollsPerDay: 0
-    });
-  } else {
-    table.entries = entries;
-    table.isActive = true;
-    table.maxRollsPerDay = 0;
-    table.markModified('entries');
-  }
-  await table.save();
+  const totalWeight = entries.reduce((sum, entry) => sum + (entry.weight || 1), 0);
+  // Atomic upsert avoids VersionError when multiple /minigame blupee calls run concurrently
+  // (find + save races on __v). Pre-save totalWeight logic is mirrored here.
+  await TableRoll.findOneAndUpdate(
+    { name: BLUPEE_TABLE_NAME },
+    {
+      $set: {
+        entries,
+        isActive: true,
+        maxRollsPerDay: 0,
+        totalWeight,
+        updatedAt: new Date()
+      },
+      $setOnInsert: {
+        createdBy: SYSTEM_CREATOR
+      }
+    },
+    { upsert: true, new: true, setDefaultsOnInsert: true, runValidators: true }
+  );
 }
 
 function parseOutcome(item) {
