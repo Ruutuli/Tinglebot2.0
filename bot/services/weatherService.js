@@ -18,6 +18,7 @@ const { AttachmentBuilder, EmbedBuilder } = require('discord.js');
 // Third-party
 const Jimp = require('jimp');
 const mongoose = require('mongoose');
+const moment = require('moment-timezone');
 
 // Local modules
 const Weather = require('../models/WeatherModel');
@@ -818,6 +819,39 @@ async function markWeatherAsPmPosted(village, weather) {
     console.log(`[weatherService.js]✅ Marked weather as PM-posted for ${normalizedVillage} (ID: ${id})`);
   }
   return updated;
+}
+
+// Idempotency for the 8am Eastern AM post. Weather periods are anchored at 13:00 UTC; during EDT,
+// 8am Eastern is 12:00 UTC (before that boundary). A stray post at 13:00 UTC (e.g. old UTC-only
+// schedule) can mark postedToDiscord for the same period before the real 8am run — this avoids
+// skipping the community 8am post in that case while still skipping same-day double-fires.
+const AM_WEATHER_POST_TZ = 'America/New_York';
+
+function shouldSkipDailyAmWeatherPost(weather, now = new Date()) {
+  if (!weather?.postedToDiscord) return false;
+  if (!weather.postedAt) return false;
+
+  const postedAt = weather.postedAt instanceof Date ? weather.postedAt : new Date(weather.postedAt);
+  if (Number.isNaN(postedAt.getTime())) return false;
+
+  const mPosted = moment(postedAt).tz(AM_WEATHER_POST_TZ);
+  const mNow = moment(now).tz(AM_WEATHER_POST_TZ);
+  if (mPosted.format('YYYY-MM-DD') === mNow.format('YYYY-MM-DD')) {
+    return true;
+  }
+
+  const { startUTC: startOfPeriodUTC, endUTC: endOfPeriodUTC } = getCurrentPeriodBounds(now);
+  const twelveHoursAgo = now.getTime() - 12 * 60 * 60 * 1000;
+  const postedMs = postedAt.getTime();
+  if (
+    postedMs >= startOfPeriodUTC.getTime() &&
+    postedMs <= endOfPeriodUTC.getTime() &&
+    postedMs < twelveHoursAgo
+  ) {
+    return true;
+  }
+
+  return false;
 }
 
 // ------------------- Get Weather Without Generation ------------------
@@ -1741,6 +1775,7 @@ module.exports = {
   simulateWeightedWeather,
   markWeatherAsPosted,
   markWeatherAsPmPosted,
+  shouldSkipDailyAmWeatherPost,
 
   // Banner and embed generation
   generateBanner,

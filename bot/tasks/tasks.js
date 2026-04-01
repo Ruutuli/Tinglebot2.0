@@ -16,6 +16,7 @@ const {
   markWeatherAsPmPosted,
   getWeatherWithoutGeneration,
   calculateWeatherDamage,
+  shouldSkipDailyAmWeatherPost,
 } = require('@/services/weatherService');
 const { damageVillage } = require('@/modules/villageModule');
 const Character = require('@/models/CharacterModel');
@@ -152,8 +153,8 @@ async function dailyWeather(client, _data = {}) {
         logger.warn('SCHEDULED', `daily-weather: no weather for ${village}`);
         continue;
       }
-      // Idempotency: if already posted this period, do nothing.
-      if (weather.postedToDiscord === true) {
+      // Idempotency: skip only if AM post already done for this run (see shouldSkipDailyAmWeatherPost).
+      if (shouldSkipDailyAmWeatherPost(weather)) {
         logger.info('SCHEDULED', `daily-weather: already posted for ${village}, skipping`);
         continue;
       }
@@ -200,7 +201,7 @@ async function dailyWeather(client, _data = {}) {
   logger.success('SCHEDULED', 'daily-weather: done');
 }
 
-// ------------------- weather-fallback-check (1:15pm UTC = 13:15 UTC) -------------------
+// ------------------- weather-fallback-check (8:15am Eastern) -------------------
 async function weatherFallbackCheck(client, _data = {}) {
   if (!client?.channels) {
     logger.error('SCHEDULED', 'weather-fallback-check: Discord client not available');
@@ -232,7 +233,7 @@ async function weatherFallbackCheck(client, _data = {}) {
         continue;
       }
 
-      if (weather.postedToDiscord === true) {
+      if (shouldSkipDailyAmWeatherPost(weather)) {
         logger.info('SCHEDULED', `weather-fallback-check: Weather already marked as posted for ${village}, skipping`);
         continue;
       }
