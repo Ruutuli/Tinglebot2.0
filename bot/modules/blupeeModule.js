@@ -15,6 +15,9 @@ const logger = require('@/utils/logger');
 const { handleInteractionError } = require('@/utils/globalErrorHandler');
 
 const BLUPEE_TABLE_NAME = 'blupee';
+/** Success catch embed accent (bright green). */
+const BLUPEE_EMBED_COLOR_CATCH = 0x00ff88;
+const BLUPEE_EMBED_COLOR_DEFAULT = 0x5865f2;
 /** Interactive Blupee season quests are recognized by title (not quest table-roll metadata). */
 const BLUPEE_QUEST_TITLE_RE = /\bblupee\b/i;
 const TEST_CHANNEL_ID = '1391812848099004578';
@@ -547,7 +550,7 @@ function buildBlupeeEmbed({ outcome, flavorBody, extraFooter, inventoryNote, act
   const description = sections.join('\n\n');
 
   const embed = new EmbedBuilder()
-    .setColor(0x5865f2)
+    .setColor(outcome === 'catch' ? BLUPEE_EMBED_COLOR_CATCH : BLUPEE_EMBED_COLOR_DEFAULT)
     .setDescription(description)
     .setTimestamp();
 
@@ -686,10 +689,22 @@ async function rollBlupee(interaction, character, requestedSessionId) {
 
   const spawnDoc = await TempData.findByTypeAndKey('blupeeSpawn', stateKey);
   if (!spawnDoc || spawnDoc.data?.virtual) {
-    return interaction.editReply({
-      content:
-        '❌ No Blupee is active here yet. Wait for a moderator to spawn one, or the next scheduled spawn.'
-    });
+    const noSpawnEmbed = new EmbedBuilder()
+      .setColor(0xff4d4f)
+      .setTitle('💨 No Blupee in this hall')
+      .setDescription(
+        'You take a slow turn through the square—**no telltale glint**, no dart of blue between the stones. ' +
+        'Either nothing’s been spotted **here** yet, or the last one’s already slipped away.\n\n' +
+        '**What to do:** watch the town hall channels for a new sighting post (with a **session ID**), ' 
+      )
+      .addFields({
+        name: 'When one appears',
+        value: `Use ${getBlupeeCommandMention()} with the posted \`id:\` and your \`charactername:\`.`,
+        inline: false
+      })
+      .setTimestamp()
+      .setFooter({ text: 'Blupee' });
+    return interaction.editReply({ embeds: [noSpawnEmbed] });
   }
 
   const participantState = { ...(spawnDoc.data?.participantState || {}) };
@@ -697,7 +712,8 @@ async function rollBlupee(interaction, character, requestedSessionId) {
   const spawnSessionId = String(spawnDoc.data?.sessionId || '').trim() || null;
   const sessionLine = spawnSessionId ? `🧾 **Session ID:** \`${spawnSessionId}\`` : null;
   const activeVillage = String(spawnDoc.data?.village || getBlupeeVillageFromStateKey(stateKey) || '').trim() || null;
-  const characterVillage = String(character?.currentVillage || character?.homeVillage || '').trim();
+  // Town-hall spawns: character must be in that village *now* (not home village).
+  const characterVillage = String(character?.currentVillage || '').trim();
   // Bonus and village validation bypasses should apply ONLY to real mod characters
   // that exist in the modcharacters collection.
   const isModCharacter = Boolean(character?._id && await ModCharacter.exists({ _id: character._id }));
@@ -735,7 +751,7 @@ async function rollBlupee(interaction, character, requestedSessionId) {
         .setColor(0xff4d4f)
         .setTitle('❌ Wrong Village For This Blupee Session')
         .setDescription(
-          `**${actorName || 'That character'}** is currently in **${characterVillage || 'Unknown'}**.\nThis Blupee session is active in **${activeVillage}**.\n\nMove the character to **${activeVillage}** first, then try again.`
+          `**${actorName || 'That character'}**’s **current village** is **${characterVillage || 'not set / unknown'}**.\nThis Blupee spawned in **${activeVillage}**.\n\nUpdate the character’s **current village** to **${activeVillage}** (or move IC), then try again.`
         )
         .setTimestamp()
         .setFooter({ text: 'Blupee' });
