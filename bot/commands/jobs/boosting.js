@@ -737,7 +737,7 @@ async function getActiveBoostEffect(characterName, category) {
   logger.error('BOOST', `Could not find booster character "${activeBoost.boostingCharacter}"`);
   return null;
  }
- const boosterJob = getEffectiveJob(boosterCharacter);
+ const boosterJob = activeBoost.boosterJob || getEffectiveJob(boosterCharacter);
  return getBoostEffect(boosterJob, category);
 }
 

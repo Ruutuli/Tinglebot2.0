@@ -826,6 +826,30 @@ module.exports = {
       
       // Note: Google Sheets sync is handled by addItemInventoryDatabase
 
+      const boosterNameBeforeClear = freshCharacter.boostedBy;
+      const activeBoostAtCraft = boosterNameBeforeClear
+        ? await retrieveBoostingRequestFromTempDataByCharacter(freshCharacter.name)
+        : null;
+
+      // ------------------- Deactivate Booster's Second Job Voucher (Entertainer Crafting / Song of Double Time) -------------------
+      if (
+        activeBoostAtCraft &&
+        activeBoostAtCraft.category === 'Crafting' &&
+        (activeBoostAtCraft.boosterJob || '').trim().toLowerCase() === 'entertainer' &&
+        boosterNameBeforeClear
+      ) {
+        const { fetchCharacterByName } = require('@/database/db');
+        const boosterCharacter = await fetchCharacterByName(boosterNameBeforeClear);
+        if (boosterCharacter && isBoosterUsingVoucherForJob(boosterCharacter, 'Entertainer')) {
+          const deactivationResult = await deactivateJobVoucher(boosterCharacter._id, { afterUse: true });
+          if (!deactivationResult.success) {
+            error('CRFT', `Failed to deactivate booster job voucher for ${boosterCharacter.name} after Entertainer Crafting use`);
+          } else {
+            info('CRFT', `Booster job voucher deactivated for ${boosterCharacter.name} after Entertainer Crafting use`);
+          }
+        }
+      }
+
       // ------------------- Clear Boost After Use -------------------
       await clearBoostAfterUse(freshCharacter, {
         client: interaction.client,
@@ -833,9 +857,9 @@ module.exports = {
       });
 
       // ------------------- Deactivate Booster's Second Job Voucher (Teacher Crafting) -------------------
-      if (teacherStaminaContribution > 0 && freshCharacter.boostedBy) {
+      if (teacherStaminaContribution > 0 && boosterNameBeforeClear) {
         const { fetchCharacterByName } = require('@/database/db');
-        const boosterCharacter = await fetchCharacterByName(freshCharacter.boostedBy);
+        const boosterCharacter = await fetchCharacterByName(boosterNameBeforeClear);
         if (boosterCharacter && boosterCharacter.jobVoucher) {
           const deactivationResult = await deactivateJobVoucher(boosterCharacter._id, { afterUse: true });
           if (!deactivationResult.success) {

@@ -40,8 +40,14 @@ async function applyBoostToAction(characterName, category, data, additionalData 
       return data;
     }
 
-    // Apply the boost effect using the booster's job
-    const boostedData = await applyBoostEffect(activeBoost.boostingCharacter, category, data, additionalData);
+    // Apply using stored booster job (voucher cleared on accept for voucher-based boosts)
+    const boostedData = await applyBoostEffect(
+      activeBoost.boostingCharacter,
+      category,
+      data,
+      additionalData,
+      activeBoost.boosterJob
+    );
     
     // Log boost application for debugging (only for Looting category with numeric data)
     if (category === 'Looting' && typeof data === 'number' && typeof boostedData === 'number' && boostedData !== data) {

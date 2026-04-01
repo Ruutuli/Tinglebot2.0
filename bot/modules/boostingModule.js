@@ -1099,15 +1099,19 @@ async function getBoostEffectByCharacter(characterName, category) {
  return getBoostEffect(character.job, category);
 }
 
-async function applyBoostEffect(job, category, data, additionalData = null) {
- let actualJob = job;
- if (job && !boostingEffects[job]) {
-  const character = await safeDatabaseOperation(
-   () => fetchCharacterByName(job),
-   `Error fetching character for job "${job}"`
-  );
-  if (character) {
-   actualJob = (character.jobVoucher && character.jobVoucherJob) ? character.jobVoucherJob : character.job;
+async function applyBoostEffect(job, category, data, additionalData = null, boostJobOverride = null) {
+ // When boosting, the booster's job voucher is cleared on boost accept; TempData boosterJob is the source of truth.
+ let actualJob = boostJobOverride;
+ if (!actualJob) {
+  actualJob = job;
+  if (job && !boostingEffects[job]) {
+   const character = await safeDatabaseOperation(
+    () => fetchCharacterByName(job),
+    `Error fetching character for job "${job}"`
+   );
+   if (character) {
+    actualJob = (character.jobVoucher && character.jobVoucherJob) ? character.jobVoucherJob : character.job;
+   }
   }
  }
 
