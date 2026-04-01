@@ -33,7 +33,7 @@ const {
 } = require('@/utils/storage');
 const { fetchCharacterByNameAndUserId, fetchCharacterByName, fetchCharactersByUserId, fetchModCharactersByUserId } = require('@/database/db');
 const { applyTeacherTokensBoost, applyScholarTokensBoost } = require('../modules/boostingModule');
-const { clearBoostAfterUse, retrieveBoostingRequestFromTempDataByCharacter } = require('../commands/jobs/boosting');
+const { retrieveBoostingRequestFromTempDataByCharacter } = require('../commands/jobs/boosting');
 
 // Menu utilities to generate select menus for the submission process
 const {
@@ -328,12 +328,9 @@ async function handleSelectMenuInteraction(interaction) {
             finalTokenAmount = boostedTokens;
             boostEffects.push(`👩‍🏫 **Critique & Composition:** ${booster.name} added 🪙 ${tokenIncrease}.`);
             processedBoosts.add('teacher_tokens');
+            // Do not clear the boost here — preview step can fail (e.g. interaction 10062) after this runs.
+            // Consumption happens in componentHandler handleConfirmation when the user confirms.
             boostFulfillmentTargets.push(character.name);
-            try {
-              await clearBoostAfterUse(character, { client: interaction.client, context: 'art/writing token step' });
-            } catch (clearErr) {
-              console.error(`[selectMenuHandler.js]: ❌ Failed to clear boost for ${character.name}:`, clearErr);
-            }
           }
         }
 
@@ -354,11 +351,6 @@ async function handleSelectMenuInteraction(interaction) {
               boostEffects.push(`📚 **Research Stipend:** ${booster.name} added 🪙 ${tokenIncrease}.`);
               processedBoosts.add('scholar_tokens');
               boostFulfillmentTargets.push(character.name);
-              try {
-                await clearBoostAfterUse(character, { client: interaction.client, context: 'art/writing token step' });
-              } catch (clearErr) {
-                console.error(`[selectMenuHandler.js]: ❌ Failed to clear boost for ${character.name}:`, clearErr);
-              }
             }
           } else {
             console.log(`[selectMenuHandler.js]: 📚 Scholar ${booster.name} boost active but category is not Tokens (is: ${activeBoost?.category || 'none'}), skipping Research Stipend`);

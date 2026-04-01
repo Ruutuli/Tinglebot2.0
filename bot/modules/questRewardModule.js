@@ -924,7 +924,7 @@ async function processParticipantReward(quest, participant, rewardContext = {}) 
 
 // ------------------- Update Participant Reward Data ------------------
 function updateParticipantRewardData(participant, quest, rewardResult, rewardSource = 'immediate') {
-    participant.progress = 'completed';
+    participant.progress = PROGRESS_STATUS.REWARDED;
     participant.rewardedAt = new Date();
     participant.tokensEarned = rewardResult.tokensAdded;
     

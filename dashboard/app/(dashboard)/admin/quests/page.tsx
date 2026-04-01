@@ -846,6 +846,7 @@ export default function AdminQuestsPage() {
   const [manageQuestId, setManageQuestId] = useState<string | null>(null);
   const [manageQuest, setManageQuest] = useState<QuestRecord | null>(null);
   const [manageParticipantsSaving, setManageParticipantsSaving] = useState(false);
+  const [syncRewardProgressLoading, setSyncRewardProgressLoading] = useState(false);
   const [manageParticipantsError, setManageParticipantsError] = useState<string | null>(null);
   const [manageParticipantsSuccess, setManageParticipantsSuccess] = useState<string | null>(null);
   const [selectedParticipantIds, setSelectedParticipantIds] = useState<string[]>([]);
@@ -987,6 +988,7 @@ export default function AdminQuestsPage() {
     setManageParticipantsError(null);
     setManageParticipantsSuccess(null);
     setSelectedParticipantIds([]);
+    setSyncRewardProgressLoading(false);
   }, []);
 
   const openViewModal = useCallback(async (id: string) => {
@@ -1128,6 +1130,42 @@ export default function AdminQuestsPage() {
       setManageParticipantsSaving(false);
     }
   }, [manageQuestId, selectedParticipantIds, fetchQuests]);
+
+  const syncRewardProgressFromQuest = useCallback(async () => {
+    if (!manageQuestId) return;
+    setSyncRewardProgressLoading(true);
+    setManageParticipantsError(null);
+    setManageParticipantsSuccess(null);
+    try {
+      const res = await fetch(`/api/admin/quests/${manageQuestId}/sync-reward-progress`, {
+        method: "POST",
+      });
+      const data = (await res.json()) as {
+        fixed?: number;
+        error?: string;
+        message?: string;
+      };
+      if (!res.ok) {
+        throw new Error(data.message ?? data.error ?? "Failed to sync reward progress");
+      }
+      const fixed = data.fixed ?? 0;
+      setManageParticipantsSuccess(
+        fixed > 0
+          ? `Updated ${fixed} participant row(s) to rewarded (tokens were already on the quest; no new payout).`
+          : "Nothing to sync: no participants had completed status with tokens already recorded."
+      );
+      const refetchRes = await fetch(`/api/admin/quests/${manageQuestId}`);
+      if (refetchRes.ok) {
+        const q = (await refetchRes.json()) as QuestRecord;
+        setManageQuest(q);
+      }
+      await fetchQuests();
+    } catch (e) {
+      setManageParticipantsError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setSyncRewardProgressLoading(false);
+    }
+  }, [manageQuestId, fetchQuests]);
 
   const handleSubmit = useCallback(
     async (e: React.FormEvent) => {
@@ -1787,6 +1825,8 @@ export default function AdminQuestsPage() {
                       )}
                       <p className="mb-3 text-xs text-[var(--totk-grey-200)]">
                         Check &quot;Mark completed&quot; for participants who finished the quest, then click the button below to grant tokens and log completion.
+                        If the bot already paid tokens but someone still shows as completed here, use{" "}
+                        <span className="text-[var(--totk-ivory)]">Sync reward status</span> below (updates the quest row only; does not send tokens again).
                       </p>
                       <div className="overflow-x-auto rounded-lg border border-[var(--totk-dark-ocher)]/40">
                         <table className="w-full text-left text-sm">
@@ -1804,7 +1844,15 @@ export default function AdminQuestsPage() {
                           <tbody>
                             {entries.map(([userId, p]) => {
                               const progress = (p?.progress ?? "active") as string;
-                              const canMark = progress !== "rewarded";
+                              const tokensEarned = p?.tokensEarned;
+                              const hasQuestTokens =
+                                typeof tokensEarned === "number" && tokensEarned > 0;
+                              const displayProgress =
+                                progress === "completed" && hasQuestTokens
+                                  ? "rewarded"
+                                  : progress;
+                              const canMark =
+                                progress !== "rewarded" && !hasQuestTokens;
                               const isSelected = selectedParticipantIds.includes(userId);
                               return (
                                 <tr
@@ -1843,7 +1891,7 @@ export default function AdminQuestsPage() {
                                   <td className="py-2 pr-3">
                                     <span
                                       className={`inline-block rounded px-2 py-0.5 text-xs font-medium ${
-                                        progress === "rewarded"
+                                        displayProgress === "rewarded"
                                           ? "bg-[var(--totk-light-green)]/20 text-[var(--totk-light-green)]"
                                           : progress === "failed"
                                           ? "bg-red-500/20 text-red-200"
@@ -1854,12 +1902,12 @@ export default function AdminQuestsPage() {
                                           : "bg-[var(--totk-dark-ocher)]/30 text-[var(--totk-ivory)]"
                                       }`}
                                     >
-                                      {progress}
+                                      {displayProgress}
                                     </span>
                                   </td>
                                   <td className="py-2 pr-3 text-[var(--totk-grey-200)]">
-                                    {progress === "rewarded" && p?.tokensEarned != null && p.tokensEarned > 0 ? (
-                                      <span>{p.tokensEarned} tokens</span>
+                                    {hasQuestTokens ? (
+                                      <span>{tokensEarned} tokens</span>
                                     ) : (
                                       "—"
                                     )}
@@ -1882,6 +1930,17 @@ export default function AdminQuestsPage() {
                 >
                   Close
                 </button>
+                {manageQuest && Object.keys(manageQuest.participants ?? {}).length > 0 && (
+                  <button
+                    type="button"
+                    onClick={() => void syncRewardProgressFromQuest()}
+                    disabled={syncRewardProgressLoading || !manageQuest}
+                    title="Sets progress to rewarded when tokensEarned is already set (e.g. bot payout); does not grant tokens."
+                    className="rounded-md border border-[var(--totk-light-green)]/50 px-4 py-2 text-sm font-medium text-[var(--totk-light-green)] hover:bg-[var(--totk-light-green)]/10 disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {syncRewardProgressLoading ? "Syncing..." : "Sync reward status"}
+                  </button>
+                )}
                 {manageQuest && Object.keys(manageQuest.participants ?? {}).length > 0 && (
                   <button
                     type="button"

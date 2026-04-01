@@ -63,6 +63,14 @@ function createErrorEmbed(title, description, fields = [], footer = null) {
   return embed;
 }
 
+// Strips heal autocomplete display suffixes (e.g. " - 5/5 🟩", " - 3/5 ❤️") when users paste the visible label.
+function sanitizeHealCommandCharacterName(raw) {
+  if (raw == null || typeof raw !== 'string') return raw;
+  const trimmed = raw.trim();
+  if (!trimmed) return trimmed;
+  return trimmed.replace(/\s*-\s*\d+\s*\/\s*\d+[\s\S]*$/, '').trim();
+}
+
 // ---- Function: getHealingJobs ----
 // Returns list of jobs that can perform healing
 function getHealingJobs() {
@@ -1539,21 +1547,22 @@ module.exports = {
       await interaction.deferReply();
 
       if (subcommand === 'aid') {
-        const healerName = interaction.options.getString('healername');
-        const targetCharacterName = interaction.options.getString('target');
+        const healerName = sanitizeHealCommandCharacterName(interaction.options.getString('healername'));
+        const targetCharacterName = sanitizeHealCommandCharacterName(interaction.options.getString('target'));
         const heartsToHeal = interaction.options.getInteger('hearts');
 
         await handleDirectHealing(interaction, healerName, targetCharacterName, heartsToHeal);
       } else if (subcommand === 'request') {
-        const characterName = interaction.options.getString('charactername');
+        const characterName = sanitizeHealCommandCharacterName(interaction.options.getString('charactername'));
         const heartsToHeal = interaction.options.getInteger('hearts');
         const paymentOffered = interaction.options.getString('payment') || 'No payment specified';
-        const healerName = interaction.options.getString('healer');
+        const healerRaw = interaction.options.getString('healer');
+        const healerName = healerRaw != null ? sanitizeHealCommandCharacterName(healerRaw) : null;
 
         await handleHealingRequest(interaction, characterName, heartsToHeal, paymentOffered, healerName);
       } else if (subcommand === 'fulfill') {
         const requestId = interaction.options.getString('requestid');
-        const healerName = interaction.options.getString('healername');
+        const healerName = sanitizeHealCommandCharacterName(interaction.options.getString('healername'));
 
         await handleHealingFulfillment(interaction, requestId, healerName);
       }

@@ -491,12 +491,15 @@ async function handleConfirmation(interaction, userId, submissionData) {
         try {
           let character = await fetchCharacterByName(characterName);
           if (!character) character = await fetchModCharacterByName(characterName);
-          if (character && character.boostedBy) {
-            await clearBoostAfterUse(character, {
+          // clearBoostAfterUse resolves TempData even if boostedBy was not synced to the DB
+          if (character) {
+            const cleared = await clearBoostAfterUse(character, {
               client: interaction.client,
               context: 'art/writing submission confirmed'
             });
-            logger.success('SUBMISSION', `✅ Cleared Tokens boost for ${characterName} after submission confirm`);
+            if (cleared.cleared) {
+              logger.success('SUBMISSION', `✅ Cleared Tokens boost for ${characterName} after submission confirm`);
+            }
           }
         } catch (clearErr) {
           console.error(`[componentHandler.js]: ❌ Failed to clear boost for ${characterName}:`, clearErr);

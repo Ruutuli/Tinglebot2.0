@@ -68,7 +68,10 @@ export async function POST(
     const userIds: string[] = [];
     if (participants && typeof participants.entries === "function") {
       for (const [uid, p] of participants.entries()) {
-        if (p && p.progress !== "rewarded") userIds.push(uid);
+        if (!p) continue;
+        if (p.progress === "rewarded") continue;
+        if (typeof p.tokensEarned === "number" && p.tokensEarned > 0) continue;
+        userIds.push(uid);
       }
     }
 
@@ -86,6 +89,12 @@ export async function POST(
         participants.get(normalizeDiscordId(userId));
       if (!participant) continue;
       if (participant.progress === "rewarded") continue;
+      if (
+        typeof participant.tokensEarned === "number" &&
+        participant.tokensEarned > 0
+      ) {
+        continue;
+      }
 
       participant.progress = "completed";
       participant.completedAt = now;

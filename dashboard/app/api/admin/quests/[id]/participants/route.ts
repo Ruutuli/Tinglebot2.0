@@ -103,6 +103,12 @@ export async function PATCH(
         participants.get(normalizeDiscordId(key));
       if (!participant) continue;
       if (participant.progress === "rewarded") continue;
+      if (
+        typeof participant.tokensEarned === "number" &&
+        participant.tokensEarned > 0
+      ) {
+        continue;
+      }
 
       participant.progress = "completed";
       participant.completedAt = now;

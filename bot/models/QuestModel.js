@@ -209,6 +209,18 @@ questSchema.pre('save', function(next) {
                 fixedParticipants.set(key, value);
             }
         }
+
+        // Fail-safe: tokens were recorded on the participant but progress was never moved to rewarded (legacy bot bug).
+        for (const [, p] of fixedParticipants.entries()) {
+            if (!p || typeof p !== 'object') continue;
+            const te = Number(p.tokensEarned);
+            if (p.progress === 'completed' && Number.isFinite(te) && te > 0) {
+                p.progress = 'rewarded';
+                if (!p.rewardedAt) {
+                    p.rewardedAt = p.completedAt ? new Date(p.completedAt) : new Date();
+                }
+            }
+        }
         
         this.participants = fixedParticipants;
     }

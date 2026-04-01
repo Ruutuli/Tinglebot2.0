@@ -1,4 +1,5 @@
 const mongoose = require('mongoose');
+const { normalizeParticipantsRewardProgress } = require('../lib/questParticipantRewardSync');
 const { Schema } = mongoose;
 
 // ============================================================================
@@ -211,6 +212,8 @@ questSchema.pre('save', function(next) {
                 fixedParticipants.set(key, value);
             }
         }
+
+        normalizeParticipantsRewardProgress(fixedParticipants);
         
         this.participants = fixedParticipants;
     }
