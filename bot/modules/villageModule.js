@@ -216,6 +216,22 @@ function getEffectiveRestLevel(village) {
     return getEffectiveVendingTier(village);
 }
 
+// Max contributed amount for the current upgrade track (L1→L2 uses required[2], L2→L3 uses required[3], L3 uses required[3]).
+// Materials at this cap are not reduced by proportional village damage.
+function getMaterialUpgradeCapForLevel(materialData, villageLevel) {
+    if (!materialData || typeof materialData !== 'object') return null;
+    const req = materialData.required;
+    if (!req || typeof req !== 'object') return null;
+    const reqObj = req instanceof Map ? Object.fromEntries(req) : req;
+    if (villageLevel >= 3) {
+        const cap = reqObj[3];
+        return cap !== undefined && cap !== null ? cap : null;
+    }
+    const nextLevel = villageLevel + 1;
+    const cap = reqObj[nextLevel];
+    return cap !== undefined && cap !== null ? cap : null;
+}
+
 // ------------------- Function: checkVillageStatus -------------------
 // Checks and returns the status of a village by name
 async function checkVillageStatus(villageName) {
@@ -383,6 +399,11 @@ async function damageVillage(villageName, damageAmount, damageCause = null) {
                     ? (materialData.current || 0) 
                     : 0;
                 if (materialCurrent <= 0) continue;
+
+                const upgradeCap = getMaterialUpgradeCapForLevel(materialData, village.level);
+                if (upgradeCap !== null && materialCurrent >= upgradeCap) {
+                    continue;
+                }
                 
                 // material_loss = floor(material_current × damage_percentage) — proportional only, no minimum
                 const removedAmount = Math.floor(materialCurrent * damagePercentage);

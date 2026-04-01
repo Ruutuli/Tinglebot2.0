@@ -42,7 +42,8 @@ const { applyTeacherTokensBoost, applyScholarTokensBoost } = require('../modules
 const { 
   retrieveBoostingRequestFromTempDataByCharacter,
   saveBoostingRequestToTempData,
-  updateBoostAppliedMessage
+  updateBoostAppliedMessage,
+  getEffectiveJob
 } = require('../commands/jobs/boosting');
 
 async function resolveTaggedCharacter(characterName, userId = null) {
@@ -259,7 +260,7 @@ async function handleSubmissionCompletion(interaction) {
 
       if (
         submissionData.category === 'art' &&
-        boosterChar.job === 'Teacher' &&
+        getEffectiveJob(boosterChar).trim().toLowerCase() === 'teacher' &&
         !processedBoostTypes.has('teacher_tokens')
       ) {
         const teacherEffectAlreadyLogged = boostEffects.some(effect =>
@@ -294,7 +295,7 @@ async function handleSubmissionCompletion(interaction) {
 
       if (
         submissionData.category === 'writing' &&
-        boosterChar.job === 'Scholar' &&
+        getEffectiveJob(boosterChar).trim().toLowerCase() === 'scholar' &&
         !processedBoostTypes.has('scholar_tokens')
       ) {
         // Verify the boost category is 'Tokens' (Research Stipend) before applying
@@ -410,11 +411,6 @@ async function handleSubmissionCompletion(interaction) {
       submissionData.boostMetadata = boostMetadata;
     } else {
       delete submissionData.boostMetadata;
-    }
-
-    // Clear Tokens boost immediately so it only applies to this submission (no race with other submissions)
-    for (const character of boostFulfillmentMap.values()) {
-      await fulfillTokenBoost(character, interaction.client);
     }
 
     // Save updated submission data using submissionId
@@ -583,6 +579,11 @@ async function handleSubmissionCompletion(interaction) {
       link: submissionUrl
     });
     console.log(`[submissionHandler.js]: ✅ Token count updated`);
+
+    // Clear Tokens boost only after submission fully succeeded (tokens applied) so failures do not consume the boost
+    for (const character of boostFulfillmentMap.values()) {
+      await fulfillTokenBoost(character, interaction.client);
+    }
 
     // Clean up storage
     console.log(`[submissionHandler.js]: 🧹 Cleaning up submission data for ID: ${submissionId}`);

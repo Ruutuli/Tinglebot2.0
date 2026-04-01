@@ -31,7 +31,8 @@ const { applyScholarTokensBoost } = require('../../modules/boostingModule');
 const {
   retrieveBoostingRequestFromTempDataByCharacter,
   saveBoostingRequestToTempData,
-  updateBoostAppliedMessage
+  updateBoostAppliedMessage,
+  getEffectiveJob
 } = require('../jobs/boosting');
 const {
   fetchAllCharacters,
@@ -641,7 +642,7 @@ module.exports = {
           }
 
           if (
-            boosterChar.job === 'Scholar' &&
+            getEffectiveJob(boosterChar).trim().toLowerCase() === 'scholar' &&
             !processedBoostTypes.has('scholar_tokens')
           ) {
             // Verify the boost category is 'Tokens' (Research Stipend) before applying

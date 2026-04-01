@@ -31,9 +31,9 @@ const {
   retrieveSubmissionFromStorage, 
   findLatestSubmissionIdForUser 
 } = require('@/utils/storage');
-const { fetchCharacterByNameAndUserId, fetchCharacterByName, fetchCharactersByUserId, fetchModCharactersByUserId } = require('@/database/db');
+const { fetchAnyCharacterByNameAndUserId, fetchCharacterByName, fetchCharactersByUserId, fetchModCharactersByUserId } = require('@/database/db');
 const { applyTeacherTokensBoost, applyScholarTokensBoost } = require('../modules/boostingModule');
-const { retrieveBoostingRequestFromTempDataByCharacter } = require('../commands/jobs/boosting');
+const { retrieveBoostingRequestFromTempDataByCharacter, getEffectiveJob } = require('../commands/jobs/boosting');
 
 // Menu utilities to generate select menus for the submission process
 const {
@@ -274,7 +274,7 @@ async function handleSelectMenuInteraction(interaction) {
       if (taggedCharacters.length > 0 && updatedSubmissionData.userId) {
         for (const taggedName of taggedCharacters) {
           try {
-            const character = await fetchCharacterByNameAndUserId(taggedName, updatedSubmissionData.userId);
+            const character = await fetchAnyCharacterByNameAndUserId(taggedName, updatedSubmissionData.userId);
             if (character) {
               focusCharacters.push(character);
               checkedCharacterMap.add(character.name.toLowerCase());
@@ -319,7 +319,7 @@ async function handleSelectMenuInteraction(interaction) {
 
         if (
           updatedSubmissionData.category === 'art' &&
-          booster.job === 'Teacher' &&
+          getEffectiveJob(booster).trim().toLowerCase() === 'teacher' &&
           !processedBoosts.has('teacher_tokens')
         ) {
           const boostedTokens = applyTeacherTokensBoost(finalTokenAmount);
@@ -336,7 +336,7 @@ async function handleSelectMenuInteraction(interaction) {
 
         if (
           updatedSubmissionData.category === 'writing' &&
-          booster.job === 'Scholar' &&
+          getEffectiveJob(booster).trim().toLowerCase() === 'scholar' &&
           !processedBoosts.has('scholar_tokens')
         ) {
           // Verify the boost category is 'Tokens' (Research Stipend) before applying
