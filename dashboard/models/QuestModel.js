@@ -422,6 +422,22 @@ function createQuestSubmission(type, submissionData) {
     return submission;
 }
 
+/** Same URL identity as syncApprovedSubmissionsToParticipant in questRewardModule (avoids double row when sync runs first). */
+function participantAlreadyHasSubmissionForPayload(participant, type, submissionData) {
+    if (!submissionData || typeof submissionData !== 'object') return false;
+    const subs = participant.submissions || [];
+    const wouldBeUrl =
+        type === SUBMISSION_TYPES.ART
+            ? submissionData.messageUrl || submissionData.fileUrl
+            : submissionData.messageUrl || submissionData.link;
+    const urls = new Set(
+        [wouldBeUrl, submissionData.messageUrl, submissionData.fileUrl, submissionData.link].filter(Boolean)
+    );
+    return subs.some(
+        (sub) => sub.type === type && sub.approved && urls.has(sub.url)
+    );
+}
+
 // ------------------- Quest Completion Notification ------------------
 async function sendCompletionNotification(quest, participant) {
     try {
@@ -470,6 +486,18 @@ function markParticipantQuestTokensPaidViaSubmission(participant, submissionData
     const amt = getSubmissionPerPersonTokenAmount(submissionData);
     participant.questTokensPaidViaSubmission = true;
     participant.submissionRewardTokenAmount = amt > 0 ? amt : null;
+}
+
+function finalizeParticipantRewardFromSubmission(participant, submissionData) {
+    const amt = getSubmissionPerPersonTokenAmount(submissionData);
+    const tokenAmt = amt > 0 ? amt : Math.floor(Number(participant.submissionRewardTokenAmount) || 0);
+    participant.tokensEarned = tokenAmt;
+    participant.progress = PROGRESS_STATUS.REWARDED;
+    participant.rewardedAt = new Date();
+    participant.rewardProcessed = true;
+    participant.rewardSource = 'submission';
+    participant.completionProcessed = true;
+    participant.updatedAt = new Date();
 }
 
 // ============================================================================
@@ -712,11 +740,13 @@ questSchema.methods.completeFromArtSubmission = async function(userId, submissio
             return { success: false, reason: 'Participant not active' };
         }
         
-        // Add the approved submission to participant's submissions
-        const submission = createQuestSubmission('art', submissionData);
-        participant.submissions.push(submission);
+        // Add the approved submission unless sync already inserted it from ApprovedSubmission
+        if (!participantAlreadyHasSubmissionForPayload(participant, SUBMISSION_TYPES.ART, submissionData)) {
+            participant.submissions.push(createQuestSubmission('art', submissionData));
+        }
         markParticipantCompleted(participant);
         markParticipantQuestTokensPaidViaSubmission(participant, submissionData);
+        finalizeParticipantRewardFromSubmission(participant, submissionData);
         
         // SAFEGUARD: Record quest completion immediately to ensure quest count is updated
         try {
@@ -758,11 +788,12 @@ questSchema.methods.completeFromWritingSubmission = async function(userId, submi
             return { success: false, reason: 'Participant not active' };
         }
         
-        // Add the approved submission to participant's submissions
-        const submission = createQuestSubmission('writing', submissionData);
-        participant.submissions.push(submission);
+        if (!participantAlreadyHasSubmissionForPayload(participant, SUBMISSION_TYPES.WRITING, submissionData)) {
+            participant.submissions.push(createQuestSubmission('writing', submissionData));
+        }
         markParticipantCompleted(participant);
         markParticipantQuestTokensPaidViaSubmission(participant, submissionData);
+        finalizeParticipantRewardFromSubmission(participant, submissionData);
         
         // SAFEGUARD: Record quest completion immediately to ensure quest count is updated
         try {
@@ -1426,7 +1457,11 @@ questSchema.methods.checkAutoCompletion = async function(forceCheck = false) {
         }
     }
     
-    const allCompleted = Array.from(this.participants.values()).every(p => p.progress === PROGRESS_STATUS.COMPLETED);
+    const allCompleted = Array.from(this.participants.values()).every(
+        (p) =>
+            p.progress === PROGRESS_STATUS.COMPLETED ||
+            p.progress === PROGRESS_STATUS.REWARDED
+    );
     // Only complete quest when all participants finished AND time has expired
     // This prevents premature completion when submissions are approved before the quest period ends
     if (allCompleted && this.status === PROGRESS_STATUS.ACTIVE) {

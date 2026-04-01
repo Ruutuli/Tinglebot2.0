@@ -1156,21 +1156,33 @@ async function recordQuestCompletionSafeguard(participant, quest) {
             return;
         }
 
-        // Always call recordQuestCompletion - it handles duplicates by updating existing entries
-        // This ensures the safeguard logic in recordQuestCompletion runs and fixes any discrepancies
-        // Record with temporary reward data (will be updated when rewards are distributed)
+        const te = Number(participant.tokensEarned);
+        const tokensEarned = Number.isFinite(te) && te >= 0 ? te : 0;
+        const paidViaSubmission = participant.questTokensPaidViaSubmission === true;
+        const rewardedAt =
+            participant.rewardedAt ||
+            (tokensEarned > 0 ? participant.completedAt || new Date() : null);
+        let rewardSource = 'pending';
+        if (tokensEarned > 0 && paidViaSubmission) {
+            rewardSource = 'submission';
+        } else if (participant.rewardSource && participant.rewardSource !== 'pending') {
+            rewardSource = participant.rewardSource;
+        } else if (tokensEarned > 0) {
+            rewardSource = 'immediate';
+        }
+
         await user.recordQuestCompletion({
             questId: quest.questID,
             questType: quest.questType || 'Other',
             questTitle: quest.title || `Quest ${quest.questID}`,
             completedAt: participant.completedAt || new Date(),
-            rewardedAt: null, // Will be set when rewards are distributed
-            tokensEarned: 0, // Will be updated when rewards are distributed
+            rewardedAt: rewardedAt || (tokensEarned > 0 ? participant.completedAt || new Date() : null),
+            tokensEarned,
             itemsEarned: [],
-            rewardSource: 'pending' // Will be updated to 'immediate' or 'monthly' when rewards are distributed
+            rewardSource
         });
 
-        logger.info('QUEST', `recordQuestCompletionSafeguard: recorded for userId=${participant.userId} questId=${quest.questID} rewardSource=pending`);
+        logger.info('QUEST', `recordQuestCompletionSafeguard: recorded for userId=${participant.userId} questId=${quest.questID} rewardSource=${rewardSource}`);
     } catch (error) {
         logger.error('QUEST', `Error in quest completion safeguard for user ${participant.userId}: ${error.message}`, error);
     }

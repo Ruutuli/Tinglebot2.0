@@ -247,7 +247,21 @@ type QuestRecord = {
   itemRewardQty?: number;
   tableRollName?: string;
   requiredRolls?: number;
-  participants?: Record<string, { userId?: string; username?: string | null; characterName?: string; progress?: string; completedAt?: string; rewardedAt?: string; tokensEarned?: number; rpPostCount?: number }>;
+  participants?: Record<
+    string,
+    {
+      userId?: string;
+      username?: string | null;
+      characterName?: string;
+      progress?: string;
+      completedAt?: string;
+      rewardedAt?: string;
+      tokensEarned?: number;
+      questTokensPaidViaSubmission?: boolean;
+      submissionRewardTokenAmount?: number | null;
+      rpPostCount?: number;
+    }
+  >;
   participantCap?: number | null;
   createdByUserId?: string | null;
   createdByUsername?: string | null;
@@ -2018,8 +2032,18 @@ export default function AdminQuestsPage() {
                                 ? progressRaw
                                 : "active";
                               const tokensEarned = p?.tokensEarned;
+                              const submissionTok =
+                                typeof p?.submissionRewardTokenAmount === "number" &&
+                                p.submissionRewardTokenAmount > 0
+                                  ? p.submissionRewardTokenAmount
+                                  : null;
                               const hasQuestTokens =
-                                typeof tokensEarned === "number" && tokensEarned > 0;
+                                (typeof tokensEarned === "number" && tokensEarned > 0) ||
+                                (p?.questTokensPaidViaSubmission === true && submissionTok != null);
+                              const displayTokens =
+                                typeof tokensEarned === "number" && tokensEarned > 0
+                                  ? tokensEarned
+                                  : submissionTok;
                               const canMark =
                                 progress !== "rewarded" && !hasQuestTokens;
                               const isSelected = selectedParticipantIds.includes(userId);
@@ -2093,8 +2117,8 @@ export default function AdminQuestsPage() {
                                     </div>
                                   </td>
                                   <td className="py-2 pr-3 text-[var(--totk-grey-200)]">
-                                    {hasQuestTokens ? (
-                                      <span>{tokensEarned} tokens</span>
+                                    {hasQuestTokens && displayTokens != null ? (
+                                      <span>{displayTokens} tokens</span>
                                     ) : (
                                       "—"
                                     )}
