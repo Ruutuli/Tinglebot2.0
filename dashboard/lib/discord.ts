@@ -472,14 +472,25 @@ export async function postQuestModCompletionAnnouncement(opts: {
   if (ids.length === 0) return true;
 
   const rawTitle = (opts.questTitle || "Quest").trim() || "Quest";
-  const safeTitle = rawTitle.replace(/\\/g, "\\\\").replace(/\*/g, "\\*");
   const mentions = ids.map((id) => `<@${id}>`).join(" ");
-  const content = `${mentions} A mod marked you as completed for **${safeTitle}**!`;
+  /** Matches quest board embed accent in `questDiscordPost.ts`. */
+  const QUEST_EMBED_COLOR = 0xaa916a;
+  const embedTitle =
+    rawTitle.length > 256 ? `${rawTitle.slice(0, 253)}...` : rawTitle;
 
   const result = await discordApiRequest<{ id: string }>(
     `channels/${QUEST_MOD_COMPLETION_ANNOUNCE_CHANNEL_ID}/messages`,
     "POST",
-    { content }
+    {
+      content: mentions,
+      embeds: [
+        {
+          title: embedTitle,
+          description: "A mod marked you as completed for this quest!",
+          color: QUEST_EMBED_COLOR,
+        },
+      ],
+    }
   );
   return Boolean(result?.id);
 }

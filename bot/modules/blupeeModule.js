@@ -8,6 +8,7 @@ const TempData = require('@/models/TempDataModel');
 const User = require('@/models/UserModel');
 const ModCharacter = require('@/models/ModCharacterModel');
 const TokenTransaction = require('@/models/TokenTransactionModel');
+const Quest = require('@/models/QuestModel');
 const { connectToTinglebot } = require('@/database/db');
 const { getMinigameCommandId } = require('../embeds/embeds');
 const logger = require('@/utils/logger');
@@ -517,6 +518,30 @@ function buildBlupeeRollLine(rollResult, outcome = null, ticketOverride = null) 
   return `🎲 **Roll:** ${ticket} / ${totalWeight}\n📌 **Result:** ${resultLabel}`;
 }
 
+/**
+ * Active Interactive quest using the Blupee table, with this user as an active participant.
+ * Mirrors tableroll quest lookup (status active, tableRollName blupee).
+ */
+async function findActiveBlupeeQuestParticipation(userId) {
+  try {
+    const quests = await Quest.find({
+      status: 'active',
+      questType: 'Interactive',
+      tableRollName: BLUPEE_TABLE_NAME,
+      [`participants.${userId}`]: { $exists: true }
+    });
+    for (const quest of quests) {
+      const participant = quest.participants.get(userId);
+      if (participant && participant.progress === 'active') {
+        return { quest, participant };
+      }
+    }
+  } catch (err) {
+    logger.warn('BLUPEE', `findActiveBlupeeQuestParticipation: ${err?.message || err}`);
+  }
+  return null;
+}
+
 /** Remove the spawn announcement message after a catch (best-effort). */
 async function deleteSpawnAnnouncementMessage(client, stateKey, messageId) {
   if (!client || !messageId) return;
@@ -543,6 +568,25 @@ async function rollBlupee(interaction, character, requestedSessionId) {
       content:
         '❌ **Blupee** can only be rolled in a village town hall (when the event is enabled) or in the designated test channel.'
     });
+  }
+
+  if (!isTestContext(interaction)) {
+    const questCtx = await findActiveBlupeeQuestParticipation(userId);
+    if (!questCtx) {
+      return interaction.editReply({
+        content:
+          '❌ You must **join the Blupee quest** on the quest board before you can try to catch Blupees.\n\n' +
+          'Use `/quest join` with this event’s quest ID and your character name (the Interactive quest that uses the Blupee hunt).'
+      });
+    }
+    const qChar = String(questCtx.participant.characterName || '').trim().toLowerCase();
+    const rollChar = String(actorLabel || '').trim().toLowerCase();
+    if (qChar && rollChar && qChar !== rollChar) {
+      return interaction.editReply({
+        content:
+          `❌ You joined the quest as **${questCtx.participant.characterName}**. Use that character with \`/minigame blupee\`, or leave the quest and rejoin if you need a different character.`
+      });
+    }
   }
 
   const spawnDoc = await TempData.findByTypeAndKey('blupeeSpawn', stateKey);

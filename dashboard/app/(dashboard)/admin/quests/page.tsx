@@ -1258,6 +1258,13 @@ export default function AdminQuestsPage() {
         setError("Quest ID is required when editing.");
         return;
       }
+      if (
+        editingId &&
+        (!form.timeLimitEndDate.trim() || !/^\d{4}-\d{2}-\d{2}$/.test(form.timeLimitEndDate.trim()))
+      ) {
+        setError("End date is required when editing a quest.");
+        return;
+      }
       setSubmitting(true);
       setError(null);
       setSuccess(null);
@@ -1502,15 +1509,19 @@ export default function AdminQuestsPage() {
                             </p>
                           </details>
                           <div className="mt-3">
-                            <label className="mb-1 block text-sm font-medium text-[var(--totk-grey-200)]">End date (optional)</label>
+                            <label className="mb-1 block text-sm font-medium text-[var(--totk-grey-200)]">
+                              End date {editingId ? "(required)" : "(optional)"}
+                            </label>
                             <input
                               type="date"
                               value={form.timeLimitEndDate}
                               onChange={(e) => setField("timeLimitEndDate", e.target.value)}
+                              required={!!editingId}
                               className="w-full rounded border border-[var(--totk-dark-ocher)] bg-[var(--botw-warm-black)] px-3 py-2 text-[var(--totk-ivory)] quest-date-input"
                             />
                             <p className="mt-1 text-[11px] leading-snug text-[var(--totk-grey-200)]">
-                              If set: ends <strong className="text-[var(--totk-ivory)]">11:59 PM US Eastern</strong> that day and overrides duration-based auto-completion.
+                              {editingId ? "Ends" : "If set: ends"}{" "}
+                              <strong className="text-[var(--totk-ivory)]">11:59 PM US Eastern</strong> that day and overrides duration-based auto-completion.
                             </p>
                           </div>
                           {form.timeLimitEndDate.trim() && /^\d{4}-\d{2}-\d{2}$/.test(form.timeLimitEndDate.trim()) && (
