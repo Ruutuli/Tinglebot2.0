@@ -27,8 +27,18 @@ const BLUPEE_CATCH_TOKEN_REWARD = 25;
 // With totalWeight=100 and base catch only at ticket=100 (1%), upgrading ticket=99 with 25%
 // makes overall catch chance ~1% + 0.25% = 1.25% (about 25% more likely).
 const BLUPEE_MOD_NEAR_MISS_UPGRADE_PROB = 0.25;
-/** How long a Blupee “round” stays active (Mongo TTL + roll eligibility). */
+/** How long a Blupee “round” stays active (roll eligibility + despawn announce). */
 const BLUPEE_SPAWN_DURATION_MS = 15 * 60 * 1000;
+/**
+ * TempData uses a global TTL on `expiresAt`. Blupee gameplay ends at `data.spawnExpiresAt`; we keep the
+ * document longer so a scheduled sweep can post “ran off” before Mongo deletes the row (TTL was winning
+ * the race and in-memory `setTimeout` was lost on restart).
+ */
+const BLUPEE_SPAWN_TTL_AFTER_END_MS = 2 * 60 * 60 * 1000;
+
+function getBlupeeSpawnDocExpiresAt(spawnEndsAt) {
+  return new Date(spawnEndsAt.getTime() + BLUPEE_SPAWN_TTL_AFTER_END_MS);
+}
 /** Auto-spawn waves per UTC day during April (Easter event). */
 const BLUPEE_AUTO_SPAWNS_PER_DAY = 6;
 
@@ -710,6 +720,22 @@ async function rollBlupee(interaction, character, requestedSessionId) {
     return interaction.editReply({ embeds: [noSpawnEmbed] });
   }
 
+  const spawnExpiresAt = spawnDoc.data?.spawnExpiresAt ? new Date(spawnDoc.data.spawnExpiresAt) : null;
+  const legacyEnd = !spawnExpiresAt && spawnDoc.expiresAt ? new Date(spawnDoc.expiresAt) : null;
+  const spawnEndsAt = spawnExpiresAt || legacyEnd;
+  if (spawnEndsAt && spawnEndsAt.getTime() <= Date.now()) {
+    await TempData.deleteOne({ type: 'blupeeSpawn', key: stateKey }).catch(() => {});
+    const tooLateEmbed = new EmbedBuilder()
+      .setColor(0xff4d4f)
+      .setTitle('💨 This Blupee Already Fled')
+      .setDescription(
+        'That session’s **15 minutes** are up — the Blupee despawned. Watch the town hall for a **new** sighting and session ID.'
+      )
+      .setTimestamp()
+      .setFooter({ text: 'Blupee' });
+    return interaction.editReply({ embeds: [tooLateEmbed] });
+  }
+
   const participantState = { ...(spawnDoc.data?.participantState || {}) };
   const participantCharacterMap = { ...(spawnDoc.data?.participantCharacterMap || {}) };
   const spawnSessionId = String(spawnDoc.data?.sessionId || '').trim() || null;
@@ -919,20 +945,24 @@ async function rollBlupee(interaction, character, requestedSessionId) {
 
     if (!rewardsApplied) {
       // Restore the spawn so a failed reward write does not consume the event.
+      const prevData = deleted.data || {
+        sessionId: spawnSessionId,
+        messageId: null,
+        virtual: false,
+        participantState: {},
+        participantCharacterMap: {}
+      };
+      const restoredSpawnEnd = prevData.spawnExpiresAt
+        ? new Date(prevData.spawnExpiresAt)
+        : new Date(Date.now() + BLUPEE_SPAWN_DURATION_MS);
       await TempData.findOneAndUpdate(
         { type: 'blupeeSpawn', key: stateKey },
         {
           $set: {
             type: 'blupeeSpawn',
             key: stateKey,
-            expiresAt: deleted.expiresAt || new Date(Date.now() + BLUPEE_SPAWN_DURATION_MS),
-            data: deleted.data || {
-              sessionId: spawnSessionId,
-              messageId: null,
-              virtual: false,
-              participantState: {},
-              participantCharacterMap: {}
-            }
+            expiresAt: getBlupeeSpawnDocExpiresAt(restoredSpawnEnd),
+            data: { ...prevData, spawnExpiresAt: restoredSpawnEnd }
           }
         },
         { upsert: true }
@@ -1072,9 +1102,8 @@ async function postBlupeeSpawn(channel, options = {}) {
     });
   }
 
-  const noticeChannel = thread;
-
-  const expiresAt = new Date(Date.now() + BLUPEE_SPAWN_DURATION_MS);
+  const spawnExpiresAt = new Date(Date.now() + BLUPEE_SPAWN_DURATION_MS);
+  const expiresAt = getBlupeeSpawnDocExpiresAt(spawnExpiresAt);
   await TempData.findOneAndUpdate(
     { type: 'blupeeSpawn', key: stateKey },
     {
@@ -1089,58 +1118,143 @@ async function postBlupeeSpawn(channel, options = {}) {
           messageId: msg.id,
           virtual: false,
           participantState: {},
-          participantCharacterMap: {}
+          participantCharacterMap: {},
+          spawnExpiresAt
         }
       }
     },
     { upsert: true }
   );
 
-  scheduleBlupeeTimeoutNotice(noticeChannel, stateKey, sessionId);
+  scheduleBlupeeDespawnNotice(channel.client, stateKey, sessionId, spawnExpiresAt);
 
   return { message: msg, stateKey, sessionId, threadId: thread.id };
+}
+
+function buildBlupeeTimeoutEmbed(doc) {
+  const sessionId = String(doc.data?.sessionId || 'unknown').trim() || 'unknown';
+  const village = doc.data?.village ? String(doc.data.village).trim() : '';
+  const villageLine = village ? `The **${village}** sighting has ended` : 'This Blupee sighting has ended';
+  const desc = `${villageLine} — **nobody** caught it before the **15-minute** timer.\n\nSession \`${sessionId}\` is closed. Watch for a new spawn post.`;
+  return new EmbedBuilder()
+    .setColor(0xff4d4f)
+    .setTitle('💨 The Blupee Ran Off!')
+    .setDescription(desc)
+    .setTimestamp()
+    .setFooter({ text: 'Blupee · timed out' });
+}
+
+/** Fires at spawn end so despawn posts on time even if the minute cron is late; safe with processExpiredBlupeeSpawns (only one path deletes). */
+function scheduleBlupeeDespawnNotice(client, stateKey, sessionId, spawnExpiresAt) {
+  if (!client || !stateKey || !sessionId || !(spawnExpiresAt instanceof Date)) return;
+  const delay = Math.max(0, spawnExpiresAt.getTime() - Date.now());
+  setTimeout(() => {
+    runBlupeeDespawnAfterDelay(client, stateKey, sessionId).catch((e) => {
+      logger.warn('BLUPEE', `Delayed despawn (${sessionId}): ${e?.message || e}`);
+    });
+  }, delay);
+}
+
+async function runBlupeeDespawnAfterDelay(client, stateKey, sessionId) {
+  try {
+    await connectToTinglebot();
+  } catch {
+    return;
+  }
+  const now = new Date();
+  const doc = await TempData.findOne({
+    type: 'blupeeSpawn',
+    key: stateKey,
+    'data.sessionId': sessionId
+  });
+  if (!doc) return;
+  const end = doc.data?.spawnExpiresAt ? new Date(doc.data.spawnExpiresAt) : doc.expiresAt ? new Date(doc.expiresAt) : null;
+  if (!end || end.getTime() > now.getTime()) return;
+  const removed = await TempData.findOneAndDelete({
+    _id: doc._id,
+    type: 'blupeeSpawn',
+    key: stateKey,
+    'data.sessionId': sessionId
+  });
+  if (!removed) return;
+  await announceBlupeeTimedOut(client, removed);
 }
 
 async function getBlupeeStatusSnapshot(stateKey) {
   const doc = await TempData.findByTypeAndKey('blupeeSpawn', stateKey);
   if (!doc) {
-    return { active: false, virtual: false, messageId: null, sessionId: null };
+    return { active: false, virtual: false, messageId: null, sessionId: null, spawnEndsAt: null };
   }
+  const rawEnd = doc.data?.spawnExpiresAt || doc.expiresAt;
+  const spawnEndsAt = rawEnd instanceof Date ? rawEnd.toISOString() : rawEnd ? String(rawEnd) : null;
   return {
     active: true,
     virtual: !!doc.data?.virtual,
     messageId: doc.data?.messageId || null,
-    sessionId: doc.data?.sessionId || null
+    sessionId: doc.data?.sessionId || null,
+    spawnEndsAt
   };
 }
 
-function scheduleBlupeeTimeoutNotice(channel, stateKey, sessionId) {
-  if (!channel) return;
-  setTimeout(async () => {
+/**
+ * Every minute (via tasks): remove expired spawns and announce in thread + town hall so TTL/timer restarts
+ * cannot silently drop the despawn message.
+ */
+async function processExpiredBlupeeSpawns(client) {
+  if (!client) return;
+  try {
+    await connectToTinglebot();
+  } catch {
+    return;
+  }
+
+  const now = new Date();
+  const expiredQuery = {
+    type: 'blupeeSpawn',
+    $or: [
+      { 'data.spawnExpiresAt': { $lte: now } },
+      { 'data.spawnExpiresAt': { $exists: false }, expiresAt: { $lte: now } }
+    ]
+  };
+
+  for (;;) {
+    const doc = await TempData.findOneAndDelete(expiredQuery);
+    if (!doc) break;
     try {
-      // Only announce timeout if this exact spawn session is still active.
-      const timedOut = await TempData.findOneAndDelete({
-        type: 'blupeeSpawn',
-        key: stateKey,
-        'data.sessionId': sessionId
-      });
-      if (!timedOut) return;
-
-      const liveChannel = await channel.client.channels.fetch(channel.id).catch(() => null);
-      if (!liveChannel?.isTextBased()) return;
-
-      const timeoutEmbed = new EmbedBuilder()
-        .setColor(0xff4d4f)
-        .setTitle('💨 The Blupee Ran Off!')
-        .setDescription(`Blupee session **${sessionId}** has ended — it's over!!`)
-        .setTimestamp()
-        .setFooter({ text: 'Blupee' });
-
-      await liveChannel.send({ embeds: [timeoutEmbed] }).catch(() => {});
+      await announceBlupeeTimedOut(client, doc);
     } catch (err) {
-      logger.warn('BLUPEE', `Timeout notice failed for session ${sessionId}: ${err.message}`);
+      logger.warn('BLUPEE', `Timed-out spawn ${doc.data?.sessionId || '?'}: ${err?.message || err}`);
     }
-  }, BLUPEE_SPAWN_DURATION_MS);
+  }
+}
+
+async function announceBlupeeTimedOut(client, doc) {
+  const sessionId = String(doc.data?.sessionId || 'unknown').trim() || 'unknown';
+  const hallId = doc.key ? normalizeSnowflake(doc.key) : null;
+  const threadId = doc.data?.threadId ? normalizeSnowflake(doc.data.threadId) : null;
+  // Town hall first (spawn lives there); then session thread.
+  const targetIds = [];
+  if (hallId) targetIds.push(hallId);
+  if (threadId && threadId !== hallId) targetIds.push(threadId);
+
+  let sent = 0;
+  for (const id of targetIds) {
+    const ch = await client.channels.fetch(id).catch(() => null);
+    if (!ch?.isTextBased?.()) continue;
+    try {
+      await ch.send({ embeds: [buildBlupeeTimeoutEmbed(doc)] });
+      sent++;
+    } catch (e) {
+      logger.warn('BLUPEE', `Despawn announce failed for channel ${id}: ${e?.message || e}`);
+    }
+  }
+
+  if (sent === 0) {
+    logger.warn(
+      'BLUPEE',
+      `Despawn message reached 0 channels (session ${sessionId}, tried: ${targetIds.length ? targetIds.join(', ') : 'none — missing key/thread in doc'})`
+    );
+  }
 }
 
 module.exports = {
@@ -1154,5 +1268,6 @@ module.exports = {
   getBlupeeStatusSnapshot,
   runBlupeeAutoSpawnTick,
   getBlupeeStateKey,
-  getBlupeeStatsSnapshot
+  getBlupeeStatsSnapshot,
+  processExpiredBlupeeSpawns
 };

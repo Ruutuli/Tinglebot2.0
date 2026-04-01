@@ -2948,7 +2948,8 @@ async function mazeImagesCleanup(_client, _data = {}) {
 // ------------------- blupee-auto-spawn (April Easter: 6 random UTC times per day, each town hall) -------------------
 async function blupeeAutoSpawn(client, _data = {}) {
   try {
-    const { runBlupeeAutoSpawnTick } = require('@/modules/blupeeModule');
+    const { runBlupeeAutoSpawnTick, processExpiredBlupeeSpawns } = require('@/modules/blupeeModule');
+    await processExpiredBlupeeSpawns(client);
     await runBlupeeAutoSpawnTick(client);
   } catch (err) {
     logger.error('SCHEDULED', `blupee-auto-spawn: ${err?.message || err}`);

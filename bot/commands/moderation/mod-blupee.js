@@ -104,7 +104,7 @@ async function execute(interaction) {
         `**State key (this context):** \`${stateKey}\``,
         `**Active spawn doc:** ${snap.active ? 'yes' : 'no'}`,
         snap.active
-          ? `**Spawn:** session \`${snap.sessionId || 'unknown'}\` · message \`${snap.messageId || 'virtual'}\` · virtual: ${snap.virtual ? 'yes' : 'no'}`
+          ? `**Spawn:** session \`${snap.sessionId || 'unknown'}\` · message \`${snap.messageId || 'virtual'}\` · virtual: ${snap.virtual ? 'yes' : 'no'}\n**Rolls / despawn until (UTC):** \`${snap.spawnEndsAt || 'unknown'}\``
           : '**Spawn:** none'
       ];
       return interaction.editReply({ content: lines.join('\n') });
