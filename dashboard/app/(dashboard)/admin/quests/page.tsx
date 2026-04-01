@@ -462,7 +462,8 @@ function questToForm(q: QuestRecord): FormState {
       } catch { /* ignore */ }
       return s.slice(0, 10);
     })(),
-    participantCap: q.participantCap != null ? String(q.participantCap) : "",
+    participantCap:
+      q.participantCap != null && Number(q.participantCap) > 0 ? String(q.participantCap) : "",
     postRequirement: q.postRequirement != null ? String(q.postRequirement) : "",
     minRequirements:
       q.minRequirements != null && typeof q.minRequirements !== "object"
@@ -554,7 +555,7 @@ function formToBody(f: FormState, isEdit: boolean): Record<string, unknown> {
   if (isEdit && f.questID.trim()) body.questID = f.questID.trim();
   if (f.participantCap.trim() !== "") {
     const n = parseInt(f.participantCap, 10);
-    if (!Number.isNaN(n)) body.participantCap = n;
+    if (!Number.isNaN(n) && n > 0) body.participantCap = n;
   }
   if (f.postRequirement.trim() !== "") {
     const n = parseInt(f.postRequirement, 10);
@@ -1198,6 +1199,8 @@ export default function AdminQuestsPage() {
           setSuccess("Quest updated.");
           setForm(emptyForm);
           setEditingId(null);
+          setActiveTab("list");
+          setTimeout(() => window.scrollTo({ top: 0, behavior: "smooth" }), 0);
         } else {
           const res = await fetch("/api/admin/quests", {
             method: "POST",
@@ -1588,7 +1591,16 @@ export default function AdminQuestsPage() {
                       <div className="grid gap-4 sm:grid-cols-2">
                         <div>
                           <label className="mb-1 block text-sm font-medium text-[var(--totk-grey-200)]">Participation cap (optional)</label>
-                          <input type="number" min={1} value={form.participantCap} onChange={(e) => setField("participantCap", e.target.value)} placeholder="No limit" className="w-full rounded border border-[var(--totk-dark-ocher)] bg-[var(--botw-warm-black)] px-3 py-2 text-[var(--totk-ivory)]" />
+                          <input
+                            type="number"
+                            inputMode="numeric"
+                            step={1}
+                            value={form.participantCap}
+                            onChange={(e) => setField("participantCap", e.target.value)}
+                            placeholder="Leave empty for no limit"
+                            className="w-full rounded border border-[var(--totk-dark-ocher)] bg-[var(--botw-warm-black)] px-3 py-2 text-[var(--totk-ivory)] [color-scheme:dark]"
+                          />
+                          <p className="mt-1 text-xs text-[var(--totk-grey-200)]">Leave blank to allow unlimited participants. Only set a number if you want a hard cap (minimum 1).</p>
                         </div>
                         <div className="sm:col-span-2">
                           <label className="mb-1 block text-sm font-medium text-[var(--totk-grey-200)]">Participation Requirement</label>
