@@ -802,13 +802,29 @@ function getEffectiveJob(character) {
 }
 
 /**
- * Ballad of the Goddess (Entertainer passive token bonus) runs only when this module
- * distributes rewards: Quest model quests completed via processQuestCompletion (e.g. RP
- * tracking, timers, mod hooks). Help Wanted / submission-only quest completion in
- * helpWantedModule does not call processQuestCompletion — no automatic Entertainer bonus there.
+ * Ballad of the Goddess (Entertainer passive token bonus) applies only to Quest-model
+ * **RP** quests when this module distributes rewards (processQuestCompletion, RP completion,
+ * monthly catch-up, etc.). Non-RP quest types never receive this bonus. Help Wanted paths
+ * that do not use processQuestCompletion never get it here either.
  */
 async function buildQuestRewardContext(quest, participants = []) {
     const context = {};
+    const entertainerBonusDisabled = {
+        enabled: false,
+        amountPerParticipant: 0,
+        entertainers: [],
+        inspectedParticipants: 0
+    };
+
+    if (quest?.questType !== QUEST_TYPES.RP) {
+        logger.debug(
+            'QUEST',
+            `[Entertainer bonus] Skipped: Ballad of the Goddess is RP quests only (questType=${quest?.questType || 'unknown'})`
+        );
+        context.entertainerBonus = entertainerBonusDisabled;
+        return context;
+    }
+
     context.entertainerBonus = await detectEntertainerBonus(participants);
 
     if (context.entertainerBonus.enabled) {
