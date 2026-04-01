@@ -5345,7 +5345,7 @@ async function handleMinigameSessionIdAutocomplete(interaction, focusedOption) {
 async function handleBlupeeSessionIdAutocomplete(interaction, focusedOption) {
   try {
     const { getBlupeeStateKey, getBlupeeStatusSnapshot } = require('@/modules/blupeeModule');
-    const stateKey = getBlupeeStateKey(interaction);
+    const stateKey = await getBlupeeStateKey(interaction);
     const snap = await getBlupeeStatusSnapshot(stateKey);
     const searchQuery = (focusedOption.value || '').toLowerCase();
 

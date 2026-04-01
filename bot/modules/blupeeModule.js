@@ -296,32 +296,52 @@ function getBlupeeStateKeyFromIds(channelId, parentId) {
   return channelId;
 }
 
-function getBlupeeStateKey(interaction) {
-  return getBlupeeStateKeyFromIds(interaction.channelId, interaction.channel?.parentId ?? null);
-}
+/**
+ * Slash commands in threads often omit parentId on interaction.channel (partial / cache).
+ * Fetch the channel so parent = town hall resolves and matches blupeeSpawn state keys.
+ */
+async function resolveBlupeeChannelIdsForInteraction(interaction) {
+  const channelId = interaction.channelId;
+  let parentId = interaction.channel?.parentId ?? null;
+  if (!channelId) return { channelId: null, parentId: null };
 
-function isTestContext(interaction) {
-  const cid = interaction.channelId;
-  const pid = interaction.channel?.parentId;
-  return cid === TEST_CHANNEL_ID || pid === TEST_CHANNEL_ID;
-}
-
-function isTownHallContext(interaction) {
-  const cid = interaction.channelId;
-  const pid = interaction.channel?.parentId;
   const halls = getTownHallIdSet();
-  return halls.has(cid) || (pid && halls.has(pid));
+  const alreadyValid =
+    halls.has(channelId) ||
+    channelId === TEST_CHANNEL_ID ||
+    (parentId && (halls.has(parentId) || parentId === TEST_CHANNEL_ID));
+
+  if (!alreadyValid && interaction.client?.channels?.fetch) {
+    try {
+      const fetched = await interaction.client.channels.fetch(channelId);
+      if (fetched?.parentId != null) parentId = fetched.parentId;
+    } catch (_) {
+      /* ignore */
+    }
+  }
+
+  return { channelId, parentId };
+}
+
+async function getBlupeeStateKey(interaction) {
+  const { channelId, parentId } = await resolveBlupeeChannelIdsForInteraction(interaction);
+  return getBlupeeStateKeyFromIds(channelId, parentId);
+}
+
+function isTestContextIds(channelId, parentId) {
+  return channelId === TEST_CHANNEL_ID || parentId === TEST_CHANNEL_ID;
+}
+
+function canUseBlupeeAt(channelId, parentId) {
+  if (isTestContextIds(channelId, parentId)) return true;
+  const halls = getTownHallIdSet();
+  if (halls.has(channelId) || (parentId && halls.has(parentId))) return isBlupeeGloballyEnabled();
+  return false;
 }
 
 function getBlupeeCommandMention() {
   const cmdId = getMinigameCommandId();
   return cmdId ? `</minigame blupee:${cmdId}>` : '`/minigame blupee`';
-}
-
-function canUseBlupeeHere(interaction) {
-  if (isTestContext(interaction)) return true;
-  if (isTownHallContext(interaction)) return isBlupeeGloballyEnabled();
-  return false;
 }
 
 function buildTableEntries() {
@@ -557,20 +577,21 @@ async function deleteSpawnAnnouncementMessage(client, stateKey, messageId) {
 
 async function rollBlupee(interaction, character, requestedSessionId) {
   const userId = interaction.user.id;
-  const stateKey = getBlupeeStateKey(interaction);
+  const { channelId, parentId } = await resolveBlupeeChannelIdsForInteraction(interaction);
+  const stateKey = getBlupeeStateKeyFromIds(channelId, parentId);
   const actorName = character?.name || character?.characterName || null;
   const actorIconUrl = character?.icon || null;
   const actorLabel = String(actorName || character?.characterID || character?._id || '').trim();
   const actorKey = actorLabel.toLowerCase();
 
-  if (!canUseBlupeeHere(interaction)) {
+  if (!canUseBlupeeAt(channelId, parentId)) {
     return interaction.editReply({
       content:
         '❌ **Blupee** can only be rolled in a village town hall (when the event is enabled) or in the designated test channel.'
     });
   }
 
-  if (!isTestContext(interaction)) {
+  if (!isTestContextIds(channelId, parentId)) {
     const questCtx = await findActiveBlupeeQuestParticipation(userId);
     if (!questCtx) {
       return interaction.editReply({
