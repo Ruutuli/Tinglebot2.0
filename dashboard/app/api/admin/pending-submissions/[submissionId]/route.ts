@@ -6,6 +6,13 @@ import { isModeratorUser } from "@/lib/moderator";
 
 export const dynamic = "force-dynamic";
 
+function normalizeSubmissionId(raw: unknown): string {
+  if (raw == null) return "";
+  return String(raw)
+    .replace(/^[`"'[\s]+|[`"'[\s]+$/g, "")
+    .trim();
+}
+
 /** POST /api/admin/pending-submissions/[submissionId] — approve or deny via bot (Discord reactions, DMs, tokens, quests). */
 export async function POST(
   request: NextRequest,
@@ -26,7 +33,8 @@ export async function POST(
   }
 
   const { submissionId: rawId } = await params;
-  const submissionId = decodeURIComponent(rawId || "").trim();
+  const rawDecoded = decodeURIComponent(rawId || "").trim();
+  const submissionId = normalizeSubmissionId(rawDecoded) || rawDecoded;
   if (!submissionId) {
     return NextResponse.json({ error: "Submission ID required" }, { status: 400 });
   }
@@ -50,16 +58,53 @@ export async function POST(
     return NextResponse.json({ error: "Reason is required when denying" }, { status: 400 });
   }
 
+  let botSubmissionId = submissionId;
+
   try {
     await connect();
     const TempData = (await import("@/models/TempDataModel.js")).default;
-    const existing = await TempData.findByTypeAndKey("submission", submissionId);
+    const ApprovedSubmission = (await import("@/models/ApprovedSubmissionModel.js")).default;
+
+    const now = new Date();
+
+    const alreadyApproved = await ApprovedSubmission.findOne({
+      $or: [
+        { submissionId },
+        ...(rawDecoded !== submissionId ? [{ submissionId: rawDecoded }] : []),
+      ],
+    }).lean();
+
+    if (alreadyApproved) {
+      return NextResponse.json(
+        { error: "This submission is already approved (stale queue entry was ignored)." },
+        { status: 409 }
+      );
+    }
+
+    const keyOrIdClauses: Record<string, string>[] = [
+      { key: submissionId },
+      { "data.submissionId": submissionId },
+    ];
+    if (rawDecoded !== submissionId) {
+      keyOrIdClauses.push({ key: rawDecoded }, { "data.submissionId": rawDecoded });
+    }
+
+    const existing = await TempData.findOne({
+      type: "submission",
+      expiresAt: { $gt: now },
+      $or: keyOrIdClauses,
+    }).exec();
+
     if (!existing) {
       return NextResponse.json(
         { error: "Submission not found or already processed" },
         { status: 404 }
       );
     }
+
+    const data = existing.data as Record<string, unknown> | undefined;
+    const dataSid = data ? normalizeSubmissionId(data.submissionId) : "";
+    botSubmissionId = dataSid || String(existing.key);
   } catch (e) {
     const msg = e instanceof Error ? e.message : "Database error";
     return NextResponse.json({ error: msg }, { status: 500 });
@@ -70,8 +115,7 @@ export async function POST(
   if (!botBase || !secret) {
     return NextResponse.json(
       {
-        error:
-          "Server is not configured for live approvals (set BOT_INTERNAL_API_URL and BOT_INTERNAL_API_SECRET to the bot service).",
+        error: "Could not reach the bot to process this submission. Try again later or use /mod approve in Discord.",
       },
       { status: 503 }
     );
@@ -87,7 +131,7 @@ export async function POST(
         "x-bot-internal-secret": secret,
       },
       body: JSON.stringify({
-        submissionId,
+        submissionId: botSubmissionId,
         action,
         reason,
         moderatorTag,

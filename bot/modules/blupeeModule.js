@@ -873,12 +873,13 @@ async function postBlupeeSpawn(channel, options = {}) {
   const villageName = forcedVillage || getBlupeeVillageFromStateKey(stateKey);
   const locationLine = villageName ? `📍 **Village:** ${villageName}` : '📍 **Location:** Test / non-village context';
 
+  const baseDescription =
+    `✨ A Blupee has been spotted in **${villageName || 'this area'}**! Quick — try to catch it!\n\n${locationLine}\n🧾 **Session ID:** \`${sessionId}\`\nUse ${getBlupeeCommandMention()} with:\n\`id: ${sessionId}\`\n\`charactername: <your character>\`\n\n**First successful catch ends this spawn for everyone** (or it despawns after **15 minutes** if nobody catches it).`;
+
   const embed = new EmbedBuilder()
     .setColor(0x5865f2)
     .setTitle('✨ A Blupee appears!')
-    .setDescription(
-      `✨ A Blupee has been spotted in **${villageName || 'this area'}**! Quick — try to catch it!\n\n${locationLine}\n🧾 **Session ID:** \`${sessionId}\`\nUse ${getBlupeeCommandMention()} with:\n\`id: ${sessionId}\`\n\`charactername: <your character>\`\n\n**First successful catch ends this spawn for everyone** (or it despawns after **15 minutes** if nobody catches it).`
-    )
+    .setDescription(baseDescription)
     .setImage(imageUrl || BLUPEE_FALLBACK_IMAGE)
     .setFooter({ text: 'Despawns in 15 minutes · Blupee event' })
     .setTimestamp();
@@ -896,6 +897,23 @@ async function postBlupeeSpawn(channel, options = {}) {
   } catch (e) {
     logger.warn('BLUPEE', `Failed to start Blupee thread for session ${sessionId}: ${e.message || e}`);
   }
+
+  const guildId = channel.guildId || msg.guildId;
+  const spawnUrl = typeof msg.url === 'string' ? msg.url : null;
+  const linkBits = [];
+  if (thread && guildId) {
+    linkBits.push(`🧵 [**Jump to session thread**](https://discord.com/channels/${guildId}/${thread.id})`);
+  }
+  if (spawnUrl) {
+    linkBits.push(`[**Jump to spawn**](${spawnUrl})`);
+  }
+  if (linkBits.length) {
+    const withLinks = EmbedBuilder.from(embed).setDescription(`${baseDescription}\n\n${linkBits.join(' · ')}`);
+    await msg.edit({ embeds: [withLinks] }).catch((editErr) => {
+      logger.warn('BLUPEE', `Failed to add Blupee jump links to spawn embed: ${editErr.message || editErr}`);
+    });
+  }
+
   const noticeChannel = thread || channel;
 
   const expiresAt = new Date(Date.now() + BLUPEE_SPAWN_DURATION_MS);

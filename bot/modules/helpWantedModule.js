@@ -1745,8 +1745,9 @@ async function generateQuestRequirements(type, pools, village, optionalQuestId) 
 // ------------------- Function: generateQuestForVillage -------------------
 // Generates a random quest object for a given village and date with fallback handling
 async function generateQuestForVillage(village, date, pools, availableNPCs = null, isAfterNoon = false, travelBlocked = false) {
-  // Validate pools with better error messages
-  const requiredPools = ['itemPool', 'monsterPool', 'craftingPool', 'escortPool', 'villageShopPool', 'artPool', 'writingPool'];
+  // Validate pools with better error messages (escortPool omitted: it can be empty when every
+  // village is a blocked destination; escort is excluded from types via noEscortDestinations below)
+  const requiredPools = ['itemPool', 'monsterPool', 'craftingPool', 'villageShopPool', 'artPool', 'writingPool'];
   const missingPools = [];
   for (const poolName of requiredPools) {
     if (!pools[poolName] || pools[poolName].length === 0) {
@@ -1850,8 +1851,9 @@ async function generateQuestForVillage(village, date, pools, availableNPCs = nul
   }
   
   // ------------------- Normal Quest Generation -------------------
-  // Get available quest types using helper function
-  const availableTypes = getAvailableQuestTypes(isAfterNoon, travelBlocked);
+  // No valid escort destination (empty pool or only this village) → treat like travel blocked for type roll
+  const noEscortDestinations = !Array.isArray(pools.escortPool) || !pools.escortPool.some(loc => loc && loc !== village);
+  const availableTypes = getAvailableQuestTypes(isAfterNoon, travelBlocked || noEscortDestinations);
   
   if (availableTypes.length === 0) {
     logger.error('QUEST', `No available quest types for ${village} (isAfterNoon: ${isAfterNoon}, travelBlocked: ${travelBlocked})`);

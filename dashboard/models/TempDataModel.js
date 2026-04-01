@@ -286,6 +286,7 @@ tempDataSchema.statics.extendExpiration = async function(type, key, additionalTi
   );
 };
 
-const TempData = mongoose.model('TempData', tempDataSchema);
+const TempData =
+  mongoose.models.TempData || mongoose.model('TempData', tempDataSchema);
 
 module.exports = TempData; 

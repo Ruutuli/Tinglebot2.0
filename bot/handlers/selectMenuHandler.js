@@ -29,7 +29,8 @@ const {
   getOrCreateSubmission, 
   updateSubmissionData, 
   retrieveSubmissionFromStorage, 
-  findLatestSubmissionIdForUser 
+  findLatestSubmissionIdForUser,
+  parseSubmissionIdFromDiscordEmbed
 } = require('@/utils/storage');
 const { fetchAnyCharacterByNameAndUserId, fetchCharacterByName, fetchCharactersByUserId, fetchModCharactersByUserId } = require('@/database/db');
 const { applyTeacherTokensBoost, applyScholarTokensBoost } = require('../modules/boostingModule');
@@ -482,9 +483,8 @@ async function confirmSubmission(interaction) {
     // Retrieve the submissionId from the latest saved data (from the select menu session)
     let submissionId;
     // Try to get it from the interaction, fallback to userId if not present
-    if (interaction.message && interaction.message.embeds && interaction.message.embeds[0]) {
-      const idField = interaction.message.embeds[0].fields?.find(f => f.name === 'Submission ID');
-      if (idField) submissionId = idField.value;
+    if (interaction.message?.embeds?.[0]) {
+      submissionId = parseSubmissionIdFromDiscordEmbed(interaction.message.embeds[0]);
     }
     // If not found, try to get from storage by userId
     if (!submissionId) {

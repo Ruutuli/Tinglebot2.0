@@ -189,7 +189,7 @@ async function handleButtonInteraction(interaction) {
           });
         }
         const cancelData = await retrieveSubmissionFromStorage(cancelSubmissionId);
-        return await handleCancel(interaction, userId, cancelData);
+        return await handleCancel(interaction, userId, cancelData, cancelSubmissionId);
       case 'view':
         return await handleViewCharacter(interaction, characterId);
       case 'job-select':
@@ -552,10 +552,14 @@ async function handleConfirmation(interaction, userId, submissionData) {
 
 // ------------------- Function: handleCancel -------------------
 // Cancels an art submission and cleans up data.
-async function handleCancel(interaction, userId, submissionData) {
+async function handleCancel(interaction, userId, submissionData, latestSubmissionIdFromUser = null) {
   try {
-    if (submissionData && submissionData.submissionId) {
-      await deleteSubmissionFromStorage(submissionData.submissionId);
+    const idFromData = submissionData?.submissionId;
+    const toDelete = idFromData || latestSubmissionIdFromUser;
+    if (toDelete) {
+      await deleteSubmissionFromStorage(toDelete);
+    } else {
+      console.warn('[componentHandler.js]: handleCancel: no submission id (data missing and no latest id)');
     }
     
     await interaction.update({

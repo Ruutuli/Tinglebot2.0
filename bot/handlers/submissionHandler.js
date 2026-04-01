@@ -36,7 +36,8 @@ const {
   updateSubmissionData, 
   retrieveSubmissionFromStorage, 
   deleteSubmissionFromStorage,
-  findLatestSubmissionIdForUser 
+  findLatestSubmissionIdForUser,
+  parseSubmissionIdFromDiscordEmbed
 } = require('@/utils/storage');
 const { applyTeacherTokensBoost, applyScholarTokensBoost } = require('../modules/boostingModule');
 const { 
@@ -104,7 +105,7 @@ async function handleSubmissionCompletion(interaction) {
     const messageEmbed = interaction.message.embeds[0];
     console.log(`[submissionHandler.js]: 📝 Embed fields:`, messageEmbed?.fields?.map(f => `${f.name}: ${f.value}`));
     
-    const submissionId = messageEmbed?.fields?.find(field => field.name === 'Submission ID')?.value;
+    const submissionId = parseSubmissionIdFromDiscordEmbed(messageEmbed);
     console.log(`[submissionHandler.js]: 🔑 Found submission ID in embed: ${submissionId}`);
     
     if (!submissionId) {
@@ -624,7 +625,7 @@ async function handleSubmissionCompletion(interaction) {
 async function handleCancelSubmission(interaction) {
   try {
     // Get submission ID from the embed
-    const submissionId = interaction.message.embeds[0]?.fields?.find(field => field.name === 'Submission ID')?.value;
+    const submissionId = parseSubmissionIdFromDiscordEmbed(interaction.message.embeds[0]);
     
     if (!submissionId) {
       console.error(`[submissionHandler.js]: handleCancelSubmission: No submission ID found in embed`);
@@ -670,7 +671,7 @@ async function handleSubmitAction(interaction) {
   if (customId === 'confirm') {
     await handleSubmissionCompletion(interaction);
 
-    const submissionId = interaction.message.embeds[0]?.fields?.find(field => field.name === 'Submission ID')?.value;
+    const submissionId = parseSubmissionIdFromDiscordEmbed(interaction.message.embeds[0]);
 
     if (!submissionId) {
       console.error(`[submissionHandler.js]: handleSubmitAction: Submission ID is undefined.`);

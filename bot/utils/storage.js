@@ -151,9 +151,32 @@ async function getAllWeaponSubmissions() {
  }
 }
 
+/** Strip markdown / whitespace from submission IDs (Discord embed values often use `A123456`). */
+function normalizeSubmissionStorageKey(raw) {
+ if (raw == null || raw === undefined) return "";
+ return String(raw)
+  .replace(/^[`"'[\s]+|[`"'[\s]+$/g, "")
+  .trim();
+}
+
+/** Submission preview / confirm embeds use different field titles (art vs writing). */
+function parseSubmissionIdFromDiscordEmbed(messageEmbed) {
+ if (!messageEmbed?.fields?.length) return null;
+ const field = messageEmbed.fields.find(
+  (f) =>
+   f.name === "Submission ID" ||
+   f.name === "🆔 Submission ID" ||
+   (typeof f.name === "string" && f.name.includes("Submission ID"))
+ );
+ if (!field?.value) return null;
+ const cleaned = normalizeSubmissionStorageKey(field.value);
+ return cleaned || null;
+}
+
 async function saveSubmissionToStorage(key, submissionData) {
  try {
-  if (!key || !submissionData) {
+  const normalizedKey = normalizeSubmissionStorageKey(key);
+  if (!normalizedKey || !submissionData) {
    console.error(`[storage.js]: Missing key or data for save operation`);
    throw new Error("Missing key or data");
   }
@@ -163,9 +186,9 @@ async function saveSubmissionToStorage(key, submissionData) {
 
   const submission = {
    type: "submission",
-   key,
+   key: normalizedKey,
    data: {
-    submissionId: submissionData.submissionId || key,
+    submissionId: normalizeSubmissionStorageKey(submissionData.submissionId) || normalizedKey,
     userId: submissionData.userId,
     username: submissionData.username,
     userAvatar: submissionData.userAvatar,
@@ -207,12 +230,12 @@ async function saveSubmissionToStorage(key, submissionData) {
   };
 
   const result = await TempData.findOneAndUpdate(
-   { type: "submission", key },
+   { type: "submission", key: normalizedKey },
    submission,
    { upsert: true, new: true }
   );
 
-  logger.success('STORAGE', `Saved submission ${key}`);
+  logger.success('STORAGE', `Saved submission ${normalizedKey}`);
   return result;
  } catch (error) {
   console.error(`[storage.js]: Error saving submission ${key}:`, error);
@@ -220,9 +243,11 @@ async function saveSubmissionToStorage(key, submissionData) {
  }
 }
 
+
 async function updateSubmissionData(submissionId, updates) {
  try {
-  if (!submissionId || !updates) {
+  const normalizedId = normalizeSubmissionStorageKey(submissionId);
+  if (!normalizedId || !updates) {
    console.error(
     `[storage.js]: Missing submissionId or updates for update operation`
    );
@@ -231,10 +256,10 @@ async function updateSubmissionData(submissionId, updates) {
 
   const now = new Date();
 
-  const existingData = await retrieveSubmissionFromStorage(submissionId);
+  const existingData = await retrieveSubmissionFromStorage(normalizedId);
   if (!existingData) {
    console.error(
-    `[storage.js]: Submission ${submissionId} not found for update`
+    `[storage.js]: Submission ${normalizedId} not found for update`
    );
    return null;
   }
@@ -246,7 +271,7 @@ async function updateSubmissionData(submissionId, updates) {
   };
 
   const result = await TempData.findOneAndUpdate(
-   { type: "submission", key: submissionId },
+   { type: "submission", key: normalizedId },
    {
     $set: {
      data: updateData,
@@ -321,11 +346,18 @@ async function getOrCreateSubmission(userId, initialData = {}) {
 
 async function retrieveSubmissionFromStorage(key) {
  try {
-  const submission = await TempData.findByTypeAndKey("submission", key);
+  const normalized = normalizeSubmissionStorageKey(key);
+  if (!normalized) return null;
+  let submission = await TempData.findByTypeAndKey("submission", normalized);
   if (submission) {
    return submission.data;
   }
-  return null;
+  const byDataId = await TempData.findOne({
+   type: "submission",
+   "data.submissionId": normalized,
+   expiresAt: { $gt: new Date() },
+  });
+  return byDataId ? byDataId.data : null;
  } catch (error) {
   console.error(`[storage.js]: Error retrieving submission ${key}:`, error);
   throw error;
@@ -334,7 +366,18 @@ async function retrieveSubmissionFromStorage(key) {
 
 async function deleteSubmissionFromStorage(submissionId) {
  try {
-  await TempData.findOneAndDelete({ type: "submission", key: submissionId });
+  const key = normalizeSubmissionStorageKey(submissionId);
+  if (!key) {
+   console.warn("[storage.js]: deleteSubmissionFromStorage called with empty id");
+   return;
+  }
+  const result = await TempData.deleteMany({
+   type: "submission",
+   $or: [{ key }, { "data.submissionId": key }],
+  });
+  if (result.deletedCount > 0) {
+   logger.success("STORAGE", `Deleted submission ${key} (${result.deletedCount} document(s))`);
+  }
  } catch (error) {
   handleError(error, "storage.js");
   throw new Error("Failed to delete submission");
@@ -1160,6 +1203,8 @@ module.exports = {
 
  retrieveAllByType,
  findLatestSubmissionIdForUser,
+
+ parseSubmissionIdFromDiscordEmbed,
 
  saveToStorage,
  retrieveFromStorage,

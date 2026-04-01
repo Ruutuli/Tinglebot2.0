@@ -2404,6 +2404,7 @@ module.exports = {
     processQuestCompletion,
     processParticipantReward,
     distributeRewards,
+    distributeItems,
     markQuestAsCompleted,
     manuallyCompleteQuest,
     getQuestStatus,
