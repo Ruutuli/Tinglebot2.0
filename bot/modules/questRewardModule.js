@@ -54,19 +54,88 @@ const PROGRESS_STATUS = {
 // ------------------- Notification Functions -------------------
 // ============================================================================
 
-// ------------------- Send Individual Reward Notification -------------------
-async function sendIndividualRewardNotification(quest, participant, rewardResult) {
+// ------------------- Reward notification helpers (batched per quest) -------------------
+function shouldIncludeInRewardNotification(quest, rewardResult) {
+    const tokenBreakdownPre = rewardResult.tokenBreakdown || {};
+    const hasQuestItems =
+        (quest.itemRewards && quest.itemRewards.length > 0) ||
+        (quest.itemReward && quest.itemRewardQty > 0);
+    if (tokenBreakdownPre.skippedDuplicateQuestReward && !hasQuestItems) {
+        return false;
+    }
+    return true;
+}
+
+function formatParticipantRewardLine(participant, rewardResult, quest) {
+    const tb = rewardResult.tokenBreakdown || {};
+    const parts = [];
+
+    if (!tb.skippedDuplicateQuestReward && rewardResult.tokensAdded > 0) {
+        let t = `${rewardResult.tokensAdded} tokens`;
+        if (tb.entertainerBonus) t += ` (+${tb.entertainerBonus} Entertainer)`;
+        parts.push(t);
+    } else if (tb.skippedDuplicateQuestReward && rewardResult.tokensAdded > 0) {
+        parts.push(`${rewardResult.tokensAdded} tokens (already credited)`);
+    }
+
+    const hasQuestItems =
+        (quest.itemRewards && quest.itemRewards.length > 0) ||
+        (quest.itemReward && quest.itemRewardQty > 0);
+    if (parts.length === 0 && hasQuestItems) {
+        return `• **${participant.characterName}** — Quest item rewards`;
+    }
+    if (parts.length === 0) {
+        return `• **${participant.characterName}** — Rewards received`;
+    }
+    return `• **${participant.characterName}** — ${parts.join(', ')}`;
+}
+
+function chunkLinesForEmbed(lines, maxChars = 1000) {
+    const chunks = [];
+    let current = [];
+    let currentLen = 0;
+    for (const line of lines) {
+        const addLen = line.length + (current.length ? 1 : 0);
+        if (currentLen + addLen > maxChars && current.length) {
+            chunks.push(current.join('\n'));
+            current = [line];
+            currentLen = line.length;
+        } else {
+            current.push(line);
+            currentLen += addLen;
+        }
+    }
+    if (current.length) chunks.push(current.join('\n'));
+    return chunks.length ? chunks : [''];
+}
+
+function chunkDiscordContent(str, maxLen = 1990) {
+    if (str.length <= maxLen) return [str];
+    const parts = [];
+    let rest = str;
+    while (rest.length > maxLen) {
+        parts.push(rest.slice(0, maxLen));
+        rest = rest.slice(maxLen);
+    }
+    if (rest.length) parts.push(rest);
+    return parts;
+}
+
+// ------------------- Send batched reward notification (one embed per quest) -------------------
+async function sendBatchedQuestRewardNotification(quest, entries) {
     try {
-        console.log(`[questRewardModule] 🎉 Sending reward notification for ${participant.characterName} in quest ${quest.questID}`);
-        
-        // Get the Discord client
+        if (!entries || entries.length === 0) return { success: true, skipped: true };
+
+        console.log(
+            `[questRewardModule] 🎉 Sending batched reward notification for quest ${quest.questID} (${entries.length} recipients)`
+        );
+
         const { client } = require('../index.js');
         if (!client) {
             console.log(`[questRewardModule] ❌ Discord client not available for notification`);
             return { success: false, error: 'Discord client not available' };
         }
 
-        // Always send to Sheikah Slate channel only
         const SHEIKAH_SLATE_CHANNEL_ID = '641858948802150400';
         const channel = await client.channels.fetch(SHEIKAH_SLATE_CHANNEL_ID);
         if (!channel) {
@@ -74,77 +143,68 @@ async function sendIndividualRewardNotification(quest, participant, rewardResult
             return { success: false, error: 'Sheikah Slate channel not found' };
         }
 
-        const tokenBreakdownPre = rewardResult.tokenBreakdown || {};
-        const hasQuestItems =
-            (quest.itemRewards && quest.itemRewards.length > 0) ||
-            (quest.itemReward && quest.itemRewardQty > 0);
-        if (tokenBreakdownPre.skippedDuplicateQuestReward && !hasQuestItems) {
-            console.log(
-                `[questRewardModule] ℹ️ Skipping Sheikah quest reward embed for ${participant.characterName} — tokens already credited at submission approval; no item rewards.`
-            );
-            return { success: true, skipped: true };
-        }
+        const lines = entries.map(({ participant, rewardResult }) =>
+            formatParticipantRewardLine(participant, rewardResult, quest)
+        );
+        const lineChunks = chunkLinesForEmbed(lines, 1000);
 
-        // Create reward notification embed
         const rewardEmbed = createBaseEmbed(
             '🎉 Quest Reward Received!',
-            `**${participant.characterName}** has received their rewards for completing **${quest.title}**!`,
+            `Rewards for completing **${quest.title}** have been distributed.`,
             QUEST_COLORS.SUCCESS
         );
 
-        const rewardFields = [];
-        const tokenBreakdown = rewardResult.tokenBreakdown || {};
-        
-        if (!tokenBreakdown.skippedDuplicateQuestReward && rewardResult.tokensAdded > 0) {
-            rewardFields.push({
-                name: '💰 Tokens',
-                value: `${rewardResult.tokensAdded} tokens${tokenBreakdown.entertainerBonus ? ' (Entertainer bonus applied)' : ''}`,
-                inline: true
-            });
-        }
-        
-        if (tokenBreakdown.entertainerBonus) {
-            rewardFields.push({
-                name: '🎭 Entertainer Bonus',
-                value: `+${tokenBreakdown.entertainerBonus} tokens`,
-                inline: true
-            });
-        }
-        
-        // Display item rewards (prefer itemRewards array, fallback to single item format)
-        if (quest.itemRewards && quest.itemRewards.length > 0) {
-            const itemRewardsText = quest.itemRewards.map(item => 
-                `${item.quantity}x ${item.name}`
-            ).join(', ');
-            rewardFields.push({
-                name: quest.itemRewards.length > 1 ? '📦 Item Rewards' : '📦 Item Reward',
-                value: itemRewardsText,
-                inline: true
-            });
-        } else if (quest.itemReward && quest.itemRewardQty > 0) {
-            rewardFields.push({
-                name: '📦 Item Reward',
-                value: `${quest.itemRewardQty}x ${quest.itemReward}`,
-                inline: true
+        const intro = `Rewards for completing **${quest.title}** have been distributed.`;
+        const recipientsBody = lines.join('\n');
+        if (recipientsBody.length + intro.length + 2 <= 4096) {
+            rewardEmbed.setDescription(`${intro}\n\n${recipientsBody}`);
+        } else if (lineChunks.length > 22) {
+            const truncated =
+                recipientsBody.length > 4000 ? `${recipientsBody.slice(0, 3996)}…` : recipientsBody;
+            rewardEmbed.setDescription(`${intro}\n\n${truncated}`);
+        } else {
+            lineChunks.forEach((chunk, i) => {
+                rewardEmbed.addFields({
+                    name: lineChunks.length > 1 ? `Recipients (${i + 1}/${lineChunks.length})` : 'Recipients',
+                    value: chunk,
+                    inline: false
+                });
             });
         }
 
-        if (rewardFields.length > 0) {
-            rewardEmbed.addFields(rewardFields);
+        if (quest.itemRewards && quest.itemRewards.length > 0) {
+            const itemRewardsText = quest.itemRewards.map((item) => `${item.quantity}x ${item.name}`).join(', ');
+            rewardEmbed.addFields({
+                name: quest.itemRewards.length > 1 ? '📦 Item Rewards' : '📦 Item Reward',
+                value: itemRewardsText.length > 1024 ? itemRewardsText.slice(0, 1020) + '…' : itemRewardsText,
+                inline: false
+            });
+        } else if (quest.itemReward && quest.itemRewardQty > 0) {
+            rewardEmbed.addFields({
+                name: '📦 Item Reward',
+                value: `${quest.itemRewardQty}x ${quest.itemReward}`,
+                inline: false
+            });
         }
 
         addQuestInfoFields(rewardEmbed, quest, []);
 
-        await channel.send({ 
-            content: `<@${participant.userId}>`,
-            embeds: [rewardEmbed] 
+        const uniqueIds = [...new Set(entries.map((e) => e.participant.userId).filter(Boolean))];
+        const mentionStr = uniqueIds.map((id) => `<@${id}>`).join(' ');
+        const mentionParts = chunkDiscordContent(mentionStr);
+
+        await channel.send({
+            content: mentionParts[0] || undefined,
+            embeds: [rewardEmbed]
         });
+        for (let i = 1; i < mentionParts.length; i++) {
+            await channel.send({ content: mentionParts[i] });
+        }
 
-        console.log(`[questRewardModule] ✅ Sent reward notification for ${participant.characterName} in quest ${quest.questID}`);
+        console.log(`[questRewardModule] ✅ Sent batched reward notification for quest ${quest.questID}`);
         return { success: true };
-
     } catch (error) {
-        console.error(`[questRewardModule] ❌ Error sending reward notification:`, error);
+        console.error(`[questRewardModule] ❌ Error sending batched reward notification:`, error);
         return { success: false, error: error.message };
     }
 }
@@ -340,11 +400,21 @@ async function sendQuestCompletionSummary(quest, completionReason) {
 
         // Always send to Sheikah Slate channel only
         const SHEIKAH_SLATE_CHANNEL_ID = '641858948802150400';
+
+        const participantIds = [...new Set(participants.map((p) => p.userId).filter(Boolean))];
+        const mentionStr = participantIds.map((id) => `<@${id}>`).join(' ');
+        const mentionParts = chunkDiscordContent(mentionStr);
         
         try {
             const sheikahSlateChannel = await client.channels.fetch(SHEIKAH_SLATE_CHANNEL_ID);
             if (sheikahSlateChannel) {
-                await sheikahSlateChannel.send({ embeds: [embed] });
+                await sheikahSlateChannel.send({
+                    content: mentionParts[0] || undefined,
+                    embeds: [embed]
+                });
+                for (let i = 1; i < mentionParts.length; i++) {
+                    await sheikahSlateChannel.send({ content: mentionParts[i] });
+                }
                 console.log(`[questRewardModule] ✅ Sent quest completion summary to Sheikah Slate channel`);
                 return { success: true };
             } else {
@@ -908,21 +978,29 @@ async function processAllParticipants(quest, participants) {
     let completedCount = 0;
     let rewardedCount = 0;
     let errorCount = 0;
+    const rewardNotificationEntries = [];
 
     const rewardContext = await buildQuestRewardContext(quest, participants);
 
     for (const participant of participants) {
         try {
             const result = await processParticipantReward(quest, participant, rewardContext);
-            if (result === 'completed') {
+            if (result.status === 'completed') {
                 rewardedCount++;
-            } else if (result !== 'already_rewarded' && result !== 'requirements_not_met') {
+                if (shouldIncludeInRewardNotification(quest, result.rewardResult)) {
+                    rewardNotificationEntries.push({ participant, rewardResult: result.rewardResult });
+                }
+            } else if (result.status !== 'already_rewarded' && result.status !== 'requirements_not_met') {
                 errorCount++;
             }
         } catch (error) {
             console.error(`[questRewardModule.js] ❌ Error processing participant ${participant.characterName}:`, error);
             errorCount++;
         }
+    }
+
+    if (rewardNotificationEntries.length > 0) {
+        await sendBatchedQuestRewardNotification(quest, rewardNotificationEntries);
     }
 
     completedCount = rewardedCount;
@@ -937,12 +1015,12 @@ async function processParticipantReward(quest, participant, rewardContext = {}) 
         
         if (rewardStatus === 'already_rewarded') {
             console.log(`[questRewardModule.js] ℹ️ Participant ${participant.characterName} already rewarded`);
-            return 'already_rewarded';
+            return { status: 'already_rewarded' };
         }
 
         if (!meetsRequirements(participant, quest)) {
             console.log(`[questRewardModule.js] ⚠️ Participant ${participant.characterName} does not meet requirements for quest ${quest.questID}`);
-            return 'requirements_not_met';
+            return { status: 'requirements_not_met' };
         }
 
         if (participant.progress !== 'completed') {
@@ -955,19 +1033,16 @@ async function processParticipantReward(quest, participant, rewardContext = {}) 
             updateParticipantRewardData(participant, quest, rewardResult, rewardResult.rewardSource || 'immediate');
             await recordUserQuestCompletion(participant, quest, rewardResult, rewardResult.rewardSource || 'immediate');
             
-            // Send individual notification to the participant
-            await sendIndividualRewardNotification(quest, participant, rewardResult);
-            
             console.log(`[questRewardModule.js] ✅ Successfully rewarded participant ${participant.characterName} for quest ${quest.questID}`);
-            return 'completed';
+            return { status: 'completed', rewardResult };
         } else {
             console.error(`[questRewardModule.js] ❌ Failed to distribute rewards for ${participant.characterName}:`, rewardResult.error);
-            return 'reward_failed';
+            return { status: 'reward_failed' };
         }
 
     } catch (error) {
         console.error(`[questRewardModule.js] ❌ Error processing reward for participant ${participant.characterName}:`, error);
-        return 'error';
+        return { status: 'error' };
     }
 }
 
