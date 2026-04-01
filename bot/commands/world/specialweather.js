@@ -14,6 +14,7 @@ const ItemModel = require('@/models/ItemModel');
 const { createWeightedItemList } = require('../../modules/rngModule.js');
 const { handleInteractionError } = require('@/utils/globalErrorHandler.js');
 const { syncToInventoryDatabase } = require('@/utils/inventoryUtils.js');
+const { toAprilFoolsLootObject } = require('@/utils/aprilFoolsRoll.js');
 const weatherService = require('@/services/weatherService');
 const { getWeatherWithoutGeneration, getCurrentPeriodBounds, getNextPeriodBounds, PERIOD_VALIDATION_TOLERANCE_MS } = weatherService;
 const { canUseSpecialWeather, normalizeVillageName } = require('@/utils/specialWeatherUtils');
@@ -557,13 +558,14 @@ module.exports = {
 
       const weightedItems = createWeightedItemList(specialWeatherItems);
       const randomItem = weightedItems[Math.floor(Math.random() * weightedItems.length)];
+      const grantItem = await toAprilFoolsLootObject({ ...randomItem, quantity: 1 });
       
       const itemToSync = {
-        itemName: randomItem.itemName,
+        itemName: grantItem.itemName,
         quantity: 1,
-        category: Array.isArray(randomItem.category) ? randomItem.category : [randomItem.category],
-        type: Array.isArray(randomItem.type) ? randomItem.type : [randomItem.type],
-        subtype: Array.isArray(randomItem.subtype) ? randomItem.subtype : (randomItem.subtype ? [randomItem.subtype] : []),
+        category: Array.isArray(grantItem.category) ? grantItem.category : [grantItem.category],
+        type: Array.isArray(grantItem.type) ? grantItem.type : [grantItem.type],
+        subtype: Array.isArray(grantItem.subtype) ? grantItem.subtype : (grantItem.subtype ? [grantItem.subtype] : []),
         obtain: `Special Weather: ${weather.special.label}`,
         date: new Date(),
         link: `https://discord.com/channels/${interaction.guildId}/${interaction.channelId}/${interaction.id}`
@@ -578,7 +580,7 @@ module.exports = {
       character.markModified('specialWeatherUsage');
       await character.save();
 
-      const { embed, files } = await createSpecialWeatherEmbed(character, randomItem, weather);
+      const { embed, files } = await createSpecialWeatherEmbed(character, grantItem, weather);
       const banner = await generateBanner(channelVillage, weather);
       if (banner) {
         embed.setImage(`attachment://${banner.name}`);

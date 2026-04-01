@@ -1,5 +1,5 @@
-// April 1 only: uses America/New_York *local calendar date* (covers EST and EDT).
-// Active from midnight through 11:59:59.999pm Eastern on April 1; off on March 31 and April 2+.
+// April 1 only: uses America/New_York *local calendar date* (US Eastern — EST in winter, EDT after DST).
+// Active the full civil day: from 12:00:00.000am through 11:59:59.999pm Eastern on April 1; off on March 31 and April 2+.
 
 const MOCK_FAIRY_NAME = 'Mock Fairy';
 

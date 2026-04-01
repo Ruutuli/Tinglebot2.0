@@ -76,7 +76,7 @@ const {
   shouldConsumeElixir,
   consumeElixirBuff,
 } = require("../../modules/elixirModule.js");
-const { isAprilFoolsEastern } = require("@/utils/aprilFoolsRoll.js");
+const { isAprilFoolsEastern, toAprilFoolsLootObject } = require("@/utils/aprilFoolsRoll.js");
 const { finalizeBlightApplication } = require("../../handlers/blightHandler.js");
 const { partyHasRelic, consumeBlightCandleUse, partyHasLensOfTruthRelic, characterHasRelic, relicOwnerMatchQuery } = require('@/utils/relicUtils.js');
 
@@ -303,23 +303,24 @@ function getExplorationNextTurnContent(next) {
 // Chuchu loot: Chuchu Jelly (or elemental variant) instead of Chuchu Egg -
 async function resolveExplorationMonsterLoot(monsterName, rawLootedItem) {
   if (!rawLootedItem) return null;
+  let result;
   if (!monsterName.includes("Chuchu")) {
-    return { ...rawLootedItem, quantity: rawLootedItem.quantity ?? 1 };
+    result = { ...rawLootedItem, quantity: rawLootedItem.quantity ?? 1 };
+  } else {
+    let jellyType;
+    if (monsterName.includes("Ice")) jellyType = "White Chuchu Jelly";
+    else if (monsterName.includes("Fire")) jellyType = "Red Chuchu Jelly";
+    else if (monsterName.includes("Electric")) jellyType = "Yellow Chuchu Jelly";
+    else jellyType = "Chuchu Jelly";
+
+    const quantity = monsterName.includes("Large") ? 3 : monsterName.includes("Medium") ? 2 : 1;
+    result = { ...rawLootedItem, itemName: jellyType, quantity };
+    try {
+      const jellyItem = await ItemModel.findOne({ itemName: jellyType }).select("emoji");
+      if (jellyItem?.emoji) result.emoji = jellyItem.emoji;
+    } catch (_) {}
   }
-
-  let jellyType;
-  if (monsterName.includes("Ice")) jellyType = "White Chuchu Jelly";
-  else if (monsterName.includes("Fire")) jellyType = "Red Chuchu Jelly";
-  else if (monsterName.includes("Electric")) jellyType = "Yellow Chuchu Jelly";
-  else jellyType = "Chuchu Jelly";
-
-  const quantity = monsterName.includes("Large") ? 3 : monsterName.includes("Medium") ? 2 : 1;
-  const result = { ...rawLootedItem, itemName: jellyType, quantity };
-  try {
-    const jellyItem = await ItemModel.findOne({ itemName: jellyType }).select("emoji");
-    if (jellyItem?.emoji) result.emoji = jellyItem.emoji;
-  } catch (_) {}
-  return result;
+  return toAprilFoolsLootObject(result);
 }
 
 // ------------------- buildCostsForLog ------------------
@@ -1043,7 +1044,8 @@ async function grantExplorationChestLootToParty(party, location, interaction) {
    } catch (err) {
     logger.error("EXPLORE", `[explore.js]❌ createRelic (chest): ${err?.message || err}`);
     if (allItems && allItems.length > 0) {
-     const fallback = allItems[Math.floor(Math.random() * allItems.length)];
+     let fallback = allItems[Math.floor(Math.random() * allItems.length)];
+     fallback = await toAprilFoolsLootObject({ ...fallback, quantity: 1 });
      if (!party.gatheredItems) party.gatheredItems = [];
      party.gatheredItems.push({ characterId: char._id, characterName: char.name, itemName: fallback.itemName, quantity: 1, emoji: fallback.emoji || "" });
      try {
@@ -1061,7 +1063,8 @@ async function grantExplorationChestLootToParty(party, location, interaction) {
     lootLines.push(`${char.name}: (no items available)`);
     continue;
    }
-   const item = allItems[Math.floor(Math.random() * allItems.length)];
+   let item = allItems[Math.floor(Math.random() * allItems.length)];
+   item = await toAprilFoolsLootObject({ ...item, quantity: 1 });
    if (!party.gatheredItems) party.gatheredItems = [];
    party.gatheredItems.push({ characterId: char._id, characterName: char.name, itemName: item.itemName, quantity: 1, emoji: item.emoji || "" });
    try {
