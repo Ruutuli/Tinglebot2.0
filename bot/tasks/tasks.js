@@ -12,13 +12,11 @@ const logger = require('@/utils/logger');
 const {
   getCurrentWeather,
   generateWeatherEmbed,
-  markWeatherAsPosted,
   markWeatherAsPmPosted,
   getWeatherWithoutGeneration,
-  calculateWeatherDamage,
   getDailyAmWeatherPostSkipDecision,
+  completeAmTownHallWeatherPost,
 } = require('@/services/weatherService');
-const { damageVillage } = require('@/modules/villageModule');
 const Character = require('@/models/CharacterModel');
 const ModCharacter = require('@/models/ModCharacterModel');
 const User = require('@/models/UserModel');
@@ -111,24 +109,6 @@ function hasScheduledTimePassed(scheduledPostTime) {
 // ------------------- Weather Tasks -------------------
 // ============================================================================
 
-// Build a readable damage cause string from weather and damage breakdown
-function buildWeatherDamageCause(weather, damageBreakdown) {
-  if (!weather || !damageBreakdown || damageBreakdown.total === 0) return 'Weather';
-  const parts = [];
-  if (damageBreakdown.special > 0 && weather.special?.label) {
-    parts.push(weather.special.label);
-  }
-  if (damageBreakdown.precipitation > 0 && weather.precipitation?.label) {
-    parts.push(weather.precipitation.label);
-  }
-  if (damageBreakdown.wind > 0 && weather.wind?.label) {
-    const windLabel = weather.wind.label;
-    const match = windLabel?.match(/\/\/\s*(.+)$/);
-    parts.push(match ? match[1].trim() : windLabel);
-  }
-  return parts.length > 0 ? `Weather: **${parts.join(', ')}**` : 'Weather';
-}
-
 // ------------------- daily-weather (8am Eastern) -------------------
 async function dailyWeather(client, _data = {}) {
   if (!client?.channels) {
@@ -169,39 +149,7 @@ async function dailyWeather(client, _data = {}) {
       }
       const { embed, files } = await generateWeatherEmbed(village, weather);
       await channel.send({ embeds: [embed], files });
-      
-      // Apply weather damage if not already applied for this weather period
-      if (!weather.weatherDamageApplied) {
-        try {
-          const damageBreakdown = calculateWeatherDamage(weather);
-          const damageAmount = damageBreakdown.total;
-          
-          if (damageAmount > 0) {
-            const weatherCause = buildWeatherDamageCause(weather, damageBreakdown);
-            await damageVillage(village, damageAmount, weatherCause);
-            logger.success('SCHEDULED', `Weather damage: ${village} took ${damageAmount} HP damage (Wind: ${damageBreakdown.wind}, Precipitation: ${damageBreakdown.precipitation}, Special: ${damageBreakdown.special})`);
-          } else {
-            logger.info('SCHEDULED', `Weather damage: ${village} - no damage conditions met`);
-          }
-          damageApplied = true;
-        } catch (damageErr) {
-          // Log error but don't fail weather posting if damage application fails
-          logger.error('SCHEDULED', `Weather damage application failed for ${village}: ${damageErr.message}`);
-        }
-      }
-      
-      // Mark weather as posted and damage as applied (if applicable) in one update
-      const Weather = require('@/models/WeatherModel');
-      const updateData = { 
-        postedToDiscord: true, 
-        postedAt: new Date() 
-      };
-      // Mark damage as applied if we processed it (even if no damage occurred or error happened)
-      if (!weather.weatherDamageApplied) {
-        updateData.weatherDamageApplied = true;
-      }
-      await Weather.findByIdAndUpdate(weather._id, { $set: updateData });
-      
+      await completeAmTownHallWeatherPost(village, weather);
       logger.success('SCHEDULED', `daily-weather: posted ${village}`);
     } catch (err) {
       logger.error('SCHEDULED', `daily-weather: ${village} failed: ${err.message}`);
@@ -254,28 +202,7 @@ async function weatherFallbackCheck(client, _data = {}) {
 
       const { embed, files } = await generateWeatherEmbed(village, weather);
       await channel.send({ embeds: [embed], files });
-      await markWeatherAsPosted(village, weather);
-
-      // Apply weather damage if not already applied (same logic as daily-weather)
-      // When fallback posts weather, damage must also be applied or villages get no "damaged" message
-      if (!weather.weatherDamageApplied) {
-        try {
-          const damageBreakdown = calculateWeatherDamage(weather);
-          const damageAmount = damageBreakdown.total;
-          if (damageAmount > 0) {
-            const weatherCause = buildWeatherDamageCause(weather, damageBreakdown);
-            await damageVillage(village, damageAmount, weatherCause);
-            logger.success('SCHEDULED', `weather-fallback-check: Applied weather damage to ${village}: ${damageAmount} HP (Wind: ${damageBreakdown.wind}, Precipitation: ${damageBreakdown.precipitation}, Special: ${damageBreakdown.special})`);
-          } else {
-            logger.info('SCHEDULED', `weather-fallback-check: ${village} - no damage conditions met`);
-          }
-          const Weather = require('@/models/WeatherModel');
-          await Weather.findByIdAndUpdate(weather._id, { $set: { weatherDamageApplied: true } });
-        } catch (damageErr) {
-          logger.error('SCHEDULED', `weather-fallback-check: Weather damage application failed for ${village}: ${damageErr.message}`);
-        }
-      }
-
+      await completeAmTownHallWeatherPost(village, weather);
       logger.success('SCHEDULED', `weather-fallback-check: Posted missing weather for ${village}`);
     } catch (err) {
       logger.error('SCHEDULED', `weather-fallback-check: ${village} failed: ${err.message}`);

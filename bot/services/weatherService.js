@@ -148,6 +148,27 @@ const OVERLAY_MAPPING = {
 // ------------------- Utility Functions -------------------
 // ============================================================================
 
+// ============================================================================
+// ------------------- Logging Helpers -------------------
+// ============================================================================
+
+function logInfo(message) {
+  console.log(`[weatherService.js]ℹ️ ${message}`);
+}
+
+function logWarn(message) {
+  console.warn(`[weatherService.js]⚠️ ${message}`);
+}
+
+function logError(message, error = null) {
+  if (error) {
+    const details = error?.stack || error?.message || String(error);
+    console.error(`[weatherService.js]❌ ${message} (${details})`);
+    return;
+  }
+  console.error(`[weatherService.js]❌ ${message}`);
+}
+
 // ------------------- Helper Functions ------------------
 // Normalize village name to proper case -
 function normalizeVillageName(name) {
@@ -197,10 +218,13 @@ function normalizeSeason(season) {
 const WEATHER_PERIOD_TZ = 'America/New_York';
 const WEATHER_PERIOD_START_HOUR = 8;
 
+// Allow small clock/DB drift when matching `weather.date` to the computed period start.
+const PERIOD_VALIDATION_TOLERANCE_MS = 60_000;
+
 // Get current period bounds (8am Eastern → next day 7:59:59.999 Eastern, exclusive of next 8am).
 function getCurrentPeriodBounds(referenceDate = new Date()) {
   if (!(referenceDate instanceof Date) || isNaN(referenceDate.getTime())) {
-    console.error('[weatherService.js]❌ Invalid referenceDate provided to getCurrentPeriodBounds:', referenceDate);
+    logError('Invalid referenceDate provided to getCurrentPeriodBounds', referenceDate);
     referenceDate = new Date();
   }
 
@@ -219,7 +243,7 @@ function getCurrentPeriodBounds(referenceDate = new Date()) {
   const endUTC = periodEndInclusive.toDate();
 
   if (isNaN(startUTC.getTime()) || isNaN(endUTC.getTime())) {
-    console.error('[weatherService.js]❌ Invalid period bounds calculated', {
+    logError('Invalid period bounds calculated', {
       referenceDate: referenceDate.toISOString(),
       startUTC: startUTC.toISOString(),
       endUTC: endUTC.toISOString()
@@ -228,7 +252,7 @@ function getCurrentPeriodBounds(referenceDate = new Date()) {
   }
 
   if (endUTC <= startUTC) {
-    console.error('[weatherService.js]❌ Period bounds validation failed: end <= start', {
+    logError('Period bounds validation failed: end <= start', {
       startUTC: startUTC.toISOString(),
       endUTC: endUTC.toISOString()
     });
@@ -251,7 +275,7 @@ function getNextPeriodBounds(referenceDate = new Date()) {
   const nextEndUTC = nextEndInclusive.toDate();
 
   if (isNaN(nextStartUTC.getTime()) || isNaN(nextEndUTC.getTime())) {
-    console.error('[weatherService.js]❌ Invalid next period bounds calculated', {
+    logError('Invalid next period bounds calculated', {
       referenceDate: referenceDate.toISOString(),
       nextStartUTC: nextStartUTC.toISOString(),
       nextEndUTC: nextEndUTC.toISOString()
@@ -260,7 +284,7 @@ function getNextPeriodBounds(referenceDate = new Date()) {
   }
 
   if (nextStartUTC <= current.startUTC || nextEndUTC <= current.endUTC) {
-    console.error('[weatherService.js]❌ Next period bounds validation failed', {
+    logError('Next period bounds validation failed', {
       currentStart: current.startUTC.toISOString(),
       currentEnd: current.endUTC.toISOString(),
       nextStart: nextStartUTC.toISOString(),
@@ -313,18 +337,16 @@ async function findWeatherForPeriod(village, startUTC, endUTC, options = {}) {
   // This ensures we get today's weather instead of yesterday's when the range includes both
   const weather = await Weather.findOne(baseQuery).sort({ date: -1 });
   
-  // Add debug logging to help troubleshoot
   if (!weather && onlyPosted) {
-    console.log(`[weatherService.js]: No posted weather found for ${normalizedVillage} in period ${startUTC.toISOString()} to ${endUTC.toISOString()}`);
-    // Try to find any weather in the period to see if it's a postedToDiscord issue
+    logInfo(`No posted weather for ${normalizedVillage} in period ${startUTC.toISOString()} → ${endUTC.toISOString()}`);
     const anyWeather = await Weather.findOne({
       village: normalizedVillage,
       date: dateRange
     }).sort({ date: -1 });
     if (anyWeather) {
-      console.log(`[weatherService.js]: Found weather but postedToDiscord=${anyWeather.postedToDiscord}, ID=${anyWeather._id}`);
+      logInfo(`Found unposted weather for ${normalizedVillage} (postedToDiscord=${anyWeather.postedToDiscord ?? false}, id=${anyWeather._id})`);
     } else {
-      console.log(`[weatherService.js]: No weather found at all for ${normalizedVillage} in this period`);
+      logInfo(`No weather found at all for ${normalizedVillage} in that period`);
     }
   }
 
@@ -340,7 +362,7 @@ async function findWeatherForPeriod(village, startUTC, endUTC, options = {}) {
 // ------------------- Weighted Choice Functions -------------------
 function safeWeightedChoice(candidates, weightMapping, modifierMap = {}) {
   if (!candidates || candidates.length === 0) {
-    console.error('[weatherService.js]❌ No candidates provided to weightedChoice');
+    logError('No candidates provided to weightedChoice');
     return null;
   }
   
@@ -354,7 +376,7 @@ function safeWeightedChoice(candidates, weightMapping, modifierMap = {}) {
   });
 
   if (totalWeight <= 0) {
-    console.warn('[weatherService.js]: Total weight is 0 or negative, selecting random candidate');
+    logWarn('Total weight is 0/negative; selecting random candidate');
     return candidates[Math.floor(Math.random() * candidates.length)];
   }
 
@@ -368,7 +390,7 @@ function safeWeightedChoice(candidates, weightMapping, modifierMap = {}) {
   
   const result = candidates[candidates.length - 1];
   if (!result) {
-    console.error('[weatherService.js]❌ Failed to select candidate, returning first option');
+    logError('Failed to select candidate; returning first option');
     return candidates[0];
   }
   
@@ -683,6 +705,66 @@ function isValidCurrentPeriodWeather(weather, now, startOfNextPeriodUTC) {
   return !(weatherDate.getTime() > oneHourFromNow && weatherDate >= startOfNextPeriodUTC);
 }
 
+// Get normalized village + current period context -
+function buildCurrentPeriodContext(village, now = new Date()) {
+  const normalizedVillage = normalizeVillageName(village);
+  const { startUTC: startOfPeriodUTC } = getCurrentPeriodBounds(now);
+  const { startUTC: startOfNextPeriodUTC } = getNextPeriodBounds(now);
+
+  // Use a range that starts 24 hours before the period start to catch weather saved with different timezone/date calculations
+  const periodSearchStart = new Date(startOfPeriodUTC);
+  periodSearchStart.setUTCHours(periodSearchStart.getUTCHours() - 24);
+
+  // Normalize date to exact start of period (same as how we save it)
+  const normalizedDate = new Date(startOfPeriodUTC);
+  normalizedDate.setMilliseconds(0);
+
+  return {
+    normalizedVillage,
+    now,
+    startOfPeriodUTC,
+    startOfNextPeriodUTC,
+    periodSearchStart,
+    normalizedDate
+  };
+}
+
+// Validate weather is inside current period (and not future scheduled) -
+function isValidInPeriodWeather(weather, ctx) {
+  if (!weather) return false;
+  const weatherDate = weather.date instanceof Date ? weather.date : new Date(weather.date);
+  if (weatherDate < ctx.startOfPeriodUTC) return false;
+  if (weatherDate >= ctx.startOfNextPeriodUTC) return false;
+  return isValidCurrentPeriodWeather(weather, ctx.now, ctx.startOfNextPeriodUTC);
+}
+
+// Find weather for current period using lookback range + optional exact-date fallback -
+async function findCurrentPeriodWeather(normalizedVillage, ctx, options = {}) {
+  const { onlyPosted = false, allowExactFallback = false } = options;
+
+  let weather = await findWeatherForPeriod(normalizedVillage, ctx.periodSearchStart, ctx.startOfNextPeriodUTC, {
+    exclusiveEnd: true,
+    onlyPosted
+  });
+
+  if (!weather && allowExactFallback) {
+    weather = await Weather.findOne({
+      village: normalizedVillage,
+      date: ctx.normalizedDate
+    });
+  }
+
+  return isValidInPeriodWeather(weather, ctx) ? weather : null;
+}
+
+// Find an existing weather doc within an arbitrary range (no period validation) -
+async function findExistingWeatherInRange(normalizedVillage, rangeStartUTC, rangeEndUTC) {
+  return await findWeatherForPeriod(normalizedVillage, rangeStartUTC, rangeEndUTC, {
+    exclusiveEnd: true,
+    onlyPosted: false
+  });
+}
+
 // Save weather with duplicate handling -
 async function saveWeatherWithDuplicateHandling(normalizedVillage, normalizedDate, newWeather, periodSearchStart, startOfNextPeriodUTC) {
   try {
@@ -723,16 +805,17 @@ async function saveWeatherWithDuplicateHandling(normalizedVillage, normalizedDat
   } catch (saveError) {
     // If save failed (e.g., duplicate key error), try to find the existing weather
     if (saveError.code === 11000 || saveError.name === 'MongoServerError') {
-      console.warn(`[weatherService.js]⚠️ Duplicate weather detected for ${normalizedVillage}, fetching existing record`);
+      logWarn(`Duplicate weather detected for ${normalizedVillage}; fetching existing record`);
       
       // Try range query first (most reliable - catches weather with different period calculations)
-      const existingWeatherByRange = await findWeatherForPeriod(normalizedVillage, periodSearchStart, startOfNextPeriodUTC, {
-        exclusiveEnd: true,
-        onlyPosted: false
-      });
+      const existingWeatherByRange = await findExistingWeatherInRange(
+        normalizedVillage,
+        periodSearchStart,
+        startOfNextPeriodUTC
+      );
       
       if (existingWeatherByRange) {
-        console.log(`[weatherService.js]✅ Found existing weather by range query (ID: ${existingWeatherByRange._id})`);
+        logInfo(`Found existing weather by range query (id=${existingWeatherByRange._id})`);
         return existingWeatherByRange;
       }
       
@@ -743,15 +826,15 @@ async function saveWeatherWithDuplicateHandling(normalizedVillage, normalizedDat
       });
       
       if (existingWeather) {
-        console.log(`[weatherService.js]✅ Found existing weather by exact date match (ID: ${existingWeather._id})`);
+        logInfo(`Found existing weather by exact date match (id=${existingWeather._id})`);
         return existingWeather;
       }
       
-      console.error(`[weatherService.js]❌ Failed to save weather and could not find existing:`, saveError);
+      logError('Failed to save weather and could not find existing', saveError);
       throw saveError;
     }
     
-    console.error(`[weatherService.js]❌ Failed to save weather to database:`, saveError);
+    logError('Failed to save weather to database', saveError);
     throw saveError;
   }
 }
@@ -815,9 +898,8 @@ async function markWeatherAsPmPosted(village, weather) {
 
 // Idempotency for the 8am Eastern AM post only.
 //
-// Weather `date` is the instant when the 8am–8am Eastern period started. One row can span two
-// calendar dates in UTC. Skip only if we already recorded an AM post for this Eastern calendar day
-// (postedAt same NY date as now, at/after 8:00 Eastern).
+// Weather `date` is the period anchor (8am Eastern start). Skip the scheduled AM job if this row
+// is for the current 8am–8am period and we already posted (first-touch before 8am, or a prior run).
 function getDailyAmWeatherPostSkipDecision(weather, now = new Date()) {
   if (!weather?.postedToDiscord) {
     return { skip: false, reason: 'not_marked_posted' };
@@ -831,22 +913,28 @@ function getDailyAmWeatherPostSkipDecision(weather, now = new Date()) {
     return { skip: false, reason: 'invalid_posted_at' };
   }
 
-  const postedEastern = moment(postedAt).tz(WEATHER_PERIOD_TZ);
-  const nowEastern = moment(now).tz(WEATHER_PERIOD_TZ);
-  if (postedEastern.format('YYYY-MM-DD') === nowEastern.format('YYYY-MM-DD')) {
-    const eightAmPostedDay = postedEastern
-      .clone()
-      .startOf('day')
-      .hour(WEATHER_PERIOD_START_HOUR)
-      .minute(0)
-      .second(0)
-      .millisecond(0);
-    if (postedEastern.isSameOrAfter(eightAmPostedDay)) {
-      return { skip: true, reason: 'same_eastern_day_after_8am' };
-    }
+  const village = weather.village || '';
+  if (!village) {
+    return { skip: false, reason: 'missing_village' };
   }
 
-  return { skip: false, reason: 'should_post' };
+  const ctx = buildCurrentPeriodContext(village, now);
+  const weatherDate = weather.date instanceof Date ? weather.date : new Date(weather.date);
+  if (Number.isNaN(weatherDate.getTime())) {
+    return { skip: false, reason: 'invalid_weather_date' };
+  }
+
+  const startMs = ctx.startOfPeriodUTC.getTime();
+  const nextMs = ctx.startOfNextPeriodUTC.getTime();
+  const d = weatherDate.getTime();
+  const inCurrentPeriod =
+    d >= startMs - PERIOD_VALIDATION_TOLERANCE_MS && d < nextMs;
+
+  if (!inCurrentPeriod) {
+    return { skip: false, reason: 'weather_row_not_current_period' };
+  }
+
+  return { skip: true, reason: 'already_posted_current_period' };
 }
 
 function shouldSkipDailyAmWeatherPost(weather, now = new Date()) {
@@ -897,27 +985,8 @@ async function tryPostUnpostedPeriodWeatherToTownHall(client, village, weather) 
     const { embed, files } = await generateWeatherEmbed(normalizedVillage, weather);
     await channel.send({ embeds: [embed], files });
 
-    if (!weather.weatherDamageApplied) {
-      try {
-        const { damageVillage } = require('@/modules/villageModule');
-        const damageBreakdown = calculateWeatherDamage(weather);
-        const damageAmount = damageBreakdown.total;
-        if (damageAmount > 0) {
-          const weatherCause = buildWeatherDamageCauseString(weather, damageBreakdown);
-          await damageVillage(normalizedVillage, damageAmount, weatherCause);
-        }
-      } catch (damageErr) {
-        console.error(`[weatherService.js]❌ tryPostUnpostedPeriodWeatherToTownHall damage: ${damageErr.message}`);
-      }
-    }
-
-    const WeatherModel = require('@/models/WeatherModel');
-    const updateData = { postedToDiscord: true, postedAt: new Date() };
-    if (!weather.weatherDamageApplied) {
-      updateData.weatherDamageApplied = true;
-    }
-    const updated = await WeatherModel.findByIdAndUpdate(weather._id, { $set: updateData }, { new: true });
-    console.log(`[weatherService.js]✅ Posted period weather to town hall for ${normalizedVillage} (first-touch)`);
+    const updated = await completeAmTownHallWeatherPost(village, weather);
+    logInfo(`Posted period weather to town hall for ${normalizedVillage} (first-touch)`);
     return updated || weather;
   } catch (err) {
     console.error(`[weatherService.js]❌ tryPostUnpostedPeriodWeatherToTownHall: ${err.message}`);
@@ -933,58 +1002,30 @@ async function tryPostUnpostedPeriodWeatherToTownHall(client, village, weather) 
 async function getWeatherWithoutGeneration(village, options = {}) {
   const { generateIfMissing = false, discordClient = null } = options;
   try {
-    const normalizedVillage = normalizeVillageName(village);
-    const now = new Date();
+    const ctx = buildCurrentPeriodContext(village, new Date());
 
-    const { startUTC: startOfPeriodUTC } = getCurrentPeriodBounds(now);
-    const { startUTC: startOfNextPeriodUTC } = getNextPeriodBounds(now);
-
-    // Use a range that starts 24 hours before the period start to catch weather saved with different timezone/date calculations
-    // This handles cases where weather was saved with EST dates but we're now using UTC
-    const periodSearchStart = new Date(startOfPeriodUTC);
-    periodSearchStart.setUTCHours(periodSearchStart.getUTCHours() - 24); // Look back 24 hours to catch timezone mismatches
-
-    // Add debug logging
     if (options.onlyPosted) {
-      console.log(`[weatherService.js]🔍 Looking for posted weather for ${normalizedVillage} in period ${periodSearchStart.toISOString()} to ${startOfNextPeriodUTC.toISOString()}`);
+      logInfo(`Searching posted weather for ${ctx.normalizedVillage} in period ${ctx.periodSearchStart.toISOString()} → ${ctx.startOfNextPeriodUTC.toISOString()}`);
     }
 
-    // Use exclusive upper bound to avoid picking up next period's weather
-    let weather = await findWeatherForPeriod(normalizedVillage, periodSearchStart, startOfNextPeriodUTC, {
-      exclusiveEnd: true,
-      onlyPosted: options.onlyPosted
+    const weather = await findCurrentPeriodWeather(ctx.normalizedVillage, ctx, {
+      onlyPosted: options.onlyPosted,
+      allowExactFallback: false
     });
 
-    // Validate that the found weather is actually for the current period (not from the lookback window)
-    // This ensures we don't return yesterday's weather when today's should be active
-    if (weather) {
-      const weatherDate = weather.date instanceof Date ? weather.date : new Date(weather.date);
-      // Check if weather date is actually within the current period bounds (not just in the wide search range)
-      if (weatherDate < startOfPeriodUTC) {
-        // Weather is from before the current period started, it's old weather
-        console.log(`[weatherService.js]⚠️ Found weather for ${normalizedVillage} but it's from before current period (weather date: ${weatherDate.toISOString()}, period start: ${startOfPeriodUTC.toISOString()}), ignoring`);
-        if (options.onlyPosted) {
-          console.log(`[weatherService.js]⚠️ No posted weather found for ${normalizedVillage} in current period`);
-        }
-        weather = null;
-      } else {
-        console.log(`[weatherService.js]✅ Found weather for ${normalizedVillage}: ID=${weather._id}, date=${weather.date?.toISOString()}, postedToDiscord=${weather.postedToDiscord}`);
-      }
-    } else if (options.onlyPosted) {
-      console.log(`[weatherService.js]⚠️ No posted weather found for ${normalizedVillage}`);
+    if (!weather && options.onlyPosted) {
+      logWarn(`No posted weather for ${ctx.normalizedVillage}`);
     }
 
-    if (!weather && generateIfMissing) {
-      weather = await getCurrentWeather(village);
+    const resolvedWeather = !weather && generateIfMissing ? await getCurrentWeather(village) : weather;
+
+    if (resolvedWeather && discordClient && resolvedWeather.postedToDiscord !== true) {
+      return await tryPostUnpostedPeriodWeatherToTownHall(discordClient, village, resolvedWeather);
     }
 
-    if (weather && discordClient && weather.postedToDiscord !== true) {
-      return await tryPostUnpostedPeriodWeatherToTownHall(discordClient, village, weather);
-    }
-
-    return weather;
+    return resolvedWeather;
   } catch (error) {
-    console.error('[weatherService.js]❌ Error getting weather:', error);
+    logError('Error getting weather', error);
     throw error;
   }
 }
@@ -992,86 +1033,43 @@ async function getWeatherWithoutGeneration(village, options = {}) {
 // ------------------- Get Current Weather -------------------
 async function getCurrentWeather(village) {
   try {
-    const normalizedVillage = normalizeVillageName(village);
-    const now = new Date();
+    const ctx = buildCurrentPeriodContext(village, new Date());
+    const normalizedVillage = ctx.normalizedVillage;
 
-    const { startUTC: startOfPeriodUTC } = getCurrentPeriodBounds(now);
-    const { startUTC: startOfNextPeriodUTC } = getNextPeriodBounds(now);
-
-    // Normalize date to exact start of period (same as how we save it)
-    // This ensures we find weather that was saved with normalized dates
-    const normalizedDate = new Date(startOfPeriodUTC);
-    normalizedDate.setMilliseconds(0);
-
-    // FIRST: Check for existing weather using date range (covers entire period)
-    // This is more reliable than exact match because period calculation may vary slightly
-    // Use a range that starts 24 hours before the period start to catch weather saved with different timezone/date calculations
-    // This handles cases where weather was saved with EST dates but we're now using UTC
-    const periodSearchStart = new Date(startOfPeriodUTC);
-    periodSearchStart.setUTCHours(periodSearchStart.getUTCHours() - 24); // Look back 24 hours to catch timezone mismatches
-    
-    let weather = await findWeatherForPeriod(normalizedVillage, periodSearchStart, startOfNextPeriodUTC, {
-      exclusiveEnd: true,
-      onlyPosted: false // Get current period weather even if not posted yet
+    let weather = await findCurrentPeriodWeather(normalizedVillage, ctx, {
+      onlyPosted: false,
+      allowExactFallback: true
     });
-
-    // SECOND: If not found by range, try exact normalized date (for newly saved weather)
-    if (!weather) {
-      weather = await Weather.findOne({
-        village: normalizedVillage,
-        date: normalizedDate
-      });
-    }
-    
-    // Validate weather is actually for current period (not yesterday via lookback, and not future)
-    if (weather) {
-      const weatherDate = weather.date instanceof Date ? weather.date : new Date(weather.date);
-      // Reject anything before current period start (lookback can accidentally return yesterday)
-      if (weatherDate < startOfPeriodUTC) {
-        console.log(
-          `[weatherService.js]⚠️ Found weather for ${normalizedVillage} but it's before current period (weather date: ${weatherDate.toISOString()}, period start: ${startOfPeriodUTC.toISOString()}), ignoring`
-        );
-        weather = null;
-      } else if (weatherDate >= startOfNextPeriodUTC) {
-        // Should never happen due to our exclusive end searches, but keep this guard explicit.
-        weather = null;
-      } else if (!isValidCurrentPeriodWeather(weather, now, startOfNextPeriodUTC)) {
-        // Excludes future/scheduled (Song of Storms) docs
-        weather = null;
-      }
-    }
     
     // Generate new weather if none exists or if we filtered out future weather
     if (!weather) {
       // Final check: Try range query one more time (race condition protection)
-      const finalCheck = await findWeatherForPeriod(normalizedVillage, periodSearchStart, startOfNextPeriodUTC, {
-        exclusiveEnd: true,
-        onlyPosted: false
+      const finalCheck = await findCurrentPeriodWeather(normalizedVillage, ctx, {
+        onlyPosted: false,
+        allowExactFallback: false
       });
-      
+
       if (finalCheck) {
-        const finalDate = finalCheck.date instanceof Date ? finalCheck.date : new Date(finalCheck.date);
-        const isInCurrentPeriod = finalDate >= startOfPeriodUTC && finalDate < startOfNextPeriodUTC;
-        if (isInCurrentPeriod && isValidCurrentPeriodWeather(finalCheck, now, startOfNextPeriodUTC)) {
-        console.log(`[weatherService.js]✅ Found existing weather for ${normalizedVillage} period (ID: ${finalCheck._id}), using it instead of generating new`);
+        logInfo(`Found existing weather for ${normalizedVillage} (id=${finalCheck._id}); using it`);
         weather = finalCheck;
-        } else if (!isInCurrentPeriod && finalCheck) {
-          console.log(
-            `[weatherService.js]⚠️ Final check found weather outside current period for ${normalizedVillage} (date: ${finalDate.toISOString()}), generating new instead`
-          );
-        }
       }
 
       if (!weather) {
-        console.log(`[weatherService.js]🔄 No existing weather found for ${normalizedVillage} period, generating new weather for date: ${startOfPeriodUTC.toISOString()}`);
+        logInfo(`No weather for ${normalizedVillage}; generating new (periodStart=${ctx.startOfPeriodUTC.toISOString()})`);
         const season = getCurrentSeason();
-        weather = await generateAndSaveWeather(normalizedVillage, normalizedDate, season, periodSearchStart, startOfNextPeriodUTC);
+        weather = await generateAndSaveWeather(
+          normalizedVillage,
+          ctx.normalizedDate,
+          season,
+          ctx.periodSearchStart,
+          ctx.startOfNextPeriodUTC
+        );
       }
     }
     
     return weather;
   } catch (error) {
-    console.error('[weatherService.js]: ❌ Error in getCurrentWeather:', error);
+    logError('Error in getCurrentWeather', error);
     throw error;
   }
 }
@@ -1127,15 +1125,17 @@ async function generateBanner(village, weather, options = {}) {
     timeout = 10000
   } = options;
   
+  let timeoutId = null;
+  let bannerImg = null;
+  let overlayImg = null;
   try {
-
     const bannerPath = getBannerForWeather(village, weather);
     if (!bannerPath) {
-      console.error(`[weatherService.js]: Failed to get banner for ${village}`);
+      logError(`Failed to get banner for ${village}`);
       return null;
     }
     if (!fs.existsSync(bannerPath)) {
-      console.error(`[weatherService.js]: Banner file does not exist: ${bannerPath}`);
+      logError(`Banner file does not exist: ${bannerPath}`);
       return null;
     }
     
@@ -1151,13 +1151,12 @@ async function generateBanner(village, weather, options = {}) {
     
     // Add timeout to prevent infinite loops
     const timeoutPromise = new Promise((_, reject) => {
-      setTimeout(() => reject(new Error('Image processing timeout')), timeout);
+      timeoutId = setTimeout(() => reject(new Error('Image processing timeout')), timeout);
     });
 
     const bannerPromise = Jimp.read(bannerPath);
-    const bannerImg = await Promise.race([bannerPromise, timeoutPromise]);
+    bannerImg = await Promise.race([bannerPromise, timeoutPromise]);
     
-    let overlayImg = null;
     try {
       if (overlayPath) {
         const overlayPromise = Jimp.read(overlayPath);
@@ -1177,11 +1176,9 @@ async function generateBanner(village, weather, options = {}) {
       
       const outName = `banner-${village.toLowerCase()}.png`;
       const buffer = await bannerImg.getBufferAsync(Jimp.MIME_PNG);
-      const banner = new AttachmentBuilder(buffer, { name: outName });
-      
-      return banner;
+      return new AttachmentBuilder(buffer, { name: outName });
     } catch (overlayError) {
-      console.error(`[weatherService.js]❌ Error loading/compositing overlay: ${overlayError.message}`);
+      logError(`Error loading/compositing overlay: ${overlayError.message}`);
       // Still return banner even if overlay fails
       const outName = `banner-${village.toLowerCase()}.png`;
       const buffer = await bannerImg.getBufferAsync(Jimp.MIME_PNG);
@@ -1200,8 +1197,12 @@ async function generateBanner(village, weather, options = {}) {
       }
     }
   } catch (error) {
-    console.error('[weatherService.js]: Error generating banner:', error);
+    logError('Error generating banner', error);
     return null;
+  } finally {
+    if (timeoutId) {
+      clearTimeout(timeoutId);
+    }
   }
 }
 
@@ -1304,7 +1305,7 @@ async function findOrCreateWeatherForNextPeriod(normalizedVillage, startOfNextPe
   } catch (saveError) {
     // If save failed due to duplicate, fetch the existing record
     if (saveError.code === 11000 || saveError.name === 'MongoServerError') {
-      console.warn(`[weatherService.js]⚠️ Duplicate weather detected for ${normalizedVillage} next period, fetching existing`);
+      logWarn(`Duplicate weather detected for ${normalizedVillage} next period; fetching existing`);
       weatherDoc = await Weather.findOne({
         village: normalizedVillage,
         date: {
@@ -1853,6 +1854,37 @@ function calculateWeatherDamage(weather) {
   };
 }
 
+// ------------------- Scheduled AM post finalize ------------------
+// After a town-hall message is sent: apply damage once, then mark posted + timestamps in DB.
+async function completeAmTownHallWeatherPost(village, weather) {
+  const normalizedVillage = normalizeVillageName(village);
+  const id = weather?._id;
+  if (!id) {
+    logWarn('completeAmTownHallWeatherPost: missing weather _id');
+    return null;
+  }
+
+  if (!weather.weatherDamageApplied) {
+    try {
+      const { damageVillage } = require('@/modules/villageModule');
+      const damageBreakdown = calculateWeatherDamage(weather);
+      const damageAmount = damageBreakdown.total;
+      if (damageAmount > 0) {
+        const weatherCause = buildWeatherDamageCauseString(weather, damageBreakdown);
+        await damageVillage(normalizedVillage, damageAmount, weatherCause);
+      }
+    } catch (damageErr) {
+      logError(`completeAmTownHallWeatherPost damage: ${damageErr.message}`);
+    }
+  }
+
+  const updateData = { postedToDiscord: true, postedAt: new Date() };
+  if (!weather.weatherDamageApplied) {
+    updateData.weatherDamageApplied = true;
+  }
+  return Weather.findByIdAndUpdate(id, { $set: updateData }, { new: true });
+}
+
 // ============================================================================
 // ------------------- Public API -------------------
 // ============================================================================
@@ -1867,6 +1899,8 @@ module.exports = {
   shouldSkipDailyAmWeatherPost,
   getDailyAmWeatherPostSkipDecision,
   tryPostUnpostedPeriodWeatherToTownHall,
+  completeAmTownHallWeatherPost,
+  PERIOD_VALIDATION_TOLERANCE_MS,
 
   // Banner and embed generation
   generateBanner,
