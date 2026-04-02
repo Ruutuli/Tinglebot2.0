@@ -335,7 +335,7 @@ module.exports = {
       }
 
       // Check starting village for blight rain (moved to after travel completion)
-      const startingWeather = await getWeatherWithoutGeneration(startingVillage);
+      const startingWeather = await getWeatherWithoutGeneration(startingVillage, { generateIfMissing: true });
       if (false && startingWeather?.special?.label === 'Blight Rain') {
         // Mod characters are immune to blight infection
         if (character.isModCharacter) {
@@ -1014,7 +1014,7 @@ async function processTravelDay(day, context) {
       const finalChannel = await interaction.client.channels.fetch(finalChannelId);
     
       // Check destination for blight rain after arrival
-      const destinationWeather = await getWeatherWithoutGeneration(destination);
+      const destinationWeather = await getWeatherWithoutGeneration(destination, { generateIfMissing: true });
       if (destinationWeather?.special?.label === 'Blight Rain') {
         // Mod characters and Hibiki are immune to blight infection
         const HIBIKI_USER_ID = "668281042414600212";
@@ -1764,7 +1764,7 @@ async function processTravelDay(day, context) {
 // Checks if the current weather conditions are too severe for travel
 async function checkSevereWeather(village) {
   try {
-    const weather = await getWeatherWithoutGeneration(village);
+    const weather = await getWeatherWithoutGeneration(village, { generateIfMissing: true });
     if (!weather) {
       return false;
     }

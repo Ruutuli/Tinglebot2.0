@@ -353,7 +353,7 @@ async function getWeatherForVillage(village, now) {
   const { startUTC: startOfNextPeriodUTC } = getNextPeriodBounds(now);
   
   // Special weather uses DB truth for the current period (it should not depend on Discord posting success).
-  const weather = await getWeatherWithoutGeneration(village);
+  const weather = await getWeatherWithoutGeneration(village, { generateIfMissing: true });
 
   return { weather, periodBounds: { startOfPeriodUTC, startOfNextPeriodUTC } };
 }

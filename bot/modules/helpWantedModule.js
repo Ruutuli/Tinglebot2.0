@@ -206,7 +206,7 @@ function getRandomNPCNameFromPool(availableNPCs) {
 // Checks if travel is blocked by current weather conditions
 async function isTravelBlockedByWeather(village) {
   try {
-    const weather = await getWeatherWithoutGeneration(village);
+    const weather = await getWeatherWithoutGeneration(village, { generateIfMissing: true });
     if (!weather || !weather.special) {
       return false; // No special weather, travel is not blocked
     }
@@ -239,7 +239,7 @@ async function isTravelBlockedByWeatherCached(village, cache = new Map()) {
   
   for (let attempt = 1; attempt <= maxRetries; attempt++) {
     try {
-      const weather = await getWeatherWithoutGeneration(village);
+      const weather = await getWeatherWithoutGeneration(village, { generateIfMissing: true });
       if (!weather || !weather.special) {
         cache.set(village, false);
         return false;

@@ -854,8 +854,11 @@ function shouldSkipDailyAmWeatherPost(weather, now = new Date()) {
 }
 
 // ------------------- Get Weather Without Generation ------------------
-// Get weather without generating new if missing -
+// Get weather without generating new if missing (unless options.generateIfMissing).
+// When true, legacy rows (e.g. old 13:00 UTC anchors) that are before the current period start
+// trigger getCurrentWeather so a row for the current 8am–8am period is created and returned.
 async function getWeatherWithoutGeneration(village, options = {}) {
+  const { generateIfMissing = false } = options;
   try {
     const normalizedVillage = normalizeVillageName(village);
     const now = new Date();
@@ -874,7 +877,7 @@ async function getWeatherWithoutGeneration(village, options = {}) {
     }
 
     // Use exclusive upper bound to avoid picking up next period's weather
-    const weather = await findWeatherForPeriod(normalizedVillage, periodSearchStart, startOfNextPeriodUTC, {
+    let weather = await findWeatherForPeriod(normalizedVillage, periodSearchStart, startOfNextPeriodUTC, {
       exclusiveEnd: true,
       onlyPosted: options.onlyPosted
     });
@@ -890,11 +893,16 @@ async function getWeatherWithoutGeneration(village, options = {}) {
         if (options.onlyPosted) {
           console.log(`[weatherService.js]⚠️ No posted weather found for ${normalizedVillage} in current period`);
         }
-        return null;
+        weather = null;
+      } else {
+        console.log(`[weatherService.js]✅ Found weather for ${normalizedVillage}: ID=${weather._id}, date=${weather.date?.toISOString()}, postedToDiscord=${weather.postedToDiscord}`);
       }
-      console.log(`[weatherService.js]✅ Found weather for ${normalizedVillage}: ID=${weather._id}, date=${weather.date?.toISOString()}, postedToDiscord=${weather.postedToDiscord}`);
     } else if (options.onlyPosted) {
       console.log(`[weatherService.js]⚠️ No posted weather found for ${normalizedVillage}`);
+    }
+
+    if (!weather && generateIfMissing) {
+      return await getCurrentWeather(village);
     }
 
     return weather;

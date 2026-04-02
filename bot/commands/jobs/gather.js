@@ -403,7 +403,7 @@ module.exports = {
       }
 
       // ------------------- Blight Rain Infection Check ------------------
-      const weatherData = await getWeatherWithoutGeneration(character.currentVillage);
+      const weatherData = await getWeatherWithoutGeneration(character.currentVillage, { generateIfMissing: true });
       
       // Store blight rain message to add to gather response
       let blightRainMessage = null;
