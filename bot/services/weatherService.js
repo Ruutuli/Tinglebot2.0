@@ -894,7 +894,7 @@ async function tryPostUnpostedPeriodWeatherToTownHall(client, village, weather) 
       console.warn(`[weatherService.js]⚠️ tryPostUnpostedPeriodWeatherToTownHall: could not fetch channel for ${village}`);
       return weather;
     }
-    const { embed, files } = await generateWeatherEmbed(village, weather);
+    const { embed, files } = await generateWeatherEmbed(normalizedVillage, weather);
     await channel.send({ embeds: [embed], files });
 
     if (!weather.weatherDamageApplied) {
@@ -904,7 +904,7 @@ async function tryPostUnpostedPeriodWeatherToTownHall(client, village, weather) 
         const damageAmount = damageBreakdown.total;
         if (damageAmount > 0) {
           const weatherCause = buildWeatherDamageCauseString(weather, damageBreakdown);
-          await damageVillage(village, damageAmount, weatherCause);
+          await damageVillage(normalizedVillage, damageAmount, weatherCause);
         }
       } catch (damageErr) {
         console.error(`[weatherService.js]❌ tryPostUnpostedPeriodWeatherToTownHall damage: ${damageErr.message}`);
@@ -1685,8 +1685,13 @@ async function scheduleSpecialWeather(village, specialLabel, options = {}) {
 
 // ------------------- Generate Weather Embed ------------------
 // Generate Discord embed for weather -
-async function generateWeatherEmbed(village, weather, options = {}) {
+async function generateWeatherEmbed(villageInput, weather, options = {}) {
   try {
+    const village = normalizeVillageName(villageInput);
+    if (!village) {
+      throw new Error('Invalid village name for weather embed');
+    }
+
     // Validate weather object structure
     if (!weather) {
       throw new Error('Weather object is null or undefined');
