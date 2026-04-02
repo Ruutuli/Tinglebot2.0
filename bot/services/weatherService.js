@@ -192,36 +192,32 @@ function normalizeSeason(season) {
   return s;
 }
 
-// Get current period bounds (1pm UTC to 12:59pm UTC next day) -
+// Rolling weather period: 8:00am America/New_York → next day 7:59:59.999 (one row per period).
+// DST is handled by the zone. The stored `date` anchor is the instant of period start (8am Eastern).
+const WEATHER_PERIOD_TZ = 'America/New_York';
+const WEATHER_PERIOD_START_HOUR = 8;
+
+// Get current period bounds (8am Eastern → next day 7:59:59.999 Eastern, exclusive of next 8am).
 function getCurrentPeriodBounds(referenceDate = new Date()) {
-  // Validate input
   if (!(referenceDate instanceof Date) || isNaN(referenceDate.getTime())) {
     console.error('[weatherService.js]❌ Invalid referenceDate provided to getCurrentPeriodBounds:', referenceDate);
-    referenceDate = new Date(); // Fallback to now
+    referenceDate = new Date();
   }
 
-  // Weather day is 1pm UTC (13:00) to 12:59pm UTC (12:59:59) the next day
-  const currentHour = referenceDate.getUTCHours();
-  const currentMinute = referenceDate.getUTCMinutes();
-  const currentYear = referenceDate.getUTCFullYear();
-  const currentMonth = referenceDate.getUTCMonth();
-  const currentDay = referenceDate.getUTCDate();
+  const m = moment(referenceDate).tz(WEATHER_PERIOD_TZ);
+  const today8am = m
+    .clone()
+    .startOf('day')
+    .hour(WEATHER_PERIOD_START_HOUR)
+    .minute(0)
+    .second(0)
+    .millisecond(0);
+  const periodStart = m.isSameOrAfter(today8am) ? today8am.clone() : today8am.clone().subtract(1, 'day');
+  const periodEndInclusive = periodStart.clone().add(1, 'day').subtract(1, 'millisecond');
 
-  let startUTC, endUTC;
+  const startUTC = periodStart.toDate();
+  const endUTC = periodEndInclusive.toDate();
 
-  if (currentHour > 13 || (currentHour === 13 && currentMinute >= 0)) {
-    // If it's 1:00pm UTC or later, period started at 1:00pm UTC today
-    startUTC = new Date(Date.UTC(currentYear, currentMonth, currentDay, 13, 0, 0, 0));
-    // End is 12:59:59pm UTC tomorrow
-    endUTC = new Date(Date.UTC(currentYear, currentMonth, currentDay + 1, 12, 59, 59, 999));
-  } else {
-    // If it's before 1:00pm UTC, period started at 1:00pm UTC yesterday
-    startUTC = new Date(Date.UTC(currentYear, currentMonth, currentDay - 1, 13, 0, 0, 0));
-    // End is 12:59:59pm UTC today
-    endUTC = new Date(Date.UTC(currentYear, currentMonth, currentDay, 12, 59, 59, 999));
-  }
-
-  // Validate calculated bounds
   if (isNaN(startUTC.getTime()) || isNaN(endUTC.getTime())) {
     console.error('[weatherService.js]❌ Invalid period bounds calculated', {
       referenceDate: referenceDate.toISOString(),
@@ -231,7 +227,6 @@ function getCurrentPeriodBounds(referenceDate = new Date()) {
     throw new Error('Failed to calculate valid period bounds');
   }
 
-  // Sanity check: end should be after start
   if (endUTC <= startUTC) {
     console.error('[weatherService.js]❌ Period bounds validation failed: end <= start', {
       startUTC: startUTC.toISOString(),
@@ -246,17 +241,15 @@ function getCurrentPeriodBounds(referenceDate = new Date()) {
   };
 }
 
-// Get next period bounds -
+// Get next period bounds (following 8am Eastern window).
 function getNextPeriodBounds(referenceDate = new Date()) {
-  // Derive from current period + 24h so "next" is always the period after the current one.
-  // Matches getCurrentPeriodBounds (including the "before 8 AM" adjustment).
   const current = getCurrentPeriodBounds(referenceDate);
-  const msPerDay = 24 * 60 * 60 * 1000;
+  const nextStart = moment(current.startUTC).tz(WEATHER_PERIOD_TZ).add(1, 'day');
+  const nextEndInclusive = nextStart.clone().add(1, 'day').subtract(1, 'millisecond');
 
-  const nextStartUTC = new Date(current.startUTC.getTime() + msPerDay);
-  const nextEndUTC = new Date(current.endUTC.getTime() + msPerDay);
+  const nextStartUTC = nextStart.toDate();
+  const nextEndUTC = nextEndInclusive.toDate();
 
-  // Validate calculated bounds
   if (isNaN(nextStartUTC.getTime()) || isNaN(nextEndUTC.getTime())) {
     console.error('[weatherService.js]❌ Invalid next period bounds calculated', {
       referenceDate: referenceDate.toISOString(),
@@ -266,7 +259,6 @@ function getNextPeriodBounds(referenceDate = new Date()) {
     throw new Error('Failed to calculate valid next period bounds');
   }
 
-  // Sanity check: next period should be after current period
   if (nextStartUTC <= current.startUTC || nextEndUTC <= current.endUTC) {
     console.error('[weatherService.js]❌ Next period bounds validation failed', {
       currentStart: current.startUTC.toISOString(),
@@ -821,51 +813,44 @@ async function markWeatherAsPmPosted(village, weather) {
   return updated;
 }
 
-// Idempotency for the 8am Eastern AM post. Weather periods are anchored at 13:00 UTC; during EDT,
-// 8am Eastern is 12:00 UTC (before that boundary). A stray post at 13:00 UTC (e.g. old UTC-only
-// schedule) can mark postedToDiscord for the same period before the real 8am run — this avoids
-// skipping the community 8am post in that case while still skipping same-day double-fires.
+// Idempotency for the 8am Eastern AM post only.
 //
-// Same calendar day alone is not enough: postedAt at midnight–7:59am Eastern (bad data, DST edge,
-// or another job) must not block the real 8am run — only skip same-day if posted at/after 8:00
-// Eastern that day (the scheduled AM slot).
-const AM_WEATHER_POST_TZ = 'America/New_York';
-const AM_WEATHER_LOCAL_HOUR = 8;
-
-function shouldSkipDailyAmWeatherPost(weather, now = new Date()) {
-  if (!weather?.postedToDiscord) return false;
-  if (!weather.postedAt) return false;
+// Weather `date` is the instant when the 8am–8am Eastern period started. One row can span two
+// calendar dates in UTC. Skip only if we already recorded an AM post for this Eastern calendar day
+// (postedAt same NY date as now, at/after 8:00 Eastern).
+function getDailyAmWeatherPostSkipDecision(weather, now = new Date()) {
+  if (!weather?.postedToDiscord) {
+    return { skip: false, reason: 'not_marked_posted' };
+  }
+  if (!weather.postedAt) {
+    return { skip: false, reason: 'missing_posted_at' };
+  }
 
   const postedAt = weather.postedAt instanceof Date ? weather.postedAt : new Date(weather.postedAt);
-  if (Number.isNaN(postedAt.getTime())) return false;
+  if (Number.isNaN(postedAt.getTime())) {
+    return { skip: false, reason: 'invalid_posted_at' };
+  }
 
-  const postedEastern = moment(postedAt).tz(AM_WEATHER_POST_TZ);
-  const nowEastern = moment(now).tz(AM_WEATHER_POST_TZ);
+  const postedEastern = moment(postedAt).tz(WEATHER_PERIOD_TZ);
+  const nowEastern = moment(now).tz(WEATHER_PERIOD_TZ);
   if (postedEastern.format('YYYY-MM-DD') === nowEastern.format('YYYY-MM-DD')) {
     const eightAmPostedDay = postedEastern
       .clone()
       .startOf('day')
-      .hour(AM_WEATHER_LOCAL_HOUR)
+      .hour(WEATHER_PERIOD_START_HOUR)
       .minute(0)
       .second(0)
       .millisecond(0);
     if (postedEastern.isSameOrAfter(eightAmPostedDay)) {
-      return true;
+      return { skip: true, reason: 'same_eastern_day_after_8am' };
     }
   }
 
-  const { startUTC: startOfPeriodUTC, endUTC: endOfPeriodUTC } = getCurrentPeriodBounds(now);
-  const twelveHoursAgo = now.getTime() - 12 * 60 * 60 * 1000;
-  const postedMs = postedAt.getTime();
-  if (
-    postedMs >= startOfPeriodUTC.getTime() &&
-    postedMs <= endOfPeriodUTC.getTime() &&
-    postedMs < twelveHoursAgo
-  ) {
-    return true;
-  }
+  return { skip: false, reason: 'should_post' };
+}
 
-  return false;
+function shouldSkipDailyAmWeatherPost(weather, now = new Date()) {
+  return getDailyAmWeatherPostSkipDecision(weather, now).skip;
 }
 
 // ------------------- Get Weather Without Generation ------------------
@@ -1790,6 +1775,7 @@ module.exports = {
   markWeatherAsPosted,
   markWeatherAsPmPosted,
   shouldSkipDailyAmWeatherPost,
+  getDailyAmWeatherPostSkipDecision,
 
   // Banner and embed generation
   generateBanner,

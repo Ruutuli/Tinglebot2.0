@@ -16,7 +16,7 @@ const {
   markWeatherAsPmPosted,
   getWeatherWithoutGeneration,
   calculateWeatherDamage,
-  shouldSkipDailyAmWeatherPost,
+  getDailyAmWeatherPostSkipDecision,
 } = require('@/services/weatherService');
 const { damageVillage } = require('@/modules/villageModule');
 const Character = require('@/models/CharacterModel');
@@ -148,14 +148,23 @@ async function dailyWeather(client, _data = {}) {
         logger.warn('SCHEDULED', `daily-weather: could not fetch channel ${village}`);
         continue;
       }
+      const existingWeather = await getWeatherWithoutGeneration(village);
+      const amSkip = getDailyAmWeatherPostSkipDecision(existingWeather);
+      if (amSkip.skip) {
+        const pa =
+          existingWeather?.postedAt instanceof Date
+            ? existingWeather.postedAt.toISOString()
+            : existingWeather?.postedAt;
+        logger.info(
+          'SCHEDULED',
+          `daily-weather: already posted for ${village}, skipping (${amSkip.reason}) postedAt=${pa} weatherDate=${existingWeather?.date instanceof Date ? existingWeather.date.toISOString() : existingWeather?.date}`
+        );
+        continue;
+      }
+      // Reuse existing period row if present; only generate when missing (never delete/replace prior days).
       const weather = await getCurrentWeather(village);
       if (!weather) {
         logger.warn('SCHEDULED', `daily-weather: no weather for ${village}`);
-        continue;
-      }
-      // Idempotency: skip only if AM post already done for this run (see shouldSkipDailyAmWeatherPost).
-      if (shouldSkipDailyAmWeatherPost(weather)) {
-        logger.info('SCHEDULED', `daily-weather: already posted for ${village}, skipping`);
         continue;
       }
       const { embed, files } = await generateWeatherEmbed(village, weather);
@@ -222,23 +231,27 @@ async function weatherFallbackCheck(client, _data = {}) {
       
       // Fallback triggers if DB record is missing OR record exists but AM post was not marked successful.
       // DB is the source of truth; never rely on scanning messages.
-      let weather = await getWeatherWithoutGeneration(village);
-      if (!weather) {
-        logger.warn('SCHEDULED', `weather-fallback-check: No weather record for ${village}, generating`);
-        weather = await getCurrentWeather(village); // generate+save if needed
-      }
-
-      if (!weather) {
-        logger.warn('SCHEDULED', `weather-fallback-check: Still no weather for ${village} after generation attempt`);
+      const existingWeather = await getWeatherWithoutGeneration(village);
+      const fbSkip = getDailyAmWeatherPostSkipDecision(existingWeather);
+      if (fbSkip.skip) {
+        const pa =
+          existingWeather?.postedAt instanceof Date
+            ? existingWeather.postedAt.toISOString()
+            : existingWeather?.postedAt;
+        logger.info(
+          'SCHEDULED',
+          `weather-fallback-check: Weather already marked as posted for ${village}, skipping (${fbSkip.reason}) postedAt=${pa} weatherDate=${existingWeather?.date instanceof Date ? existingWeather.date.toISOString() : existingWeather?.date}`
+        );
         continue;
       }
 
-      if (shouldSkipDailyAmWeatherPost(weather)) {
-        logger.info('SCHEDULED', `weather-fallback-check: Weather already marked as posted for ${village}, skipping`);
+      logger.warn('SCHEDULED', `weather-fallback-check: Weather not posted for ${village}, fetching/generating if needed and attempting post`);
+      const weather = await getCurrentWeather(village);
+      if (!weather) {
+        logger.warn('SCHEDULED', `weather-fallback-check: Still no weather for ${village} after getCurrentWeather`);
         continue;
       }
 
-      logger.warn('SCHEDULED', `weather-fallback-check: Weather not posted for ${village}, attempting post`);
       const { embed, files } = await generateWeatherEmbed(village, weather);
       await channel.send({ embeds: [embed], files });
       await markWeatherAsPosted(village, weather);
