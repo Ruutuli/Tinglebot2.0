@@ -101,7 +101,7 @@ function getJobVoucherErrorMessage(errorType, data = {}) {
             title: '❌ Stamina Limit Exceeded',
             description: `${data.characterName || 'Character'} cannot craft "${data.itemName}" with a job voucher.`,
             fields: [
-                { name: 'What Happened', value: '> The item requires 5 stamina or more to craft. Job vouchers cannot be used for these recipes.' },
+                { name: 'What Happened', value: '> The item requires more than 5 stamina to craft. Job vouchers can only be used for recipes that cost 5 stamina or less.' },
                 { name: 'How to Fix', value: '> Try crafting something easier or use your main job instead.' }
             ],
             color: '#FF0000'

@@ -334,10 +334,10 @@ module.exports = {
             return interaction.editReply({ embeds: [voucherCheck.embed], flags: [MessageFlags.Ephemeral] });
           }
         } else {
-          // Restrict crafting of items that require 5 stamina or more when using a job voucher.
+          // Restrict crafting of items that require more than 5 stamina when using a job voucher (5 or less is allowed).
           // Uses base recipe cost (item.staminaToCraft) so Enduring Elixir cannot bypass this limit.
-          if (item.staminaToCraft >= 5) {
-            error('CRFT', `Item "${itemName}" requires ${item.staminaToCraft} stamina - exceeds job voucher limit (5+ not allowed)`);
+          if (item.staminaToCraft > 5) {
+            error('CRFT', `Item "${itemName}" requires ${item.staminaToCraft} stamina - exceeds job voucher limit (>5 not allowed)`);
             const staminaError = getJobVoucherErrorMessage('STAMINA_LIMIT', {
               characterName: character.name,
               itemName: itemName
