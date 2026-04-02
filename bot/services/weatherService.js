@@ -825,7 +825,12 @@ async function markWeatherAsPmPosted(village, weather) {
 // 8am Eastern is 12:00 UTC (before that boundary). A stray post at 13:00 UTC (e.g. old UTC-only
 // schedule) can mark postedToDiscord for the same period before the real 8am run — this avoids
 // skipping the community 8am post in that case while still skipping same-day double-fires.
+//
+// Same calendar day alone is not enough: postedAt at midnight–7:59am Eastern (bad data, DST edge,
+// or another job) must not block the real 8am run — only skip same-day if posted at/after 8:00
+// Eastern that day (the scheduled AM slot).
 const AM_WEATHER_POST_TZ = 'America/New_York';
+const AM_WEATHER_LOCAL_HOUR = 8;
 
 function shouldSkipDailyAmWeatherPost(weather, now = new Date()) {
   if (!weather?.postedToDiscord) return false;
@@ -834,10 +839,19 @@ function shouldSkipDailyAmWeatherPost(weather, now = new Date()) {
   const postedAt = weather.postedAt instanceof Date ? weather.postedAt : new Date(weather.postedAt);
   if (Number.isNaN(postedAt.getTime())) return false;
 
-  const mPosted = moment(postedAt).tz(AM_WEATHER_POST_TZ);
-  const mNow = moment(now).tz(AM_WEATHER_POST_TZ);
-  if (mPosted.format('YYYY-MM-DD') === mNow.format('YYYY-MM-DD')) {
-    return true;
+  const postedEastern = moment(postedAt).tz(AM_WEATHER_POST_TZ);
+  const nowEastern = moment(now).tz(AM_WEATHER_POST_TZ);
+  if (postedEastern.format('YYYY-MM-DD') === nowEastern.format('YYYY-MM-DD')) {
+    const eightAmPostedDay = postedEastern
+      .clone()
+      .startOf('day')
+      .hour(AM_WEATHER_LOCAL_HOUR)
+      .minute(0)
+      .second(0)
+      .millisecond(0);
+    if (postedEastern.isSameOrAfter(eightAmPostedDay)) {
+      return true;
+    }
   }
 
   const { startUTC: startOfPeriodUTC, endUTC: endOfPeriodUTC } = getCurrentPeriodBounds(now);
