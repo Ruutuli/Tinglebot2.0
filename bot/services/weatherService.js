@@ -853,12 +853,85 @@ function shouldSkipDailyAmWeatherPost(weather, now = new Date()) {
   return getDailyAmWeatherPostSkipDecision(weather, now).skip;
 }
 
+function buildWeatherDamageCauseString(weather, damageBreakdown) {
+  if (!weather || !damageBreakdown || damageBreakdown.total === 0) return 'Weather';
+  const parts = [];
+  if (damageBreakdown.special > 0 && weather.special?.label) {
+    parts.push(weather.special.label);
+  }
+  if (damageBreakdown.precipitation > 0 && weather.precipitation?.label) {
+    parts.push(weather.precipitation.label);
+  }
+  if (damageBreakdown.wind > 0 && weather.wind?.label) {
+    const windLabel = weather.wind.label;
+    const match = windLabel?.match(/\/\/\s*(.+)$/);
+    parts.push(match ? match[1].trim() : windLabel);
+  }
+  return parts.length > 0 ? `Weather: **${parts.join(', ')}**` : 'Weather';
+}
+
+// When gameplay generates the first row for a period before the 8am job, post the embed to the village town hall (same as scheduled daily-weather).
+async function tryPostUnpostedPeriodWeatherToTownHall(client, village, weather) {
+  if (!client?.channels || !weather || weather.postedToDiscord === true) {
+    return weather;
+  }
+  const normalizedVillage = normalizeVillageName(village);
+  const channelId =
+    normalizedVillage === 'Rudania'
+      ? process.env.RUDANIA_TOWNHALL
+      : normalizedVillage === 'Inariko'
+        ? process.env.INARIKO_TOWNHALL
+        : normalizedVillage === 'Vhintl'
+          ? process.env.VHINTL_TOWNHALL
+          : null;
+  if (!channelId) {
+    console.warn(`[weatherService.js]⚠️ tryPostUnpostedPeriodWeatherToTownHall: no town hall env for ${village}`);
+    return weather;
+  }
+  try {
+    const channel = await client.channels.fetch(channelId).catch(() => null);
+    if (!channel) {
+      console.warn(`[weatherService.js]⚠️ tryPostUnpostedPeriodWeatherToTownHall: could not fetch channel for ${village}`);
+      return weather;
+    }
+    const { embed, files } = await generateWeatherEmbed(village, weather);
+    await channel.send({ embeds: [embed], files });
+
+    if (!weather.weatherDamageApplied) {
+      try {
+        const { damageVillage } = require('@/modules/villageModule');
+        const damageBreakdown = calculateWeatherDamage(weather);
+        const damageAmount = damageBreakdown.total;
+        if (damageAmount > 0) {
+          const weatherCause = buildWeatherDamageCauseString(weather, damageBreakdown);
+          await damageVillage(village, damageAmount, weatherCause);
+        }
+      } catch (damageErr) {
+        console.error(`[weatherService.js]❌ tryPostUnpostedPeriodWeatherToTownHall damage: ${damageErr.message}`);
+      }
+    }
+
+    const WeatherModel = require('@/models/WeatherModel');
+    const updateData = { postedToDiscord: true, postedAt: new Date() };
+    if (!weather.weatherDamageApplied) {
+      updateData.weatherDamageApplied = true;
+    }
+    const updated = await WeatherModel.findByIdAndUpdate(weather._id, { $set: updateData }, { new: true });
+    console.log(`[weatherService.js]✅ Posted period weather to town hall for ${normalizedVillage} (first-touch)`);
+    return updated || weather;
+  } catch (err) {
+    console.error(`[weatherService.js]❌ tryPostUnpostedPeriodWeatherToTownHall: ${err.message}`);
+    return weather;
+  }
+}
+
 // ------------------- Get Weather Without Generation ------------------
 // Get weather without generating new if missing (unless options.generateIfMissing).
 // When true, legacy rows (e.g. old 13:00 UTC anchors) that are before the current period start
 // trigger getCurrentWeather so a row for the current 8am–8am period is created and returned.
+// options.discordClient: if set and weather is still unposted, post embed to town hall (matches scheduled job).
 async function getWeatherWithoutGeneration(village, options = {}) {
-  const { generateIfMissing = false } = options;
+  const { generateIfMissing = false, discordClient = null } = options;
   try {
     const normalizedVillage = normalizeVillageName(village);
     const now = new Date();
@@ -902,7 +975,11 @@ async function getWeatherWithoutGeneration(village, options = {}) {
     }
 
     if (!weather && generateIfMissing) {
-      return await getCurrentWeather(village);
+      weather = await getCurrentWeather(village);
+    }
+
+    if (weather && discordClient && weather.postedToDiscord !== true) {
+      return await tryPostUnpostedPeriodWeatherToTownHall(discordClient, village, weather);
     }
 
     return weather;
@@ -1784,6 +1861,7 @@ module.exports = {
   markWeatherAsPmPosted,
   shouldSkipDailyAmWeatherPost,
   getDailyAmWeatherPostSkipDecision,
+  tryPostUnpostedPeriodWeatherToTownHall,
 
   // Banner and embed generation
   generateBanner,

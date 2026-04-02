@@ -1582,7 +1582,10 @@ async function handleMonsterHunt(interaction, questId, characterName) {
   }
   
   // ------------------- Blight Rain Infection Check -------------------
-  const weather = await getWeatherWithoutGeneration(character.currentVillage, { generateIfMissing: true });
+  const weather = await getWeatherWithoutGeneration(character.currentVillage, {
+    generateIfMissing: true,
+    discordClient: interaction.client
+  });
   let blightRainMessage = null;
   if (weather?.special?.label === 'Blight Rain') {
     // Mod characters and Hibiki are immune to blight infection
@@ -2210,7 +2213,10 @@ module.exports = {
         }
 
         // ------------------- Blight Rain Infection Check -------------------
-        const weather = await getWeatherWithoutGeneration(character.currentVillage, { generateIfMissing: true });
+        const weather = await getWeatherWithoutGeneration(character.currentVillage, {
+          generateIfMissing: true,
+          discordClient: interaction.client
+        });
         let blightRainMessage = null;
         if (weather?.special?.label === 'Blight Rain') {
           // Mod characters and Hibiki are immune to blight infection

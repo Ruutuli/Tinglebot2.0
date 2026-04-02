@@ -335,7 +335,10 @@ module.exports = {
       }
 
       // Check starting village for blight rain (moved to after travel completion)
-      const startingWeather = await getWeatherWithoutGeneration(startingVillage, { generateIfMissing: true });
+      const startingWeather = await getWeatherWithoutGeneration(startingVillage, {
+        generateIfMissing: true,
+        discordClient: interaction.client
+      });
       if (false && startingWeather?.special?.label === 'Blight Rain') {
         // Mod characters are immune to blight infection
         if (character.isModCharacter) {
@@ -482,7 +485,7 @@ module.exports = {
 
       // ------------------- Check Severe Weather -------------------
       let boostFlavorText = null;
-      const severeWeather = await checkSevereWeather(startingVillage);
+      const severeWeather = await checkSevereWeather(startingVillage, interaction.client);
       if (severeWeather.blocked) {
         // Check for Fortune Teller Traveling boost override
         const weatherOverride = await applyTravelWeatherBoost(character.name, true);
@@ -504,7 +507,7 @@ module.exports = {
       }
 
       // Check destination weather as well
-      const destinationSevereWeather = await checkSevereWeather(destination);
+      const destinationSevereWeather = await checkSevereWeather(destination, interaction.client);
       if (destinationSevereWeather.blocked) {
         // Check for Fortune Teller Traveling boost override (arrival side)
         const weatherOverrideDest = await applyTravelWeatherBoost(character.name, true);
@@ -1014,7 +1017,10 @@ async function processTravelDay(day, context) {
       const finalChannel = await interaction.client.channels.fetch(finalChannelId);
     
       // Check destination for blight rain after arrival
-      const destinationWeather = await getWeatherWithoutGeneration(destination, { generateIfMissing: true });
+      const destinationWeather = await getWeatherWithoutGeneration(destination, {
+        generateIfMissing: true,
+        discordClient: interaction.client
+      });
       if (destinationWeather?.special?.label === 'Blight Rain') {
         // Mod characters and Hibiki are immune to blight infection
         const HIBIKI_USER_ID = "668281042414600212";
@@ -1762,9 +1768,12 @@ async function processTravelDay(day, context) {
 
 // ------------------- Check Severe Weather -------------------
 // Checks if the current weather conditions are too severe for travel
-async function checkSevereWeather(village) {
+async function checkSevereWeather(village, discordClient = null) {
   try {
-    const weather = await getWeatherWithoutGeneration(village, { generateIfMissing: true });
+    const weather = await getWeatherWithoutGeneration(village, {
+      generateIfMissing: true,
+      discordClient
+    });
     if (!weather) {
       return false;
     }

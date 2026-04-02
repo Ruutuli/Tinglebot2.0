@@ -348,12 +348,15 @@ function validateWeather(weather, village, periodBounds) {
 }
 
 // ------------------- Weather Retrieval -------------------
-async function getWeatherForVillage(village, now) {
+async function getWeatherForVillage(village, now, discordClient = null) {
   const { startUTC: startOfPeriodUTC } = getCurrentPeriodBounds(now);
   const { startUTC: startOfNextPeriodUTC } = getNextPeriodBounds(now);
   
   // Special weather uses DB truth for the current period (it should not depend on Discord posting success).
-  const weather = await getWeatherWithoutGeneration(village, { generateIfMissing: true });
+  const weather = await getWeatherWithoutGeneration(village, {
+    generateIfMissing: true,
+    discordClient
+  });
 
   return { weather, periodBounds: { startOfPeriodUTC, startOfNextPeriodUTC } };
 }
@@ -524,7 +527,7 @@ module.exports = {
         return;
       }
 
-      const { weather, periodBounds } = await getWeatherForVillage(channelVillage, now);
+      const { weather, periodBounds } = await getWeatherForVillage(channelVillage, now, interaction.client);
       
       if (!weather) {
         const embed = createWeatherErrorEmbed(character.name, channelVillage, 'noWeather');
