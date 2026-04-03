@@ -10,7 +10,7 @@ const User = require('@/models/UserModel');
 const Character = require('@/models/CharacterModel');
 const ModCharacter = require('@/models/ModCharacterModel');
 const { finalizeBlightApplication } = require('../../handlers/blightHandler');
-const { getTodaysQuests, hasUserCompletedQuestToday, hasUserReachedWeeklyQuestLimit, updateQuestEmbed } = require('../../modules/helpWantedModule');
+const { getTodaysQuests, hasUserCompletedQuestToday, hasUserReachedWeeklyQuestLimit, updateQuestEmbed, getEasternDateString } = require('../../modules/helpWantedModule');
 const HelpWantedQuest = require('@/models/HelpWantedQuestModel');
 const { getWeatherWithoutGeneration } = require('@/services/weatherService');
 const VillageShopItem = require('@/models/VillageShopsModel');
@@ -112,18 +112,15 @@ function createBlightRejectionEmbed(character, quest) {
  * @returns {Promise<{canProceed: boolean, message?: string}>}
  */
 async function validateQuestExpiration(quest) {
-  const now = new Date();
-  // Get today's date in EST format (YYYY-MM-DD) - EST is UTC-5
-  const estDate = new Date(now.getTime() - 5 * 60 * 60 * 1000);
-  const today = `${estDate.getUTCFullYear()}-${String(estDate.getUTCMonth() + 1).padStart(2, '0')}-${String(estDate.getUTCDate()).padStart(2, '0')}`;
-  
+  const today = getEasternDateString(new Date());
+
   if (quest.date !== today) {
     return { 
       canProceed: false, 
-      message: `❌ **Quest Expired!**\n\nThis quest was posted on **${quest.date}** and is no longer available for completion. Help Wanted quests expire at midnight (EST) on the day they are posted.\n\n⏰ **Current Date:** ${today}\n💡 **Tip:** Check the Help Wanted board for today's fresh quests!` 
+      message: `❌ **Quest Expired!**\n\nThis quest was posted on **${quest.date}** and is no longer available for completion. Help Wanted quests expire at midnight Eastern Time on the day they are posted.\n\n⏰ **Current Date:** ${today}\n💡 **Tip:** Check the Help Wanted board for today's fresh quests!` 
     };
   }
-  
+
   return { canProceed: true };
 }
 
@@ -647,10 +644,8 @@ async function updateUserTracking(user, quest, userId) {
     };
   }
   const now = new Date();
-  // Get today's date in EST format (YYYY-MM-DD) - EST is UTC-5
-  const estDate = new Date(now.getTime() - 5 * 60 * 60 * 1000);
-  const today = `${estDate.getUTCFullYear()}-${String(estDate.getUTCMonth() + 1).padStart(2, '0')}-${String(estDate.getUTCDate()).padStart(2, '0')}`;
-  
+  const today = getEasternDateString(now);
+
   user.helpWanted.lastCompletion = today;
   // Increment both total and current completions
   user.helpWanted.totalCompletions = (user.helpWanted.totalCompletions || 0) + 1;
@@ -764,8 +759,7 @@ async function handleCharacterGuess(interaction, questId, characterName, guess) 
     }
     quest = claimedQuest;
     const now = new Date();
-    const estDate = new Date(now.getTime() - 5 * 60 * 60 * 1000);
-    const today = `${estDate.getUTCFullYear()}-${String(estDate.getUTCMonth() + 1).padStart(2, '0')}-${String(estDate.getUTCDate()).padStart(2, '0')}`;
+    const today = getEasternDateString(now);
     await updateUserTracking(user, quest, userId);
     if (!character.helpWanted) {
       character.helpWanted = { lastCompletion: null, cooldownUntil: null, completions: [] };
@@ -2123,9 +2117,7 @@ module.exports = {
         
         if (!quest) {
           // Try to find any quests for today to help debug
-          const now = new Date();
-          const estDate = new Date(now.getTime() - 5 * 60 * 60 * 1000);
-          const today = `${estDate.getUTCFullYear()}-${String(estDate.getUTCMonth() + 1).padStart(2, '0')}-${String(estDate.getUTCDate()).padStart(2, '0')}`;
+          const today = getEasternDateString(new Date());
           const todaysQuests = await HelpWantedQuest.find({ date: today }).lean();
           console.log(`[helpWanted.js]: Available quests for today (${today}):`, todaysQuests.map(q => ({ questId: q.questId, village: q.village, type: q.type })));
           
@@ -2511,19 +2503,12 @@ module.exports = {
           ? (user.helpWanted?.currentCompletions ?? 0)
           : totalCompletions;
 
-        // Calculate today's and this week's completions (EST)
-        const now = new Date();
-        const estOffset = 5 * 60 * 60 * 1000;
-        const estDate = new Date(now.getTime() - estOffset);
-        const today = `${estDate.getUTCFullYear()}-${String(estDate.getUTCMonth() + 1).padStart(2, '0')}-${String(estDate.getUTCDate()).padStart(2, '0')}`;
+        // Today's and this week's completions (America/New_York)
+        const moment = require('moment-timezone');
+        const today = getEasternDateString(new Date());
         const todayCompletions = recentCompletions.filter(c => c.date === today).length;
-        
-        // This week: Sunday 00:00 EST through Saturday
-        const estDay = estDate.getUTCDay();
-        const estSunday = new Date(estDate);
-        estSunday.setUTCDate(estDate.getUTCDate() - estDay);
-        estSunday.setUTCHours(0, 0, 0, 0);
-        const startOfWeekStr = `${estSunday.getUTCFullYear()}-${String(estSunday.getUTCMonth() + 1).padStart(2, '0')}-${String(estSunday.getUTCDate()).padStart(2, '0')}`;
+
+        const startOfWeekStr = moment.tz('America/New_York').startOf('week').format('YYYY-MM-DD');
         const weekCompletions = recentCompletions.filter(c => c.date && c.date >= startOfWeekStr).length;
 
         // Get last quest completion details

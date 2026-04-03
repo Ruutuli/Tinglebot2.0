@@ -111,11 +111,15 @@ function getUTCDateString(date = new Date()) {
   return date.toISOString().split('T')[0];
 }
 
-// ------------------- Helper: getESTDateString -------------------
-// Gets date string in EST format (YYYY-MM-DD) - matches helpWanted.js for completion tracking
-function getESTDateString(date = new Date()) {
-  const estDate = new Date(date.getTime() - 5 * 60 * 60 * 1000);
-  return `${estDate.getUTCFullYear()}-${String(estDate.getUTCMonth() + 1).padStart(2, '0')}-${String(estDate.getUTCDate()).padStart(2, '0')}`;
+// ------------------- Helper: getEasternDateString -------------------
+// Calendar date (YYYY-MM-DD) in America/New_York — correct through DST (not fixed UTC-5).
+function getEasternDateString(date = new Date()) {
+  return new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'America/New_York',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit'
+  }).format(date);
 }
 
 // ------------------- Helper: getHourInUTC -------------------
@@ -1906,10 +1910,9 @@ async function generateDailyQuests() {
   
   try {
     const now = new Date();
-    // Get UTC date string (YYYY-MM-DD format)
-    const date = getUTCDateString(now);
+    // Eastern calendar day — matches Help Wanted "midnight Eastern" expiry and quest.date
+    const date = getEasternDateString(now);
     
-    // Validate UTC date format
     if (!date || !date.match(/^\d{4}-\d{2}-\d{2}$/)) {
       logger.error('QUEST', `Invalid date format: ${date}`);
       throw new Error(`Invalid date format: ${date}`);
@@ -2614,7 +2617,7 @@ function selectTimesWithBuffer(availableTimes, count) {
 // Checks if a quest is expired (not from today)
 function isQuestExpired(quest) {
   const now = new Date();
-  const today = getUTCDateString(now);
+  const today = getEasternDateString(now);
   return quest.date !== today;
 }
 
@@ -2623,8 +2626,7 @@ function isQuestExpired(quest) {
 async function getTodaysQuests() {
   try {
     const now = new Date();
-    // Get EST date string (YYYY-MM-DD format)
-    const date = getUTCDateString(now);
+    const date = getEasternDateString(now);
     const quests = await HelpWantedQuest.find({ date });
     
     // Ensure all quests have an npcName field
@@ -2647,8 +2649,7 @@ async function getTodaysQuests() {
 async function getQuestsForScheduledTime(cronTime) {
   try {
     const now = new Date();
-    // Get EST date string (YYYY-MM-DD format)
-    const date = getUTCDateString(now);
+    const date = getEasternDateString(now);
     return await HelpWantedQuest.find({ date, scheduledPostTime: cronTime });
   } catch (error) {
     logger.error('QUEST', 'Error fetching quests for scheduled time', error);
@@ -2998,9 +2999,8 @@ async function hasUserCompletedQuestToday(userId) {
       return false;
     }
     
-    // Use EST date for midnight reset (matches completion storage)
     const now = new Date();
-    const today = getESTDateString(now);
+    const today = getEasternDateString(now);
     const lastCompletion = user.helpWanted?.lastCompletion || 'null';
     
     return lastCompletion === today;
@@ -3016,20 +3016,16 @@ async function hasUserReachedWeeklyQuestLimit(userId) {
   try {
     const user = await require('@/models/UserModel').findOne({ discordId: userId });
     if (!user || !user.helpWanted.completions) return false;
-    
-    // Use EST-equivalent for weekly reset (UTC-5)
-    const now = new Date();
-    // EST is UTC-5, subtract 5 hours
-    const estNow = new Date(now.getTime() - 5 * 60 * 60 * 1000);
-    const startOfWeek = new Date(estNow.getUTCFullYear(), estNow.getUTCMonth(), estNow.getUTCDate());
-    startOfWeek.setDate(estNow.getDate() - estNow.getDay());
-    startOfWeek.setHours(0, 0, 0, 0);
-    
-    const weeklyCompletions = user.helpWanted.completions.filter(completion => {
-      const completionDate = new Date(completion.date + 'T00:00:00-05:00'); // EST timezone
-      return completionDate >= startOfWeek;
+
+    const moment = require('moment-timezone');
+    const startOfWeek = moment.tz('America/New_York').startOf('week');
+
+    const weeklyCompletions = user.helpWanted.completions.filter((completion) => {
+      if (!completion.date) return false;
+      const d = moment.tz(completion.date, 'YYYY-MM-DD', 'America/New_York');
+      return d.isSameOrAfter(startOfWeek, 'day');
     });
-    
+
     return weeklyCompletions.length >= 3;
   } catch (error) {
     logger.error('QUEST', 'Error checking weekly quest limit', error);
@@ -3473,7 +3469,7 @@ async function completeQuestFromSubmission(quest, submissionData, client) {
 
     // Update character's helpWanted.completions so character bio and bot-side reads see the completion
     if (character) {
-      const today = getESTDateString(new Date());
+      const today = getEasternDateString(new Date());
       if (!character.helpWanted) {
         character.helpWanted = { lastCompletion: null, cooldownUntil: null, completions: [] };
       }
@@ -3518,8 +3514,8 @@ async function updateUserTracking(user, quest, userId) {
     };
   }
   const now = new Date();
-  const today = getESTDateString(now);
-  
+  const today = getEasternDateString(now);
+
   user.helpWanted.lastCompletion = today;
   // Increment both total and current completions
   user.helpWanted.totalCompletions = (user.helpWanted.totalCompletions || 0) + 1;
@@ -3624,7 +3620,7 @@ async function generateCharacterGuessQuestForTesting(village = null) {
   }
   const npcName = getRandomNPCName();
   const requirements = await generateQuestRequirements('character-guess', pools, targetVillage, questId);
-  const date = getUTCDateString();
+  const date = getEasternDateString();
   const scheduledPostTime = '0 12 * * *'; // noon UTC placeholder
   return {
     questId,
@@ -3683,5 +3679,6 @@ module.exports = {
   getRandomNPCName,
   getRandomNPCNameFromPool,
   getAvailableQuestTypes,
-  isOnOrAfterNoonEastern
+  isOnOrAfterNoonEastern,
+  getEasternDateString
 }; 

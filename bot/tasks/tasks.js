@@ -1625,10 +1625,8 @@ async function helpWantedBoardCheck(client, _data = {}) {
     }
     
     const { updateQuestEmbed, postQuestToDiscord, verifyQuestMessageExists, isQuestExpired } = require('@/modules/helpWantedModule');
-    
-    // Get today's date string (YYYY-MM-DD format in UTC)
-    const now = new Date();
-    const today = now.toISOString().split('T')[0];
+
+    const today = moment.tz(SCHEDULE_TZ_EASTERN).format('YYYY-MM-DD');
     
     // Only check quests from today (active quests that might need updates)
     // Yesterday's quests are already expired and won't change
@@ -1834,13 +1832,11 @@ async function postUnpostedQuestsOnStartup(client) {
     }
     
     const { postQuestToDiscord, verifyQuestMessageExists } = require('@/modules/helpWantedModule');
-    
-    // Get today's and yesterday's date strings (YYYY-MM-DD format in UTC)
+
+    const mEastern = moment.tz(SCHEDULE_TZ_EASTERN);
+    const today = mEastern.format('YYYY-MM-DD');
+    const yesterdayStr = mEastern.clone().subtract(1, 'day').format('YYYY-MM-DD');
     const now = new Date();
-    const today = now.toISOString().split('T')[0];
-    const yesterday = new Date(now);
-    yesterday.setUTCDate(yesterday.getUTCDate() - 1);
-    const yesterdayStr = yesterday.toISOString().split('T')[0];
     
     // Check how many quests exist for today and yesterday
     const allRecentQuests = await HelpWantedQuest.find({ 
