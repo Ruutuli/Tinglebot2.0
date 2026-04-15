@@ -517,6 +517,21 @@ module.exports = {
  },
 };
 
+async function ensureDeferred(interaction, opts = { ephemeral: true }) {
+  if (!interaction) return;
+  if (interaction.deferred || interaction.replied) return;
+  try {
+    // Prefer flags when available (matches this codebase's style in some handlers)
+    const payload =
+      opts && opts.ephemeral
+        ? { flags: [MessageFlags.Ephemeral] }
+        : {};
+    await interaction.deferReply(payload);
+  } catch {
+    // If this fails (already acknowledged / expired), downstream calls should be guarded anyway.
+  }
+}
+
 async function handleGift(interaction) {
  await interaction.deferReply();
  const fromCharacterName = interaction.options.getString("fromcharacter");
@@ -1372,7 +1387,7 @@ async function handleShopView(interaction) {
 
 async function handleShopBuy(interaction) {
   try {
-    await interaction.deferReply();
+    await ensureDeferred(interaction, { ephemeral: true });
 
     const user = await getOrCreateToken(interaction.user.id);
 
@@ -1813,7 +1828,7 @@ async function handleShopBuy(interaction) {
 
 async function handleShopSell(interaction) {
  try {
-  await interaction.deferReply();
+  await ensureDeferred(interaction, { ephemeral: true });
 
   const characterName = interaction.options.getString("charactername");
   const itemNameRaw = interaction.options.getString("itemname");
@@ -2334,7 +2349,7 @@ if (quantity <= 0) {
 
 
 async function handleTransfer(interaction) {
- await interaction.deferReply();
+ await ensureDeferred(interaction, { ephemeral: true });
 
  const fromCharacterName = interaction.options.getString("fromcharacter");
  const toCharacterName = interaction.options.getString("tocharacter");
@@ -3289,7 +3304,7 @@ async function handleTrade(interaction) {
   const userId = interaction.user.id;
 
   try {
-    await interaction.deferReply();
+    await ensureDeferred(interaction, { ephemeral: true });
 
     // ------------------- Clean Item Names from Copy-Paste -------------------
     // Remove emoji prefixes and quantity information from item names if users copy-paste autocomplete text

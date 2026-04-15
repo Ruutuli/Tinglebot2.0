@@ -13,6 +13,7 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useState, type ReactN
 import { createPortal } from "react-dom";
 import ReactMarkdown, { type Components } from "react-markdown";
 import { useSession } from "@/hooks/use-session";
+import { discordCdnAvatarUrl } from "@/lib/discord";
 import { useSidebar } from "./sidebar-context";
 
 /* ============================================================================ */
@@ -582,11 +583,12 @@ export function TopBar() {
             >
               {user.avatar && !avatarError ? (
                 <Image
-                  src={`https://cdn.discordapp.com/avatars/${user.id}/${user.avatar}.png?size=128`}
+                  src={(discordCdnAvatarUrl(user.id, user.avatar) ?? "/ankle_icon.png") + "?size=128"}
                   alt={user.global_name?.trim() || user.username}
                   width={40}
                   height={40}
                   className="h-full w-full object-cover"
+                  unoptimized
                   onError={() => setAvatarError(true)}
                 />
               ) : !user.avatar && !avatarError ? (
@@ -596,6 +598,7 @@ export function TopBar() {
                   width={40}
                   height={40}
                   className="h-full w-full object-cover"
+                  unoptimized
                   onError={() => setAvatarError(true)}
                 />
               ) : (

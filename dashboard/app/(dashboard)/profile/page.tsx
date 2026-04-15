@@ -9,6 +9,7 @@ import Image from "next/image";
 import Link from "next/link";
 import ReactMarkdown, { type Components } from "react-markdown";
 import { useSession } from "@/hooks/use-session";
+import { discordCdnAvatarUrl } from "@/lib/discord";
 import type {
   UserProfile,
   UserProfileResponse,
@@ -312,9 +313,10 @@ function ProfileHeader({
   user: UserProfile;
   sessionUser: { id: string; username: string; avatar?: string | null } | null;
 }) {
-  const avatarUrl = sessionUser?.avatar
-    ? `https://cdn.discordapp.com/avatars/${sessionUser.id}/${sessionUser.avatar}.png?size=256`
+  const avatarBase = sessionUser?.id
+    ? discordCdnAvatarUrl(sessionUser.id, sessionUser.avatar ?? null)
     : null;
+  const avatarUrl = avatarBase ? `${avatarBase}?size=256` : null;
   const [avatarError, setAvatarError] = useState(false);
   const hasBirthday = user.birthday.month && user.birthday.day;
   const hasDiscount = user.birthday.birthdayDiscountExpiresAt
@@ -327,7 +329,7 @@ function ProfileHeader({
         <div className="flex flex-col items-center gap-4 md:flex-row md:items-start">
           <div className="relative h-20 w-20 shrink-0 overflow-hidden rounded-full border-2 border-[var(--totk-dark-ocher)] sm:h-24 sm:w-24">
             {avatarUrl && !avatarError ? (
-              <Image src={avatarUrl} alt="Avatar" fill className="object-cover" onError={() => setAvatarError(true)} />
+              <Image src={avatarUrl} alt="Avatar" fill className="object-cover" unoptimized onError={() => setAvatarError(true)} />
             ) : (
               <Image src="/ankle_icon.png" alt="Avatar" fill className="object-cover" />
             )}

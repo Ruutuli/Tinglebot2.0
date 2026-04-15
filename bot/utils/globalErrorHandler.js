@@ -374,7 +374,13 @@ async function handleErrorResponse(error, context) {
   try {
     switch (responseType) {
       case ERROR_RESPONSE_TYPES.REPLY:
-        if (interaction && interaction.isRepliable && !interaction.replied && !interaction.deferred) {
+        if (
+          interaction &&
+          typeof interaction.isRepliable === "function" &&
+          interaction.isRepliable() &&
+          !interaction.replied &&
+          !interaction.deferred
+        ) {
           return await interaction.reply({ content: errorMessage, ephemeral: true });
         }
         break;
@@ -401,6 +407,8 @@ async function handleErrorResponse(error, context) {
         throw error;
     }
   } catch (replyError) {
+    // Expired / unknown interactions are expected sometimes; don't spam logs.
+    if (replyError?.code === 10062) return;
     console.error(`[globalErrorHandler]: Failed to send error response:`, replyError);
   }
 }
