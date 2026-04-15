@@ -1271,7 +1271,14 @@ async function handleBoostAccept(interaction) {
 
  // Deduct 1 stamina from the booster character
  try {
-  const staminaResult = await useStamina(freshBooster._id, 1);
+  const staminaResult = await useStamina(freshBooster._id, 1, {
+   source: 'job:boosting',
+   action: 'accept_boost',
+   boostCategory: requestData?.category ?? null,
+   boostJob: requestData?.boosterJob ?? boosterJob ?? null,
+   boostRequestId: requestData?.boostRequestId ?? requestData?.requestId ?? null,
+   targetCharacterName: requestData?.targetCharacter ?? null,
+  });
   if (staminaResult.exhausted) {
    await respond({
     content: `❌ **${freshBooster.name}** doesn't have enough stamina to provide this boost. They need at least 1 stamina to boost others.`,

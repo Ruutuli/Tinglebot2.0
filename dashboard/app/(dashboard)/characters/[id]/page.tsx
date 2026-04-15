@@ -1980,13 +1980,82 @@ export default function OCDetailPage() {
                 const src = statLogTab === "stamina" ? (character.staminaLog ?? []) : (character.heartsLog ?? []);
                 const q = statLogQuery.trim().toLowerCase();
 
+                const pretty = (v: string) =>
+                  v
+                    .replace(/[_-]+/g, " ")
+                    .replace(/\s+/g, " ")
+                    .trim()
+                    .replace(/\b\w/g, (m) => m.toUpperCase());
+
+                const prettySource = (source: string) => {
+                  const s = source.trim();
+                  const map: Record<string, string> = {
+                    "job:heal": "Heal job",
+                    "job:boosting": "Boosting job",
+                    boosting_other: "Boosting (Other)",
+                    recoverStamina: "Stamina recovery",
+                    daily_recovery: "Daily recovery",
+                  };
+                  if (map[s]) return map[s];
+
+                  // Common patterns: "job:xyz" => "Xyz job"
+                  if (s.startsWith("job:")) return `${pretty(s.slice(4))} job`;
+
+                  // Fallback: make "module:thing" look nicer
+                  if (s.includes(":")) return s.split(":").map(pretty).join(" • ");
+                  return pretty(s);
+                };
+
+                const prettyAction = (action: string) => {
+                  const a = action.trim();
+                  const map: Record<string, string> = {
+                    fulfill: "Fulfill",
+                    accept_boost: "Accept boost",
+                    request_boost: "Request boost",
+                    prediction: "Prediction",
+                    craft: "Craft",
+                    gather: "Gather",
+                  };
+                  return map[a] || pretty(a);
+                };
+
+                const getActionText = (e: { reason?: unknown; meta?: unknown }) => {
+                  const meta = (e as any)?.meta;
+                  if (!meta || typeof meta !== "object") return "";
+
+                  const sourceRaw = typeof (meta as any).source === "string" ? (meta as any).source.trim() : "";
+                  const actionRaw = typeof (meta as any).action === "string" ? (meta as any).action.trim() : "";
+                  const abilityRaw = typeof (meta as any).ability === "string" ? (meta as any).ability.trim() : "";
+                  const commandRaw = typeof (meta as any).command === "string" ? (meta as any).command.trim() : "";
+                  const labelRaw = typeof (meta as any).label === "string" ? (meta as any).label.trim() : "";
+                  const stepRaw = typeof (meta as any).step === "string" ? (meta as any).step.trim() : "";
+
+                  const source = sourceRaw ? prettySource(sourceRaw) : "";
+                  const action = actionRaw ? prettyAction(actionRaw) : "";
+                  const ability = abilityRaw ? pretty(abilityRaw) : "";
+                  const command = commandRaw ? pretty(commandRaw) : "";
+                  const label = labelRaw ? pretty(labelRaw) : "";
+                  const step = stepRaw ? pretty(stepRaw) : "";
+
+                  const middle = command || ability || label || step;
+                  const parts = [source, middle, action].filter(Boolean);
+                  if (parts.length === 0) return "";
+
+                  // Hide redundant action text when the reason already contains the same info.
+                  const reason = String((e as any)?.reason ?? "").toLowerCase();
+                  const joined = parts.join(" • ");
+                  if (reason && joined.toLowerCase().includes(reason)) return "";
+                  return joined;
+                };
+
                 const filtered = src
                   .filter((e) => {
                     const tsMs = toDateMs(e.ts);
                     if (rangeMs !== Infinity && tsMs > 0 && now - tsMs > rangeMs) return false;
                     if (!q) return true;
                     const reason = String(e.reason ?? "").toLowerCase();
-                    return reason.includes(q);
+                    const actionText = getActionText(e).toLowerCase();
+                    return reason.includes(q) || actionText.includes(q);
                   })
                   .slice()
                   .sort((a, b) => toDateMs(b.ts) - toDateMs(a.ts));
@@ -2087,6 +2156,7 @@ export default function OCDetailPage() {
                           const tsMs = toDateMs(e.ts);
                           const rel = tsMs ? formatRelativeTime(tsMs) : "";
                           const absolute = e.ts ? formatDate(e.ts) : "Unknown time";
+                          const actionText = getActionText(e as any);
                           const leftBar =
                             delta > 0
                               ? "bg-[var(--totk-light-green)]"
@@ -2110,6 +2180,11 @@ export default function OCDetailPage() {
                                       {String(e.reason ?? "unknown")}
                                     </span>
                                   </div>
+                                  {actionText && (
+                                    <div className="mt-1 text-[10px] sm:text-xs text-[var(--totk-grey-200)] break-words">
+                                      {actionText}
+                                    </div>
+                                  )}
                                   {beforeAfter && (
                                     <div className="mt-1 text-[10px] sm:text-xs text-[var(--totk-grey-200)] font-mono">
                                       {beforeAfter}
