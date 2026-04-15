@@ -79,6 +79,82 @@ function stackModifierHeartsFromInventoryRow(row) {
   return Math.max(0, Math.floor(Number(row?.modifierHearts) || 0));
 }
 
+function parseEconomyItemSpecifier(rawName) {
+  const raw = String(rawName || '').trim();
+  const tierParse = parseElixirTierFromItemOption(raw);
+  if (tierParse && tierParse.baseName && isElixirItemName(tierParse.baseName)) {
+    return {
+      baseName: tierParse.baseName.trim(),
+      isElixir: true,
+      elixirLevel: normalizeElixirLevel(tierParse.elixirLevel),
+      modifierHearts:
+        tierParse.modifierHearts != null
+          ? Math.max(0, Math.floor(Number(tierParse.modifierHearts) || 0))
+          : null, // null means "any mix-in for that tier"
+      specifiedTier: true,
+    };
+  }
+  return {
+    baseName: raw,
+    isElixir: isElixirItemName(raw),
+    elixirLevel: null,
+    modifierHearts: null,
+    specifiedTier: false,
+  };
+}
+
+function formatEconomyElixirStackLabel(itemName, elixirLevel, modifierHearts) {
+  const lv = normalizeElixirLevel(elixirLevel ?? 1);
+  const tierWord = ['Basic', 'Mid', 'High'][lv - 1] || 'Basic';
+  const mh = Math.max(0, Math.floor(Number(modifierHearts) || 0));
+  return `${itemName} [${tierWord}|m${mh}]`;
+}
+
+function computeElixirStackMovesFromInventoryEntries(entries, quantityNeeded, spec = {}) {
+  const need = Math.max(0, Math.floor(Number(quantityNeeded) || 0));
+  if (need <= 0) return [];
+  const desiredLevel = spec.elixirLevel != null ? normalizeElixirLevel(spec.elixirLevel) : null;
+  const desiredMod = spec.modifierHearts != null ? Math.max(0, Math.floor(Number(spec.modifierHearts) || 0)) : null;
+
+  const rows = (Array.isArray(entries) ? entries : [])
+    .filter((e) => (e?.quantity || 0) > 0)
+    .map((e) => ({
+      elixirLevel: normalizeElixirLevel(e.elixirLevel),
+      modifierHearts: stackModifierHeartsFromInventoryRow(e),
+      quantity: Math.max(0, Math.floor(Number(e.quantity) || 0)),
+    }))
+    .filter((e) => e.quantity > 0);
+
+  let filtered = rows;
+  if (desiredLevel != null) {
+    filtered = filtered.filter((r) => r.elixirLevel === desiredLevel);
+  }
+  if (desiredMod != null) {
+    filtered = filtered.filter((r) => r.modifierHearts === desiredMod);
+  }
+
+  // Deterministic order: Basic→Mid→High, then lower mix-in first
+  filtered.sort(
+    (a, b) => a.elixirLevel - b.elixirLevel || a.modifierHearts - b.modifierHearts
+  );
+
+  const moves = [];
+  let remaining = need;
+  for (const r of filtered) {
+    if (remaining <= 0) break;
+    const take = Math.min(remaining, r.quantity);
+    if (take > 0) {
+      moves.push({
+        elixirLevel: r.elixirLevel,
+        modifierHearts: r.modifierHearts,
+        quantity: take,
+      });
+      remaining -= take;
+    }
+  }
+  return moves;
+}
+
 /**
  * Find shop stock row for buy/sell. Elixir rows are keyed by itemName + elixirLevel + modifierHearts (Fairy mix).
  */
@@ -467,8 +543,21 @@ const cleanedItems = items.map(item => ({
   quantity: item.quantity
 }));
 
+// Parse elixir tier suffixes like: "Hearty Elixir [Mid|m0]"
+const parsedItems = cleanedItems.map((it) => {
+  const parsed = parseEconomyItemSpecifier(it.name);
+  return {
+    ...it,
+    baseName: parsed.baseName,
+    isElixir: parsed.isElixir,
+    elixirLevel: parsed.elixirLevel,
+    modifierHearts: parsed.modifierHearts,
+    specifiedTier: parsed.specifiedTier,
+  };
+});
+
 // ------------------- Validate Gift Quantities -------------------
-for (const { quantity } of cleanedItems) {
+for (const { quantity } of parsedItems) {
   if (quantity <= 0) {
     await interaction.editReply({
       embeds: [{
@@ -489,8 +578,8 @@ for (const { quantity } of cleanedItems) {
 }
 
 // ------------------- NEW: Prevent gifting Spirit Orbs -------------------
-for (const { name } of cleanedItems) {
-  if (isSpiritOrb(name)) {
+for (const { baseName } of parsedItems) {
+  if (isSpiritOrb(baseName)) {
     await interaction.editReply({
       embeds: [{
         color: 0xFF0000, // Red color
@@ -510,8 +599,8 @@ for (const { name } of cleanedItems) {
 }
 
 // ------------------- Prevent gifting Old Maps -------------------
-for (const { name } of cleanedItems) {
-  if (isOldMapItem(name)) {
+for (const { baseName } of parsedItems) {
+  if (isOldMapItem(baseName)) {
     await interaction.editReply({
       embeds: [{
         color: 0xFF0000, // Red color
@@ -730,10 +819,15 @@ for (const { name } of cleanedItems) {
   // Aggregate quantities for duplicate items (case-insensitive)
   const aggregatedItems = [];
   const itemMap = new Map();
-  for (const { name, quantity } of cleanedItems) {
-    const key = name.trim().toLowerCase();
+  for (const { name, baseName, quantity, isElixir, elixirLevel, modifierHearts, specifiedTier } of parsedItems) {
+    const baseKey = baseName.trim().toLowerCase();
+    const stackKey =
+      isElixir && specifiedTier
+        ? `${baseKey}|lv${normalizeElixirLevel(elixirLevel)}|m${modifierHearts == null ? '*' : Math.max(0, Math.floor(Number(modifierHearts) || 0))}`
+        : baseKey;
+    const key = stackKey;
     if (!itemMap.has(key)) {
-      itemMap.set(key, { name, quantity });
+      itemMap.set(key, { name, baseName, quantity, isElixir, elixirLevel, modifierHearts, specifiedTier });
     } else {
       itemMap.get(key).quantity += quantity;
     }
@@ -743,9 +837,9 @@ for (const { name } of cleanedItems) {
   }
 
   for (const item of aggregatedItems) {
-   const { name, quantity } = item;
+   const { name, baseName, quantity, isElixir, elixirLevel, modifierHearts, specifiedTier } = item;
    // Extract the base item name by removing any quantity in parentheses
-   const baseItemName = name.replace(/\s*\(Qty:\s*\d+\)\s*$/, '').trim();
+   const baseItemName = String(baseName || name).replace(/\s*\(Qty:\s*\d+\)\s*$/, '').trim();
 
    // Find the canonical item name from the database first
    // Handle items with + in their names by using exact match instead of regex
@@ -784,15 +878,23 @@ for (const { name } of cleanedItems) {
       .find({ itemName: { $regex: new RegExp(`^${escapeRegExp(canonicalName)}$`, "i") } })
       .toArray();
    }
-   const totalQuantity = fromInventoryEntries.reduce(
-    (sum, entry) => sum + (entry.quantity || 0),
-    0
-   );
+   const totalQuantity = fromInventoryEntries.reduce((sum, entry) => sum + (entry.quantity || 0), 0);
+   let availableToGift = totalQuantity;
+   if (isElixir) {
+     // If a tier was specified, only count that stack (and optional modifierHearts filter)
+     if (specifiedTier && elixirLevel != null) {
+       const moves = computeElixirStackMovesFromInventoryEntries(fromInventoryEntries, quantity, {
+         elixirLevel,
+         modifierHearts,
+       });
+       availableToGift = moves.reduce((s, m) => s + m.quantity, 0);
+     }
+   }
    const isEquipped = equippedItemNamesLower.has(canonicalName.trim().toLowerCase());
-   const availableToGift = totalQuantity - (isEquipped ? 1 : 0);
+   availableToGift = availableToGift - (isEquipped ? 1 : 0);
    if (quantity > availableToGift) {
      unavailableItems.push(
-       `${canonicalName} - Available:${availableToGift}${isEquipped ? ' (1 equipped)' : ''}`
+       `${canonicalName}${isElixir && specifiedTier ? ` (stacked)` : ''} - Available:${availableToGift}${isEquipped ? ' (1 equipped)' : ''}`
      );
      allItemsAvailable = false;
    }
@@ -852,18 +954,113 @@ for (const { name } of cleanedItems) {
 
   const formattedItems = [];
 
-  for (const { name, quantity, canonicalName } of aggregatedItems) {
+  for (const { name, baseName, quantity, canonicalName, isElixir, elixirLevel, modifierHearts, specifiedTier } of aggregatedItems) {
    // Use canonicalName if available (from availability check), otherwise fall back to name
-   const itemNameToAdd = canonicalName || name;
-   const itemNameToRemove = canonicalName || name;
+   const canonicalBaseName = canonicalName || String(baseName || name);
 
-   // Add to recipient first so we never remove from sender without recipient having the item
+   // For elixirs, preserve stack keys by splitting across tiers/mix-ins as needed
+   if (isElixir) {
+     const fromInventoryCollectionForGift = await getCharacterInventoryCollectionWithModSupport(fromCharacter);
+     const fromInventoryEntriesForGift = canonicalBaseName.includes('+')
+       ? await fromInventoryCollectionForGift.find({ itemName: canonicalBaseName }).toArray()
+       : await fromInventoryCollectionForGift
+           .find({ itemName: { $regex: new RegExp(`^${escapeRegExp(canonicalBaseName)}$`, "i") } })
+           .toArray();
+
+     const moves = computeElixirStackMovesFromInventoryEntries(fromInventoryEntriesForGift, quantity, {
+       elixirLevel: specifiedTier ? elixirLevel : null,
+       modifierHearts: specifiedTier ? modifierHearts : null,
+     });
+
+     let movedTotal = 0;
+     for (const mv of moves) {
+       const addOpts = { elixirLevel: mv.elixirLevel, modifierHearts: mv.modifierHearts };
+       const addResult = await addItemInventoryDatabase(
+         toCharacter._id,
+         canonicalBaseName,
+         mv.quantity,
+         interaction,
+         'Gift from ' + fromCharacter.name,
+         addOpts
+       );
+       if (!addResult) {
+         await interaction.editReply({
+           content: `❌ Failed to add ${canonicalBaseName} to recipient's inventory. Please try again.`,
+           ephemeral: true
+         });
+         return;
+       }
+
+       try {
+         const removeResult = await removeItemInventoryDatabase(
+           fromCharacter._id,
+           canonicalBaseName,
+           mv.quantity,
+           interaction,
+           'Gift to ' + toCharacter.name,
+           addOpts
+         );
+         if (!removeResult) throw new Error('remove returned false');
+       } catch (removeErr) {
+         try {
+           await removeItemInventoryDatabase(
+             toCharacter._id,
+             canonicalBaseName,
+             mv.quantity,
+             interaction,
+             'Rollback: gift remove failed',
+             addOpts
+           );
+           logger.warn('ECONOMY', `Gift remove failed for ${canonicalBaseName}, rolled back add to ${toCharacter.name}`);
+         } catch (rollbackErr) {
+           logger.error('ECONOMY', `Gift remove failed and rollback failed for ${canonicalBaseName}: ${rollbackErr.message}`);
+         }
+         await interaction.editReply({
+           content: `❌ Failed to remove ${canonicalBaseName} from your inventory. The item has been removed from the recipient's inventory. Please try again.`,
+           ephemeral: true
+         });
+         return;
+       }
+
+       movedTotal += mv.quantity;
+
+       try {
+         const itemDetails = await fetchItemByName(canonicalBaseName);
+         const itemIcon = itemDetails?.emoji || "🎁";
+         formattedItems.push({
+           itemName: formatEconomyElixirStackLabel(canonicalBaseName, mv.elixirLevel, mv.modifierHearts),
+           quantity: mv.quantity,
+           itemIcon
+         });
+       } catch (error) {
+         formattedItems.push({
+           itemName: formatEconomyElixirStackLabel(canonicalBaseName, mv.elixirLevel, mv.modifierHearts),
+           quantity: mv.quantity,
+           itemIcon: "🎁"
+         });
+       }
+     }
+
+     if (movedTotal !== quantity) {
+       await interaction.editReply({
+         content: `❌ Could not gift the requested quantity of ${canonicalBaseName}. Please try again.`,
+         ephemeral: true
+       });
+       return;
+     }
+     continue;
+   }
+
+   // Non-elixir: original behavior
+   const itemNameToAdd = canonicalBaseName;
+   const itemNameToRemove = canonicalBaseName;
+
    const addResult = await addItemInventoryDatabase(
-    toCharacter._id,
-    itemNameToAdd,
-    quantity,
-    interaction,
-    'Gift from ' + fromCharacter.name
+     toCharacter._id,
+     itemNameToAdd,
+     quantity,
+     interaction,
+     'Gift from ' + fromCharacter.name
    );
 
    if (!addResult) {
@@ -874,23 +1071,22 @@ for (const { name } of cleanedItems) {
      return;
    }
 
-   // Remove from sender; on failure, roll back by removing from recipient
    const removeResult = await removeItemInventoryDatabase(
-    fromCharacter._id,
-    itemNameToRemove,
-    quantity,
-    interaction,
-    'Gift to ' + toCharacter.name
+     fromCharacter._id,
+     itemNameToRemove,
+     quantity,
+     interaction,
+     'Gift to ' + toCharacter.name
    );
 
    if (!removeResult) {
      try {
        await removeItemInventoryDatabase(
-        toCharacter._id,
-        itemNameToRemove,
-        quantity,
-        interaction,
-        'Rollback: gift remove failed'
+         toCharacter._id,
+         itemNameToRemove,
+         quantity,
+         interaction,
+         'Rollback: gift remove failed'
        );
        logger.warn('ECONOMY', `Gift remove failed for ${itemNameToRemove}, rolled back add to ${toCharacter.name}`);
      } catch (rollbackErr) {
@@ -2164,8 +2360,20 @@ const cleanedItems = items.map(item => ({
   quantity: item.quantity
 }));
 
+const parsedItems = cleanedItems.map((it) => {
+  const parsed = parseEconomyItemSpecifier(it.name);
+  return {
+    ...it,
+    baseName: parsed.baseName,
+    isElixir: parsed.isElixir,
+    elixirLevel: parsed.elixirLevel,
+    modifierHearts: parsed.modifierHearts,
+    specifiedTier: parsed.specifiedTier,
+  };
+});
+
  // ------------------- Validate Transfer Quantities -------------------
-for (const { quantity } of cleanedItems) {
+for (const { quantity } of parsedItems) {
   if (quantity <= 0) {
     await interaction.editReply({
       embeds: [{
@@ -2186,8 +2394,8 @@ for (const { quantity } of cleanedItems) {
 }
 
 // ------------------- Prevent transferring Old Maps -------------------
-for (const { name } of cleanedItems) {
-  if (isOldMapItem(name)) {
+for (const { baseName } of parsedItems) {
+  if (isOldMapItem(baseName)) {
     await interaction.editReply({
       embeds: [{
         color: 0xFF0000, // Red color
@@ -2353,10 +2561,15 @@ for (const { name } of cleanedItems) {
   // Aggregate quantities for duplicate items (case-insensitive)
   const aggregatedItems = [];
   const itemMap = new Map();
-  for (const { name, quantity } of cleanedItems) {
-    const key = name.trim().toLowerCase();
+  for (const { name, baseName, quantity, isElixir, elixirLevel, modifierHearts, specifiedTier } of parsedItems) {
+    const baseKey = baseName.trim().toLowerCase();
+    const stackKey =
+      isElixir && specifiedTier
+        ? `${baseKey}|lv${normalizeElixirLevel(elixirLevel)}|m${modifierHearts == null ? '*' : Math.max(0, Math.floor(Number(modifierHearts) || 0))}`
+        : baseKey;
+    const key = stackKey;
     if (!itemMap.has(key)) {
-      itemMap.set(key, { name, quantity });
+      itemMap.set(key, { name, baseName, quantity, isElixir, elixirLevel, modifierHearts, specifiedTier });
     } else {
       itemMap.get(key).quantity += quantity;
     }
@@ -2365,11 +2578,11 @@ for (const { name } of cleanedItems) {
     aggregatedItems.push(entry);
   }
 
-  for (const { name, quantity } of aggregatedItems) {
+  for (const { name, baseName, quantity, isElixir, elixirLevel, modifierHearts, specifiedTier } of aggregatedItems) {
    // Checking item availability
 
    // Extract the base item name by removing any quantity in parentheses
-   const baseItemName = name.replace(/\s*\(Qty:\s*\d+\)\s*$/, '').trim();
+   const baseItemName = String(baseName || name).replace(/\s*\(Qty:\s*\d+\)\s*$/, '').trim();
 
    // Find the canonical item name from the database first
    // Handle items with + in their names by using exact match instead of regex
@@ -2408,8 +2621,18 @@ for (const { name } of cleanedItems) {
     (sum, entry) => sum + entry.quantity,
     0
    );
+   let availableToTransfer = totalQuantity;
+   if (isElixir) {
+     if (specifiedTier && elixirLevel != null) {
+       const moves = computeElixirStackMovesFromInventoryEntries(fromInventoryEntries, quantity, {
+         elixirLevel,
+         modifierHearts,
+       });
+       availableToTransfer = moves.reduce((s, m) => s + m.quantity, 0);
+     }
+   }
    const isEquipped = equippedNamesNormalized.has(normalizeItemNameForEquipped(canonicalName));
-   const availableToTransfer = totalQuantity - (isEquipped ? 1 : 0);
+   availableToTransfer = availableToTransfer - (isEquipped ? 1 : 0);
    if (quantity > availableToTransfer) {
      unavailableItems.push(`${canonicalName} - QTY:${availableToTransfer}${isEquipped ? ' (1 equipped)' : ''}`);
      allItemsAvailable = false;
@@ -2465,17 +2688,18 @@ for (const { name } of cleanedItems) {
 
   const formattedItems = [];
 
-  for (const { name, quantity } of aggregatedItems) {
+  for (const { name, baseName, quantity, isElixir, elixirLevel, modifierHearts, specifiedTier } of aggregatedItems) {
     // Find the canonical item name from the database
     // Handle items with + in their names by using exact match instead of regex
     let itemDetails;
-    if (name.includes('+')) {
+    const baseForLookup = String(baseName || name);
+    if (baseForLookup.includes('+')) {
       itemDetails = await ItemModel.findOne({
-        itemName: name
+        itemName: baseForLookup
       }).exec();
     } else {
       itemDetails = await ItemModel.findOne({
-        itemName: { $regex: new RegExp(`^${escapeRegExp(name)}$`, "i") }
+        itemName: { $regex: new RegExp(`^${escapeRegExp(baseForLookup)}$`, "i") }
       }).exec();
     }
 
@@ -2489,57 +2713,134 @@ for (const { name } of cleanedItems) {
     const type = itemDetails?.type.join(", ") || "";
     const subtype = itemDetails?.subtype.join(", ") || "";
 
-    // Add to target first so we never remove from sender without recipient having the item
-    const addData = {
-      characterId: toCharacter._id,
-      itemName: canonicalName,
-      quantity: quantity,
-      category,
-      type,
-      subtype,
-      obtain: `Transfer from ${fromCharacterName}`,
-      date: new Date(),
-      synced: uniqueSyncId
-    };
-    await syncToInventoryDatabase(toCharacter, addData);
+    if (isElixirItemName(canonicalName)) {
+      const fromInventoryEntriesForTransfer = canonicalName.includes('+')
+        ? await fromInventoryCollection.find({ itemName: canonicalName }).toArray()
+        : await fromInventoryCollection
+            .find({ itemName: { $regex: new RegExp(`^${escapeRegExp(canonicalName)}$`, "i") } })
+            .toArray();
+      const moves = computeElixirStackMovesFromInventoryEntries(fromInventoryEntriesForTransfer, quantity, {
+        elixirLevel: specifiedTier ? elixirLevel : null,
+        modifierHearts: specifiedTier ? modifierHearts : null,
+      });
 
-    // Remove from source (fromCharacter); on failure, roll back by removing from recipient
-    const removeData = {
-      characterId: fromCharacter._id,
-      itemName: canonicalName,
-      quantity: -quantity,
-      category,
-      type,
-      subtype,
-      obtain: `Transfer to ${toCharacterName}`,
-      date: new Date(),
-      synced: uniqueSyncId
-    };
-    try {
-      await syncToInventoryDatabase(fromCharacter, removeData);
-    } catch (removeError) {
-      const rollbackData = {
+      let movedTotal = 0;
+      for (const mv of moves) {
+        const opts = { elixirLevel: mv.elixirLevel, modifierHearts: mv.modifierHearts };
+        const addData = {
+          characterId: toCharacter._id,
+          itemName: canonicalName,
+          quantity: mv.quantity,
+          category,
+          type,
+          subtype,
+          obtain: `Transfer from ${fromCharacterName}`,
+          date: new Date(),
+          synced: uniqueSyncId,
+          ...opts,
+        };
+        await syncToInventoryDatabase(toCharacter, addData);
+
+        const removeData = {
+          characterId: fromCharacter._id,
+          itemName: canonicalName,
+          quantity: -mv.quantity,
+          category,
+          type,
+          subtype,
+          obtain: `Transfer to ${toCharacterName}`,
+          date: new Date(),
+          synced: uniqueSyncId,
+          ...opts,
+        };
+        try {
+          await syncToInventoryDatabase(fromCharacter, removeData);
+        } catch (removeError) {
+          const rollbackData = {
+            characterId: toCharacter._id,
+            itemName: canonicalName,
+            quantity: -mv.quantity,
+            category,
+            type,
+            subtype,
+            obtain: `Rollback: transfer remove failed`,
+            date: new Date(),
+            synced: uniqueSyncId,
+            ...opts,
+          };
+          try {
+            await syncToInventoryDatabase(toCharacter, rollbackData);
+            logger.warn('ECONOMY', `Transfer remove failed for ${canonicalName}, rolled back add to ${toCharacterName}`);
+          } catch (rollbackErr) {
+            logger.error('ECONOMY', `Transfer remove failed and rollback failed for ${canonicalName}: ${rollbackErr.message}`);
+          }
+          throw removeError;
+        }
+
+        const itemIcon = itemDetails?.emoji || "🎁";
+        formattedItems.push({
+          itemName: formatEconomyElixirStackLabel(canonicalName, mv.elixirLevel, mv.modifierHearts),
+          quantity: mv.quantity,
+          itemIcon,
+        });
+        movedTotal += mv.quantity;
+      }
+      if (movedTotal !== quantity) {
+        throw new Error(`Could not transfer requested quantity for ${canonicalName}`);
+      }
+    } else {
+      // Add to target first so we never remove from sender without recipient having the item
+      const addData = {
         characterId: toCharacter._id,
+        itemName: canonicalName,
+        quantity: quantity,
+        category,
+        type,
+        subtype,
+        obtain: `Transfer from ${fromCharacterName}`,
+        date: new Date(),
+        synced: uniqueSyncId
+      };
+      await syncToInventoryDatabase(toCharacter, addData);
+
+      // Remove from source (fromCharacter); on failure, roll back by removing from recipient
+      const removeData = {
+        characterId: fromCharacter._id,
         itemName: canonicalName,
         quantity: -quantity,
         category,
         type,
         subtype,
-        obtain: `Rollback: transfer remove failed`,
+        obtain: `Transfer to ${toCharacterName}`,
         date: new Date(),
         synced: uniqueSyncId
       };
       try {
-        await syncToInventoryDatabase(toCharacter, rollbackData);
-        logger.warn('ECONOMY', `Transfer remove failed for ${canonicalName}, rolled back add to ${toCharacterName}`);
-      } catch (rollbackErr) {
-        logger.error('ECONOMY', `Transfer remove failed and rollback failed for ${canonicalName}: ${rollbackErr.message}`);
+        await syncToInventoryDatabase(fromCharacter, removeData);
+      } catch (removeError) {
+        const rollbackData = {
+          characterId: toCharacter._id,
+          itemName: canonicalName,
+          quantity: -quantity,
+          category,
+          type,
+          subtype,
+          obtain: `Rollback: transfer remove failed`,
+          date: new Date(),
+          synced: uniqueSyncId
+        };
+        try {
+          await syncToInventoryDatabase(toCharacter, rollbackData);
+          logger.warn('ECONOMY', `Transfer remove failed for ${canonicalName}, rolled back add to ${toCharacterName}`);
+        } catch (rollbackErr) {
+          logger.error('ECONOMY', `Transfer remove failed and rollback failed for ${canonicalName}: ${rollbackErr.message}`);
+        }
+        throw removeError;
       }
-      throw removeError;
-    }
 
-    const itemIcon = itemDetails?.emoji || "🎁";
-    formattedItems.push({ itemName: canonicalName, quantity, itemIcon });
+      const itemIcon = itemDetails?.emoji || "🎁";
+      formattedItems.push({ itemName: canonicalName, quantity, itemIcon });
+    }
   }
 
   const fromCharacterIcon = fromCharacter.icon || "🧙";
@@ -2690,26 +2991,137 @@ async function executeTrade(tradeData) {
 // ------------------- Trade Item Processing -------------------
 async function processTradeItems(fromChar, toChar, items, uniqueSyncId) {
   for (const item of items) {
+    const spec = parseEconomyItemSpecifier(item.name);
+    const baseName = spec.baseName;
     // Handle items with + in their names by using exact match instead of regex
     let itemDetails;
-    if (item.name.includes('+')) {
+    if (baseName.includes('+')) {
       itemDetails = await ItemModel.findOne({
-        itemName: item.name
+        itemName: baseName
       }).exec();
     } else {
       itemDetails = await ItemModel.findOne({
-        itemName: { $regex: new RegExp(`^${escapeRegExp(item.name)}$`, "i") }
+        itemName: { $regex: new RegExp(`^${escapeRegExp(baseName)}$`, "i") }
       }).exec();
     }
 
     const category = itemDetails?.category.join(", ") || "";
     const type = itemDetails?.type.join(", ") || "";
     const subtype = itemDetails?.subtype.join(", ") || "";
+    const canonicalName = itemDetails?.itemName || baseName;
 
-    // Add to receiver first so we never remove from sender without receiver having the item
+    if (isElixirItemName(canonicalName)) {
+      const fromInvCol = await getCharacterInventoryCollectionWithModSupport(fromChar);
+      const fromInvEntries = canonicalName.includes('+')
+        ? await fromInvCol.find({ itemName: canonicalName }).toArray()
+        : await fromInvCol
+            .find({ itemName: { $regex: new RegExp(`^${escapeRegExp(canonicalName)}$`, "i") } })
+            .toArray();
+      const moves = computeElixirStackMovesFromInventoryEntries(fromInvEntries, item.quantity, {
+        elixirLevel: spec.specifiedTier ? spec.elixirLevel : null,
+        modifierHearts: spec.specifiedTier ? spec.modifierHearts : null,
+      });
+
+      let movedTotal = 0;
+      for (const mv of moves) {
+        const opts = { elixirLevel: mv.elixirLevel, modifierHearts: mv.modifierHearts };
+        const addData = {
+          characterId: toChar._id,
+          itemName: canonicalName,
+          quantity: mv.quantity,
+          category,
+          type,
+          subtype,
+          obtain: `Trade from ${fromChar.name}`,
+          date: new Date(),
+          synced: uniqueSyncId,
+          characterName: toChar.name,
+          ...opts,
+        };
+        await syncToInventoryDatabase(toChar, addData);
+
+        try {
+          await logItemAcquisitionToDatabase(
+            toChar,
+            itemDetails || { itemName: canonicalName },
+            {
+              itemName: formatEconomyElixirStackLabel(canonicalName, mv.elixirLevel, mv.modifierHearts),
+              quantity: mv.quantity,
+              obtain: 'Trade',
+              location: toChar.currentVillage || toChar.homeVillage || 'Unknown',
+              link: '',
+            }
+          );
+        } catch (logError) {
+          console.error(`[economy.js] ⚠️ Failed to log item acquisition to InventoryLog:`, logError.message);
+        }
+
+        const removeData = {
+          characterId: fromChar._id,
+          itemName: canonicalName,
+          quantity: -mv.quantity,
+          category,
+          type,
+          subtype,
+          obtain: `Trade to ${toChar.name}`,
+          date: new Date(),
+          synced: uniqueSyncId,
+          characterName: fromChar.name,
+          ...opts,
+        };
+        try {
+          await syncToInventoryDatabase(fromChar, removeData);
+        } catch (removeError) {
+          const rollbackData = {
+            characterId: toChar._id,
+            itemName: canonicalName,
+            quantity: -mv.quantity,
+            category,
+            type,
+            subtype,
+            obtain: 'Rollback: trade remove failed',
+            date: new Date(),
+            synced: uniqueSyncId,
+            characterName: toChar.name,
+            ...opts,
+          };
+          try {
+            await syncToInventoryDatabase(toChar, rollbackData);
+            logger.warn('ECONOMY', `Trade remove failed for ${canonicalName}, rolled back add to ${toChar.name}`);
+          } catch (rollbackErr) {
+            logger.error('ECONOMY', `Trade remove failed and rollback failed for ${canonicalName}: ${rollbackErr.message}`);
+          }
+          throw removeError;
+        }
+
+        try {
+          await logItemRemovalToDatabase(
+            fromChar,
+            itemDetails || { itemName: canonicalName },
+            {
+              itemName: formatEconomyElixirStackLabel(canonicalName, mv.elixirLevel, mv.modifierHearts),
+              quantity: mv.quantity,
+              obtain: 'Traded',
+              location: fromChar.currentVillage || fromChar.homeVillage || 'Unknown',
+              link: '',
+            }
+          );
+        } catch (logError) {
+          console.error(`[economy.js] ⚠️ Failed to log item removal to InventoryLog:`, logError.message);
+        }
+
+        movedTotal += mv.quantity;
+      }
+      if (movedTotal !== item.quantity) {
+        throw new Error(`Insufficient elixir quantity to trade for ${canonicalName}`);
+      }
+      continue;
+    }
+
+    // Non-elixir: original behavior
     const addData = {
       characterId: toChar._id,
-      itemName: item.name,
+      itemName: canonicalName,
       quantity: item.quantity,
       category,
       type,
@@ -2721,23 +3133,20 @@ async function processTradeItems(fromChar, toChar, items, uniqueSyncId) {
     };
     await syncToInventoryDatabase(toChar, addData);
 
-    // Log addition to InventoryLog database collection
     try {
-      await logItemAcquisitionToDatabase(toChar, itemDetails || { itemName: item.name }, {
+      await logItemAcquisitionToDatabase(toChar, itemDetails || { itemName: canonicalName }, {
         quantity: item.quantity,
         obtain: 'Trade',
         location: toChar.currentVillage || toChar.homeVillage || 'Unknown',
         link: '' // No interaction link available in trade execution
       });
     } catch (logError) {
-      // Don't fail the trade if logging fails
       console.error(`[economy.js] ⚠️ Failed to log item acquisition to InventoryLog:`, logError.message);
     }
 
-    // Remove from sender; on failure, roll back by removing from receiver
     const removeData = {
       characterId: fromChar._id,
-      itemName: item.name,
+      itemName: canonicalName,
       quantity: -item.quantity,
       category,
       type,
@@ -2752,7 +3161,7 @@ async function processTradeItems(fromChar, toChar, items, uniqueSyncId) {
     } catch (removeError) {
       const rollbackData = {
         characterId: toChar._id,
-        itemName: item.name,
+        itemName: canonicalName,
         quantity: -item.quantity,
         category,
         type,
@@ -2764,23 +3173,21 @@ async function processTradeItems(fromChar, toChar, items, uniqueSyncId) {
       };
       try {
         await syncToInventoryDatabase(toChar, rollbackData);
-        logger.warn('ECONOMY', `Trade remove failed for ${item.name}, rolled back add to ${toChar.name}`);
+        logger.warn('ECONOMY', `Trade remove failed for ${canonicalName}, rolled back add to ${toChar.name}`);
       } catch (rollbackErr) {
-        logger.error('ECONOMY', `Trade remove failed and rollback failed for ${item.name}: ${rollbackErr.message}`);
+        logger.error('ECONOMY', `Trade remove failed and rollback failed for ${canonicalName}: ${rollbackErr.message}`);
       }
       throw removeError;
     }
 
-    // Log removal to InventoryLog database collection
     try {
-      await logItemRemovalToDatabase(fromChar, itemDetails || { itemName: item.name }, {
+      await logItemRemovalToDatabase(fromChar, itemDetails || { itemName: canonicalName }, {
         quantity: item.quantity,
         obtain: 'Traded',
         location: fromChar.currentVillage || fromChar.homeVillage || 'Unknown',
         link: '' // No interaction link available in trade execution
       });
     } catch (logError) {
-      // Don't fail the trade if logging fails
       console.error(`[economy.js] ⚠️ Failed to log item removal to InventoryLog:`, logError.message);
     }
   }
@@ -2817,22 +3224,35 @@ async function validateTradeItems(character, items) {
   const characterInventoryCollection = await getCharacterInventoryCollectionWithModSupport(character);
   const unavailableItems = [];
   for (const item of items) {
-    // Handle items with + in their names by using exact match instead of regex
-    let itemInventory;
-    if (item.name.includes('+')) {
-      itemInventory = await characterInventoryCollection.findOne({
-        itemName: item.name
-      });
+    const spec = parseEconomyItemSpecifier(item.name);
+    const baseName = spec.baseName;
+
+    let inventoryEntries;
+    if (baseName.includes('+')) {
+      inventoryEntries = await characterInventoryCollection
+        .find({ itemName: baseName, quantity: { $gt: 0 } })
+        .toArray();
     } else {
-      itemInventory = await characterInventoryCollection.findOne({
-        itemName: { $regex: new RegExp(`^${escapeRegExp(item.name)}$`, "i") }
-      });
+      inventoryEntries = await characterInventoryCollection
+        .find({ itemName: { $regex: new RegExp(`^${escapeRegExp(baseName)}$`, "i") }, quantity: { $gt: 0 } })
+        .toArray();
     }
-    if (!itemInventory || itemInventory.quantity < item.quantity) {
+
+    const totalAvailable = inventoryEntries.reduce((sum, e) => sum + (e.quantity || 0), 0);
+    let available = totalAvailable;
+    if (spec.isElixir && spec.specifiedTier && spec.elixirLevel != null) {
+      const moves = computeElixirStackMovesFromInventoryEntries(inventoryEntries, item.quantity, {
+        elixirLevel: spec.elixirLevel,
+        modifierHearts: spec.modifierHearts,
+      });
+      available = moves.reduce((s, m) => s + m.quantity, 0);
+    }
+
+    if (available < item.quantity) {
       unavailableItems.push({
         name: item.name,
         requested: item.quantity,
-        available: itemInventory ? itemInventory.quantity : 0
+        available: available
       });
     }
   }

@@ -595,7 +595,7 @@ function buildBlupeeRollLine(rollResult, outcome = null, ticketOverride = null) 
 
 /**
  * Blupee season quests: active Interactive quests whose title includes “Blupee”.
- * Catching uses `/minigame blupee` only; no `/tableroll` or quest `tableRollName` is involved in eligibility.
+ * Catching uses `/minigame blupee` only; quest `tableRollName` is not involved in eligibility.
  */
 function isBlupeeHuntInteractiveQuest(quest) {
   return BLUPEE_QUEST_TITLE_RE.test(String(quest?.title ?? ''));
@@ -645,6 +645,7 @@ async function rollBlupee(interaction, character, requestedSessionId) {
   const actorIconUrl = character?.icon || null;
   const actorLabel = String(actorName || character?.characterID || character?._id || '').trim();
   const actorKey = actorLabel.toLowerCase();
+  let questCtx = null;
 
   if (!canUseBlupeeAt(channelId, parentId)) {
     return interaction.editReply({
@@ -654,14 +655,14 @@ async function rollBlupee(interaction, character, requestedSessionId) {
   }
 
   if (!isTestContextIds(channelId, parentId)) {
-    const questCtx = await findActiveBlupeeQuestParticipation(userId);
+    questCtx = await findActiveBlupeeQuestParticipation(userId);
     if (!questCtx) {
       const joinQuestEmbed = new EmbedBuilder()
         .setColor(0xff4d4f)
         .setTitle('❌ Join the Blupee Quest First')
         .setDescription(
           'Town-hall Blupee catches require an **active** **Interactive** quest on the board whose title includes **Blupee** ' +
-          '(e.g. “One Blupee, Two Blupee”). Use **`/minigame blupee`** to catch — not `/tableroll`.\n\n' +
+          '(e.g. “One Blupee, Two Blupee”). Use **`/minigame blupee`** to catch.\n\n' +
           'We could not find a matching quest participation for your account.'
         )
         .addFields(
@@ -981,10 +982,77 @@ async function rollBlupee(interaction, character, requestedSessionId) {
       return interaction.editReply({ embeds: [failEmbed] });
     }
 
+    // Interactive quest tracking: this minigame uses /minigame blupee, so we must update the quest participant
+    // directly when the user earns a Blupee rupee outcome.
+    if (questCtx?.quest?.participants?.get) {
+      try {
+        const q = questCtx.quest;
+        const p = q.participants.get(userId);
+        if (p && p.progress === 'active') {
+          const existing = Array.isArray(p.tableRollResults)
+            ? p.tableRollResults.some((r) => {
+                const res = r?.result;
+                if (!res || typeof res !== 'object') return false;
+                const sameSource = String(res.source || '').toLowerCase() === 'minigame blupee';
+                const sameOutcome = String(res.outcome || '').toLowerCase() === 'rupee';
+                const recordedSession = String(res.sessionId || '').trim().toLowerCase();
+                const targetSession = String(spawnSessionId || requestedId || '').trim().toLowerCase();
+                return sameSource && sameOutcome && recordedSession && targetSession && recordedSession === targetSession;
+              })
+            : false;
+          if (existing) {
+            // Already recorded this session's rupee roll for this participant.
+            // Do not increment again (handles retries / double-submit edge cases).
+            await q.save();
+          } else {
+          const nextRollNumber = Array.isArray(p.tableRollResults) ? p.tableRollResults.length + 1 : 1;
+          const rollEntry = {
+            rollNumber: nextRollNumber,
+            result: {
+              source: 'minigame blupee',
+              sessionId: spawnSessionId || requestedId || null,
+              outcome: 'rupee', // earning a Blupee rupee (via catch) counts as the Interactive quest "roll"
+              village: activeVillage || null,
+              characterName: actorName || actorLabel || null
+            },
+            rolledAt: new Date(),
+            success: true
+          };
+          if (!Array.isArray(p.tableRollResults)) p.tableRollResults = [];
+          p.tableRollResults.push(rollEntry);
+          p.successfulRolls = Number(p.successfulRolls || 0) + 1;
+          p.updatedAt = new Date();
+          await q.save();
+          }
+        }
+      } catch (questErr) {
+        // Do not fail the catch if quest progress write fails — rewards/tally are already applied.
+        logger.warn('BLUPEE', `Quest roll tracking failed for ${userId}: ${questErr?.message || questErr}`);
+      }
+    }
+
     if (spawnSessionId) {
       inventoryParts.push(`🧾 **Session:** \`${spawnSessionId}\``);
     }
     await deleteSpawnAnnouncementMessage(interaction.client, stateKey, deleted.data?.messageId);
+
+    // Refresh the quest board embed so participants immediately show 1/1 once they have a rupee in TempData.
+    if (questCtx?.quest?.messageID && interaction?.client) {
+      try {
+        const questCommand = require('../commands/world/quest');
+        if (questCommand?.updateQuestEmbed) {
+          await questCommand.updateQuestEmbed.call(
+            questCommand,
+            interaction.guild,
+            questCtx.quest,
+            interaction.client,
+            'blupeeRupeeTally'
+          );
+        }
+      } catch (e) {
+        logger.warn('BLUPEE', `Quest embed refresh failed after rupee tally update: ${e?.message || e}`);
+      }
+    }
 
     const embed = buildBlupeeEmbed({
       outcome: 'catch',

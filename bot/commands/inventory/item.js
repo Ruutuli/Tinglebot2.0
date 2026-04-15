@@ -1103,6 +1103,8 @@ module.exports = {
 
         // Apply the elixir buff
         try {
+          const beforeHearts = character.currentHearts;
+          const beforeStamina = character.currentStamina;
           
           // Apply immediate healing effects first
           if (stackModifierHearts > 0 && !healUsesTierPlusFairyMix) {
@@ -1182,6 +1184,21 @@ module.exports = {
           // Update character in database
           const updateFunction = character.isModCharacter ? updateModCharacterById : updateCharacterById;
           await updateFunction(character._id, { buff: character.buff });
+
+          // Persist any immediate stat changes caused by elixir application (e.g. Energizing Elixir stamina restore)
+          // Hearty/Fairy/Enduring already persist their immediate stats explicitly below.
+          const isInstantElixir =
+            canonicalItemName === 'Hearty Elixir' ||
+            canonicalItemName === 'Fairy Tonic' ||
+            canonicalItemName === 'Enduring Elixir';
+          if (!isInstantElixir) {
+            if (character.currentHearts !== beforeHearts) {
+              await updateCurrentHearts(character._id, character.currentHearts);
+            }
+            if (character.currentStamina !== beforeStamina) {
+              await updateCurrentStamina(character._id, character.currentStamina);
+            }
+          }
           
           // Update hearts if they were modified by Hearty Elixir or Fairy Tonic
           if (canonicalItemName === 'Hearty Elixir' || canonicalItemName === 'Fairy Tonic') {

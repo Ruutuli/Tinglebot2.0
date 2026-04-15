@@ -669,6 +669,14 @@ async function syncApprovedSubmissionsToParticipant(quest, participant) {
                 } catch (error) {
                     console.error(`[questRewardModule] ❌ Error recording quest completion safeguard after syncing submissions:`, error);
                 }
+
+                // Same completion ping as completeFromArtSubmission / completeFromWritingSubmission.
+                // Without this, submitters who are auto-completed here skip QuestModel completion and never get sheikah-slate pings (collabs still get pinged from completeFrom*).
+                try {
+                    await sendQuestCompletionNotification(quest, participant);
+                } catch (notifyErr) {
+                    console.error(`[questRewardModule] ❌ Error sending completion notification after sync for ${participant.characterName}:`, notifyErr);
+                }
                 
                 console.log(`[questRewardModule] ✅ Marked participant ${participant.characterName} as completed after syncing approved submissions for quest ${quest.questID}`);
             }

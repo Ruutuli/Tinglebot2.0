@@ -2086,8 +2086,10 @@ function InventoriesPageContent() {
         body: JSON.stringify({
           sourceCharacterName: transferSource,
           destinationCharacterName: transferDestination,
-          itemName: transferItem,
+          itemName: (selectedItem as any).baseItemName || transferItem,
           quantity: transferQuantity,
+          elixirLevel: (selectedItem as any).elixirLevel ?? null,
+          modifierHearts: (selectedItem as any).modifierHearts ?? null,
         }),
       });
 

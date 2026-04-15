@@ -21,6 +21,43 @@ const { info, success, debug } = require('../utils/logger');
 // lazily at call time and provide a minimal fallback to avoid crashing encounters.
 const { EmbedBuilder } = require('discord.js');
 
+// ============================================================================
+// Stat change logging (embedded on Character doc)
+// ============================================================================
+const STAT_LOG_LIMIT = 300;
+
+async function appendStatLogEntry(characterId, kind, entry) {
+  const field = kind === 'hearts' ? 'heartsLog' : 'staminaLog';
+  try {
+    // Skip mod characters (unlimited stats, would be noisy)
+    const modCharacter = await ModCharacter.findById(characterId);
+    if (modCharacter) return;
+
+    if (!entry || typeof entry !== 'object') return;
+    const before = Number(entry.before);
+    const after = Number(entry.after);
+    const delta = Number(entry.delta);
+    if (!Number.isFinite(before) || !Number.isFinite(after) || !Number.isFinite(delta)) return;
+    if (before === after) return;
+
+    const doc = {
+      ts: entry.ts instanceof Date ? entry.ts : new Date(entry.ts || Date.now()),
+      before,
+      after,
+      delta,
+      reason: typeof entry.reason === 'string' && entry.reason.trim() ? entry.reason.trim() : 'unknown',
+      meta: entry.meta ?? null,
+    };
+
+    await Character.updateOne(
+      { _id: characterId },
+      { $push: { [field]: { $each: [doc], $slice: -STAT_LOG_LIMIT } } }
+    );
+  } catch (_error) {
+    // Logging must never break the underlying stat mutation.
+  }
+}
+
 const createSimpleCharacterEmbedSafe = (character, description) => {
   try {
     const embeds = require('../embeds/embeds.js');
@@ -168,6 +205,7 @@ const recoverHearts = async (characterId, hearts, healerId = null, allowOneOverf
 
     const character = await Character.findById(characterId);
     if (!character) throw new Error('Character not found');
+    const beforeHearts = Number(character.currentHearts) || 0;
 
     if (character.ko) {
       console.log(`[characterStatsModule.js]: 💀 Character ${character.name} is KO'd. Validating healer...`);
@@ -199,6 +237,15 @@ const recoverHearts = async (characterId, hearts, healerId = null, allowOneOverf
     }
 
     await character.save();
+    const afterHearts = Number(character.currentHearts) || 0;
+    await appendStatLogEntry(characterId, 'hearts', {
+      ts: new Date(),
+      before: beforeHearts,
+      after: afterHearts,
+      delta: afterHearts - beforeHearts,
+      reason: healerId ? 'recoverHearts:healer' : 'recoverHearts',
+      meta: healerId ? { healerId } : null,
+    });
     return createSimpleCharacterEmbedSafe(character, `❤️ +${hearts} hearts recovered`);
   } catch (error) {
     handleError(error, 'characterStatsModule.js', {
@@ -227,6 +274,7 @@ const recoverStamina = async (characterId, stamina) => {
     
     const character = await Character.findById(characterId);
     if (!character) throw new Error('Character not found');
+    const beforeStamina = Math.max(0, Number(character.currentStamina) || 0);
 
     const next = character.currentStamina + stamina;
     let newStamina;
@@ -238,6 +286,13 @@ const recoverStamina = async (characterId, stamina) => {
       newStamina = next;
     }
     await updateCurrentStamina(characterId, newStamina);
+    await appendStatLogEntry(characterId, 'stamina', {
+      ts: new Date(),
+      before: beforeStamina,
+      after: Number(newStamina) || 0,
+      delta: (Number(newStamina) || 0) - beforeStamina,
+      reason: 'recoverStamina',
+    });
 
     return createSimpleCharacterEmbedSafe(character, `🟩 +${stamina} stamina recovered`);
   } catch (error) {
@@ -286,6 +341,14 @@ const useHearts = async (characterId, hearts, context = {}) => {
     // Heart deduction logged only in debug mode
 
     await updateCurrentHearts(characterId, newHearts);
+    await appendStatLogEntry(characterId, 'hearts', {
+      ts: new Date(),
+      before: Number(currentHearts) || 0,
+      after: Number(newHearts) || 0,
+      delta: (Number(newHearts) || 0) - (Number(currentHearts) || 0),
+      reason: typeof context?.source === 'string' && context.source.trim() ? context.source.trim() : 'useHearts',
+      meta: context && typeof context === 'object' ? context : null,
+    });
 
     if (newHearts === 0) {
       info('CHARACTER', `Triggering KO for ${character.name}`);
@@ -335,6 +398,14 @@ const useStamina = async (characterId, stamina, context = {}) => {
     // Deduct stamina and update database (clamp so we never write negative)
     const newStamina = Math.max(0, current - stamina);
     await updateCurrentStamina(characterId, newStamina, true);
+    await appendStatLogEntry(characterId, 'stamina', {
+      ts: new Date(),
+      before: current,
+      after: newStamina,
+      delta: newStamina - current,
+      reason: typeof context?.source === 'string' && context.source.trim() ? context.source.trim() : 'useStamina',
+      meta: context && typeof context === 'object' ? context : null,
+    });
 
     // If stamina reaches 0 after use, log it but don't mark as exhausted
     // (they successfully used the stamina they had)
@@ -451,16 +522,13 @@ const exchangeSpiritOrbs = async (characterId, type) => {
 // ------------------- Recover Daily Stamina -------------------
 // Recovers stamina for all characters daily if they haven't used stamina today.
 const recoverDailyStamina = async () => {
+  let today;
   try {
     const characters = await Character.find({});
     const now = new Date();
     // EST is UTC-5, subtract 5 hours
     const estNow = new Date(now.getTime() - 5 * 60 * 60 * 1000);
-    const today = `${estNow.getUTCFullYear()}-${String(estNow.getUTCMonth() + 1).padStart(2, '0')}-${String(estNow.getUTCDate()).padStart(2, '0')}`;
-    
-    // Get yesterday's date in EST
-    const yesterday = new Date(estNow.getTime() - 24 * 60 * 60 * 1000);
-    const yesterdayStr = `${yesterday.getUTCFullYear()}-${String(yesterday.getUTCMonth() + 1).padStart(2, '0')}-${String(yesterday.getUTCDate()).padStart(2, '0')}`;
+    today = `${estNow.getUTCFullYear()}-${String(estNow.getUTCMonth() + 1).padStart(2, '0')}-${String(estNow.getUTCDate()).padStart(2, '0')}`;
 
     info('SYNC', `Starting daily stamina recovery for ${today}`);
 
@@ -472,8 +540,17 @@ const recoverDailyStamina = async () => {
         if (!character.lastStaminaUsage) {
           // If no last usage, they can recover
           if (character.currentStamina < character.maxStamina) {
+            const before = Math.max(0, Number(character.currentStamina) || 0);
             const newStamina = Math.min(character.currentStamina + 1, character.maxStamina);
             await updateCurrentStamina(character._id, newStamina);
+            await appendStatLogEntry(character._id, 'stamina', {
+              ts: new Date(),
+              before,
+              after: Number(newStamina) || 0,
+              delta: (Number(newStamina) || 0) - before,
+              reason: 'daily_recovery',
+              meta: { today },
+            });
             recoveredCount++;
             debug('SYNC', `Recovered stamina for ${character.name} (no previous usage)`);
           }
@@ -485,11 +562,20 @@ const recoverDailyStamina = async () => {
         const lastUsageDate = `${lastUsage.getUTCFullYear()}-${String(lastUsage.getUTCMonth() + 1).padStart(2, '0')}-${String(lastUsage.getUTCDate()).padStart(2, '0')}`;
 
         // Only recover if:
-        // 1. Last usage was NOT yesterday (must be before yesterday)
+        // 1. Last usage was not today (same rule as comment above — one recovery per calendar day in EST offset frame)
         // 2. Current stamina is below max
-        if (lastUsageDate < yesterdayStr && character.currentStamina < character.maxStamina) {
+        if (lastUsageDate < today && character.currentStamina < character.maxStamina) {
+          const before = Math.max(0, Number(character.currentStamina) || 0);
           const newStamina = Math.min(character.currentStamina + 1, character.maxStamina);
           await updateCurrentStamina(character._id, newStamina);
+          await appendStatLogEntry(character._id, 'stamina', {
+            ts: new Date(),
+            before,
+            after: Number(newStamina) || 0,
+            delta: (Number(newStamina) || 0) - before,
+            reason: 'daily_recovery',
+            meta: { today, lastUsageDate },
+          });
           recoveredCount++;
           debug('SYNC', `Recovered stamina for ${character.name} (last usage: ${lastUsageDate})`);
         } else {

@@ -15,6 +15,18 @@ const GearSchema = new Schema({
 }, { _id: false });
 
 // ============================================================================
+// ------------------- Stat log schema (embedded, capped in code) -------------------
+// ============================================================================
+const StatLogEntrySchema = new Schema({
+  ts: { type: Date, default: Date.now },
+  delta: { type: Number, required: true },
+  before: { type: Number, required: true },
+  after: { type: Number, required: true },
+  reason: { type: String, default: 'unknown' },
+  meta: { type: Schema.Types.Mixed, default: null },
+}, { _id: false });
+
+// ============================================================================
 // ------------------- Inventory Link Helpers -------------------
 // Inventory links should point to the Dashboard inventory route:
 //   https://tinglebot.xyz/characters/inventories/<slug>
@@ -66,6 +78,10 @@ const characterSchema = new Schema({
   currentStamina: { type: Number, required: true },
   lastStaminaUsage: { type: Date, default: null },
   lastSpecialWeatherGather: { type: Date, default: null },
+  
+  // ------------------- Stamina/Hearts logs (embedded; retention via $slice) -------------------
+  staminaLog: { type: [StatLogEntrySchema], default: [] },
+  heartsLog: { type: [StatLogEntrySchema], default: [] },
 
   // ------------------- Gear and stats -------------------
   gearArmor: {

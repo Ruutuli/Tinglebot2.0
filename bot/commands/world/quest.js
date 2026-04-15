@@ -5,6 +5,7 @@ const logger = require('@/utils/logger');
 const Quest = require('@/models/QuestModel');
 const Character = require('@/models/CharacterModel');
 const User = require('@/models/UserModel');
+const TempData = require('@/models/TempDataModel');
 const { fetchCharacterByNameAndUserId, fetchModCharacterByNameAndUserId, getCharacterInventoryCollection, updateModCharacterById } = require('@/database/db');
 const { 
     BORDER_IMAGE, 
@@ -33,6 +34,11 @@ const SHEIKAH_SLATE_CHANNEL_ID = '641858948802150400';
 // Embed update queue to prevent race conditions
 const embedUpdateQueue = new Map(); // questID -> { isUpdating: boolean, pendingUpdates: Array }
 const updateTimeouts = new Map(); // questID -> timeout
+
+function isBlupeeInteractiveQuest(quest) {
+ const title = String(quest?.title || '');
+ return quest?.questType === 'Interactive' && /\bblupee\b/i.test(title);
+}
 
 // ============================================================================
 // ------------------- Command Definition -------------------
@@ -1055,7 +1061,7 @@ formatQuestCount(count = 0) {
    await this.updateParticipantFields(quest, client, embed);
 
    // Update quest status information
-   this.updateStatusFields(quest, embed, updateSource);
+   await this.updateStatusFields(quest, embed, updateSource);
 
    // Update quest-specific information
    await this.updateQuestSpecificFields(quest, client, embed, updateSource);
@@ -1138,7 +1144,7 @@ formatQuestCount(count = 0) {
   }
  },
 
- updateStatusFields(quest, embed, updateSource) {
+ async updateStatusFields(quest, embed, updateSource) {
   try {
    // Update quest status
    const statusFieldIndex = embed.data.fields.findIndex(field => 
@@ -1164,7 +1170,7 @@ formatQuestCount(count = 0) {
    if (quest.questType === 'RP') {
     this.updateRPQuestFields(quest, embed);
    } else if (quest.questType === 'Interactive') {
-    this.updateInteractiveQuestFields(quest, embed);
+    await this.updateInteractiveQuestFields(quest, embed);
    }
 
   } catch (error) {
@@ -1199,30 +1205,56 @@ formatQuestCount(count = 0) {
   }
  },
 
- updateInteractiveQuestFields(quest, embed) {
+ async updateInteractiveQuestFields(quest, embed) {
   try {
-   // Update table roll information
-   if (quest.tableRollName) {
-    const tableRollFieldIndex = embed.data.fields.findIndex(field => 
-     field.name.includes("Table Roll") || field.name.includes("Rolls Required")
+   const rollFieldIndex = embed.data.fields.findIndex(field => 
+    field.name.includes("Table Roll") || field.name.includes("Rolls Required") || field.name.includes("Successful Rolls")
+   );
+   if (rollFieldIndex < 0) return;
+
+   const requiredRolls = quest.requiredRolls || 1;
+   const participants = this.getParticipantsArray(quest);
+
+   // Blupee event: use TempData season tally as the source of truth for "rupees earned"/roll credit.
+   if (isBlupeeInteractiveQuest(quest)) {
+    const seasonKey = String(new Date().getUTCFullYear());
+    const userIds = participants.map((p) => p.userId).filter(Boolean);
+    const tallyDocs = userIds.length
+     ? await TempData.find({
+        type: 'blupeeRupeeTally',
+        'data.userId': { $in: userIds },
+        'data.seasonKey': seasonKey,
+        expiresAt: { $gt: new Date() }
+       }).lean()
+     : [];
+    const countByUser = new Map(
+     tallyDocs.map((d) => [String(d?.data?.userId), Number(d?.data?.count || 0)])
     );
 
-    if (tableRollFieldIndex >= 0) {
-     const requiredRolls = quest.requiredRolls || 1;
-     const participants = this.getParticipantsArray(quest);
-     
-     const rollStatus = participants.map(p => {
-      const successfulRolls = p.successfulRolls || 0;
-      return `${p.characterName}: ${successfulRolls}/${requiredRolls}`;
-     }).join('\n');
+    const rollStatus = participants.map((p) => {
+     const c = countByUser.get(String(p.userId)) || 0;
+     return `${p.characterName}: ${c}/${requiredRolls}`;
+    }).join('\n');
 
-     embed.data.fields[tableRollFieldIndex] = {
-      name: `🎲 Table Rolls Required (${requiredRolls})`,
-      value: rollStatus.length > 1024 ? rollStatus.substring(0, 1021) + "..." : rollStatus,
-      inline: false
-     };
-    }
+    embed.data.fields[rollFieldIndex] = {
+     name: `✨ Blupee Rupees (${requiredRolls} required)`,
+     value: rollStatus.length > 1024 ? rollStatus.substring(0, 1021) + "..." : rollStatus,
+     inline: false
+    };
+    return;
    }
+
+   // Default Interactive: fall back to participant.successfulRolls.
+   const rollStatus = participants.map(p => {
+    const successfulRolls = p.successfulRolls || 0;
+    return `${p.characterName}: ${successfulRolls}/${requiredRolls}`;
+   }).join('\n');
+
+   embed.data.fields[rollFieldIndex] = {
+    name: `🎲 Rolls Required (${requiredRolls})`,
+    value: rollStatus.length > 1024 ? rollStatus.substring(0, 1021) + "..." : rollStatus,
+    inline: false
+   };
 
   } catch (error) {
    logger.error('QUEST', `Error updating interactive quest fields: ${error.message}`, error);
@@ -2073,8 +2105,13 @@ formatQuestCount(count = 0) {
   });
   
   embed.addFields({
-   name: quest.questType === 'RP' ? '__❌ Posts That DON\'T Count__' : '__🎲 Table Roll Instructions__',
-   value: this.getQuestInstructions(quest, requirementValue),
+  name:
+   quest.questType === 'RP'
+    ? '__❌ Posts That DON\'T Count__'
+    : isBlupeeInteractiveQuest(quest)
+      ? '__✨ Blupee Instructions__'
+      : '__🎲 Roll Instructions__',
+  value: this.getQuestInstructions(quest, requirementValue),
    inline: false
   });
   
@@ -2149,17 +2186,27 @@ formatQuestCount(count = 0) {
  getQuestInstructions(quest, requirementValue) {
   if (quest.questType === QUEST_TYPES.RP) {
    return `• Messages under 20 characters\n• Just emojis or reactions\n• GIFs/stickers without text\n• Messages with "))" (reaction posts)\n• Just numbers, symbols, or punctuation\n• Single words repeated multiple times\n• URLs, mentions, or pings only\n• Keyboard mashing or spam\n• Messages with less than 30% letters`;
-  } else {
-   return `• Use </tableroll roll:1389946995468271729> to roll on the ${quest.tableRollName} table\n• Each successful roll counts toward your quest progress\n• Check your progress with this command\n• Quest completes when you reach ${requirementValue} successful rolls`;
+  }
+
+  if (quest.questType === QUEST_TYPES.INTERACTIVE && isBlupeeInteractiveQuest(quest)) {
+   return `• Use \`/minigame blupee\` with the **session ID** from the “A Blupee appears!” post\n• Earning **at least 1 Blupee rupee** counts as completing this quest\n• Check the leaderboard with \`/minigame blupee-stats\``;
+  }
+
+  // Default Interactive instruction (non-Blupee)
+  return `• Follow the quest’s roll instructions to progress\n• Each successful roll counts toward your quest progress\n• Quest completes when you reach ${requirementValue} successful rolls`;
   }
  },
 
  getQuestMetaInfo(quest) {
   if (quest.questType === QUEST_TYPES.RP) {
    return `If you want to talk outside of the RP for meta reasons, please use the gossip and mossy stone or format your comments in this thread "like this text lorem ipsum yada yada ))" - messages with this format don't count as RP posts.`;
-  } else {
-   return `Use this command to check your table roll progress. Each successful roll on the ${quest.tableRollName} table counts toward completing the quest.`;
   }
+
+  if (quest.questType === QUEST_TYPES.INTERACTIVE && isBlupeeInteractiveQuest(quest)) {
+   return `This quest’s progress is tracked from Blupee rupees earned during the April event (via \`/minigame blupee\`).`;
+  }
+
+  return `Use this command to check your roll progress. Each successful roll counts toward completing the quest.`;
  },
 
 

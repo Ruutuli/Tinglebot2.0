@@ -236,6 +236,7 @@ export function QuestDetailsModal({
           return m ? parseInt(m[1], 10) : null;
         })()
       : null;
+  const isBlupeeQuest = quest.type === "Interactive" && /\bblupee\b/i.test(quest.name || "");
 
   return (
     <Modal
@@ -499,7 +500,11 @@ export function QuestDetailsModal({
                       )}
                       {quest.type === "Interactive" && typeof participant.rollCount === "number" && (
                         <span>
-                          {requiredRolls != null ? ` • ${participant.rollCount}/${requiredRolls} rolls` : ` • ${participant.rollCount} rolls`}
+                          {isBlupeeQuest
+                            ? ` • ${participant.rollCount} caught`
+                            : requiredRolls != null
+                              ? ` • ${participant.rollCount}/${requiredRolls} rolls`
+                              : ` • ${participant.rollCount} rolls`}
                         </span>
                       )}
                     </span>

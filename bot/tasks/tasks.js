@@ -522,14 +522,12 @@ async function birthdayRemoveRole(client, _data = {}) {
   }
 }
 
-// Helper: get today's month (1-12) and day (1-31) in Eastern time (EST = UTC-5) for consistent "midnight Eastern" semantics
+// Helper: today's month (1-12) and day (1-31) in America/New_York (EST and EDT). Fixed UTC-5 math broke announcements during EDT (e.g. April).
 function getTodayMonthDayEastern() {
-  const now = new Date();
-  const estOffset = 5 * 60 * 60 * 1000; // EST is UTC-5
-  const estNow = new Date(now.getTime() - estOffset);
+  const m = moment.tz(SCHEDULE_TZ_EASTERN);
   return {
-    month: estNow.getUTCMonth() + 1,
-    day: estNow.getUTCDate()
+    month: m.month() + 1,
+    day: m.date()
   };
 }
 

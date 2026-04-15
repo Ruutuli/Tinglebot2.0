@@ -35,6 +35,7 @@ const { removeNegativeQuantityEntries } = require('@/utils/inventoryUtils.js');
 
 // ------------------- Database Models -------------------
 const ItemModel = require('@/models/ItemModel.js');
+const { isElixirItemName, normalizeElixirLevel, ELIXIR_EFFECTS, getElixirItemUseBlurb } = require('../../modules/elixirModule.js');
 
 // ------------------- Project Embeds -------------------
 const { formatItemDetails } = require('../../embeds/embeds.js');
@@ -45,6 +46,38 @@ const { formatItemDetails } = require('../../embeds/embeds.js');
 const ITEMS_PER_PAGE = 25;
 const DEFAULT_EMOJI = '🔹';
 const MAX_DESCRIPTION_LENGTH = 4096;
+
+function stackModifierHeartsFromInventoryRow(row) {
+  return Math.max(0, Math.floor(Number(row?.modifierHearts) || 0));
+}
+
+function formatElixirInventoryStackLabel(itemName, elixirLevel, modifierHearts) {
+  const lv = normalizeElixirLevel(elixirLevel ?? 1);
+  const tierWord = ['Basic', 'Mid', 'High'][lv - 1] || 'Basic';
+  const mh = Math.max(0, Math.floor(Number(modifierHearts) || 0));
+  return `${itemName} [${tierWord}|m${mh}]`;
+}
+
+function getActiveElixirDisplay(character) {
+  if (!character?.buff?.active) return null;
+  const rawType = character.buff.type;
+  const type = rawType === 'fireproof' ? 'chilly' : rawType;
+  const elixirName =
+    Object.keys(ELIXIR_EFFECTS || {}).find((k) => ELIXIR_EFFECTS[k]?.type === type) ||
+    null;
+  if (!elixirName) return null;
+  const lv = normalizeElixirLevel(character.buff.elixirLevel);
+  const tierWord = ['Basic', 'Mid', 'High'][lv - 1] || 'Basic';
+  const effect =
+    getElixirItemUseBlurb(elixirName, lv, {
+      maxHeartsForFairyTonic: character.maxHearts,
+      maxHeartsForHearty: character.maxHearts,
+      maxStaminaForEnduring: character.maxStamina,
+    }) || '';
+  const line1 = `**Active Elixir:** ${elixirName} (${tierWord}, level ${lv})`;
+  const line2 = effect ? `**Effect**\n${effect}` : null;
+  return [line1, line2].filter(Boolean).join('\n');
+}
 
 // ============================================================================
 // Command Definition
@@ -205,12 +238,23 @@ module.exports = {
 
       const combinedItems = itemDetails
         .reduce((acc, item) => {
-          const existing = acc.find(i => i.itemName === item.itemName);
+          const isElixir = isElixirItemName(item.itemName);
+          const lv = isElixir ? normalizeElixirLevel(item.elixirLevel) : null;
+          const mh = isElixir ? stackModifierHeartsFromInventoryRow(item) : null;
+          const stackKey = isElixir
+            ? `${String(item.itemName).toLowerCase()}|lv${lv}|m${mh}`
+            : String(item.itemName);
+          const displayName = isElixir
+            ? formatElixirInventoryStackLabel(item.itemName, lv, mh)
+            : item.itemName;
+
+          const existing = acc.find(i => i._stackKey === stackKey);
           if (existing) {
             existing.quantity += item.quantity;
           } else {
             acc.push({
-              itemName: item.itemName,
+              _stackKey: stackKey,
+              itemName: displayName,
               quantity: item.quantity,
               type: item.type,
               emoji: item.emoji
@@ -350,6 +394,11 @@ module.exports = {
     let description = slice
       .map(item => formatItemDetails(item.itemName, item.quantity, item.emoji))
       .join('\n');
+
+    const activeElixir = getActiveElixirDisplay(character);
+    if (activeElixir) {
+      description = `${activeElixir}\n\n${description}`;
+    }
     
     if (description.length > MAX_DESCRIPTION_LENGTH) {
       description = `${description.substring(0, MAX_DESCRIPTION_LENGTH - 3)}...`;

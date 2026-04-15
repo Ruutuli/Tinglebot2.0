@@ -107,6 +107,22 @@ type CharacterDetail = Character & {
     date?: Date | string;
     success?: boolean;
   }>;
+  staminaLog?: Array<{
+    ts?: Date | string;
+    delta?: number;
+    before?: number;
+    after?: number;
+    reason?: string;
+    meta?: unknown;
+  }>;
+  heartsLog?: Array<{
+    ts?: Date | string;
+    delta?: number;
+    before?: number;
+    after?: number;
+    reason?: string;
+    meta?: unknown;
+  }>;
   submittedAt?: Date | string | null;
   decidedAt?: Date | string | null;
   approvedAt?: Date | string | null;
@@ -380,6 +396,33 @@ function formatDate(date: Date | string | null | undefined): string {
   } catch {
     return "Invalid date";
   }
+}
+
+function formatShortDelta(delta: number): string {
+  if (!Number.isFinite(delta)) return "0";
+  return delta > 0 ? `+${delta}` : String(delta);
+}
+
+function toDateMs(d: Date | string | null | undefined): number {
+  if (!d) return 0;
+  const dt = typeof d === "string" ? new Date(d) : d;
+  const ms = dt instanceof Date ? dt.getTime() : 0;
+  return Number.isFinite(ms) ? ms : 0;
+}
+
+function formatRelativeTime(ms: number): string {
+  if (!Number.isFinite(ms) || ms <= 0) return "";
+  const diff = Date.now() - ms;
+  if (diff < 0) return "just now";
+  const minute = 60 * 1000;
+  const hour = 60 * minute;
+  const day = 24 * hour;
+  const week = 7 * day;
+  if (diff < minute) return "just now";
+  if (diff < hour) return `${Math.floor(diff / minute)}m ago`;
+  if (diff < day) return `${Math.floor(diff / hour)}h ago`;
+  if (diff < week) return `${Math.floor(diff / day)}d ago`;
+  return `${Math.floor(diff / week)}w ago`;
 }
 
 function formatTimeRemaining(date: Date | string | null | undefined): string {
@@ -1195,6 +1238,9 @@ export default function OCDetailPage() {
   });
   const [relationshipsLoading, setRelationshipsLoading] = useState(false);
   const [relationshipsError, setRelationshipsError] = useState<string | null>(null);
+  const [statLogTab, setStatLogTab] = useState<"stamina" | "hearts">("stamina");
+  const [statLogRange, setStatLogRange] = useState<"24h" | "7d" | "30d" | "all">("7d");
+  const [statLogQuery, setStatLogQuery] = useState("");
 
   const characterId = typeof params.id === "string" ? params.id : null;
 
@@ -1916,6 +1962,175 @@ export default function OCDetailPage() {
                   />
                 )}
               </div>
+            </CardSection>
+
+            {/* Stamina & Hearts Log */}
+            <CardSection icon="fa-book" title="Stamina & Hearts Log">
+              {(() => {
+                const now = Date.now();
+                const rangeMs =
+                  statLogRange === "24h"
+                    ? 24 * 60 * 60 * 1000
+                    : statLogRange === "7d"
+                      ? 7 * 24 * 60 * 60 * 1000
+                      : statLogRange === "30d"
+                        ? 30 * 24 * 60 * 60 * 1000
+                        : Infinity;
+
+                const src = statLogTab === "stamina" ? (character.staminaLog ?? []) : (character.heartsLog ?? []);
+                const q = statLogQuery.trim().toLowerCase();
+
+                const filtered = src
+                  .filter((e) => {
+                    const tsMs = toDateMs(e.ts);
+                    if (rangeMs !== Infinity && tsMs > 0 && now - tsMs > rangeMs) return false;
+                    if (!q) return true;
+                    const reason = String(e.reason ?? "").toLowerCase();
+                    return reason.includes(q);
+                  })
+                  .slice()
+                  .sort((a, b) => toDateMs(b.ts) - toDateMs(a.ts));
+
+                const tabButton = (tab: "stamina" | "hearts", label: string, icon: string) => {
+                  const active = statLogTab === tab;
+                  const activeClasses =
+                    tab === "stamina"
+                      ? "border-[var(--botw-blue)] bg-[var(--botw-blue)]/15 text-[var(--botw-blue)]"
+                      : "border-[#ff5a7a] bg-[#ff5a7a]/15 text-[#ff8aa0]";
+                  return (
+                    <button
+                      type="button"
+                      onClick={() => setStatLogTab(tab)}
+                      className={[
+                        "rounded-full border px-3 py-1.5 text-xs font-semibold transition-all inline-flex items-center gap-2",
+                        active
+                          ? `${activeClasses} shadow-[0_0_14px_rgba(0,0,0,0.25)]`
+                          : "border-[var(--totk-green)] bg-[var(--totk-ocher)]/10 text-[var(--totk-grey-200)] hover:text-[var(--totk-light-green)] hover:bg-[var(--totk-ocher)]/15",
+                      ].join(" ")}
+                    >
+                      <i className={`fa-solid ${icon} text-[11px]`} aria-hidden="true" />
+                      {label}
+                    </button>
+                  );
+                };
+
+                return (
+                  <div className="space-y-3">
+                    <div className="sticky top-0 z-10 -mx-2 px-2 py-2 rounded-lg border border-[var(--totk-green)] bg-[var(--botw-warm-black)]/80 backdrop-blur">
+                      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                        <div className="flex items-center justify-between gap-2 flex-wrap">
+                          <div className="flex items-center gap-2">
+                            {tabButton("stamina", "Stamina", "fa-bolt")}
+                            {tabButton("hearts", "Hearts", "fa-heart")}
+                          </div>
+                          <div className="text-[10px] sm:text-xs text-[var(--totk-grey-200)]">
+                            Showing <span className="font-semibold text-[var(--botw-pale)]">{filtered.length}</span>
+                          </div>
+                        </div>
+
+                        <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+                          <select
+                            value={statLogRange}
+                            onChange={(e) => setStatLogRange(e.target.value as typeof statLogRange)}
+                            className="rounded-md border border-[var(--totk-green)] bg-[var(--botw-warm-black)] px-2.5 py-1.5 text-xs text-[var(--botw-pale)]"
+                          >
+                            <option value="24h">Last 24h</option>
+                            <option value="7d">Last 7d</option>
+                            <option value="30d">Last 30d</option>
+                            <option value="all">All time</option>
+                          </select>
+                          <div className="relative w-full sm:w-64">
+                            <i
+                              className="fa-solid fa-magnifying-glass absolute left-3 top-1/2 -translate-y-1/2 text-[10px] text-[var(--totk-grey-200)]"
+                              aria-hidden="true"
+                            />
+                            <input
+                              value={statLogQuery}
+                              onChange={(e) => setStatLogQuery(e.target.value)}
+                              placeholder="Filter by reason…"
+                              className="w-full rounded-md border border-[var(--totk-green)] bg-[var(--botw-warm-black)] pl-8 pr-3 py-1.5 text-xs text-[var(--botw-pale)] placeholder:text-[var(--totk-grey-200)]/70"
+                            />
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    {filtered.length === 0 ? (
+                      <div className="rounded-lg border border-[var(--totk-green)] bg-[var(--totk-ocher)]/10 p-4 text-sm text-[var(--totk-grey-200)]">
+                        <div className="flex items-start gap-3">
+                          <div className="mt-0.5">
+                            <i className="fa-solid fa-inbox text-[var(--totk-grey-200)]" aria-hidden="true" />
+                          </div>
+                          <div>
+                            <div className="font-semibold text-[var(--botw-pale)]">No entries yet</div>
+                            <div className="mt-1 text-xs">
+                              Once stamina/hearts change, you’ll see a history here (daily recovery, combat damage, healing, etc.).
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="max-h-[420px] overflow-y-auto pr-1 space-y-2" style={{ overscrollBehavior: "contain" }}>
+                        {filtered.map((e, idx) => {
+                          const delta = Number(e.delta) || 0;
+                          const isPositive = delta > 0;
+                          const badgeClasses = isPositive
+                            ? "border-[var(--totk-light-green)]/50 bg-[var(--totk-light-green)]/15 text-[var(--totk-light-green)]"
+                            : delta < 0
+                              ? "border-[#ff6347]/50 bg-[#ff6347]/15 text-[#ff6347]"
+                              : "border-[var(--totk-grey-300)]/50 bg-[var(--totk-grey-300)]/10 text-[var(--totk-grey-200)]";
+
+                          const before = Number(e.before);
+                          const after = Number(e.after);
+                          const beforeAfter =
+                            Number.isFinite(before) && Number.isFinite(after) ? `${before} → ${after}` : "";
+                          const tsMs = toDateMs(e.ts);
+                          const rel = tsMs ? formatRelativeTime(tsMs) : "";
+                          const absolute = e.ts ? formatDate(e.ts) : "Unknown time";
+                          const leftBar =
+                            delta > 0
+                              ? "bg-[var(--totk-light-green)]"
+                              : delta < 0
+                                ? "bg-[#ff6347]"
+                                : "bg-[var(--totk-grey-300)]";
+
+                          return (
+                            <div
+                              key={`${String(e.ts ?? "0")}-${idx}`}
+                              className="relative rounded-lg border border-[var(--totk-green)] bg-gradient-to-br from-[var(--totk-ocher)]/12 to-transparent p-3"
+                            >
+                              <div className={`absolute left-0 top-0 bottom-0 w-1 rounded-l-lg ${leftBar}`} />
+                              <div className="flex items-start justify-between gap-3 pl-2">
+                                <div className="min-w-0">
+                                  <div className="flex items-center gap-2 flex-wrap">
+                                    <span className={`inline-flex items-center rounded-md border px-2 py-0.5 text-xs font-bold ${badgeClasses}`}>
+                                      {formatShortDelta(delta)}
+                                    </span>
+                                    <span className="text-xs font-semibold text-[var(--botw-pale)] break-words">
+                                      {String(e.reason ?? "unknown")}
+                                    </span>
+                                  </div>
+                                  {beforeAfter && (
+                                    <div className="mt-1 text-[10px] sm:text-xs text-[var(--totk-grey-200)] font-mono">
+                                      {beforeAfter}
+                                    </div>
+                                  )}
+                                </div>
+                                <div className="flex-shrink-0 text-right text-[10px] sm:text-xs text-[var(--totk-grey-200)]">
+                                  <div className="font-semibold text-[var(--botw-pale)]" title={absolute}>
+                                    {rel || absolute}
+                                  </div>
+                                  <div className="mt-0.5 opacity-80">{absolute}</div>
+                                </div>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
+                );
+              })()}
             </CardSection>
 
             {/* Gear Card */}

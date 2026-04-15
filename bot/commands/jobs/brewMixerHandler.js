@@ -13,16 +13,35 @@ const {
   MessageFlags,
 } = require('discord.js');
 
-const { connectToTinglebot, fetchCharacterByNameAndUserId, getCharacterInventoryCollection, fetchItemByName } = require('@/database/db');
+const {
+  connectToTinglebot,
+  fetchCharacterByName,
+  fetchCharacterByNameAndUserId,
+  getCharacterInventoryCollection,
+  fetchItemByName,
+} = require('@/database/db');
 const TempData = require('@/models/TempDataModel');
 const { checkAndUseStamina } = require('../../modules/characterStatsModule');
-const { getJobPerk } = require('../../modules/jobsModule');
-const { getJobVoucherErrorMessage } = require('../../modules/jobVoucherModule');
+const { getJobPerk, isVillageExclusiveJob } = require('../../modules/jobsModule');
+const {
+  getJobVoucherErrorMessage,
+  validateJobVoucher,
+  activateJobVoucher,
+  fetchJobVoucherItem,
+  deactivateJobVoucher,
+} = require('../../modules/jobVoucherModule');
 const { capitalizeWords } = require('../../modules/formattingModule');
 const { addItemInventoryDatabase, removeItemInventoryDatabase } = require('@/utils/inventoryUtils');
 const { checkInventorySync } = require('@/utils/characterUtils');
 const { handleInteractionError } = require('@/utils/globalErrorHandler');
-const { info } = require('@/utils/logger');
+const { applyCraftingQuantityBoost } = require('../../modules/boostIntegration');
+const {
+  clearBoostAfterUse,
+  getEffectiveJob,
+  isBoosterUsingVoucherForJob,
+  retrieveBoostingRequestFromTempDataByCharacter,
+} = require('./boosting');
+const { error, info } = require('@/utils/logger');
 const { enforceJail } = require('@/utils/jailCheck');
 const {
   validateBrewPair,
@@ -225,6 +244,67 @@ function parseStaminaToCraftBrew(raw) {
   if (typeof raw === 'number' && Number.isFinite(raw)) return Math.max(1, Math.floor(raw));
   const n = parseInt(String(raw), 10);
   return Number.isFinite(n) ? Math.max(1, n) : 4;
+}
+
+/**
+ * Same rules as /crafting recipe (`crafting.js`): validate voucher, base stamina ≤ 5 for locked vouchers,
+ * village-exclusive job location, fetch voucher item for post-craft consumption.
+ * @param {import('mongoose').Document} character
+ * @param {{ itemName?: string, staminaToCraft?: number } | null} itemForStaminaCheck catalog row (or stub)
+ * @param {(payload: { embeds?: import('discord.js').EmbedBuilder[], content?: string }) => Promise<void>} sendError
+ * @returns {Promise<{ ok: boolean, voucherCheck?: object, jobVoucherItem?: object, job?: string }>}
+ */
+async function evaluateBrewJobVoucherEligibility(character, itemForStaminaCheck, sendError) {
+  const job =
+    character.jobVoucher && character.jobVoucherJob ? character.jobVoucherJob : character.job;
+  if (!character.jobVoucher) {
+    return { ok: true, job };
+  }
+
+  const itemRef = itemForStaminaCheck || { itemName: '', staminaToCraft: 0 };
+  let voucherCheck;
+  let jobVoucherItem;
+
+  voucherCheck = await validateJobVoucher(character, job);
+  if (voucherCheck.skipVoucher) {
+    return { ok: true, voucherCheck, job };
+  }
+  if (!voucherCheck.success) {
+    if (character.jobVoucherJob === null) {
+      return { ok: true, voucherCheck, job };
+    }
+    await sendError({ embeds: [voucherCheck.embed] });
+    return { ok: false };
+  }
+
+  if ((itemRef.staminaToCraft ?? 0) > 5) {
+    const staminaError = getJobVoucherErrorMessage('STAMINA_LIMIT', {
+      characterName: character.name,
+      itemName: itemRef.itemName || 'this elixir',
+    });
+    await sendError({ embeds: [staminaError.embed] });
+    return { ok: false };
+  }
+
+  const lockedVillage = isVillageExclusiveJob(job);
+  if (lockedVillage && character.currentVillage.toLowerCase() !== lockedVillage.toLowerCase()) {
+    const villageError = getJobVoucherErrorMessage('MISSING_SKILLS', {
+      characterName: character.name,
+      jobName: job,
+      activity: 'crafting',
+    });
+    await sendError({ embeds: [villageError.embed] });
+    return { ok: false };
+  }
+
+  const fetchResult = await fetchJobVoucherItem();
+  if (!fetchResult.success) {
+    await sendError({ embeds: [fetchResult.embed] });
+    return { ok: false };
+  }
+  jobVoucherItem = fetchResult.item;
+
+  return { ok: true, voucherCheck, jobVoucherItem, job };
 }
 
 function rowQty(row) {
@@ -849,22 +929,31 @@ async function finalizeBrewMixerSession(interaction, session, critterName, partN
     extraItems.push(pItem);
   }
 
-  const staminaCost = parseStaminaToCraftBrew(outputItem.staminaToCraft);
-  const fresh = await fetchCharacterByNameAndUserId(character.name, userId);
-  if (!fresh) {
+  let ch = await fetchCharacterByNameAndUserId(character.name, userId);
+  if (!ch) {
+    const { fetchModCharacterByNameAndUserId } = require('@/database/db');
+    ch = await fetchModCharacterByNameAndUserId(character.name, userId);
+  }
+  if (!ch) {
     await brewMixerErrFollowUp({ content: '❌ Character not found.' });
     return;
   }
-  if ((fresh.currentStamina ?? 0) < staminaCost) {
-    const cur = fresh.currentStamina ?? 0;
-    const max = fresh.maxStamina ?? '?';
+
+  const voucherGate = await evaluateBrewJobVoucherEligibility(ch, outputItem, brewMixerErrFollowUp);
+  if (!voucherGate.ok) return;
+  const { voucherCheck, jobVoucherItem, job: brewVoucherJob } = voucherGate;
+
+  const staminaCost = parseStaminaToCraftBrew(outputItem.staminaToCraft);
+  if ((ch.currentStamina ?? 0) < staminaCost) {
+    const cur = ch.currentStamina ?? 0;
+    const max = ch.maxStamina ?? '?';
     await brewMixerErrFollowUp({
       embeds: [
         new EmbedBuilder()
           .setColor(0xc0392b)
           .setTitle('🟩 Not enough stamina')
           .setDescription(
-            `**${fresh.name}** needs **${staminaCost}** stamina to brew **${outputItem.itemName}**, but only has **${cur}** / **${max}**.\n\n` +
+            `**${ch.name}** needs **${staminaCost}** stamina to brew **${outputItem.itemName}**, but only has **${cur}** / **${max}**.\n\n` +
               '**Nothing was taken** — your ingredients are still in your inventory and no stamina was spent.'
           )
           .setFooter({ text: 'Recover stamina, then brew again.' }),
@@ -875,12 +964,12 @@ async function finalizeBrewMixerSession(interaction, session, critterName, partN
 
   const removedIngredientNames = [];
   try {
-    await removeItemInventoryDatabase(character._id, critterItem.itemName, 1, interaction, 'Elixir brew (critter)', {});
+    await removeItemInventoryDatabase(ch._id, critterItem.itemName, 1, interaction, 'Elixir brew (critter)', {});
     removedIngredientNames.push(critterItem.itemName);
-    await removeItemInventoryDatabase(character._id, partItem.itemName, 1, interaction, 'Elixir brew (part)', {});
+    await removeItemInventoryDatabase(ch._id, partItem.itemName, 1, interaction, 'Elixir brew (part)', {});
     removedIngredientNames.push(partItem.itemName);
     for (const p of extraItems) {
-      await removeItemInventoryDatabase(character._id, p.itemName, 1, interaction, 'Elixir brew (extra part)', {});
+      await removeItemInventoryDatabase(ch._id, p.itemName, 1, interaction, 'Elixir brew (extra part)', {});
       removedIngredientNames.push(p.itemName);
     }
   } catch (invErr) {
@@ -888,7 +977,7 @@ async function finalizeBrewMixerSession(interaction, session, critterName, partN
     for (let i = removedIngredientNames.length - 1; i >= 0; i--) {
       try {
         await addItemInventoryDatabase(
-          character._id,
+          ch._id,
           removedIngredientNames[i],
           1,
           interaction,
@@ -915,14 +1004,73 @@ async function finalizeBrewMixerSession(interaction, session, critterName, partN
     return;
   }
 
+  const freshCharacter = (await fetchCharacterByName(ch.name)) || ch;
+
+  // Song of Double Time: same voucher gate as /crafting recipe (non-native Entertainer must be on second voucher).
+  if (freshCharacter.boostedBy) {
+    const boosterCharacter = await fetchCharacterByName(freshCharacter.boostedBy);
+    const activeBoost = await retrieveBoostingRequestFromTempDataByCharacter(freshCharacter.name);
+    const isEntertainerCraftingBoost =
+      activeBoost &&
+      activeBoost.category === 'Crafting' &&
+      (activeBoost.boosterJob || '').trim().toLowerCase() === 'entertainer';
+    if (isEntertainerCraftingBoost && boosterCharacter) {
+      const boosterIsNativeEntertainer =
+        (boosterCharacter.job || '').trim().toLowerCase() === 'entertainer';
+      const boosterIsCurrentlyEntertainer =
+        getEffectiveJob(boosterCharacter).trim().toLowerCase() === 'entertainer';
+      if (!boosterIsNativeEntertainer && !boosterIsCurrentlyEntertainer) {
+        for (let i = removedIngredientNames.length - 1; i >= 0; i--) {
+          try {
+            await addItemInventoryDatabase(
+              ch._id,
+              removedIngredientNames[i],
+              1,
+              interaction,
+              'Brew refund - Entertainer Second Voucher',
+              {}
+            );
+          } catch (refundErr) {
+            console.error('[brewMixerHandler.js] Entertainer voucher refund failed:', refundErr?.message || refundErr);
+          }
+        }
+        const voucherError = getJobVoucherErrorMessage('BOOSTER_ENTERTAINER_MUST_USE_SECOND_VOUCHER_FIRST', {
+          boosterName: freshCharacter.boostedBy || 'Entertainer',
+          targetName: freshCharacter.name,
+        });
+        const voucherEmbed = voucherError.embed.setImage(EMBED_BORDER_IMAGE_URL);
+        try {
+          await interaction.deleteReply();
+        } catch (_) {}
+        try {
+          if (interaction.channel && typeof interaction.channel.send === 'function') {
+            await interaction.channel.send({
+              content: '⚠️ **Ingredients have been refunded.**',
+              embeds: [voucherEmbed],
+            });
+          } else {
+            await interaction.followUp({
+              content: '⚠️ **Ingredients have been refunded.**',
+              embeds: [voucherEmbed],
+              flags: [MessageFlags.Ephemeral],
+            });
+          }
+        } catch (_) {
+          await brewMixerErrFollowUp({ embeds: [voucherEmbed] });
+        }
+        return;
+      }
+    }
+  }
+
   let staminaAfter;
   try {
-    staminaAfter = await checkAndUseStamina(fresh, staminaCost);
+    staminaAfter = await checkAndUseStamina(ch, staminaCost);
   } catch (stErr) {
-    await addItemInventoryDatabase(character._id, critterItem.itemName, 1, interaction, 'Brew refund (stamina)');
-    await addItemInventoryDatabase(character._id, partItem.itemName, 1, interaction, 'Brew refund (stamina)');
+    await addItemInventoryDatabase(ch._id, critterItem.itemName, 1, interaction, 'Brew refund (stamina)');
+    await addItemInventoryDatabase(ch._id, partItem.itemName, 1, interaction, 'Brew refund (stamina)');
     for (const p of extraItems) {
-      await addItemInventoryDatabase(character._id, p.itemName, 1, interaction, 'Brew refund (stamina)');
+      await addItemInventoryDatabase(ch._id, p.itemName, 1, interaction, 'Brew refund (stamina)');
     }
     await brewMixerErrFollowUp({
       embeds: [
@@ -938,6 +1086,9 @@ async function finalizeBrewMixerSession(interaction, session, critterName, partN
     });
     return;
   }
+
+  let craftedQuantity = 1;
+  craftedQuantity = await applyCraftingQuantityBoost(freshCharacter.name, craftedQuantity);
 
   const levelRarityInputs = [
     { itemRarity: critterItem.itemRarity, itemName: critterItem.itemName },
@@ -955,9 +1106,9 @@ async function finalizeBrewMixerSession(interaction, session, critterName, partN
   const tierNames = { 1: 'Basic', 2: 'Mid', 3: 'High' };
   const tierWord = tierNames[brewedElixirLevel] || String(brewedElixirLevel);
   const brewPreview = getBrewPreviewForElixir(outputItem.itemName, brewedElixirLevel, fairyHealHearts, {
-    maxHeartsForHearty: fresh.maxHearts,
-    maxStaminaForEnduring: fresh.maxStamina,
-    maxHeartsForFairyTonic: fresh.maxHearts,
+    maxHeartsForHearty: ch.maxHearts,
+    maxStaminaForEnduring: ch.maxStamina,
+    maxHeartsForFairyTonic: ch.maxHearts,
   });
   const brewedElixirExtraFields = [];
   if (brewPreview.immediateText) {
@@ -1001,15 +1152,29 @@ async function finalizeBrewMixerSession(interaction, session, critterName, partN
   if (fairyHealHearts > 0) {
     brewAddOptions.modifierHearts = fairyHealHearts;
   }
-  await addItemInventoryDatabase(character._id, outputItem.itemName, 1, interaction, 'Elixir brew', brewAddOptions);
+  let fortuneTellerBoostTag = false;
+  if (freshCharacter.boostedBy) {
+    const boosterCharacterFt = await fetchCharacterByName(freshCharacter.boostedBy);
+    if (boosterCharacterFt && getEffectiveJob(boosterCharacterFt) === 'Fortune Teller') {
+      const activeBoostFt = await retrieveBoostingRequestFromTempDataByCharacter(freshCharacter.name);
+      if (activeBoostFt && activeBoostFt.status === 'accepted' && activeBoostFt.category === 'Crafting') {
+        fortuneTellerBoostTag = true;
+      }
+    }
+  }
+  const craftedAt = new Date();
+  await addItemInventoryDatabase(ch._id, outputItem.itemName, craftedQuantity, interaction, 'Elixir brew', {
+    ...brewAddOptions,
+    craftedAt,
+    fortuneTellerBoost: fortuneTellerBoostTag,
+  });
 
   const materialsUsed = [
     { itemName: critterItem.itemName, quantity: 1 },
     { itemName: partItem.itemName, quantity: 1 },
     ...extraItems.map((p) => ({ itemName: p.itemName, quantity: 1 })),
   ];
-  const jobForFlavor =
-    character.jobVoucher && character.jobVoucherJob ? character.jobVoucherJob : character.job;
+  const jobForFlavor = ch.jobVoucher && ch.jobVoucherJob ? ch.jobVoucherJob : ch.job;
 
   const brewedElixirLevelValue = formatUserFriendlyBrewBlend(
     mixOutcome,
@@ -1024,10 +1189,10 @@ async function finalizeBrewMixerSession(interaction, session, critterName, partN
   try {
     brewEmbed = await createCraftingEmbed(
       outputItem,
-      character,
+      ch,
       '',
       materialsUsed,
-      1,
+      craftedQuantity,
       staminaCost,
       staminaAfter,
       jobForFlavor,
@@ -1042,7 +1207,7 @@ async function finalizeBrewMixerSession(interaction, session, critterName, partN
     handleInteractionError(embedErr, 'brewMixerHandler.js');
     brewEmbed = new EmbedBuilder()
       .setColor(0xaa926a)
-      .setTitle(`🧪 ${character.name} brewed ${outputItem.itemName}`)
+      .setTitle(`🧪 ${ch.name} brewed ${outputItem.itemName}`)
       .setDescription(
         `Mixer: **${critterItem.itemName}** + **${partItem.itemName}**` +
           (extraItems.length ? ` + ${extraItems.map((p) => `**${p.itemName}**`).join(', ')}` : '') +
@@ -1070,10 +1235,45 @@ async function finalizeBrewMixerSession(interaction, session, critterName, partN
   });
   await completeBrewMixerEphemeralUi(interaction, {
     characterName: character.name,
-    itemName: outputItem.itemName,
+    itemName:
+      craftedQuantity > 1 ? `${outputItem.itemName} (×${craftedQuantity})` : outputItem.itemName,
     brewFields: brewCompleteFields,
   });
   await interaction.followUp({ embeds: [brewEmbed], ephemeral: false });
+
+  const boosterNameBeforeClear = freshCharacter.boostedBy;
+  const activeBoostAtCraft = boosterNameBeforeClear
+    ? await retrieveBoostingRequestFromTempDataByCharacter(freshCharacter.name)
+    : null;
+  if (
+    activeBoostAtCraft &&
+    activeBoostAtCraft.category === 'Crafting' &&
+    (activeBoostAtCraft.boosterJob || '').trim().toLowerCase() === 'entertainer' &&
+    boosterNameBeforeClear
+  ) {
+    const boosterCharacterEc = await fetchCharacterByName(boosterNameBeforeClear);
+    if (boosterCharacterEc && isBoosterUsingVoucherForJob(boosterCharacterEc, 'Entertainer')) {
+      const deactivationResult = await deactivateJobVoucher(boosterCharacterEc._id, { afterUse: true });
+      if (!deactivationResult.success) {
+        error('BREW', `Failed to deactivate booster job voucher for ${boosterCharacterEc.name} after Entertainer brew use`);
+      } else {
+        info('BREW', `Booster job voucher deactivated for ${boosterCharacterEc.name} after Entertainer brew use`);
+      }
+    }
+  }
+
+  await clearBoostAfterUse(freshCharacter, {
+    client: interaction.client,
+    context: 'crafting',
+  });
+
+  // Same condition as crafting.js after a successful craft
+  if (ch.jobVoucher && !voucherCheck?.skipVoucher && jobVoucherItem) {
+    const activationResult = await activateJobVoucher(ch, brewVoucherJob, jobVoucherItem, 1, interaction);
+    if (activationResult.success) {
+      await deactivateJobVoucher(ch._id, { afterUse: true });
+    }
+  }
 }
 
 async function runCraftingBrew(interaction) {
@@ -1165,6 +1365,15 @@ async function runCraftingBrew(interaction) {
       userId,
       operation: 'brew_catalog_critter',
     });
+    const voucherGateStart = await evaluateBrewJobVoucherEligibility(
+      character,
+      elixirCatalog,
+      async (payload) => {
+        await interaction.editReply({ ...payload, flags: [MessageFlags.Ephemeral] });
+      }
+    );
+    if (!voucherGateStart.ok) return;
+
     const catalogCritter = getCatalogRepresentativeCritterName(elixirCatalog);
     const { familyByCritterName, partNames } = getIngredientLabelSets();
     const critterChoices = buildMixerCritterOptions(inventory, catalogCritter, chosenFamily, familyByCritterName);

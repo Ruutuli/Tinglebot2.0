@@ -709,6 +709,21 @@ const modCommand = new SlashCommandBuilder()
             .setDescription('Amount of the item to give')
             .setRequired(true)
         )
+        .addIntegerOption(opt =>
+          opt
+            .setName('elixirlevel')
+            .setDescription('Elixir tier (1=Basic, 2=Mid, 3=High). Only applies to elixirs.')
+            .setRequired(false)
+            .setMinValue(1)
+            .setMaxValue(3)
+        )
+        .addIntegerOption(opt =>
+          opt
+            .setName('modifierhearts')
+            .setDescription('Fairy mix-in hearts (0+). Only applies to elixirs.')
+            .setRequired(false)
+            .setMinValue(0)
+        )
     )
     .addSubcommand(sub =>
       sub
@@ -1700,6 +1715,8 @@ async function handleGive(interaction) {
     const charName = interaction.options.getString('character');
     const itemName = interaction.options.getString('item');
     const quantity = interaction.options.getInteger('quantity');
+    const requestedElixirLevel = interaction.options.getInteger('elixirlevel');
+    const requestedModifierHearts = interaction.options.getInteger('modifierhearts');
   
     if (quantity < 1) {
       return interaction.editReply('❌ You must specify a quantity of at least **1**.');
@@ -1726,8 +1743,13 @@ async function handleGive(interaction) {
     }
   
     // ------------------- Apply Inventory Update -------------------
-    const modGiveOptions =
-      isElixirItemName(item.itemName) ? { elixirLevel: 1 } : {};
+    const isElixir = isElixirItemName(item.itemName);
+    const modGiveOptions = isElixir
+      ? {
+          elixirLevel: normalizeElixirLevel(requestedElixirLevel ?? 1),
+          modifierHearts: Math.max(0, Math.floor(Number(requestedModifierHearts) || 0)),
+        }
+      : {};
     await addItemInventoryDatabase(
       character._id,
       itemName,

@@ -618,15 +618,17 @@ async function retrieveBoostingRequestFromTempDataByCharacter(characterName) {
   try {
     const allBoostingData = await TempData.findAllByType('boosting');
     const currentTime = Date.now();
+    const targetKey = String(characterName || '').trim().toLowerCase();
 
     // Find all active boosts for this character and sort by timestamp (most recent first)
     const activeBoosts = [];
     
     for (const tempData of allBoostingData) {
       const requestData = tempData.data;
+      const reqTargetKey = String(requestData?.targetCharacter || '').trim().toLowerCase();
       
       if (
-        requestData.targetCharacter === characterName &&
+        reqTargetKey === targetKey &&
         requestData.status === "accepted" &&
         requestData.boostExpiresAt &&
         currentTime <= requestData.boostExpiresAt
@@ -636,7 +638,7 @@ async function retrieveBoostingRequestFromTempDataByCharacter(characterName) {
           timestamp: requestData.timestamp || 0
         });
       } else if (
-        requestData.targetCharacter === characterName &&
+        reqTargetKey === targetKey &&
         requestData.status === "accepted" &&
         requestData.boostExpiresAt &&
         currentTime > requestData.boostExpiresAt

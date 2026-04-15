@@ -174,6 +174,12 @@ type WeatherApiDoc = {
   season?: string;
 };
 
+type WeatherApiRange = {
+  start: string; // ISO
+  end: string; // ISO
+  timeZone: string; // e.g. America/New_York
+};
+
 /** Extract short label (e.g. "Cool") from "52°F / 11°C - Cool" or "Calm" from "< 2(km/h) // Calm". */
 function shortLabel(full: string | undefined, sep: string): string {
   if (!full || typeof full !== "string") return "—";
@@ -328,11 +334,15 @@ function mapQuestToMonthlyItem(doc: QuestApiDoc): MonthlyQuestItem {
           name: p.characterName ?? "—",
           status: (p.progress === "active" ? "Active" : "Completed") as "Active" | "Completed",
           rpPostCount: typeof p.rpPostCount === "number" && Number.isFinite(p.rpPostCount) ? p.rpPostCount : undefined,
-          rollCount: Array.isArray(p.tableRollResults)
-            ? p.tableRollResults.length
-            : typeof p.successfulRolls === "number" && Number.isFinite(p.successfulRolls)
-              ? p.successfulRolls
-              : undefined,
+          rollCount: (() => {
+            const tr = p.tableRollResults;
+            const sr = p.successfulRolls;
+            // Prefer explicit successfulRolls when present; tableRollResults is often an empty array by schema default,
+            // which should not mask a real roll count coming from server-side hydration (e.g., Blupee TempData tally).
+            if (typeof sr === "number" && Number.isFinite(sr)) return sr;
+            if (Array.isArray(tr)) return tr.length;
+            return undefined;
+          })(),
         }))
     : [];
 
@@ -1270,6 +1280,7 @@ export default function HomePage() {
   const [weatherItems, setWeatherItems] = useState<VillageWeatherItem[]>([]);
   const [isLoadingWeather, setIsLoadingWeather] = useState(true);
   const [weatherError, setWeatherError] = useState<string | null>(null);
+  const [weatherRange, setWeatherRange] = useState<WeatherApiRange | null>(null);
 
   const [villageLevelItems, setVillageLevelItems] = useState<VillageLevelItem[]>([]);
   const [isLoadingVillageLevels, setIsLoadingVillageLevels] = useState(true);
@@ -1332,11 +1343,15 @@ export default function HomePage() {
       try {
         setIsLoadingWeather(true);
         setWeatherError(null);
+        setWeatherRange(null);
         const res = await fetch("/api/weather", { signal, cache: "no-store" });
         if (signal.aborted) return;
         if (!res.ok) throw new Error("Failed to fetch weather");
-        const data: { weather: WeatherApiDoc[] } = await res.json();
+        const data: { weather: WeatherApiDoc[]; range?: WeatherApiRange } = await res.json();
         if (signal.aborted) return;
+        if (data.range && typeof data.range.start === "string" && typeof data.range.end === "string") {
+          setWeatherRange(data.range);
+        }
         const byVillage = new Map<string, WeatherApiDoc>();
         for (const w of data.weather ?? []) byVillage.set(w.village, w);
         const ordered = WEATHER_VILLAGES_ORDER.map((name) =>
@@ -1346,6 +1361,7 @@ export default function HomePage() {
       } catch (e) {
         if (signal.aborted) return;
         setWeatherError(e instanceof Error ? e.message : "Failed to load weather");
+        setWeatherRange(null);
         setWeatherItems(
           WEATHER_VILLAGES_ORDER.map((name) => mapWeatherDocToItem(null, name))
         );
@@ -1358,6 +1374,29 @@ export default function HomePage() {
     fetchWeather();
     return () => abortController.abort();
   }, []);
+
+  const weatherRangeDisplay = useMemo(() => {
+    if (!weatherRange?.start || !weatherRange?.end) return null;
+    const start = new Date(weatherRange.start);
+    const end = new Date(weatherRange.end);
+    if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) return null;
+
+    const tz = weatherRange.timeZone || "America/New_York";
+    const dateFmt = new Intl.DateTimeFormat("en-US", {
+      timeZone: tz,
+      month: "numeric",
+      day: "numeric",
+    });
+    const timeFmt = new Intl.DateTimeFormat("en-US", {
+      timeZone: tz,
+      hour: "numeric",
+      minute: "2-digit",
+      hour12: true,
+    });
+    const startStr = `${dateFmt.format(start)} ${timeFmt.format(start)}`;
+    const endStr = `${dateFmt.format(end)} ${timeFmt.format(end)}`;
+    return `${startStr} ET – ${endStr} ET`;
+  }, [weatherRange]);
 
   useEffect(() => {
     const abortController = new AbortController();
@@ -1729,6 +1768,11 @@ export default function HomePage() {
 
         <div>
           <SectionHeader title="Today's Weather" variant="section" />
+          {weatherRangeDisplay && (
+            <p className="mb-3 text-center text-xs text-[var(--totk-grey-200)]" suppressHydrationWarning>
+              {weatherRangeDisplay}
+            </p>
+          )}
           {weatherError && (
             <p className="mb-3 text-center text-sm text-[var(--blight-border)]">
               {weatherError}

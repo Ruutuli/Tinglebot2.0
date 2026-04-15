@@ -51,7 +51,7 @@ export async function POST(req: NextRequest) {
     }
 
     const body = await req.json();
-    const { sourceCharacterName, destinationCharacterName, itemName, quantity } = body;
+    const { sourceCharacterName, destinationCharacterName, itemName, quantity, elixirLevel, modifierHearts } = body;
 
     // Validate input
     if (!sourceCharacterName || !destinationCharacterName || !itemName || !quantity) {
@@ -158,15 +158,29 @@ export async function POST(req: NextRequest) {
       ? new mongoose.Types.ObjectId(sourceChar._id)
       : sourceChar._id;
 
+    const isElixirTransfer = elixirLevel != null || modifierHearts != null;
+    const lv = isElixirTransfer ? (Number(elixirLevel) === 2 || Number(elixirLevel) === 3 ? Number(elixirLevel) : 1) : null;
+    const mh = isElixirTransfer ? Math.max(0, Math.floor(Number(modifierHearts) || 0)) : null;
+
     // Find the item in source character's inventory (filter by characterId to match Bot behavior)
     const escapedItemName = escapeRegExp(itemName);
-    const sourceInventoryEntries = await sourceCollection
-      .find({
-        characterId: sourceCharId,
-        itemName: { $regex: new RegExp(`^${escapedItemName}$`, "i") },
-        quantity: { $gt: 0 },
-      })
-      .toArray();
+    const baseFilter: Record<string, unknown> = {
+      characterId: sourceCharId,
+      itemName: { $regex: new RegExp(`^${escapedItemName}$`, "i") },
+      quantity: { $gt: 0 },
+    };
+    if (isElixirTransfer) {
+      // Match exact elixir stack; Basic(1)/m0 also matches legacy rows missing fields.
+      baseFilter.$and = [
+        lv === 1
+          ? { $or: [{ elixirLevel: 1 }, { elixirLevel: { $exists: false } }, { elixirLevel: null }] }
+          : { elixirLevel: lv },
+        mh === 0
+          ? { $or: [{ modifierHearts: 0 }, { modifierHearts: { $exists: false } }, { modifierHearts: null }] }
+          : { modifierHearts: mh },
+      ];
+    }
+    const sourceInventoryEntries = await sourceCollection.find(baseFilter).toArray();
 
     if (!sourceInventoryEntries || sourceInventoryEntries.length === 0) {
       return NextResponse.json(
@@ -236,14 +250,23 @@ export async function POST(req: NextRequest) {
       remainingToRemove -= quantityFromThisEntry;
     }
 
-    // Add items to destination character's inventory
+    // Add items to destination character's inventory (preserve elixir stack keys)
     const destinationCollectionName = destChar.name.toLowerCase();
     const destinationCollection = db.collection(destinationCollectionName);
+    const destCharId = typeof destChar._id === "string"
+      ? new mongoose.Types.ObjectId(destChar._id)
+      : destChar._id;
 
     // Check if item already exists in destination inventory
-    const existingDestinationItem = await destinationCollection.findOne({
+    const destBaseFilter: Record<string, unknown> = {
+      characterId: destCharId,
       itemName: canonicalItemName,
-    });
+    };
+    if (isElixirTransfer) {
+      destBaseFilter.elixirLevel = lv;
+      destBaseFilter.modifierHearts = mh;
+    }
+    const existingDestinationItem = await destinationCollection.findOne(destBaseFilter);
 
     const category = Array.isArray(item.category)
       ? item.category.join(", ")
@@ -258,13 +281,13 @@ export async function POST(req: NextRequest) {
     if (existingDestinationItem) {
       // Update existing item by incrementing quantity
       await destinationCollection.updateOne(
-        { itemName: canonicalItemName },
+        { _id: existingDestinationItem._id },
         { $inc: { quantity: quantityNum } }
       );
     } else {
       // Insert new item
-      await destinationCollection.insertOne({
-        characterId: destChar._id,
+      const insertDoc: Record<string, unknown> = {
+        characterId: destCharId,
         itemName: canonicalItemName,
         itemId: item._id,
         quantity: quantityNum,
@@ -276,7 +299,12 @@ export async function POST(req: NextRequest) {
         location: destChar.currentVillage || destChar.homeVillage || "",
         date: new Date(),
         obtain: `Transfer from ${sourceChar.name}`,
-      });
+      };
+      if (isElixirTransfer) {
+        insertDoc.elixirLevel = lv;
+        insertDoc.modifierHearts = mh;
+      }
+      await destinationCollection.insertOne(insertDoc);
     }
 
     // Log removal to InventoryLog
@@ -314,7 +342,7 @@ export async function POST(req: NextRequest) {
       await InventoryLog.create({
         characterName: destChar.name,
         characterId: destChar._id,
-        itemName: canonicalItemName,
+        itemName: isElixirTransfer ? `${canonicalItemName} [lv${lv}|m${mh}]` : canonicalItemName,
         itemId: item._id,
         quantity: quantityNum, // Positive for addition
         category,

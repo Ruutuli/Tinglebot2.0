@@ -17,6 +17,7 @@ const { v4: uuidv4 } = require('uuid');
 // ------------------- Database Services -------------------
 // ============================================================================
 const { fetchCharacterByNameAndUserId, fetchAllItems, fetchItemsByMonster, fetchAllMonsters, fetchItemByName } = require('@/database/db.js');
+const Character = require('@/models/CharacterModel');
 const { Village } = require('@/models/VillageModel');
 
 // ============================================================================
@@ -32,7 +33,7 @@ const { capitalizeWords } = require('../../modules/formattingModule.js');
 const logger = require('@/utils/logger.js');
 const { validateJobVoucher, activateJobVoucher, fetchJobVoucherItem, deactivateJobVoucher, getJobVoucherErrorMessage } = require('../../modules/jobVoucherModule.js');
 const { applyGatheringBoost } = require('../../modules/boostIntegration');
-const { clearBoostAfterUse } = require('./boosting');
+const { clearBoostAfterUse, retrieveBoostingRequestFromTempDataByCharacter } = require('./boosting');
 
 // ============================================================================
 // ------------------- Utilities -------------------
@@ -151,20 +152,88 @@ function canUseDailyRoll(character, activity, userId) {
   return true;
 }
 
-// Update the daily roll timestamp for an activity
-async function updateDailyRoll(character, activity) {
-  try {
-    if (!character.dailyRoll) {
-      character.dailyRoll = new Map();
-    }
-    const now = new Date().toISOString();
-    character.dailyRoll.set(activity, now);
-    character.markModified('dailyRoll'); // Required for Mongoose to track Map changes
-    await character.save();
-  } catch (error) {
-    logger.error('GATHER', `Failed to update daily roll for ${character.name}: ${error.message}`, error);
-    throw error;
+// Same 8am Eastern / 13:00 UTC window boundary as canUseDailyRoll (gather + loot share this period).
+function getGatherLootRolloverBoundary() {
+  const now = new Date();
+  const rollover = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate(), 13, 0, 0, 0));
+  if (now < rollover) {
+    rollover.setUTCDate(rollover.getUTCDate() - 1);
   }
+  return rollover.toISOString();
+}
+
+/**
+ * Atomically reserves today's gather slot on the character document.
+ * Prevents two overlapping /gather commands from both passing canUseDailyRoll and granting two results.
+ */
+async function tryClaimGatherDailyRoll(character) {
+  if (character.jobVoucher || character.isModCharacter) {
+    return true;
+  }
+  if (character.name === 'Tingle test' || character.name === 'Tingle' || character.name === 'John') {
+    return true;
+  }
+
+  const rolloverIso = getGatherLootRolloverBoundary();
+  const nowIso = new Date().toISOString();
+
+  const slotStillAvailable = {
+    $and: [
+      {
+        $or: [
+          { 'dailyRoll.gather': { $exists: false } },
+          { 'dailyRoll.gather': null },
+          { 'dailyRoll.gather': { $lt: rolloverIso } },
+        ],
+      },
+      {
+        $or: [
+          { 'dailyRoll.loot': { $exists: false } },
+          { 'dailyRoll.loot': null },
+          { 'dailyRoll.loot': { $lt: rolloverIso } },
+        ],
+      },
+    ],
+  };
+
+  const updated = await Character.findOneAndUpdate(
+    { _id: character._id, ...slotStillAvailable },
+    { $set: { 'dailyRoll.gather': nowIso } },
+    { new: true }
+  );
+
+  if (!updated) {
+    return false;
+  }
+
+  if (!character.dailyRoll) {
+    character.dailyRoll = new Map();
+  }
+  character.dailyRoll.set('gather', nowIso);
+  character.markModified('dailyRoll');
+  return true;
+}
+
+async function sendDailyGatheringLimitEmbed(safeReply, characterName) {
+  const nextRollover = new Date();
+  nextRollover.setUTCHours(13, 0, 0, 0); // 8AM EST = 13:00 UTC
+  if (nextRollover < new Date()) {
+    nextRollover.setUTCDate(nextRollover.getUTCDate() + 1);
+  }
+  const unixTimestamp = Math.floor(nextRollover.getTime() / 1000);
+  await safeReply({
+    embeds: [{
+      color: 0x008B8B,
+      description: `*${characterName} seems exhausted from their earlier gathering...*\n\n**Daily gathering limit reached.**\nThe next opportunity to gather will be available at <t:${unixTimestamp}:F>.\n\n*Tip: A job voucher would allow you to gather again today.*`,
+      image: {
+        url: 'https://storage.googleapis.com/tinglebot/Graphics/border.png',
+      },
+      footer: {
+        text: 'Daily Activity Limit',
+      },
+    }],
+    flags: 64,
+  });
 }
 
 // ============================================================================
@@ -518,26 +587,7 @@ module.exports = {
         const canGather = canUseDailyRoll(character, 'gather', interaction.user.id);
         
         if (!canGather) {
-          const nextRollover = new Date();
-          nextRollover.setUTCHours(13, 0, 0, 0); // 8AM EST = 13:00 UTC
-          if (nextRollover < new Date()) {
-            nextRollover.setUTCDate(nextRollover.getUTCDate() + 1);
-          }
-          const unixTimestamp = Math.floor(nextRollover.getTime() / 1000);
-          
-          await safeReply({
-            embeds: [{
-              color: 0x008B8B, // Dark cyan color
-              description: `*${character.name} seems exhausted from their earlier gathering...*\n\n**Daily gathering limit reached.**\nThe next opportunity to gather will be available at <t:${unixTimestamp}:F>.\n\n*Tip: A job voucher would allow you to gather again today.*`,
-              image: {
-                url: 'https://storage.googleapis.com/tinglebot/Graphics/border.png'
-              },
-              footer: {
-                text: 'Daily Activity Limit'
-              }
-            }],
-            flags: 64,
-          });
+          await sendDailyGatheringLimitEmbed(safeReply, character.name);
           return;
         }
       }
@@ -710,11 +760,16 @@ module.exports = {
           );
           if (monstersByRegion.length > 0) {
             const encounteredMonster = monstersByRegion[Math.floor(Math.random() * monstersByRegion.length)];
-            // Consume daily roll only when we actually start an encounter
+            // Consume daily roll only when we actually start an encounter (atomic — blocks double /gather)
             try {
-              await updateDailyRoll(character, 'gather');
+              const claimed = await tryClaimGatherDailyRoll(character);
+              if (!claimed) {
+                logger.warn('GATHER', `Gather daily slot already taken (race) for ${character.name} — blood moon encounter path`);
+                await sendDailyGatheringLimitEmbed(safeReply, character.name);
+                return;
+              }
             } catch (error) {
-              logger.error('GATHER', 'Failed to update daily roll (encounter path)');
+              logger.error('GATHER', `Failed to claim daily roll (encounter path): ${error.message}`, error);
               await safeReply({
                 content: `❌ **An error occurred while updating your daily roll. Please try again.**`,
                 flags: 64,
@@ -805,11 +860,19 @@ module.exports = {
                   // Store bonus item to show in the encounter embed (gather-style presentation)
                   entertainerBonusForEmbed = bonusItem;
 
-                  // Clear used boost to match normal gathering behavior
-                  await clearBoostAfterUse(character, {
-                    client: interaction.client,
-                    context: 'gathering (encounter bonus)'
-                  });
+                  // Only consume Gathering-category boosts (same as main gather path). Token boosts
+                  // (e.g. Teacher Critique & Composition) must remain for art submission.
+                  const activeBoostEncounter = await retrieveBoostingRequestFromTempDataByCharacter(character.name);
+                  const clearGatherEncounter =
+                    activeBoostEncounter &&
+                    activeBoostEncounter.status === 'accepted' &&
+                    String(activeBoostEncounter.category || '').toLowerCase() === 'gathering';
+                  if (clearGatherEncounter) {
+                    await clearBoostAfterUse(character, {
+                      client: interaction.client,
+                      context: 'gathering (encounter bonus)'
+                    });
+                  }
                 }
               }
             }
@@ -900,7 +963,6 @@ module.exports = {
                      // Handle Scholar boost (cross-region gathering) before filtering items
            if (boosterCharacter && boosterCharacter.job?.toLowerCase() === 'scholar') {
              // Get the boost data to find the target village
-             const { retrieveBoostingRequestFromTempDataByCharacter } = require('./boosting');
              const boostData = await retrieveBoostingRequestFromTempDataByCharacter(character.name);
              
              logger.info('BOOST', `Scholar boost detected for ${character.name}`);
@@ -1013,18 +1075,22 @@ module.exports = {
           return;
         }
 
-        // Consume daily roll only when we have items to gather (not when we hit the no-items guard above)
-        if (!character.jobVoucher && !character.isModCharacter) {
-          try {
-            await updateDailyRoll(character, 'gather');
-          } catch (error) {
-            logger.error('GATHER', 'Failed to update daily roll');
-            await safeReply({
-              content: `❌ **An error occurred while updating your daily roll. Please try again.**`,
-              flags: 64,
-            });
+        // Consume daily roll only when we have items to gather (not when we hit the no-items guard above).
+        // Atomic claim prevents two overlapping invocations from both granting a gather before the roll was saved.
+        try {
+          const claimed = await tryClaimGatherDailyRoll(character);
+          if (!claimed) {
+            logger.warn('GATHER', `Gather daily slot already taken (race) for ${character.name} — normal gather path`);
+            await sendDailyGatheringLimitEmbed(safeReply, character.name);
             return;
           }
+        } catch (error) {
+          logger.error('GATHER', `Failed to claim daily roll: ${error.message}`, error);
+          await safeReply({
+            content: `❌ **An error occurred while updating your daily roll. Please try again.**`,
+            flags: 64,
+          });
+          return;
         }
         
         // Calculate total weight for selection
@@ -1261,10 +1327,18 @@ module.exports = {
         await safeReply({ content, embeds: [embed] });
         
         // ------------------- Clear Boost After Use ------------------
-        await clearBoostAfterUse(character, {
-          client: interaction.client,
-          context: 'gathering'
-        });
+        // Only fulfill Gathering boosts here. Token (and other non-gather) boosts stay active for their own commands (e.g. art submission).
+        const activeBoostForGather = await retrieveBoostingRequestFromTempDataByCharacter(character.name);
+        const shouldClearGatheringBoost =
+          activeBoostForGather &&
+          activeBoostForGather.status === 'accepted' &&
+          String(activeBoostForGather.category || '').toLowerCase() === 'gathering';
+        if (shouldClearGatheringBoost) {
+          await clearBoostAfterUse(character, {
+            client: interaction.client,
+            context: 'gathering'
+          });
+        }
         
         // ------------------- Update Last Gather Timestamp ------------------
         character.lastGatheredAt = new Date().toISOString();

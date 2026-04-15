@@ -884,7 +884,15 @@ async function handleHealingFulfillment(interaction, requestId, healerName) {
     // ============================================================================
     // ------------------- Execute Healing -------------------
     // ============================================================================
-    const staminaResult = await useStamina(healerCharacter._id, staminaCost);
+    const staminaResult = await useStamina(healerCharacter._id, staminaCost, {
+      source: 'job:heal',
+      action: 'fulfill',
+      requestId,
+      targetCharacterId: characterToHeal?._id,
+      targetCharacterName: characterToHeal?.name,
+      heartsHealed: heartsToHeal,
+      staminaCost,
+    });
     if (staminaResult.exhausted) {
       const errorEmbed = createErrorEmbed(
         'Not Enough Stamina',
@@ -1263,7 +1271,14 @@ async function handleDirectHealing(interaction, healerName, targetCharacterName,
     // ============================================================================
     // ------------------- Execute Healing -------------------
     // ============================================================================
-    const staminaResult = await useStamina(healerCharacter._id, staminaCost);
+    const staminaResult = await useStamina(healerCharacter._id, staminaCost, {
+      source: 'job:heal',
+      action: 'aid',
+      targetCharacterId: characterToHeal?._id,
+      targetCharacterName: characterToHeal?.name,
+      heartsHealed: finalHeartsToHeal,
+      staminaCost,
+    });
     if (staminaResult.exhausted) {
       const errorEmbed = createErrorEmbed(
         'Not Enough Stamina',

@@ -12,6 +12,31 @@ function escapeRegExp(string: string): string {
   return string.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
+function isElixirLikeName(itemName: string): boolean {
+  const s = String(itemName || "").trim().toLowerCase();
+  return s.endsWith("elixir") || s === "fairy tonic";
+}
+
+function normalizeElixirLevel(raw: unknown): 1 | 2 | 3 {
+  const n = Number(raw);
+  if (!Number.isFinite(n)) return 1;
+  if (n === 2 || n === 3) return n;
+  return 1;
+}
+
+function stackModifierHearts(raw: unknown): number {
+  const n = Number(raw);
+  if (!Number.isFinite(n)) return 0;
+  return Math.max(0, Math.floor(n));
+}
+
+function formatElixirStackLabel(baseName: string, elixirLevel: number, modifierHearts: number): string {
+  const lv = normalizeElixirLevel(elixirLevel);
+  const tier = ["Basic", "Mid", "High"][lv - 1] || "Basic";
+  const mh = stackModifierHearts(modifierHearts);
+  return `${baseName} [${tier}|m${mh}]`;
+}
+
 // Uses session cookies; must be dynamically rendered per-request.
 export const dynamic = "force-dynamic";
 
@@ -108,22 +133,46 @@ export async function GET(
       .sort({ itemName: 1 })
       .toArray();
 
-    // Aggregate by itemName (case-insensitive): one entry per item, sum quantity, Equipped if any row has it
-    const byItemName = new Map<string, { itemName: string; quantity: number; Equipped: boolean }>();
+    // Aggregate by itemName + elixir stack key (case-insensitive)
+    // Elixirs: separate stacks by elixirLevel + modifierHearts so transfers preserve potency.
+    const byKey = new Map<
+      string,
+      {
+        itemName: string;
+        baseItemName: string;
+        quantity: number;
+        Equipped: boolean;
+        elixirLevel: number | null;
+        modifierHearts: number | null;
+      }
+    >();
     for (const item of inventoryItems) {
-      const name = String(item.itemName ?? "").trim();
-      const key = name.toLowerCase();
+      const baseName = String(item.itemName ?? "").trim();
+      const baseKey = baseName.toLowerCase();
       const qty = Number(item.quantity) || 0;
       const equipped = item.Equipped === true;
-      const existing = byItemName.get(key);
+      const isElixir = isElixirLikeName(baseName);
+      const lv = isElixir ? normalizeElixirLevel((item as any).elixirLevel) : null;
+      const mh = isElixir ? stackModifierHearts((item as any).modifierHearts) : null;
+      const key = isElixir ? `${baseKey}|lv${lv}|m${mh}` : baseKey;
+
+      const existing = byKey.get(key);
       if (existing) {
         existing.quantity += qty;
         if (equipped) existing.Equipped = true;
       } else {
-        byItemName.set(key, { itemName: name, quantity: qty, Equipped: equipped });
+        const displayName = isElixir ? formatElixirStackLabel(baseName, lv ?? 1, mh ?? 0) : baseName;
+        byKey.set(key, {
+          itemName: displayName,
+          baseItemName: baseName,
+          quantity: qty,
+          Equipped: equipped,
+          elixirLevel: isElixir ? (lv ?? 1) : null,
+          modifierHearts: isElixir ? (mh ?? 0) : null,
+        });
       }
     }
-    const items = Array.from(byItemName.values());
+    const items = Array.from(byKey.values()).sort((a, b) => a.itemName.localeCompare(b.itemName));
 
     const response = NextResponse.json({
       data: items,
