@@ -4833,7 +4833,10 @@ async function handleRPPosts(interaction) {
       const embed = new EmbedBuilder()
         .setColor('#00FF00')
         .setTitle('✅ RP Post Count Updated')
-        .setDescription(`Updated RP post count for **${user.username}** in quest **${questID}**`)
+        .setDescription(
+          `Updated RP post count for **${user.username}** in quest **${questID}**.\n` +
+            'The quest board embed was refreshed if a board message exists for this quest.'
+        )
         .addFields(
           { name: 'Quest ID', value: questID, inline: true },
           { name: 'User', value: user.username, inline: true },

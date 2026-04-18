@@ -40,6 +40,17 @@ const REACTION_PATTERNS = [
     /^rofl+$/i, /^xd+$/i, /^uwu+$/i, /^owo+$/i
 ];
 
+/** True only for obvious one-line "ack" / closer posts — not posts that merely contain "))" somewhere in real RP. */
+function isBareReactionOnlyPost(content) {
+    const t = content.trim();
+    if (!t.length) return false;
+    if (/^\)+$/.test(t)) return true;
+    if (t.length <= 14 && /^(lol|lmao|haha|ha|heh|mhm|mm|ok|okay|k|yes|no|yep|nope|same|this|oof|rip)[\s.,!?'"]*\)+$/i.test(t)) {
+        return true;
+    }
+    return false;
+}
+
 const VALIDATION_REGEX = {
     EMOJI: /^[\p{Emoji}\s]+$/u,
     CUSTOM_EMOJI: /^<a?:\w+:\d+>\s*$/,
@@ -96,7 +107,7 @@ async function handleRPPostTracking(message) {
             return;
         }
 
-        await processValidRPPost(quest, participant, message.channel.id);
+        await processValidRPPost(quest, participant, message.channel.id, message);
 
     } catch (error) {
         logger.error('QUEST', 'Error tracking RP post');
@@ -119,7 +130,7 @@ function isValidRPQuest(quest) {
 }
 
 // ------------------- Process Valid RP Post -------------------
-async function processValidRPPost(quest, participant, channelId) {
+async function processValidRPPost(quest, participant, channelId, message = null) {
     quest.incrementRPPosts(participant);
     
     if (!participant.rpThreadId) {
@@ -149,6 +160,14 @@ async function processValidRPPost(quest, participant, channelId) {
     }
 
     await quest.save();
+
+    if (message?.react) {
+        try {
+            await message.react('✅');
+        } catch (reactErr) {
+            logger.warn('QUEST', `Could not add counted reaction: ${reactErr.message}`);
+        }
+    }
 
     try {
         const client = getDiscordClient();
@@ -318,8 +337,8 @@ function validateBasicContent(content) {
         return { valid: false, reason: `Content too short for RP (${content.length} chars, minimum ${VALIDATION_RULES.MIN_RP_LENGTH})` };
     }
 
-    if (content.includes('))')) {
-        return { valid: false, reason: `Content contains "))" (likely a reaction post)` };
+    if (isBareReactionOnlyPost(content)) {
+        return { valid: false, reason: 'Content looks like a short reaction/ack line only' };
     }
 
     return { valid: true, reason: null };
@@ -384,7 +403,7 @@ function validateAdvancedContent(content) {
         }
     }
 
-    const letterCount = (content.match(/[a-zA-Z]/g) || []).length;
+    const letterCount = (content.match(/\p{L}/gu) || []).length;
     const totalChars = content.replace(/\s/g, '').length;
     if (totalChars > 0 && (letterCount / totalChars) < VALIDATION_RULES.MIN_LETTER_PERCENTAGE) {
         const percentage = Math.round((letterCount / totalChars) * 100);
@@ -433,6 +452,15 @@ async function updateRPPostCount(questID, userId, newCount) {
 
         await quest.save();
         logger.info('QUEST', `Manually updated RP post count for user ${userId} in quest ${questID}: ${oldCount} → ${newCount}`);
+
+        try {
+            const client = getDiscordClient();
+            if (client) {
+                await questModule.updateQuestEmbed(null, quest, client, 'modRppostsAdjust');
+            }
+        } catch (embedErr) {
+            logger.warn('QUEST', `Could not refresh quest embed after manual RP count: ${embedErr.message}`);
+        }
 
         return { success: true, oldCount, newCount, meetsRequirements };
 
