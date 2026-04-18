@@ -1,5 +1,5 @@
-const { SlashCommandBuilder, PermissionFlagsBits } = require("@discordjs/builders");
-const { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, MessageFlags } = require("discord.js");
+const { SlashCommandBuilder } = require("@discordjs/builders");
+const { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, MessageFlags, PermissionFlagsBits } = require("discord.js");
 const { handleInteractionError } = require('@/utils/globalErrorHandler');
 const logger = require('@/utils/logger');
 const Quest = require('@/models/QuestModel');
@@ -30,6 +30,9 @@ const {
 
 // Quest join is only allowed in the Sheikah Slate channel
 const SHEIKAH_SLATE_CHANNEL_ID = '641858948802150400';
+
+// Same env as other bot modules; used so mods with the staff role can adjust RP counts without Manage Server
+const MOD_ROLE_ID = process.env.MOD_ROLE_ID || '';
 
 // Embed update queue to prevent race conditions
 const embedUpdateQueue = new Map(); // questID -> { isUpdating: boolean, pendingUpdates: Array }
@@ -144,6 +147,31 @@ module.exports = {
       .setRequired(true)
       .setAutocomplete(true)
     )
+  )
+  .addSubcommand(subcommand =>
+   subcommand
+    .setName("setrpposts")
+    .setDescription("[Mods] Set a participant’s RP post count for an active RP quest (requires Manage Server)")
+    .addStringOption(option =>
+     option
+      .setName("questid")
+      .setDescription("ID of the RP quest")
+      .setRequired(true)
+      .setAutocomplete(true)
+    )
+    .addUserOption(option =>
+     option
+      .setName("user")
+      .setDescription("Discord user whose RP post count to set")
+      .setRequired(true)
+    )
+    .addIntegerOption(option =>
+     option
+      .setName("count")
+      .setDescription("New total RP post count for this user on this quest")
+      .setRequired(true)
+      .setMinValue(0)
+    )
   ),
 
  // ============================================================================
@@ -161,7 +189,8 @@ module.exports = {
    turnin: () => this.handleQuestTurnIn(interaction),
    transfer: () => this.handleLegacyQuestTransfer(interaction),
    stats: () => this.handleQuestStats(interaction),
-    postcount: () => this.handlePostCount(interaction)
+    postcount: () => this.handlePostCount(interaction),
+    setrpposts: () => this.handleSetRpPosts(interaction)
    };
 
    const handler = handlers[subcommand];
@@ -1404,6 +1433,76 @@ formatQuestCount(count = 0) {
    return interaction.reply({
     content: "[quest.js]❌ An error occurred while fetching post counts. Please try again later.",
     flags: MessageFlags.Ephemeral,
+   });
+  }
+ },
+
+ // ============================================================================
+ // ------------------- Mod: set RP post count (Manage Server) -------------------
+ // ============================================================================
+ async handleSetRpPosts(interaction) {
+  const hasModRole = MOD_ROLE_ID && interaction.member?.roles?.cache?.has(MOD_ROLE_ID);
+  const allowed =
+   interaction.memberPermissions?.has(PermissionFlagsBits.ManageGuild) || hasModRole;
+  if (!allowed) {
+   return interaction.reply({
+    content:
+     "❌ You need **Manage Server** or the server’s configured mod role to use `/quest setrpposts`.\n\n" +
+      "Note: **`/mod system rpposts`** only appears in the menu for people with **Administrator**, because `/mod` is set that way in Discord.",
+    flags: MessageFlags.Ephemeral
+   });
+  }
+
+  await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+
+  try {
+   const questID = interaction.options.getString("questid");
+   const user = interaction.options.getUser("user");
+   const newCount = interaction.options.getInteger("count");
+
+   const { updateRPPostCount } = require("../../modules/rpQuestTrackingModule");
+   const result = await updateRPPostCount(questID, user.id, newCount);
+
+   if (result.success) {
+    const embed = new EmbedBuilder()
+     .setColor("#00FF00")
+     .setTitle("✅ RP Post Count Updated")
+     .setDescription(
+      `Updated RP post count for **${user.username}** in quest **${questID}**.\n` +
+       "The quest board embed was refreshed if a board message exists for this quest."
+     )
+     .addFields(
+      { name: "Quest ID", value: questID, inline: true },
+      { name: "User", value: user.username, inline: true },
+      { name: "Old Count", value: String(result.oldCount), inline: true },
+      { name: "New Count", value: String(result.newCount), inline: true },
+      {
+       name: "Meets Requirements",
+       value: result.meetsRequirements ? "✅ Yes" : "❌ No",
+       inline: true
+      }
+     )
+     .setImage("https://storage.googleapis.com/tinglebot/Graphics/border.png")
+     .setFooter({ text: `Updated by ${interaction.user.tag}` })
+     .setTimestamp();
+
+    return interaction.editReply({ embeds: [embed] });
+   }
+
+   return interaction.editReply({
+    content: `❌ Failed to update RP post count: ${result.error}`,
+   });
+  } catch (error) {
+   await handleInteractionError(error, interaction, {
+    source: "quest.js",
+    commandName: "quest setrpposts",
+    userTag: interaction.user.tag,
+    userId: interaction.user.id,
+    questID: interaction.options.getString("questid")
+   });
+
+   return interaction.editReply({
+    content: "[quest.js]❌ An error occurred while updating the RP post count.",
    });
   }
  },

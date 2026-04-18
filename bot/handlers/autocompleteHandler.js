@@ -882,6 +882,10 @@ async function handleAutocompleteInternal(interaction, commandName, focusedOptio
                 if (focusedOption.name === "questid") {
                   await handleQuestIdAutocomplete(interaction, focusedOption);
                 }
+              } else if (questSubcommand === "setrpposts") {
+                if (focusedOption.name === "questid") {
+                  await handleQuestIdAutocomplete(interaction, focusedOption, { rpOnly: true });
+                }
               } else if (questSubcommand === "turnin") {
                 if (focusedOption.name === "character") {
                   await handleCharacterBasedCommandsAutocomplete(interaction, focusedOption, "quest");
@@ -4403,13 +4407,17 @@ function shouldShowQuestInJoinAutocomplete(quest, questCommand) {
 }
 
 async function handleQuestIdAutocomplete(interaction, focusedOption, options = {}) {
-  const { joinOnly = false } = options;
+  const { joinOnly = false, rpOnly = false } = options;
   try {
       let quests = await Quest.find({ status: 'active' }).lean();
 
       if (joinOnly) {
         const questCommand = require('@/commands/world/quest.js');
         quests = quests.filter((q) => shouldShowQuestInJoinAutocomplete(q, questCommand));
+      }
+
+      if (rpOnly) {
+        quests = quests.filter((q) => q.questType === 'RP');
       }
 
       const choices = quests.map(quest => ({
