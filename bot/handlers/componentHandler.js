@@ -24,10 +24,13 @@ const {
 // ------------------- Database Connections -------------------
 const {
   connectToTinglebot,
+  connectToInventories,
   fetchCharacterById,
   fetchModCharacterById,
   getUserById,
   fetchCharacterByName,
+  getCharacterInventoryCollectionWithModSupport,
+  updateModCharacterById,
   VILLAGE_BANNERS
 } = require('@/database/db');
 
@@ -615,6 +618,26 @@ async function handleViewCharacter(interaction, characterId) {
           .setTimestamp()],
         flags: 64
       });
+    }
+
+    // Spirit orbs: inventory is source of truth (same as /character view in character.js).
+    // Viewlist uses this button path; without sync, character.spiritOrbs can be stale.
+    try {
+      await connectToInventories();
+      const inventoryCollection = await getCharacterInventoryCollectionWithModSupport(character);
+      const spiritOrb = await inventoryCollection.findOne({
+        characterId: character._id,
+        itemName: { $regex: /^spirit orb$/i },
+      });
+      const orbCount = spiritOrb?.quantity || 0;
+      character.spiritOrbs = orbCount;
+      if (character.isModCharacter) {
+        await updateModCharacterById(character._id, { spiritOrbs: orbCount });
+      } else {
+        await Character.findByIdAndUpdate(character._id, { spiritOrbs: orbCount });
+      }
+    } catch (orbErr) {
+      handleError(orbErr, 'componentHandler.js');
     }
 
     const embed = createCharacterEmbed(character);

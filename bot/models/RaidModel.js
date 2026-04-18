@@ -372,6 +372,10 @@ raidSchema.methods.removeParticipant = async function(characterId, addToLootElig
       this.currentTurn = this.currentTurn % this.participants.length;
     }
     this.currentTurn = Math.max(0, Math.min(this.currentTurn, this.participants.length - 1));
+    // Turn moved without advanceTurn() — e.g. last other player left while you still had
+    // hasTakenActionThisTurn from your previous roll; clear so the new current holder can act.
+    const newCurrent = this.participants[this.currentTurn];
+    if (newCurrent) newCurrent.hasTakenActionThisTurn = false;
   }
   return await this.save();
 };
@@ -403,6 +407,8 @@ raidSchema.methods.incrementParticipantSkipCountAndMaybeRemove = async function(
       }
     }
     this.currentTurn = Math.max(0, Math.min(newCurrentTurn, this.participants.length - 1));
+    const newCurrent = this.participants[this.currentTurn];
+    if (newCurrent) newCurrent.hasTakenActionThisTurn = false;
     await this.save();
     return { removed: true, participant, newCurrentTurnIndex: this.currentTurn };
   }

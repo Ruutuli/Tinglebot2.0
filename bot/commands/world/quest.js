@@ -2194,7 +2194,6 @@ formatQuestCount(count = 0) {
 
   // Default Interactive instruction (non-Blupee)
   return `• Follow the quest’s roll instructions to progress\n• Each successful roll counts toward your quest progress\n• Quest completes when you reach ${requirementValue} successful rolls`;
-  }
  },
 
  getQuestMetaInfo(quest) {

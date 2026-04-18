@@ -1008,6 +1008,16 @@ async function processRaidTurn(character, raidId, interaction, raidData = null, 
       throw new Error('Character is not in this raid');
     }
 
+    // Solo raid: if others left without clearing hasTakenActionThisTurn, turn UI matches DB currentTurn
+    // but processRaidTurn would reject — clear the stale flag (see RaidModel.removeParticipant).
+    if (!isModTurn && participants.length === 1 && participant.hasTakenActionThisTurn) {
+      const soleCurrent = raid.getCurrentTurnParticipant();
+      if (soleCurrent && soleCurrent.characterId.toString() === character._id.toString()) {
+        participant.hasTakenActionThisTurn = false;
+        await raid.save();
+      }
+    }
+
     // Explicit "is it my turn?" check (mod characters can roll anytime)
     if (!isModTurn) {
       const currentTurnParticipant = raid.getCurrentTurnParticipant();

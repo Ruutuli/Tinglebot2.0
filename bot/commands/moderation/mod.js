@@ -63,7 +63,11 @@ const { monsterMapping } = require('@/models/MonsterModel');
 // ------------------- Utility Functions -------------------
 const { handleInteractionError } = require('@/utils/globalErrorHandler');
 const { addItemInventoryDatabase, escapeRegExp } = require('@/utils/inventoryUtils');
-const { isElixirItemName } = require('../../modules/elixirModule');
+const {
+  ELIXIR_LEVEL_NAMES,
+  isElixirItemName,
+  normalizeElixirLevel
+} = require('../../modules/elixirModule');
 const { safeInteractionResponse, safeFollowUp, safeSendLongMessage, splitMessage } = require('@/utils/interactionUtils');
 const { generateUniqueId } = require('@/utils/uniqueIdUtils');
 const {
@@ -688,7 +692,9 @@ const modCommand = new SlashCommandBuilder()
     .addSubcommand(sub =>
       sub
         .setName('give')
-        .setDescription('🎁 Give an item to a character')
+        .setDescription(
+          '🎁 Give an item to a character. For elixirs, set Elixir tier or elixirlevel (1–3); default is Basic.'
+        )
         .addStringOption(opt =>
           opt
             .setName('character')
@@ -709,10 +715,25 @@ const modCommand = new SlashCommandBuilder()
             .setDescription('Amount of the item to give')
             .setRequired(true)
         )
+        .addStringOption(opt =>
+          opt
+            .setName('elixirtier')
+            .setDescription(
+              'Elixir tier (Basic / Mid / High). Overrides elixirlevel when set. Mid/High grants require this or elixirlevel.'
+            )
+            .setRequired(false)
+            .addChoices(
+              { name: 'Basic', value: 'basic' },
+              { name: 'Mid', value: 'mid' },
+              { name: 'High', value: 'high' }
+            )
+        )
         .addIntegerOption(opt =>
           opt
             .setName('elixirlevel')
-            .setDescription('Elixir tier (1=Basic, 2=Mid, 3=High). Only applies to elixirs.')
+            .setDescription(
+              'Elixir tier as number: 1=Basic, 2=Mid, 3=High. Ignored if Elixir tier is set. Default Basic.'
+            )
             .setRequired(false)
             .setMinValue(1)
             .setMaxValue(3)
@@ -1711,12 +1732,22 @@ async function handleStealReset(interaction) {
 // ------------------- Function: handleGive -------------------
 // Gives an item to a character by name, validating quantity and existence.
 async function handleGive(interaction) {
-    const userId = interaction.user.id;
     const charName = interaction.options.getString('character');
     const itemName = interaction.options.getString('item');
     const quantity = interaction.options.getInteger('quantity');
+    const elixirTierChoice = interaction.options.getString('elixirtier');
     const requestedElixirLevel = interaction.options.getInteger('elixirlevel');
     const requestedModifierHearts = interaction.options.getInteger('modifierhearts');
+
+    const resolveModGiveElixirLevel = (tierStr, levelInt) => {
+      if (tierStr) {
+        const t = String(tierStr).toLowerCase();
+        if (t === 'mid') return 2;
+        if (t === 'high') return 3;
+        return 1;
+      }
+      return normalizeElixirLevel(levelInt ?? 1);
+    };
   
     if (quantity < 1) {
       return interaction.editReply('❌ You must specify a quantity of at least **1**.');
@@ -1744,10 +1775,14 @@ async function handleGive(interaction) {
   
     // ------------------- Apply Inventory Update -------------------
     const isElixir = isElixirItemName(item.itemName);
+    const resolvedElixirLevel = isElixir
+      ? resolveModGiveElixirLevel(elixirTierChoice, requestedElixirLevel)
+      : 1;
+    const modifierHearts = Math.max(0, Math.floor(Number(requestedModifierHearts) || 0));
     const modGiveOptions = isElixir
       ? {
-          elixirLevel: normalizeElixirLevel(requestedElixirLevel ?? 1),
-          modifierHearts: Math.max(0, Math.floor(Number(requestedModifierHearts) || 0)),
+          elixirLevel: resolvedElixirLevel,
+          modifierHearts,
         }
       : {};
     await addItemInventoryDatabase(
@@ -1764,6 +1799,31 @@ async function handleGive(interaction) {
     // Send processing message as ephemeral
     await interaction.editReply({ content: '✅ Processing...', ephemeral: true });
     
+    const itemFields = [
+      { 
+        name: '🎁 Item Received', 
+        value: `**${itemName}** × **${quantity}**`, 
+        inline: false 
+      },
+      { 
+        name: '👤 Character', 
+        value: `**${character.name}**`, 
+        inline: false 
+      }
+    ];
+    if (isElixir) {
+      const tierLabel = ELIXIR_LEVEL_NAMES[resolvedElixirLevel] || 'Basic';
+      let elixirDetail = `**${tierLabel}** (level ${resolvedElixirLevel})`;
+      if (modifierHearts > 0) {
+        elixirDetail += `\nFairy mix-in: **+${modifierHearts}** heart(s)`;
+      }
+      itemFields.push({
+        name: '🧪 Elixir stack',
+        value: elixirDetail,
+        inline: false
+      });
+    }
+
     // Create a beautiful embed for the success message
     const successEmbed = new EmbedBuilder()
       .setColor('#59A914') // Green color for success
@@ -1774,18 +1834,7 @@ async function handleGive(interaction) {
         iconURL: character.icon || 'https://via.placeholder.com/100',
         url: character.inventory || null
       })
-      .addFields(
-        { 
-          name: '🎁 Item Received', 
-          value: `**${itemName}** × **${quantity}**`, 
-          inline: false 
-        },
-        { 
-          name: '👤 Character', 
-          value: `**${character.name}**`, 
-          inline: false 
-        }
-      )
+      .addFields(itemFields)
       .setThumbnail(validateAndSanitizeUrl(item.image, 'https://via.placeholder.com/100'))
       .setImage('https://storage.googleapis.com/tinglebot/Graphics/border.png')
       .setFooter({ text: 'Divine blessing bestowed by the Gods ✨' })

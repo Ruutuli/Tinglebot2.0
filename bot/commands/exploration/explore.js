@@ -644,6 +644,12 @@ async function maybeApplyQuadrantHazards(party, options = {}) {
   const hazards = await getQuadrantHazards(squareId, quadrantId);
   if (!hazards.length) return { applied: false, ko: false, heartsLost: 0, staminaLost: 0, hazardMessage: null };
 
+  const needsHazardBuffCheck = hazards.some((h) => {
+    const x = String(h || "").trim().toLowerCase();
+    return x === "thunder" || x === "hot" || x === "cold";
+  });
+  const partyHazardBuffTypes = needsHazardBuffCheck ? await getPartyHazardResistanceBuffTypes(party) : new Set();
+
   const exploreElixir = party.exploreElixir;
   const location = `${String(squareId || "").trim().toUpperCase()} ${String(quadrantId || "").trim().toUpperCase()}`.trim();
   const at = options.at instanceof Date ? options.at : new Date();
@@ -658,6 +664,8 @@ async function maybeApplyQuadrantHazards(party, options = {}) {
   for (const hz of hazards) {
     // If the party used a hazard-resistance elixir this explore, skip hazards it counters
     if (exploreElixir?.type && elixirCountersExplorationHazard(exploreElixir.type, hz)) continue;
+    // Per-character hazard elixirs from /item (Spicy / Chilly / Electro) protect the party the same way
+    if (partyHazardBuffTypes.size && partyBuffTypesCounterExplorationHazard(partyHazardBuffTypes, hz)) continue;
 
     if (hz === "thunder") {
       if (Math.random() < HAZARD_PROC_CHANCE) {
@@ -1829,6 +1837,42 @@ async function getBrightRevealStepsForMazeParty(party) {
     if (steps > best) best = steps;
   }
   return best;
+}
+
+/** Active Spicy / Chilly / Electro buff on any party member (from /item, etc.) — same counters as `party.exploreElixir` for quadrant hazards. */
+async function getPartyHazardResistanceBuffTypes(party) {
+  const types = new Set();
+  const chars = party?.characters || [];
+  if (!chars.length) return types;
+  const ids = chars.map((c) => c._id).filter(Boolean);
+  if (!ids.length) return types;
+  const [norm, mods] = await Promise.all([
+    Character.find({ _id: { $in: ids } }).select("buff").lean(),
+    ModCharacter.find({ _id: { $in: ids } }).select("buff").lean(),
+  ]);
+  const byId = new Map();
+  for (const d of norm || []) {
+    if (d?._id) byId.set(String(d._id), d);
+  }
+  for (const d of mods || []) {
+    if (d?._id && !byId.has(String(d._id))) byId.set(String(d._id), d);
+  }
+  for (const slot of chars) {
+    if (!slot?._id) continue;
+    const doc = byId.get(String(slot._id));
+    const buff = doc?.buff;
+    if (!buff?.active) continue;
+    const t = buff.type === "fireproof" ? "chilly" : buff.type;
+    if (t === "spicy" || t === "chilly" || t === "electro") types.add(t);
+  }
+  return types;
+}
+
+function partyBuffTypesCounterExplorationHazard(buffTypesSet, hazardKey) {
+  for (const t of buffTypesSet) {
+    if (elixirCountersExplorationHazard(t, hazardKey)) return true;
+  }
+  return false;
 }
 
 // ------------------- handleGrottoCleanse ------------------

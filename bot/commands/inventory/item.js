@@ -31,6 +31,7 @@ const { getJobVoucherErrorMessage } = require('../../modules/jobVoucherModule');
 const { getPetTypeData, getPetEmoji, getRollsDisplay } = require('../../modules/petModule');
 const {
   applyElixirBuff,
+  consumeElixirBuff,
   getElixirInfo,
   removeExpiredBuffs,
   ELIXIR_EFFECTS,
@@ -1051,48 +1052,20 @@ module.exports = {
           });
         }
 
-        // Only one buff elixir active at a time. Instant elixirs (no lingering buff) may still be drunk.
+        // Instant elixirs (no lingering buff) may be drunk anytime. Persistent buffs: new elixir replaces the old one.
         const elixirInstantNoPersistentBuff =
           canonicalItemName === 'Hearty Elixir' ||
           canonicalItemName === 'Fairy Tonic' ||
           canonicalItemName === 'Enduring Elixir';
+        let priorBuffDisplayName = null;
         if (character.buff?.active && !elixirInstantNoPersistentBuff) {
           const rawType = character.buff.type;
           const typeForLookup = rawType === 'fireproof' ? 'chilly' : rawType;
-          const elixirDisplayName =
+          priorBuffDisplayName =
             Object.keys(ELIXIR_EFFECTS).find(
               (key) => ELIXIR_EFFECTS[key].type === typeForLookup
             ) || String(rawType || 'unknown');
-          const currentElixirInfo = getElixirInfo(elixirDisplayName);
-          const activeBuffEffect =
-            currentElixirInfo &&
-            (getElixirItemUseBlurb(elixirDisplayName, normalizeElixirLevel(character.buff?.elixirLevel) || 1, {
-              maxHeartsForFairyTonic: character.maxHearts,
-              maxHeartsForHearty: character.maxHearts,
-              maxStaminaForEnduring: character.maxStamina,
-            }).trim() ||
-              currentElixirInfo.description);
-          return void await interaction.editReply({
-            embeds: [{
-              color: 0x8B4513,
-              title: '❌ Active elixir buff',
-              description: [
-                `${character.name} already has an active elixir buff and cannot drink another buff elixir until it is used up or cleared.`,
-                `**Current buff:** **${elixirDisplayName}**`,
-                activeBuffEffect ? `**Effect**\n${activeBuffEffect.slice(0, 3500)}` : null,
-              ]
-                .filter(Boolean)
-                .join('\n\n'),
-              fields: [],
-              image: {
-                url: 'https://storage.googleapis.com/tinglebot/Graphics/border.png'
-              },
-              footer: {
-                text: 'Hearty, Fairy Tonic, and Enduring can still be drunk while buffed (instant). Otherwise wait until your buff is consumed.',
-              },
-            }],
-            ephemeral: true,
-          });
+          consumeElixirBuff(character);
         }
 
         // Store original values for display (moved to broader scope)
@@ -1276,6 +1249,9 @@ module.exports = {
         }
         const descParts = [
           `**${character.name}** drank **${canonicalItemName}** (${potencyLabel}, level ${invElixirLevel}).`,
+          priorBuffDisplayName
+            ? `_Previous buff **${priorBuffDisplayName}** was replaced._`
+            : null,
           effectValue ? `**Effect**\n${effectValue.slice(0, 3500)}` : null,
         ].filter(Boolean);
 
@@ -1332,7 +1308,9 @@ module.exports = {
         }
 
         elixirEmbed.setFooter({
-          text: isImmediateElixir ? 'Instant effect' : 'Until spent',
+          text: isImmediateElixir
+            ? 'Instant effect'
+            : 'Until spent · Drink another buff elixir anytime to replace it',
           iconURL: character.icon,
         });
 
