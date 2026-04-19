@@ -724,7 +724,7 @@ const modCommand = new SlashCommandBuilder()
           opt
             .setName('elixirtier')
             .setDescription(
-              'Elixir tier (Basic / Mid / High). Overrides elixirlevel when set. Mid/High grants require this or elixirlevel.'
+              'Elixir tier (Basic/Mid/High). Overrides elixirlevel; use for Mid/High grants or with elixirlevel.'
             )
             .setRequired(false)
             .addChoices(
