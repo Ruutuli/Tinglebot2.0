@@ -11,6 +11,7 @@ const { v4: uuidv4 } = require('uuid');
 // ------------------- Discord.js Components -------------------
 const {
   EmbedBuilder,
+  MessageFlags,
   PermissionsBitField,
   SlashCommandBuilder
 } = require('discord.js');
@@ -679,10 +680,14 @@ const ADMIN_REVIEW_CHANNEL_ID = process.env.ADMIN_REVIEW_CHANNEL_ID || '96434287
 // Defines the /mod command and all subcommands
 // ============================================================================
 
+// Not Administrator-only: Discord hides commands when the member lacks these bits. Manage Messages is
+// the usual baseline for mod roles; tighten via Server Settings → Integrations if needed.
+const modCommandDefaultPerms = PermissionsBitField.Flags.ManageMessages;
+
 const modCommand = new SlashCommandBuilder()
   .setName('mod')
   .setDescription('🛠️ Moderator utilities: manage items, pets, encounters, status, tables, and submissions')
-  .setDefaultMemberPermissions(PermissionsBitField.Flags.Administrator)
+  .setDefaultMemberPermissions(modCommandDefaultPerms)
 
 // ------------------- Subcommand Group: character -------------------
 .addSubcommandGroup(group =>
@@ -1482,7 +1487,7 @@ async function execute(interaction) {
     // Only defer with ephemeral for non-mount and non-weather commands
     try {
       if (subcommand !== 'mount' && subcommandGroup !== 'weather') {
-        await interaction.deferReply({ flags: [4096] }); // 4096 is the flag for ephemeral messages
+        await interaction.deferReply({ flags: [MessageFlags.Ephemeral] });
       } else {
         await interaction.deferReply();
       }
@@ -6508,7 +6513,7 @@ async function handleLevel(interaction) {
       default:
         return await interaction.editReply({
           content: '❌ Invalid action specified.',
-          flags: [4096]
+          flags: [MessageFlags.Ephemeral]
         });
     }
     
@@ -6565,7 +6570,7 @@ async function handleLevel(interaction) {
     
     await interaction.editReply({
       embeds: [embed],
-      flags: [4096] // Ephemeral
+      flags: [MessageFlags.Ephemeral]
     });
     
   } catch (error) {
