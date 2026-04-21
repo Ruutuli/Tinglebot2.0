@@ -3701,13 +3701,6 @@ async function checkMissedRolls(client) {
         console.log(`[blightHandler]: ✅ Skipping missed roll for ${character.name} - rolled in period. Last roll: ${character.lastRollDate.toISOString()}, Window start: ${currentRollBoundary.toISOString()}`);
         continue;
       }
-      
-      // Additional safety check: if we're before 8 PM today and they rolled after current boundary,
-      // they've already rolled for today's period (which hasn't ended yet)
-      if (utcHour < 20 && character.lastRollDate && character.lastRollDate > currentRollBoundary) {
-        console.log(`[blightHandler]: Skipping missed roll for ${character.name} (lastRollDate=${character.lastRollDate.toISOString()}, currentRollBoundary=${currentRollBoundary.toISOString()}) - already rolled in current period (before 8 PM check).`);
-        continue;
-      }
 
       // ---- SKIP missed roll progression if blight is paused ----
       if (character.blightPaused) {
