@@ -482,8 +482,9 @@ export async function PUT(
         updatedRecord.guildId == null
           ? ""
           : String(updatedRecord.guildId).trim();
-      const roleGuildId: string =
-        docGuildId || (process.env.GUILD_ID?.trim() ?? "");
+      const roleGuildId = String(
+        docGuildId || (process.env.GUILD_ID?.trim() ?? "")
+      );
       if (questRoleId && roleGuildId) {
         const rawP = updatedRecord.participants;
         const pairs: Array<[string, unknown]> =

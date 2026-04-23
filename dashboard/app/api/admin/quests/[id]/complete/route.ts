@@ -162,10 +162,11 @@ export async function POST(
     await quest.save();
 
     const questRoleId = quest.roleID ? String(quest.roleID).trim() : "";
-    const roleGuildId =
+    const roleGuildId = String(
       (quest.guildId && String(quest.guildId).trim()) ||
-      process.env.GUILD_ID ||
-      "";
+        (process.env.GUILD_ID && String(process.env.GUILD_ID).trim()) ||
+        ""
+    );
     if (questRoleId && roleGuildId && participants && typeof participants.entries === "function") {
       for (const [uid, p] of participants.entries()) {
         if (!p) continue;
