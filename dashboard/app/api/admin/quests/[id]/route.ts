@@ -7,7 +7,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import mongoose from "mongoose";
 import { connect } from "@/lib/db";
-import { discordApiRequest } from "@/lib/discord";
+import { discordApiRequest, removeGuildMemberRole } from "@/lib/discord";
 import { buildQuestEmbed } from "@/lib/questDiscordPost";
 import { isModeratorUser } from "@/lib/moderator";
 import { getSession, isAdminUser } from "@/lib/session";
@@ -288,6 +288,8 @@ export async function PUT(
       );
     }
 
+    const previousStatus = String((existing as Record<string, unknown>).status ?? "");
+
     const itemParsed = parseItemRewards(
       body.itemReward,
       body.itemRewardQty,
@@ -471,6 +473,44 @@ export async function PUT(
     }
 
     const updatedRecord = updated as Record<string, unknown>;
+
+    if (status === "completed" && previousStatus !== "completed") {
+      const questRoleId = updatedRecord.roleID
+        ? String(updatedRecord.roleID).trim()
+        : "";
+      const roleGuildId =
+        (updatedRecord.guildId && String(updatedRecord.guildId).trim()) ||
+        process.env.GUILD_ID ||
+        "";
+      if (questRoleId && roleGuildId) {
+        const rawP = updatedRecord.participants;
+        const pairs: Array<[string, unknown]> =
+          rawP instanceof Map
+            ? Array.from((rawP as Map<string, unknown>).entries())
+            : rawP && typeof rawP === "object" && rawP !== null
+              ? Object.entries(rawP as Record<string, unknown>)
+              : [];
+        for (const [uid, p] of pairs) {
+          if (!p || typeof p !== "object") continue;
+          const userId = normalizeDiscordId(
+            (p as { userId?: string }).userId ?? uid
+          );
+          if (!userId) continue;
+          const rm = await removeGuildMemberRole(
+            roleGuildId,
+            userId,
+            questRoleId
+          );
+          if (!rm.ok) {
+            logger.warn(
+              "api/admin/quests/[id] PUT",
+              `Could not remove quest role for ${userId}: ${rm.error}`
+            );
+          }
+        }
+      }
+    }
+
     const finalRpThreadId = updatedRecord.rpThreadId as string | null | undefined;
     if (
       questType === "RP" &&

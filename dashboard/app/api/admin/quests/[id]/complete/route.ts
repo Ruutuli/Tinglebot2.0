@@ -6,7 +6,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import mongoose from "mongoose";
 import { connect } from "@/lib/db";
-import { postQuestModCompletionAnnouncement } from "@/lib/discord";
+import { postQuestModCompletionAnnouncement, removeGuildMemberRole } from "@/lib/discord";
 import { getSession, isAdminUser } from "@/lib/session";
 import { logger } from "@/utils/logger";
 
@@ -160,6 +160,28 @@ export async function POST(
     }
 
     await quest.save();
+
+    const questRoleId = quest.roleID ? String(quest.roleID).trim() : "";
+    const roleGuildId =
+      (quest.guildId && String(quest.guildId).trim()) ||
+      process.env.GUILD_ID ||
+      "";
+    if (questRoleId && roleGuildId && participants && typeof participants.entries === "function") {
+      for (const [uid, p] of participants.entries()) {
+        if (!p) continue;
+        const userId = normalizeDiscordId(
+          (p as { userId?: string }).userId ?? uid
+        );
+        if (!userId) continue;
+        const rm = await removeGuildMemberRole(roleGuildId, userId, questRoleId);
+        if (!rm.ok) {
+          logger.warn(
+            "api/admin/quests/[id]/complete",
+            `Could not remove quest role for ${userId}: ${rm.error}`
+          );
+        }
+      }
+    }
 
     if (rewarded.length > 0) {
       const posted = await postQuestModCompletionAnnouncement({

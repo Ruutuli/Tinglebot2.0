@@ -112,7 +112,7 @@ export async function POST(
   }
 
   const { baseUrl: botBase, secret, isConfigured } = getBotInternalApiConfig();
-  if (!isConfigured) {
+  if (!isConfigured || !botBase || !secret) {
     return NextResponse.json(
       {
         error:

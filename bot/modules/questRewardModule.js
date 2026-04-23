@@ -1479,6 +1479,70 @@ function escapeRegExp(string) {
 // ------------------- Quest Management Functions -------------------
 // ============================================================================
 
+// ------------------- Remove per-quest role from all participants (when quest ends) ------------------
+async function removeQuestRoleFromAllParticipants(quest) {
+    try {
+        if (!quest?.roleID) {
+            return;
+        }
+        const { client } = require('../index.js');
+        if (!client) {
+            console.log(`[questRewardModule.js] ⚠️ Cannot remove quest role: Discord client unavailable`);
+            return;
+        }
+        const guildId = String(quest.guildId || process.env.GUILD_ID || '').trim();
+        let guild = null;
+        if (guildId) {
+            guild = client.guilds.cache.get(guildId) || (await client.guilds.fetch(guildId).catch(() => null));
+        }
+        if (!guild) {
+            guild = client.guilds.cache.first();
+        }
+        if (!guild) {
+            console.log(`[questRewardModule.js] ⚠️ Cannot remove quest role: no guild in cache`);
+            return;
+        }
+        const role = await guild.roles.fetch(quest.roleID).catch(() => null);
+        if (!role) {
+            console.log(`[questRewardModule.js] ⚠️ Quest role ${quest.roleID} not found in guild ${guild.id}`);
+            return;
+        }
+        if (!quest.participants || quest.participants.size === 0) {
+            return;
+        }
+        let removed = 0;
+        for (const [mapKey, participant] of quest.participants) {
+            const rawId = String(participant?.userId || mapKey || '')
+                .trim()
+                .replace(/[<@!>]/g, '');
+            const userId = rawId.replace(/\D/g, '');
+            if (userId.length < 15) {
+                continue;
+            }
+            const member = await guild.members.fetch(userId).catch(() => null);
+            if (!member || !member.roles.cache.has(quest.roleID)) {
+                continue;
+            }
+            try {
+                await member.roles.remove(role);
+                removed++;
+            } catch (err) {
+                console.error(
+                    `[questRewardModule.js] ⚠️ Could not remove quest role from member ${userId}:`,
+                    err.message
+                );
+            }
+        }
+        if (removed > 0) {
+            console.log(
+                `[questRewardModule.js] ✅ Removed quest role ${quest.roleID} from ${removed} member(s) (quest ${quest.questID})`
+            );
+        }
+    } catch (error) {
+        console.error(`[questRewardModule.js] ❌ removeQuestRoleFromAllParticipants:`, error);
+    }
+}
+
 // ------------------- Mark Quest as Completed ------------------
 async function markQuestAsCompleted(quest) {
     try {
@@ -1510,9 +1574,7 @@ async function markQuestAsCompleted(quest) {
         
         console.log(`[questRewardModule.js] ✅ Quest ${quest.questID} marked as completed`);
         
-        if (quest.roleID) {
-            console.log(`[questRewardModule.js] ℹ️ Quest role ${quest.roleID} should be deleted (requires guild context)`);
-        }
+        await removeQuestRoleFromAllParticipants(quest);
         
     } catch (error) {
         console.error(`[questRewardModule.js] ❌ Error marking quest as completed:`, error);
@@ -2414,6 +2476,7 @@ module.exports = {
     distributeRewards,
     distributeItems,
     markQuestAsCompleted,
+    removeQuestRoleFromAllParticipants,
     manuallyCompleteQuest,
     getQuestStatus,
     processRPQuestCompletion,

@@ -1458,6 +1458,13 @@ questSchema.methods.checkAutoCompletion = async function(forceCheck = false) {
         }
         
         await this.save();
+
+        try {
+            const questRewardModule = require('../modules/questRewardModule');
+            await questRewardModule.removeQuestRoleFromAllParticipants(this);
+        } catch (roleErr) {
+            console.error(`[QuestModel.js] ❌ Error removing quest role after completion:`, roleErr);
+        }
         
         // Don't send summary here - it will be sent after rewards are processed
         // to avoid duplicate messages
@@ -1529,6 +1536,13 @@ questSchema.methods.checkAutoCompletion = async function(forceCheck = false) {
         this.completionProcessed = false; // Mark for reward processing
         console.log(`[QuestModel.js] 🎉 Quest "${this.title}" completed - all participants finished and quest period has ended`);
         await this.save();
+
+        try {
+            const questRewardModule = require('../modules/questRewardModule');
+            await questRewardModule.removeQuestRoleFromAllParticipants(this);
+        } catch (roleErr) {
+            console.error(`[QuestModel.js] ❌ Error removing quest role after completion:`, roleErr);
+        }
         
         // Don't send summary here - it will be sent after rewards are processed
         // to avoid duplicate messages
