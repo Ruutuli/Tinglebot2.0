@@ -43,7 +43,8 @@ const {
   sendBloodMoonEndAnnouncement,
   cleanupOldTrackingData,
   renameChannels,
-  revertChannelNames
+  revertChannelNames,
+  syncTownHallChannelNames
 } = require('@/scripts/bloodmoon');
 const { generateDailyQuests: runHelpWantedGeneration } = require('@/modules/helpWantedModule');
 const { updateSubmissionData } = require('@/utils/storage');
@@ -155,6 +156,11 @@ async function dailyWeather(client, _data = {}) {
       logger.error('SCHEDULED', `daily-weather: ${village} failed: ${err.message}`);
     }
   }
+  try {
+    await syncTownHallChannelNames(client);
+  } catch (err) {
+    logger.error('SCHEDULED', `daily-weather: town hall name sync: ${err.message}`);
+  }
   logger.success('SCHEDULED', 'daily-weather: done');
 }
 
@@ -208,6 +214,11 @@ async function weatherFallbackCheck(client, _data = {}) {
       logger.error('SCHEDULED', `weather-fallback-check: ${village} failed: ${err.message}`);
     }
   }
+  try {
+    await syncTownHallChannelNames(client);
+  } catch (err) {
+    logger.error('SCHEDULED', `weather-fallback-check: town hall name sync: ${err.message}`);
+  }
   logger.success('SCHEDULED', 'weather-fallback-check: done');
 }
 
@@ -251,6 +262,11 @@ async function weatherReminder(client, _data = {}) {
     } catch (err) {
       logger.error('SCHEDULED', `weather-reminder: ${village} failed: ${err.message}`);
     }
+  }
+  try {
+    await syncTownHallChannelNames(client);
+  } catch (err) {
+    logger.error('SCHEDULED', `weather-reminder: town hall name sync: ${err.message}`);
   }
 
   logger.success('SCHEDULED', 'weather-reminder: done');

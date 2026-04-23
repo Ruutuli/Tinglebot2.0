@@ -33,6 +33,17 @@ const { EmbedBuilder } = require('discord.js');
 // ------------------- Importing custom modules -------------------
 const { convertToHyruleanDate, bloodmoonDates, isBloodmoon } = require('../modules/calendarModule');
 const BloodMoonTracking = require('@/models/BloodMoonTrackingModel');
+const { getWeatherWithoutGeneration } = require('@/services/weatherService');
+
+/** Prepend to town-hall names when the village’s current special weather is Blight Rain. */
+const BLIGHT_RAIN_TOWNHALL_PREFIX = '\uD83E\uDE78'; // (🩸)
+
+const TOWNHALL_VILLAGES = ['Rudania', 'Inariko', 'Vhintl'];
+const TOWNHALL_CHANNEL_ENV = {
+  Rudania: 'RUDANIA_TOWNHALL',
+  Inariko: 'INARIKO_TOWNHALL',
+  Vhintl: 'VHINTL_TOWNHALL',
+};
 
 // ============================================================================
 // Blood Moon Tracking State
@@ -405,6 +416,45 @@ function getBloodMoonChannelMappings() {
   }
 }
 
+// ------------------- getDesiredTownHallName -------------------
+// Picks default vs. Blood Moon name, then prepends the Blight Rain hint when the village is under Blight Rain.
+function getDesiredTownHallName(channelId, isBlightRain) {
+  const defaultNames = getChannelMappings();
+  const bloodNames = getBloodMoonChannelMappings();
+  const base = isBloodMoonDay() ? bloodNames[channelId] : defaultNames[channelId];
+  if (!base) {
+    return null;
+  }
+  return isBlightRain ? `${BLIGHT_RAIN_TOWNHALL_PREFIX}${base}` : base;
+}
+
+// ------------------- syncTownHallChannelNames -------------------
+// Updates all village town-hall channel names to match Blood Moon, Blight Rain, or normal branding.
+async function syncTownHallChannelNames(client) {
+  if (!client?.channels) {
+    return;
+  }
+  for (const village of TOWNHALL_VILLAGES) {
+    const envKey = TOWNHALL_CHANNEL_ENV[village];
+    const channelId = process.env[envKey];
+    if (!channelId) {
+      continue;
+    }
+    let isBlightRain = false;
+    try {
+      const w = await getWeatherWithoutGeneration(village);
+      isBlightRain = w?.special?.label === 'Blight Rain';
+    } catch (error) {
+      handleError(error, 'bloodmoon.js');
+      logger.error('BLOODMOON', `Could not read weather for ${village} when syncing town-hall name: ${error.message}`, error);
+    }
+    const newName = getDesiredTownHallName(channelId, isBlightRain);
+    if (newName) {
+      await changeChannelName(client, channelId, newName);
+    }
+  }
+}
+
 // ------------------- changeChannelName -------------------
 // Changes the name of a Discord channel.
 async function changeChannelName(client, channelId, newName) {
@@ -432,6 +482,10 @@ async function changeChannelName(client, channelId, newName) {
       return;
     }
 
+    if (channel.name === newName) {
+      return;
+    }
+
     // Attempt to change the channel name
     await channel.setName(newName);
   } catch (error) {
@@ -441,58 +495,15 @@ async function changeChannelName(client, channelId, newName) {
 }
 
 // ------------------- renameChannels -------------------
-// Renames channels to indicate Blood Moon activation.
-// Only renames when it is actually a Blood Moon period (8pm EST day-before through 8am EST day-after).
+// Public hook used by manual Blood Moon triggers: applies full town-hall naming (Blood Moon + Blight Rain where relevant).
 async function renameChannels(client) {
-  if (!isBloodMoonDay()) {
-    logger.info('BLOODMOON', 'Not a Blood Moon period - skipping channel renaming');
-    return;
-  }
-  logger.info('BLOODMOON', 'Starting Blood Moon channel renaming');
-  
-  const channelMappings = getBloodMoonChannelMappings();
-  for (const [channelId, newName] of Object.entries(channelMappings)) {
-    try {
-      await changeChannelName(client, channelId, newName);
-      logger.success('BLOODMOON', `Renamed channel ${channelId} for Blood Moon`);
-    } catch (error) {
-      logger.error('BLOODMOON', `Failed to rename channel ${channelId}: ${error.message}`, error);
-    }
-  }
-  
-  logger.success('BLOODMOON', 'Blood Moon channel renaming completed');
+  await syncTownHallChannelNames(client);
 }
 
 // ------------------- revertChannelNames -------------------
-// Reverts channel names to their default state and sends end-of-event announcements.
+// Reverts to non–Blood-Moon state where applicable; also reflects Blight Rain in channel names.
 async function revertChannelNames(client) {
-  
-  // First check if Blood Moon is currently active
-  const isBloodMoonActive = isBloodMoonDay();
-  
-  if (isBloodMoonActive) {
-    logger.info('BLOODMOON', 'Blood Moon is active - skipping channel reversion');
-    return;
-  }
-  
-  const channelMappings = getChannelMappings();
-
-  // Track successful channel changes
-  const successfulChannels = new Set();
-
-  for (const [channelId, newName] of Object.entries(channelMappings)) {
-    try {
-      await changeChannelName(client, channelId, newName);
-      successfulChannels.add(channelId);
-    } catch (error) {
-      logger.error('BLOODMOON', `Failed to revert channel ${channelId}: ${error.message}`, error);
-    }
-  }
-
-  // End announcement is sent only by the scheduled task at 8am EST on the day after blood moon (see sendBloodMoonEndAnnouncement)
-  if (successfulChannels.size > 0) {
-    logger.info('BLOODMOON', `Reverted ${successfulChannels.size} channel names`);
-  }
+  await syncTownHallChannelNames(client);
 }
 
 // ============================================================================
@@ -533,6 +544,7 @@ module.exports = {
   trackBloodMoon,
   renameChannels,
   revertChannelNames,
+  syncTownHallChannelNames,
   isBloodMoonDay,
   isBloodMoonPeriod,
   triggerBloodMoonNow,

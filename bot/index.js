@@ -56,7 +56,7 @@ const { initializeModTodoReactionHandler } = require('./handlers/modTodoReaction
 // ============================================================================
 // ------------------- Scripts & Modules -------------------
 // ============================================================================
-const { isBloodMoonDay, renameChannels, revertChannelNames } = require("./scripts/bloodmoon");
+const { isBloodMoonDay, syncTownHallChannelNames } = require("./scripts/bloodmoon");
 const { convertToHyruleanDate } = require("./modules/calendarModule");
 
 // ============================================================================
@@ -595,17 +595,12 @@ async function initializeClient() {
         // Check blood moon status
         logBloodMoonStatus();
 
-        // Sync Blood Moon channel names on startup (handles bot restarts during/after Blood Moon)
+        // Town hall channel names: Blood Moon + Blight Rain hint (🩸) match DB weather on startup
         try {
-          if (isBloodMoonDay()) {
-            await renameChannels(client);
-            logger.info('SYSTEM', 'Blood Moon channel names synced (active)');
-          } else {
-            await revertChannelNames(client);
-            logger.info('SYSTEM', 'Blood Moon channel names synced (reverted)');
-          }
+          await syncTownHallChannelNames(client);
+          logger.info('SYSTEM', 'Town hall channel names synced (Blood Moon + Blight Rain when applicable)');
         } catch (err) {
-          logger.error('SYSTEM', `Failed to sync Blood Moon channel names on startup: ${err.message}`);
+          logger.error('SYSTEM', `Failed to sync town hall channel names on startup: ${err.message}`);
         }
         
         
