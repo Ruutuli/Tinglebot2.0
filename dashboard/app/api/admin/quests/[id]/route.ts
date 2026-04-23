@@ -510,6 +510,9 @@ export async function PUT(
             );
           }
         }
+        await Quest.findByIdAndUpdate(id, {
+          $set: { participantQuestRolesStrippedAt: new Date() },
+        }).exec();
       }
     }
 

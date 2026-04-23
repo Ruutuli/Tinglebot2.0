@@ -30,7 +30,11 @@ const TempData = require('@/models/TempDataModel');
 const TokenTransaction = require('@/models/TokenTransactionModel');
 const { releaseFromJail } = require('@/utils/jailCheck');
 const { recoverDailyStamina } = require('@/modules/characterStatsModule');
-const { processMonthlyQuestRewards, processQuestCompletion } = require('@/modules/questRewardModule');
+const {
+  processMonthlyQuestRewards,
+  processQuestCompletion,
+  cleanupStaleQuestParticipantRoles
+} = require('@/modules/questRewardModule');
 const { checkRaidExpiration, RAID_EXPIRATION_JOB_NAME, RAID_TURN_SKIP_JOB_NAME, scheduleRaidTurnSkip, applyPartySizeScalingToRaid } = require('@/modules/raidModule');
 const { checkVillageRaidQuotas } = require('@/scripts/randomMonsterEncounters');
 const {
@@ -2267,6 +2271,17 @@ async function questCompletionCheck(_client, _data = {}) {
   }
 }
 
+// ------------------- quest-participant-role-cleanup (Every 6 h: backfill strip for completed quests) -------------------
+async function questParticipantRoleCleanup(_client, _data = {}) {
+  try {
+    logger.info('SCHEDULED', 'quest-participant-role-cleanup: starting');
+    await cleanupStaleQuestParticipantRoles();
+    logger.info('SCHEDULED', 'quest-participant-role-cleanup: done');
+  } catch (err) {
+    logger.error('SCHEDULED', `quest-participant-role-cleanup: ${err.message}`);
+  }
+}
+
 // ------------------- village-tracking-check (Every 2 hours) -------------------
 async function villageTrackingCheck(_client, _data = {}) {
   try {
@@ -2963,6 +2978,7 @@ const TASKS = [
   { name: 'raid-expiration-cleanup', cron: '*/5 * * * *', handler: raidExpirationCleanup }, // Every 5 minutes
   { name: 'village-raid-quota-check', cron: '0 * * * *', handler: villageRaidQuotaCheck }, // Every hour
   { name: 'quest-completion-check', cron: '0 */6 * * *', handler: questCompletionCheck }, // Every 6 hours
+  { name: 'quest-participant-role-cleanup', cron: '25 */6 * * *', handler: questParticipantRoleCleanup }, // Every 6 h (offset) — backfill per-quest roles
   { name: 'village-tracking-check', cron: '0 */2 * * *', handler: villageTrackingCheck }, // Every 2 hours
   
   // Character Timer Tasks

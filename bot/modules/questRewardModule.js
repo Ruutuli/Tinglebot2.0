@@ -1479,10 +1479,27 @@ function escapeRegExp(string) {
 // ------------------- Quest Management Functions -------------------
 // ============================================================================
 
+// ------------------- Per-quest role strip bookkeeping (Mongoose docs only) ------------------
+async function markParticipantQuestRolesStripped(quest) {
+    if (quest?.participantQuestRolesStrippedAt || typeof quest?.save !== 'function') {
+        return;
+    }
+    try {
+        quest.participantQuestRolesStrippedAt = new Date();
+        await quest.save();
+    } catch (e) {
+        console.error(`[questRewardModule.js] ⚠️ markParticipantQuestRolesStripped:`, e.message);
+    }
+}
+
 // ------------------- Remove per-quest role from all participants (when quest ends) ------------------
 async function removeQuestRoleFromAllParticipants(quest) {
     try {
-        if (!quest?.roleID) {
+        const roleId = quest?.roleID != null ? String(quest.roleID).trim() : '';
+        if (!roleId) {
+            return;
+        }
+        if (quest.participantQuestRolesStrippedAt) {
             return;
         }
         const { client } = require('../index.js');
@@ -1502,12 +1519,14 @@ async function removeQuestRoleFromAllParticipants(quest) {
             console.log(`[questRewardModule.js] ⚠️ Cannot remove quest role: no guild in cache`);
             return;
         }
-        const role = await guild.roles.fetch(quest.roleID).catch(() => null);
+        const role = await guild.roles.fetch(roleId).catch(() => null);
         if (!role) {
-            console.log(`[questRewardModule.js] ⚠️ Quest role ${quest.roleID} not found in guild ${guild.id}`);
+            console.log(`[questRewardModule.js] ⚠️ Quest role ${roleId} not found in guild ${guild.id} — marking stripped`);
+            await markParticipantQuestRolesStripped(quest);
             return;
         }
-        if (!quest.participants || quest.participants.size === 0) {
+        if (!quest.participants || !quest.participants.size) {
+            await markParticipantQuestRolesStripped(quest);
             return;
         }
         let removed = 0;
@@ -1520,7 +1539,7 @@ async function removeQuestRoleFromAllParticipants(quest) {
                 continue;
             }
             const member = await guild.members.fetch(userId).catch(() => null);
-            if (!member || !member.roles.cache.has(quest.roleID)) {
+            if (!member || !member.roles.cache.has(roleId)) {
                 continue;
             }
             try {
@@ -1535,11 +1554,45 @@ async function removeQuestRoleFromAllParticipants(quest) {
         }
         if (removed > 0) {
             console.log(
-                `[questRewardModule.js] ✅ Removed quest role ${quest.roleID} from ${removed} member(s) (quest ${quest.questID})`
+                `[questRewardModule.js] ✅ Removed quest role ${roleId} from ${removed} member(s) (quest ${quest.questID})`
             );
         }
+        await markParticipantQuestRolesStripped(quest);
     } catch (error) {
         console.error(`[questRewardModule.js] ❌ removeQuestRoleFromAllParticipants:`, error);
+    }
+}
+
+// ------------------- Backfill: strip roles for completed quests not yet marked cleaned ------------------
+async function cleanupStaleQuestParticipantRoles() {
+    const Quest = require('../models/QuestModel');
+    const find = {
+        status: 'completed',
+        roleID: { $exists: true, $nin: [null, ''] },
+        $or: [
+            { participantQuestRolesStrippedAt: null },
+            { participantQuestRolesStrippedAt: { $exists: false } }
+        ]
+    };
+    const batch = await Quest.find(find)
+        .sort({ completedAt: 1, postedAt: 1 })
+        .limit(50)
+        .exec();
+
+    for (const quest of batch) {
+        try {
+            await removeQuestRoleFromAllParticipants(quest);
+        } catch (e) {
+            console.error(
+                `[questRewardModule.js] cleanupStaleQuestParticipantRoles quest ${quest?.questID}:`,
+                e.message
+            );
+        }
+    }
+    if (batch.length) {
+        console.log(
+            `[questRewardModule.js] 🧹 cleanupStaleQuestParticipantRoles: processed up to ${batch.length} quest(s) with pending role removal`
+        );
     }
 }
 
@@ -2477,6 +2530,7 @@ module.exports = {
     distributeItems,
     markQuestAsCompleted,
     removeQuestRoleFromAllParticipants,
+    cleanupStaleQuestParticipantRoles,
     manuallyCompleteQuest,
     getQuestStatus,
     processRPQuestCompletion,

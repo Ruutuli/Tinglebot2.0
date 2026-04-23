@@ -181,6 +181,9 @@ export async function POST(
           );
         }
       }
+      (quest as { participantQuestRolesStrippedAt?: Date }).participantQuestRolesStrippedAt =
+        new Date();
+      await quest.save();
     }
 
     if (rewarded.length > 0) {

@@ -77,7 +77,9 @@ const statusFields = {
     completionReason: { type: String, default: null },
     completedAt: { type: Date, default: null },
     completionProcessed: { type: Boolean, default: false }, // Prevents duplicate reward processing
-    lastCompletionCheck: { type: Date, default: null } // Tracks when completion was last checked
+    lastCompletionCheck: { type: Date, default: null }, // Tracks when completion was last checked
+    /** Set when the per-quest Discord role has been stripped (or n/a); avoids repeated cleanup. */
+    participantQuestRolesStrippedAt: { type: Date, default: null }
 };
 
 // ------------------- Submission Schema ------------------
