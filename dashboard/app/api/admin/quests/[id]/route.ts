@@ -478,10 +478,12 @@ export async function PUT(
       const questRoleId = updatedRecord.roleID
         ? String(updatedRecord.roleID).trim()
         : "";
-      const roleGuildId =
-        (updatedRecord.guildId && String(updatedRecord.guildId).trim()) ||
-        process.env.GUILD_ID ||
-        "";
+      const docGuildId =
+        updatedRecord.guildId == null
+          ? ""
+          : String(updatedRecord.guildId).trim();
+      const roleGuildId: string =
+        docGuildId || (process.env.GUILD_ID?.trim() ?? "");
       if (questRoleId && roleGuildId) {
         const rawP = updatedRecord.participants;
         const pairs: Array<[string, unknown]> =
