@@ -2300,7 +2300,7 @@ async function rollForBlightProgression(interaction, characterName) {
     if (character.lastRollDate) {
       const DAY_MS = 24 * 60 * 60 * 1000;
 
-      const lastWindowStart = getBlightRollWindowStart(character.lastRollDate);
+      let lastWindowStart = getBlightRollWindowStart(character.lastRollDate);
 
       const obligationBoundary = getFirstBlightRollObligationBoundary(character.blightedAt);
       if (obligationBoundary && lastWindowStart.getTime() < obligationBoundary.getTime()) {
@@ -2930,39 +2930,33 @@ function getBlightStageDescription(stage) {
 
 // ------------------- Function: viewBlightHistory -------------------
 // Displays the most recent blight progression history for a character.
-async function viewBlightHistory(interaction, characterName, limit = 10) {
+// Expects `character` from validateCharacterOwnership (same doc / id as roll history uses).
+async function viewBlightHistory(interaction, character, limit = 10) {
   try {
-    const character = await Character.findOne({ name: characterName });
-    if (!character) {
-      await interaction.editReply({ content: `❌ Character "${characterName}" not found.`, flags: [4096] });
-      return;
-    }
+    const characterName = character.name;
 
-    // Check if character has ever been blighted
-    if (!character.blighted && !character.blightHistory) {
-      const neverBlightedEmbed = new EmbedBuilder()
-        .setColor('#00FF00') // Green color for positive message
-        .setTitle('📜 Never Blighted')
-        .setDescription(`**${characterName}** has never been blighted.`)
+    const history = await getCharacterBlightHistory(character._id, limit, {
+      characterName: character.name,
+      userId: character.userId
+    });
+
+    if (history.length === 0) {
+      const noRecordEmbed = new EmbedBuilder()
+        .setColor('#AA926A')
+        .setTitle('📜 No Blight History on Record')
+        .setDescription(
+          `**${characterName}** has no blight roll or healing events stored in the archive yet.\n\n` +
+          `Past rolls and healing completions appear here once logged. If you expected older entries, they may be missing after a data change or were never written to history.`
+        )
         .setThumbnail(character.icon)
         .setAuthor({ name: `${characterName}'s History`, iconURL: interaction.user.displayAvatarURL() })
         .setImage('https://storage.googleapis.com/tinglebot/border%20blight.png')
         .setFooter({ text: 'Blight History Check', iconURL: 'https://storage.googleapis.com/tinglebot/Graphics/blight_white.png' })
         .setTimestamp();
 
-      await interaction.editReply({ 
-        content: `<@${interaction.user.id}>`,
-        embeds: [neverBlightedEmbed],
-        flags: [4096] 
-      });
-      return;
-    }
-
-    const history = await getCharacterBlightHistory(character._id, limit);
-    
-    if (history.length === 0) {
       await interaction.editReply({
-        content: `📜 **${characterName}** has no recorded blight history.`,
+        content: `<@${interaction.user.id}>`,
+        embeds: [noRecordEmbed],
         flags: [4096]
       });
       return;
@@ -3020,7 +3014,7 @@ async function viewBlightHistory(interaction, characterName, limit = 10) {
       commandName: interaction.commandName || 'history',
       userTag: interaction.user.tag,
       userId: interaction.user.id,
-      characterName
+      characterName: character?.name
     });
     console.error('[blightHandler]: Error viewing blight history:', error);
     await interaction.editReply({ 
@@ -3572,9 +3566,26 @@ async function checkMissedRolls(client) {
       return;
     }
 
-    const channel = client.channels.cache.get(channelId);
-    if (!channel) {
-      console.error('[blightHandler]: ❌ Channel not found for missed roll notifications:', channelId);
+    let channel = client.channels.cache.get(channelId);
+    if (!channel || typeof channel.send !== 'function') {
+      try {
+        channel = await client.channels.fetch(channelId);
+      } catch (fetchChErr) {
+        console.error('[blightHandler]: ❌ Could not fetch missed-roll notification channel:', channelId, fetchChErr.message);
+        logger.error('BLIGHT', `checkMissedRolls: channel fetch failed: ${fetchChErr.message}`);
+        return;
+      }
+    }
+    if (!channel || typeof channel.send !== 'function') {
+      console.error('[blightHandler]: ❌ Channel not usable for missed roll notifications:', channelId);
+      return;
+    }
+
+    const nowForSchedule = new Date();
+    const mSchedule = moment.tz(nowForSchedule, BLIGHT_TZ);
+    const todayEightPmEastern = mSchedule.clone().startOf('day').hour(20).minute(0).second(0).millisecond(0);
+    if (mSchedule.isBefore(todayEightPmEastern)) {
+      logger.info('BLIGHT', 'checkMissedRolls: before 8:00 PM Eastern — skipping (roll window not closed)');
       return;
     }
 
@@ -3672,14 +3683,14 @@ async function checkMissedRolls(client) {
       const lastRollDate = character.lastRollDate || new Date(0);
       const timeSinceLastRoll = Date.now() - lastRollDate.getTime();
       
-      // ---- Calculate blight call boundaries (same as rollForBlightProgression: 8:00 PM Eastern) ----
+      // ---- Calculate blight call boundaries (8:00 PM Eastern; obligation = blight-day that just closed) ----
       const now = new Date();
 
       const currentRollBoundary = getBlightRollWindowStart(now);
-      const previousBlightCall = getPreviousBlightRollWindowStart(currentRollBoundary);
+      const obligationWindowStart = getPreviousBlightRollWindowStart(currentRollBoundary);
       
       // Enhanced logging for debugging
-      logger.info('BLIGHT', `Checking ${character.name} - UTC Time: ${now.toISOString()}, Last roll: ${lastRollDate.toISOString()}, Current boundary: ${currentRollBoundary.toISOString()}, Previous call: ${previousBlightCall.toISOString()}, Time since roll: ${Math.floor(timeSinceLastRoll / (1000 * 60 * 60))} hours`);
+      logger.info('BLIGHT', `Checking ${character.name} - UTC Time: ${now.toISOString()}, Last roll: ${lastRollDate.toISOString()}, Obligation window start: ${obligationWindowStart.toISOString()}, Current 8pm boundary: ${currentRollBoundary.toISOString()}, Time since roll: ${Math.floor(timeSinceLastRoll / (1000 * 60 * 60))} hours`);
       
       // ---- SKIP missed roll progression if newly blighted after previous blight call ----
       if (character.blightedAt) {
@@ -3693,12 +3704,9 @@ async function checkMissedRolls(client) {
         }
       }
       
-      // ---- CRITICAL: Check if character rolled in the period we're checking ----
-      // We consider the current rolling window (windowStart=currentRollBoundary).
-      // If they rolled after windowStart, they didn't miss this window.
-      // This is the primary check that prevents false progression
-      if (character.lastRollDate && character.lastRollDate > currentRollBoundary) {
-        console.log(`[blightHandler]: ✅ Skipping missed roll for ${character.name} - rolled in period. Last roll: ${character.lastRollDate.toISOString()}, Window start: ${currentRollBoundary.toISOString()}`);
+      // ---- Rolled during the blight-day that just ended (inclusive of 8pm boundary) ----
+      if (character.lastRollDate && character.lastRollDate >= obligationWindowStart) {
+        console.log(`[blightHandler]: ✅ Skipping missed roll for ${character.name} - rolled in period. Last roll: ${character.lastRollDate.toISOString()}, Obligation window start: ${obligationWindowStart.toISOString()}`);
         continue;
       }
 
@@ -3879,11 +3887,16 @@ async function checkMissedRolls(client) {
             .setImage('https://storage.googleapis.com/tinglebot/border%20blight.png')
             .setTimestamp();
 
-          if (characterInfo.userId) {
-            await channel.send({ content: `<@${characterInfo.userId}>`, embeds: [embed] });
-          } else {
-            await channel.send({ embeds: [embed] });
-            console.error(`[blightHandler]: Missing userId for ${characterInfo.name}`);
+          try {
+            if (characterInfo.userId) {
+              await channel.send({ content: `<@${characterInfo.userId}>`, embeds: [embed] });
+            } else {
+              await channel.send({ embeds: [embed] });
+              console.error(`[blightHandler]: Missing userId for ${characterInfo.name}`);
+            }
+          } catch (deathSendErr) {
+            logger.error('BLIGHT', `Blight death channel notify failed for ${characterInfo.name}: ${deathSendErr.message}`);
+            console.error(`[blightHandler]: ❌ Blight death channel notify failed for ${characterInfo.name}:`, deathSendErr);
           }
 
           // ------------------- Mod Log Death Report -------------------
@@ -3931,26 +3944,24 @@ async function checkMissedRolls(client) {
           .setImage('https://storage.googleapis.com/tinglebot/border%20blight.png')
           .setTimestamp();
 
-        await channel.send({ content: `<@${character.userId}>`, embeds: [stage5Embed] });
+        try {
+          await channel.send({ content: `<@${character.userId}>`, embeds: [stage5Embed] });
+        } catch (s5SendErr) {
+          logger.error('BLIGHT', `Stage 5 missed-roll channel notify failed for ${character.name}: ${s5SendErr.message}`);
+          console.error(`[blightHandler]: ❌ Stage 5 missed-roll channel notify failed for ${character.name}:`, s5SendErr);
+        }
         continue;
       }
 
       // ========================================================================
       // ------------------- Missed Roll → Auto Progression -------------------
       // ========================================================================
-      // checkMissedRolls runs only at 7:59 PM Eastern (blight-roll-call-check cron).
-      // A character has missed a roll if:
-      // 1. Their last roll was not after the current window start (currentRollBoundary)
-      // 2. They're not at stage 5 yet
-      //
-      // We've already skipped above: rolled in period, paused, or stage 5.
-      const isPastBlightCallTime = true;
-      // Auto-advance if they didn't roll during the current rolling window.
-      const lastRollBeforeCurrentWindow = !character.lastRollDate || character.lastRollDate <= currentRollBoundary;
-      const shouldProgress = isPastBlightCallTime && lastRollBeforeCurrentWindow && character.blightStage < 5;
+      // Runs after 8:00 PM Eastern (scheduled ~8:05). A character missed if they did not
+      // roll on or after obligationWindowStart (start of the blight-day that just ended).
+      const shouldProgress = character.blightStage < 5;
       
       if (shouldProgress) {
-        console.log(`[blightHandler]: ⚠️ ${character.name} missed roll - Last roll: ${lastRollDate.toISOString()}, Window start: ${currentRollBoundary.toISOString()}, Current time: ${now.toISOString()}, Progressing from Stage ${character.blightStage}`);
+        console.log(`[blightHandler]: ⚠️ ${character.name} missed roll - Last roll: ${lastRollDate.toISOString()}, Obligation window start: ${obligationWindowStart.toISOString()}, Current time: ${now.toISOString()}, Progressing from Stage ${character.blightStage}`);
         
         // Fetch the actual document from the correct model to update and save
         let characterDoc;
@@ -4011,8 +4022,13 @@ async function checkMissedRolls(client) {
           .setImage('https://storage.googleapis.com/tinglebot/border%20blight.png')
           .setTimestamp();
 
-        await channel.send({ content: `<@${character.userId}>`, embeds: [embed] });
-        console.log(`[blightHandler]: ${character.name} progressed to Stage ${character.blightStage}`);
+        try {
+          await channel.send({ content: `<@${character.userId}>`, embeds: [embed] });
+          console.log(`[blightHandler]: ${character.name} progressed to Stage ${character.blightStage}`);
+        } catch (sendErr) {
+          logger.error('BLIGHT', `Missed-roll channel notify failed for ${character.name}: ${sendErr.message}`);
+          console.error(`[blightHandler]: ❌ Missed-roll channel notify failed for ${character.name}:`, sendErr);
+        }
       }
     }
     
@@ -4029,13 +4045,29 @@ async function checkMissedRolls(client) {
 }
 
 // ------------------- Function: getCharacterBlightHistory -------------------
-// Retrieves the blight progression history for a character
-async function getCharacterBlightHistory(characterId, limit = 10) {
+// Retrieves the blight progression history for a character.
+// Optional `byNameFallback`: if no rows match characterId, match characterName + userId (legacy / id drift).
+async function getCharacterBlightHistory(characterId, limit = 10, byNameFallback = {}) {
   try {
     const BlightRollHistory = require('@/models/BlightRollHistoryModel');
-    const history = await BlightRollHistory.find({ characterId })
+    let history = await BlightRollHistory.find({ characterId })
       .sort({ timestamp: -1 })
       .limit(limit);
+
+    if (
+      history.length === 0 &&
+      byNameFallback.characterName &&
+      byNameFallback.userId
+    ) {
+      const esc = String(byNameFallback.characterName).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      history = await BlightRollHistory.find({
+        characterName: { $regex: new RegExp(`^${esc}$`, 'i') },
+        userId: byNameFallback.userId
+      })
+        .sort({ timestamp: -1 })
+        .limit(limit);
+    }
+
     return history;
   } catch (error) {
     // Try to fetch character info for better error reporting

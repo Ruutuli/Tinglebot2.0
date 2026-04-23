@@ -775,8 +775,9 @@ const updateCharacterAttack = async (characterId) => {
 // ============================================================================
 // Stamina Management Functions
 // ------------------- Check and Use Stamina -------------------
-// Checks if a character has enough stamina, deducts it if possible, and returns the updated stamina.
-const checkAndUseStamina = async (character, staminaCost) => {
+// Checks if a character has enough stamina, deducts (or refunds if negative) stamina, and returns the updated stamina.
+// Optional `context` matches useStamina: { source: 'Readable reason', ...meta } — used for Character.staminaLog.
+const checkAndUseStamina = async (character, staminaCost, context = null) => {
   try {
       // Check if this is a mod character (also check ModCharacter collection)
       const modCharacter = await ModCharacter.findById(character._id);
@@ -785,15 +786,35 @@ const checkAndUseStamina = async (character, staminaCost) => {
           return character.currentStamina; // Return current stamina without deduction
       }
 
-      if (character.currentStamina < staminaCost) {
-          throw new Error(`❌ Not enough stamina. Required: ${staminaCost}, Available: ${character.currentStamina}`);
+      const ctx = context && typeof context === 'object' ? context : {};
+      const before = Math.max(0, Number(character.currentStamina) || 0);
+      if (staminaCost > 0 && before < staminaCost) {
+          throw new Error(`❌ Not enough stamina. Required: ${staminaCost}, Available: ${before}`);
       }
 
-      character.currentStamina -= staminaCost;
-      character.currentStamina = Math.max(0, character.currentStamina);
+      const after = Math.max(0, before - staminaCost);
+      character.currentStamina = after;
+      if (staminaCost > 0) {
+        character.lastStaminaUsage = new Date();
+      }
       await character.save();
 
       const updatedCharacter = await Character.findById(character._id);
+      const afterLogged = Math.max(0, Number(updatedCharacter.currentStamina) || 0);
+
+      if (afterLogged !== before) {
+        await appendStatLogEntry(character._id, 'stamina', {
+          ts: new Date(),
+          before,
+          after: afterLogged,
+          delta: afterLogged - before,
+          reason:
+            typeof ctx.source === 'string' && ctx.source.trim()
+              ? ctx.source.trim()
+              : 'checkAndUseStamina',
+          meta: context && typeof context === 'object' ? context : null,
+        });
+      }
       return updatedCharacter.currentStamina;
   } catch (error) {
     handleError(error, 'characterStatsModule.js', {

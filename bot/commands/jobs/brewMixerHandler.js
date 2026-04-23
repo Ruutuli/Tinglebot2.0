@@ -1063,9 +1063,16 @@ async function finalizeBrewMixerSession(interaction, session, critterName, partN
     }
   }
 
+  const brewStamLog = {
+    source: freshCharacter?.jobVoucher ? 'Brewing (Job Voucher)' : 'Brewing',
+    itemName: session?.chosenElixirName || null,
+    jobVoucher: !!freshCharacter?.jobVoucher,
+    job: freshCharacter?.jobVoucherJob || freshCharacter?.job || null,
+  };
+
   let staminaAfter;
   try {
-    staminaAfter = await checkAndUseStamina(ch, staminaCost);
+    staminaAfter = await checkAndUseStamina(freshCharacter, staminaCost, brewStamLog);
   } catch (stErr) {
     await addItemInventoryDatabase(ch._id, critterItem.itemName, 1, interaction, 'Brew refund (stamina)');
     await addItemInventoryDatabase(ch._id, partItem.itemName, 1, interaction, 'Brew refund (stamina)');

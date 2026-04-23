@@ -1080,7 +1080,10 @@ async function processCraftingTransaction(character, weaponSubmission, inventory
         console.log(`[processCraftingTransaction]: ✅ Materials processed successfully`);
 
         // Step 2: Deduct stamina
-        await checkAndUseStamina(character, weaponSubmission.staminaToCraft);
+        await checkAndUseStamina(character, weaponSubmission.staminaToCraft, {
+          source: 'Custom weapon',
+          weaponName: weaponSubmission.weaponName,
+        });
         staminaDeducted = true;
         console.log(`[processCraftingTransaction]: ✅ Stamina deducted successfully`);
 

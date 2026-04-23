@@ -82,6 +82,20 @@ function getContributorItemTotal(items) {
     return Object.values(items).reduce((sum, qty) => sum + (Number(qty) || 0), 0);
 }
 
+// ------------------- Function: addContributorItemQty -------------------
+// contributor.items is a Mongoose Map; bracket assignment on nested Maps is unreliable for persistence.
+function addContributorItemQty(contributorData, itemKey, qty) {
+    if (!contributorData.items) {
+        contributorData.items = new Map();
+    }
+    if (contributorData.items instanceof Map) {
+        const current = Number(contributorData.items.get(itemKey)) || 0;
+        contributorData.items.set(itemKey, current + qty);
+    } else {
+        contributorData.items[itemKey] = (Number(contributorData.items[itemKey]) || 0) + qty;
+    }
+}
+
 // ------------------- Function: getContributorItemEntries -------------------
 // Safely gets [itemName, qty] entries (handles Mongoose Map and plain object)
 function getContributorItemEntries(items) {
@@ -242,7 +256,7 @@ async function processItemContribution(village, interaction, itemName, qty, char
     // Update contributor tracking
     const contributorKey = donatingCharacter._id.toString();
     const contributorData = village.contributors.get(contributorKey) || { items: {}, tokens: 0 };
-    contributorData.items[matchedKey] = (contributorData.items[matchedKey] || 0) + qty;
+    addContributorItemQty(contributorData, matchedKey, qty);
     contributorData.lastDonatedAt = new Date();
     village.contributors.set(contributorKey, contributorData);
     village.markModified('contributors');

@@ -1,5 +1,6 @@
 // ------------------- Import necessary modules -------------------
 const mongoose = require('mongoose');
+const moment = require('moment-timezone');
 const { countUniqueQuestCompletions } = require('../utils/questTrackingUtils');
 const logger = require('../utils/logger');
 // ------------------- Define the user schema -------------------
@@ -993,6 +994,11 @@ userSchema.methods.consumeQuestTurnIns = async function(amount = 10, options = {
       remaining -= consumedFromLegacy;
     }
   } else {
+    // character_slot: burn Hard Group Art Meme (slot-only) credits before general/legacy
+    if (slotOnlyBefore > 0 && remaining > 0) {
+      consumedFromSlotOnly = Math.min(slotOnlyBefore, remaining);
+      remaining -= consumedFromSlotOnly;
+    }
     if (botBefore > 0 && remaining > 0) {
       consumedFromCurrent = Math.min(botBefore, remaining);
       remaining -= consumedFromCurrent;
@@ -1000,10 +1006,6 @@ userSchema.methods.consumeQuestTurnIns = async function(amount = 10, options = {
     if (remaining > 0 && legacyBefore > 0) {
       consumedFromLegacy = Math.min(legacyBefore, remaining);
       remaining -= consumedFromLegacy;
-    }
-    if (remaining > 0 && slotOnlyBefore > 0) {
-      consumedFromSlotOnly = Math.min(slotOnlyBefore, remaining);
-      remaining -= consumedFromSlotOnly;
     }
   }
 
@@ -1309,51 +1311,12 @@ userSchema.methods.giveBirthdayRewards = async function(rewardType = 'random') {
   } else if (finalRewardType === 'discount') {
     rewardAmount = 75;
     rewardDescription = `75% discount in village shops (active until end of your birthday)`;
-    
-    // Set discount to expire at end of birthday (11:59:59 PM EST)
-    // Get current time in EST-equivalent (UTC-5) to determine the birthday date
-    const now = new Date();
-    const estNow = new Date(now.getTime() - 5 * 60 * 60 * 1000);
-    
-    // Get EST date components
-    const year = estNow.getFullYear();
-    const month = estNow.getMonth();
-    const day = estNow.getDate();
-    
-    // Create expiration date: 11:59:59.999 PM EST
-    // Method: Create a date representing end of day EST by using UTC calculation
-    // EST is UTC-5, EDT is UTC-4. We'll determine the offset dynamically.
-    // Create a date at the start of the day in EST, then add 23:59:59.999 hours
-    const startOfDayUTC = new Date(Date.UTC(year, month, day, 0, 0, 0, 0));
-    // Get what this UTC time is in EST to calculate offset
-    const startESTString = startOfDayUTC.toLocaleString("en-US", { 
-      timeZone: "America/New_York", 
-      year: 'numeric',
-      month: '2-digit', 
-      day: '2-digit',
-      hour: '2-digit',
-      minute: '2-digit',
-      second: '2-digit',
-      hour12: false
-    });
-    // Parse the date parts from EST string (format: "MM/DD/YYYY, HH:MM:SS")
-    const estParts = startESTString.match(/(\d+)\/(\d+)\/(\d+),\s+(\d+):(\d+):(\d+)/);
-    if (estParts) {
-      const estMonth = parseInt(estParts[1]) - 1;
-      const estDay = parseInt(estParts[2]);
-      const estYear = parseInt(estParts[3]);
-      const estHour = parseInt(estParts[4]);
-      // Calculate offset: difference between UTC and EST for this date
-      const estDate = new Date(estYear, estMonth, estDay, estHour, 0, 0, 0);
-      const offsetMs = startOfDayUTC.getTime() - estDate.getTime();
-      // Create expiration: start of day UTC + offset + 23:59:59.999 hours
-      const expirationDate = new Date(startOfDayUTC.getTime() + offsetMs + (23 * 60 * 60 * 1000) + (59 * 60 * 1000) + (59 * 1000) + 999);
-      this.birthday.birthdayDiscountExpiresAt = expirationDate;
-    } else {
-      // Fallback: use EST offset of 5 hours (UTC-5)
-      const expirationDate = new Date(Date.UTC(year, month, day, 23 + 5, 59, 59, 999));
-      this.birthday.birthdayDiscountExpiresAt = expirationDate;
-    }
+    // End of current calendar day in America/New_York (matches reward copy; avoids
+    // server-TZ bugs from the old UTC offset math that could expire before claim time).
+    this.birthday.birthdayDiscountExpiresAt = moment()
+      .tz('America/New_York')
+      .endOf('day')
+      .toDate();
   }
   
   // Update birthday tracking
@@ -1386,20 +1349,8 @@ userSchema.methods.hasBirthdayDiscount = function() {
   if (!this.birthday || !this.birthday.birthdayDiscountExpiresAt) {
     return false;
   }
-  
-  // Compare using EST timezone to match expiration date timezone
-  // Both dates are stored as UTC internally, so we compare UTC timestamps
-  // but we need to ensure we're comparing EST times
-  const now = new Date();
-  const expiration = this.birthday.birthdayDiscountExpiresAt;
-  
-  // Get current time in EST to compare with expiration (which represents end of day EST)
-  const nowESTString = now.toLocaleString("en-US", { timeZone: "America/New_York", hour12: false });
-  const expirationESTString = expiration.toLocaleString("en-US", { timeZone: "America/New_York", hour12: false });
-  
-  // Parse both as dates and compare (they'll be in server timezone, but the relative comparison is correct)
-  // Better: compare the actual UTC timestamps since expiration is stored as UTC representing EST time
-  return now < expiration;
+  const expiration = new Date(this.birthday.birthdayDiscountExpiresAt).getTime();
+  return Date.now() < expiration;
 };
 
 userSchema.methods.getBirthdayDiscountAmount = function() {

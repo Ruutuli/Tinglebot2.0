@@ -936,6 +936,11 @@ userSchema.methods.consumeQuestTurnIns = async function(amount = 10, options = {
       remaining -= consumedFromLegacy;
     }
   } else {
+    // character_slot: burn Hard Group Art Meme (slot-only) credits before general/legacy
+    if (slotOnlyBefore > 0 && remaining > 0) {
+      consumedFromSlotOnly = Math.min(slotOnlyBefore, remaining);
+      remaining -= consumedFromSlotOnly;
+    }
     if (botBefore > 0 && remaining > 0) {
       consumedFromCurrent = Math.min(botBefore, remaining);
       remaining -= consumedFromCurrent;
@@ -943,10 +948,6 @@ userSchema.methods.consumeQuestTurnIns = async function(amount = 10, options = {
     if (remaining > 0 && legacyBefore > 0) {
       consumedFromLegacy = Math.min(legacyBefore, remaining);
       remaining -= consumedFromLegacy;
-    }
-    if (remaining > 0 && slotOnlyBefore > 0) {
-      consumedFromSlotOnly = Math.min(slotOnlyBefore, remaining);
-      remaining -= consumedFromSlotOnly;
     }
   }
 

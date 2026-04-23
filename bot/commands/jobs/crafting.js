@@ -68,6 +68,18 @@ async function sendPublicCraftingRefundReply(interaction, voucherEmbed) {
 
 // Brew: `brewMixerHandler.js` (multi-step menus)
 
+function craftingStaminaLogContext(character, itemName, { refund = false } = {}) {
+  if (refund) {
+    return { source: 'Crafting refund', itemName: itemName || null };
+  }
+  return {
+    source: character?.jobVoucher ? 'Crafting (Job Voucher)' : 'Crafting',
+    itemName: itemName || null,
+    jobVoucher: !!character?.jobVoucher,
+    job: character?.jobVoucherJob || character?.job || null,
+  };
+}
+
 // ============================================================================
 // ------------------- CRAFTING COMMAND HANDLER -------------------
 // Main handler for the /crafting command.
@@ -712,7 +724,11 @@ module.exports = {
       let teacherUpdatedStamina = null;
       try {
         // Deduct stamina from crafter
-        updatedStamina = await checkAndUseStamina(freshCharacter, crafterStaminaCost);
+        updatedStamina = await checkAndUseStamina(
+          freshCharacter,
+          crafterStaminaCost,
+          craftingStaminaLogContext(freshCharacter, itemName)
+        );
         success('CRFT', `Stamina deducted for ${freshCharacter.name} - remaining: ${updatedStamina}`);
         
         // Deduct stamina from Teacher if applicable
@@ -720,7 +736,11 @@ module.exports = {
           const { fetchCharacterByName } = require('@/database/db');
           const boosterCharacter = await fetchCharacterByName(freshCharacter.boostedBy);
           if (boosterCharacter && getEffectiveJob(boosterCharacter) === 'Teacher') {
-            teacherUpdatedStamina = await checkAndUseStamina(boosterCharacter, teacherStaminaContribution);
+            teacherUpdatedStamina = await checkAndUseStamina(
+              boosterCharacter,
+              teacherStaminaContribution,
+              { source: 'Crafting (Teacher support)', itemName: itemName || null }
+            );
             success('CRFT', `Teacher stamina deducted for ${boosterCharacter.name} - remaining: ${teacherUpdatedStamina}`);
           }
         }
@@ -786,12 +806,19 @@ module.exports = {
       } catch (embedError) {
         // ------------------- Failsafe: Refund on Embed Error -------------------
         // Refund stamina
-        await checkAndUseStamina(freshCharacter, -crafterStaminaCost); // Negative to add back
+        await checkAndUseStamina(
+          freshCharacter,
+          -crafterStaminaCost,
+          craftingStaminaLogContext(freshCharacter, itemName, { refund: true })
+        ); // Negative to add back
         if (teacherStaminaContribution > 0 && freshCharacter.boostedBy) {
           const { fetchCharacterByName } = require('@/database/db');
           const boosterCharacter = await fetchCharacterByName(freshCharacter.boostedBy);
           if (boosterCharacter && getEffectiveJob(boosterCharacter) === 'Teacher') {
-            await checkAndUseStamina(boosterCharacter, -teacherStaminaContribution);
+            await checkAndUseStamina(boosterCharacter, -teacherStaminaContribution, {
+              source: 'Crafting refund (Teacher support)',
+              itemName: itemName || null,
+            });
           }
         }
         // Refund materials
@@ -907,18 +934,29 @@ module.exports = {
         }
         // Refund stamina - check if we have the updated values
         if (typeof updatedStamina !== 'undefined' && typeof crafterStaminaCost !== 'undefined') {
-          await checkAndUseStamina(freshCharacter, -crafterStaminaCost); // Refund crafter stamina
+          await checkAndUseStamina(
+            freshCharacter,
+            -crafterStaminaCost,
+            craftingStaminaLogContext(freshCharacter, itemName, { refund: true })
+          ); // Refund crafter stamina
           // Refund Teacher stamina if applicable
           if (typeof teacherStaminaContribution !== 'undefined' && teacherStaminaContribution > 0 && freshCharacter?.boostedBy) {
             const { fetchCharacterByName } = require('@/database/db');
             const boosterCharacter = await fetchCharacterByName(freshCharacter.boostedBy);
             if (boosterCharacter && getEffectiveJob(boosterCharacter) === 'Teacher') {
-              await checkAndUseStamina(boosterCharacter, -teacherStaminaContribution);
+              await checkAndUseStamina(boosterCharacter, -teacherStaminaContribution, {
+                source: 'Crafting refund (Teacher support)',
+                itemName: itemName || null,
+              });
             }
           }
         } else if (typeof updatedStamina !== 'undefined' && typeof staminaCost !== 'undefined') {
           // Fallback: if crafterStaminaCost isn't available, use staminaCost (for cases where error occurred before Teacher boost calculation)
-          await checkAndUseStamina(freshCharacter, -staminaCost);
+          await checkAndUseStamina(
+            freshCharacter,
+            -staminaCost,
+            craftingStaminaLogContext(freshCharacter, itemName, { refund: true })
+          );
         }
       } catch (refundError) {
         console.error('[crafting.js]: Refund error:', refundError);

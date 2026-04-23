@@ -18,14 +18,20 @@ function serializeMap(m: unknown): Record<string, unknown> {
   return {};
 }
 
-// Safely sum contributor items (handles Map and plain object)
-function getContributorItemTotal(items: unknown): number {
-  if (!items) return 0;
-  if (items instanceof Map) return [...items.values()].reduce((s, n) => s + (Number(n) || 0), 0);
-  if (typeof items === "object" && items !== null) {
-    return Object.values(items).reduce((s, n) => s + (Number(n) || 0), 0);
+// Match bot/commands/world/village.js (getContributorItemEntries / totals) for Map + plain object
+function getContributorItemEntries(items: unknown): [string, number][] {
+  if (!items) return [];
+  if (items instanceof Map) {
+    return [...items.entries()].map(([k, v]) => [String(k), Number(v) || 0]);
   }
-  return 0;
+  if (typeof items === "object" && !Array.isArray(items)) {
+    return Object.entries(items as Record<string, unknown>).map(([k, v]) => [k, Number(v) || 0]);
+  }
+  return [];
+}
+
+function getContributorItemTotal(items: unknown): number {
+  return getContributorItemEntries(items).reduce((s, [, n]) => s + n, 0);
 }
 
 function isValidContributorKey(key: string): boolean {
@@ -190,7 +196,8 @@ export async function GET(req: NextRequest) {
         .filter(([charId]) => isValidContributorKey(charId))
         .map(([charId, data]) => {
           const rawItems = data?.items;
-          const items = rawItems instanceof Map ? Object.fromEntries(rawItems) : (rawItems ?? {}) as Record<string, number>;
+          const entries = getContributorItemEntries(rawItems ?? {});
+          const items = Object.fromEntries(entries) as Record<string, number>;
           const totalItems = getContributorItemTotal(rawItems ?? {});
           const tokens = Number(data?.tokens) ?? 0;
           return {

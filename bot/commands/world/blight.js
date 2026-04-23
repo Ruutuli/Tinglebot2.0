@@ -13,7 +13,6 @@ const {
   validateCharacterOwnership,
   loadBlightSubmissions
 } = require('../../handlers/blightHandler');
-const { fetchCharacterByNameAndUserId, getCharacterBlightHistory } = require('@/database/db.js');
 const { getModCharacterByName } = require('../../modules/modCharacters');
 const { retrieveBlightRequestFromStorage } = require('@/utils/storage');
 const Character = require('@/models/CharacterModel');
@@ -246,7 +245,7 @@ module.exports = {
         if (!character) return;
         
         const limit = interaction.options.getInteger('limit') || 10;
-        await viewBlightHistory(interaction, characterName, limit);
+        await viewBlightHistory(interaction, character, limit);
 
       } else if (subcommand === 'status') {
         const characterName = interaction.options.getString('character_name');

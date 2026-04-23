@@ -2763,6 +2763,19 @@ async function handleCraftingMaterialSelection(interaction) {
   }
 }
 
+// ------------------- Function: continueCraftingStaminaLog -------------------
+function continueCraftingStaminaLog(continueData, { refund = false } = {}) {
+  if (refund) {
+    return { source: 'Crafting refund', itemName: continueData?.itemName || null };
+  }
+  return {
+    source: continueData?.jobVoucher ? 'Crafting (Job Voucher)' : 'Crafting',
+    itemName: continueData?.itemName || null,
+    jobVoucher: !!continueData?.jobVoucher,
+    job: continueData?.jobVoucherJob || continueData?.job || null,
+  };
+}
+
 // ------------------- Function: continueCraftingProcess -------------------
 // Continues the crafting process after material selection
 async function continueCraftingProcess(interaction, character, materialsUsed, continueData, processingMessage = null) {
@@ -2858,13 +2871,21 @@ async function continueCraftingProcess(interaction, character, materialsUsed, co
     let updatedStamina;
     let teacherUpdatedStamina = null;
     try {
-      updatedStamina = await checkAndUseStamina(freshCharacter, continueData.crafterStaminaCost);
+      updatedStamina = await checkAndUseStamina(
+        freshCharacter,
+        continueData.crafterStaminaCost,
+        continueCraftingStaminaLog(continueData)
+      );
       success('CRFT', `Stamina deducted for ${freshCharacter.name} - remaining: ${updatedStamina}`);
       
       if (continueData.teacherStaminaContribution > 0 && freshCharacter.boostedBy) {
         const boosterCharacter = await fetchCharacterByName(freshCharacter.boostedBy);
         if (boosterCharacter && getEffectiveJob(boosterCharacter) === 'Teacher') {
-          teacherUpdatedStamina = await checkAndUseStamina(boosterCharacter, continueData.teacherStaminaContribution);
+          teacherUpdatedStamina = await checkAndUseStamina(
+            boosterCharacter,
+            continueData.teacherStaminaContribution,
+            { source: 'Crafting (Teacher support)', itemName: continueData?.itemName || null }
+          );
           success('CRFT', `Teacher stamina deducted for ${boosterCharacter.name} - remaining: ${teacherUpdatedStamina}`);
         }
       }
@@ -2921,11 +2942,18 @@ async function continueCraftingProcess(interaction, character, materialsUsed, co
       );
     } catch (embedError) {
       // Refund stamina
-      await checkAndUseStamina(freshCharacter, -continueData.crafterStaminaCost);
+      await checkAndUseStamina(
+        freshCharacter,
+        -continueData.crafterStaminaCost,
+        continueCraftingStaminaLog(continueData, { refund: true })
+      );
       if (continueData.teacherStaminaContribution > 0 && freshCharacter.boostedBy) {
         const boosterCharacter = await fetchCharacterByName(freshCharacter.boostedBy);
         if (boosterCharacter && getEffectiveJob(boosterCharacter) === 'Teacher') {
-          await checkAndUseStamina(boosterCharacter, -continueData.teacherStaminaContribution);
+          await checkAndUseStamina(boosterCharacter, -continueData.teacherStaminaContribution, {
+            source: 'Crafting refund (Teacher support)',
+            itemName: continueData?.itemName || null,
+          });
         }
       }
       // Refund materials
