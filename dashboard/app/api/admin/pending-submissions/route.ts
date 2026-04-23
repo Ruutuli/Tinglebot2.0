@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { connect } from "@/lib/db";
 import { getSession, isAdminUser } from "@/lib/session";
 import { isModeratorUser } from "@/lib/moderator";
+import { getBotInternalApiConfig } from "@/lib/config";
 
 export const dynamic = "force-dynamic";
 
@@ -131,7 +132,8 @@ export async function GET() {
       const tb = b.queuedAt ? Date.parse(b.queuedAt) : 0;
       return tb - ta;
     });
-    return NextResponse.json(list);
+    const { isConfigured: botInternalApiConfigured } = getBotInternalApiConfig();
+    return NextResponse.json({ items: list, botInternalApiConfigured });
   } catch (e) {
     const msg = e instanceof Error ? e.message : "Failed to load pending submissions";
     return NextResponse.json({ error: msg }, { status: 500 });

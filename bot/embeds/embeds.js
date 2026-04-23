@@ -2092,7 +2092,23 @@ const createArtSubmissionEmbed = (submissionData) => {
   }
 
   return embed;
-}
+};
+
+// ------------------- getPendingSubmissionApprovalDescription -------------------
+/** Mod ping embed: 24h note, /mod submission approve usage, and admin art-submissions URL. */
+const getPendingSubmissionApprovalDescription = () => {
+  const base = (process.env.DASHBOARD_URL || process.env.APP_URL || 'https://tinglebot.xyz').replace(/\/$/, '');
+  const adminUrl = `${base}/admin/art-submissions`;
+  return (
+    '⏳ **Please review within 24 hours.**\n\n' +
+    '**In Discord** — use `/mod submission approve` with:\n' +
+    '• `submission_id` — the **Submission ID** in this message\n' +
+    '• `action` — **Approve** or **Deny** (add `reason` if denying)\n\n' +
+    '**On the dashboard** — approve or deny the same queue (no command needed):\n' +
+    `[Tinglebot Admin — Art & writing submissions](${adminUrl})`
+  );
+};
+
 // ------------------- Function: capitalizeFirst -------------------
 // Helper function to capitalize the first letter of a string
 function capitalizeFirst(str) {
@@ -4242,6 +4258,7 @@ module.exports = {
  createCraftingEmbed,
  createWritingSubmissionEmbed,
  createArtSubmissionEmbed,
+ getPendingSubmissionApprovalDescription,
  createGatherEmbed,
  createTransferEmbed,
  createGiftEmbed,

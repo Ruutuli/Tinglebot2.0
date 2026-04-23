@@ -150,6 +150,8 @@ export default function AdminArtSubmissionsPage() {
   const [actionId, setActionId] = useState<string | null>(null);
   const [denyingId, setDenyingId] = useState<string | null>(null);
   const [denyReason, setDenyReason] = useState("");
+  /** False when dashboard env is missing BOT_INTERNAL_API_URL / BOT_INTERNAL_API_SECRET (approval must use Discord). */
+  const [botInternalApiConfigured, setBotInternalApiConfigured] = useState(true);
 
   const canAccess = isAdmin || isModerator;
 
@@ -165,8 +167,16 @@ export default function AdminArtSubmissionsPage() {
         setItems([]);
         return;
       }
-      const data = await res.json();
-      setItems(Array.isArray(data) ? data : []);
+      const data = await res.json() as
+        | PendingSubmission[]
+        | { items: PendingSubmission[]; botInternalApiConfigured?: boolean };
+      if (Array.isArray(data)) {
+        setItems(data);
+        setBotInternalApiConfigured(true);
+      } else {
+        setItems(Array.isArray(data.items) ? data.items : []);
+        setBotInternalApiConfigured(data.botInternalApiConfigured !== false);
+      }
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed to load");
       setItems([]);
@@ -284,7 +294,10 @@ export default function AdminArtSubmissionsPage() {
             <img src="/Side=Right.svg" alt="" className="h-5 w-auto opacity-90 sm:h-7" aria-hidden />
           </div>
           <p className="mx-auto max-w-2xl text-sm leading-relaxed text-[var(--botw-pale)]">
-            Same actions as <code className="rounded bg-[var(--totk-dark-green)]/30 px-1.5 py-0.5 text-[var(--totk-light-ocher)]">/mod approve</code>
+            Same actions as{" "}
+            <code className="rounded bg-[var(--totk-dark-green)]/30 px-1.5 py-0.5 text-[var(--totk-light-ocher)]">
+              /mod submission approve
+            </code>{" "}
             — tokens, Discord embeds, DMs, and quest hooks run on the bot.
           </p>
           <p className="mx-auto mt-2 max-w-2xl text-xs leading-relaxed text-[var(--totk-grey-200)]">
@@ -309,6 +322,25 @@ export default function AdminArtSubmissionsPage() {
             </button>
           </div>
         </header>
+
+        {!botInternalApiConfigured && (
+          <div
+            role="status"
+            className="mb-6 rounded-xl border border-amber-500/45 bg-amber-950/35 p-4 text-left text-sm leading-relaxed text-amber-100 shadow-lg backdrop-blur-sm"
+          >
+            <p className="font-semibold text-amber-50">Dashboard cannot reach the bot to approve or deny</p>
+            <p className="mt-2 text-amber-100/90">
+              The site is missing <code className="rounded bg-black/30 px-1.5 py-0.5 font-mono text-xs">BOT_INTERNAL_API_URL</code> and/or{" "}
+              <code className="rounded bg-black/30 px-1.5 py-0.5 font-mono text-xs">BOT_INTERNAL_API_SECRET</code> in this deployment’s environment.
+              Set the URL to your bot’s HTTP base (same <code className="font-mono text-xs">PORT</code> as <code className="font-mono text-xs">/health</code>; no path). Use the{" "}
+              <strong>same secret</strong> on the bot process. Then redeploy the dashboard.
+            </p>
+            <p className="mt-3 text-amber-100/90">
+              Until then, use{" "}
+              <code className="rounded bg-black/30 px-1.5 py-0.5 font-mono text-xs">/mod submission approve</code> in Discord with the submission ID.
+            </p>
+          </div>
+        )}
 
         {error && (
           <div
@@ -538,7 +570,7 @@ export default function AdminArtSubmissionsPage() {
                         <button
                           type="button"
                           onClick={() => handleApprove(sub.submissionId)}
-                          disabled={actionId === sub.submissionId}
+                          disabled={actionId === sub.submissionId || !botInternalApiConfigured}
                           className="rounded-xl bg-[var(--totk-light-green)] px-4 py-2.5 text-sm font-semibold text-black shadow-md transition hover:brightness-110 focus:outline-none focus:ring-2 focus:ring-[var(--totk-light-green)] focus:ring-offset-2 focus:ring-offset-[var(--botw-warm-black)] disabled:opacity-50"
                         >
                           {actionId === sub.submissionId ? "Working…" : "Approve"}
@@ -551,7 +583,7 @@ export default function AdminArtSubmissionsPage() {
                               setDenyReason("");
                               setError(null);
                             }}
-                            disabled={actionId === sub.submissionId}
+                            disabled={actionId === sub.submissionId || !botInternalApiConfigured}
                             className="rounded-xl border border-red-500/50 bg-red-500/10 px-4 py-2.5 text-sm font-semibold text-red-200 transition hover:bg-red-500/20 focus:outline-none focus:ring-2 focus:ring-red-400/50 focus:ring-offset-2 focus:ring-offset-[var(--botw-warm-black)] disabled:opacity-50"
                           >
                             Deny
@@ -561,7 +593,7 @@ export default function AdminArtSubmissionsPage() {
                             <button
                               type="button"
                               onClick={() => handleDeny(sub.submissionId)}
-                              disabled={actionId === sub.submissionId}
+                              disabled={actionId === sub.submissionId || !botInternalApiConfigured}
                               className="rounded-xl border border-red-400 bg-red-600/80 px-4 py-2.5 text-sm font-semibold text-white shadow-md transition hover:bg-red-600 focus:outline-none focus:ring-2 focus:ring-red-400 disabled:opacity-50"
                             >
                               {actionId === sub.submissionId ? "Working…" : "Confirm deny"}

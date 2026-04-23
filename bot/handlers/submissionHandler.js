@@ -9,7 +9,7 @@
 const { EmbedBuilder } = require('discord.js');
 
 const { handleError } = require('@/utils/globalErrorHandler');
-const { createArtSubmissionEmbed, createWritingSubmissionEmbed, updateBoostRequestEmbed } = require('../embeds/embeds.js');
+const { createArtSubmissionEmbed, createWritingSubmissionEmbed, updateBoostRequestEmbed, getPendingSubmissionApprovalDescription } = require('../embeds/embeds.js');
 // ============================================================================
 // Database Services
 // ============================================================================
@@ -487,12 +487,12 @@ async function handleSubmissionCompletion(interaction) {
 
         // Build notification fields dynamically
         const notificationFields = [
-          { name: '👤 Submitted by', value: `<@${interaction.user.id}>`, inline: false },
-          { name: '📅 Submitted on', value: `<t:${Math.floor(Date.now() / 1000)}:F>`, inline: false },
+          { name: '👤 Submitted by', value: `<@${interaction.user.id}>`, inline: true },
+          { name: '📅 Submitted on', value: `<t:${Math.floor(Date.now() / 1000)}:F>`, inline: true },
           { name: `${typeEmoji} Title`, value: submissionData.title || submissionData.fileName || 'Untitled', inline: false },
-          { name: '💰 Token Amount', value: tokenDisplay, inline: false },
+          { name: '💰 Token amount', value: tokenDisplay, inline: false },
           { name: '🆔 Submission ID', value: `\`${submissionId}\``, inline: false },
-          { name: '🔗 View Submission', value: `[Click Here](${submissionData.messageUrl})`, inline: false }
+          { name: '🔗 View post', value: `[Open in Discord](${submissionData.messageUrl})`, inline: false }
         ];
 
         // Add collaboration field if present
@@ -545,15 +545,13 @@ async function handleSubmissionCompletion(interaction) {
           });
         }
 
-        const dashboardArtSubmissionsUrl = `${(process.env.DASHBOARD_URL || process.env.APP_URL || 'https://tinglebot.xyz').replace(/\/$/, '')}/admin/art-submissions`;
-
         const notificationEmbed = new EmbedBuilder()
           .setColor(typeColor)
-          .setTitle(`${typeEmoji} PENDING ${submissionType} SUBMISSION!`)
-          .setDescription(`⏳ **Please approve within 24 hours!**\n\n✅ Approve or deny on the [dashboard](${dashboardArtSubmissionsUrl}).`)
+          .setTitle(`${typeEmoji} Pending ${submissionType.toLowerCase()} submission`)
+          .setDescription(getPendingSubmissionApprovalDescription())
           .addFields(notificationFields)
           .setImage('https://storage.googleapis.com/tinglebot/Graphics/border.png')
-          .setFooter({ text: `${submissionType} Submission Approval Required` })
+          .setFooter({ text: `${submissionType} — awaiting mod review` })
           .setTimestamp();
 
         const notificationMessage = await approvalChannel.send({ embeds: [notificationEmbed] });

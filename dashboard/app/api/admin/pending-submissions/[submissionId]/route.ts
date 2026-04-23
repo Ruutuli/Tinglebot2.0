@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { connect } from "@/lib/db";
 import { getSession, isAdminUser } from "@/lib/session";
 import { isModeratorUser } from "@/lib/moderator";
+import { getBotInternalApiConfig } from "@/lib/config";
 
 export const dynamic = "force-dynamic";
 
@@ -110,12 +111,13 @@ export async function POST(
     return NextResponse.json({ error: msg }, { status: 500 });
   }
 
-  const botBase = process.env.BOT_INTERNAL_API_URL?.replace(/\/$/, "");
-  const secret = process.env.BOT_INTERNAL_API_SECRET;
-  if (!botBase || !secret) {
+  const { baseUrl: botBase, secret, isConfigured } = getBotInternalApiConfig();
+  if (!isConfigured) {
     return NextResponse.json(
       {
-        error: "Could not reach the bot to process this submission. Try again later or use /mod approve in Discord.",
+        error:
+          "Dashboard approval is not wired to the bot: this deployment is missing BOT_INTERNAL_API_URL and/or BOT_INTERNAL_API_SECRET. Add both to the dashboard environment (URL = bot HTTP base, same port as /health; secret must match the bot). Until then, use /mod submission approve in Discord.",
+        code: "BOT_INTERNAL_API_NOT_CONFIGURED" as const,
       },
       { status: 503 }
     );

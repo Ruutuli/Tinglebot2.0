@@ -73,3 +73,22 @@ export function getDiscordRedirectUri(request?: NextRequest): string {
   const appUrl = getAppUrl().replace(/\/$/, "");
   return `${appUrl}/api/auth/discord/callback`;
 }
+
+/**
+ * Bot HTTP server (see bot/index.js) exposes POST /internal/pending-submissions on the same
+ * port as /health. The dashboard must call it to approve/deny from the admin UI.
+ * Set the same BOT_INTERNAL_API_SECRET on both dashboard and bot; URL is the bot's base (no path).
+ */
+export function getBotInternalApiConfig(): {
+  baseUrl: string | undefined;
+  secret: string | undefined;
+  isConfigured: boolean;
+} {
+  const baseUrl = process.env.BOT_INTERNAL_API_URL?.replace(/\/$/, "");
+  const secret = process.env.BOT_INTERNAL_API_SECRET;
+  return {
+    baseUrl: baseUrl || undefined,
+    secret: secret || undefined,
+    isConfigured: Boolean(baseUrl && secret),
+  };
+}

@@ -24,7 +24,7 @@ const {
   updateSubmissionData 
 } = require('@/utils/storage.js');
 const { uploadSubmissionImage } = require('@/utils/uploadUtils.js');
-const { createWritingSubmissionEmbed, createArtSubmissionEmbed, updateBoostRequestEmbed } = require('../../embeds/embeds.js');
+const { createWritingSubmissionEmbed, createArtSubmissionEmbed, updateBoostRequestEmbed, getPendingSubmissionApprovalDescription } = require('../../embeds/embeds.js');
 const User = require('@/models/UserModel.js'); 
 const { generateUniqueId } = require('@/utils/uniqueIdUtils.js');
 const { applyScholarTokensBoost } = require('../../modules/boostingModule');
@@ -791,12 +791,12 @@ module.exports = {
 
             // Build notification fields dynamically
             const notificationFields = [
-              { name: '👤 Submitted by', value: `<@${interaction.user.id}>`, inline: false },
-              { name: '📅 Submitted on', value: `<t:${Math.floor(Date.now() / 1000)}:F>`, inline: false },
+              { name: '👤 Submitted by', value: `<@${interaction.user.id}>`, inline: true },
+              { name: '📅 Submitted on', value: `<t:${Math.floor(Date.now() / 1000)}:F>`, inline: true },
               { name: '📝 Title', value: title || 'Untitled', inline: false },
-              { name: '💰 Token Amount', value: tokenDisplay, inline: false },
+              { name: '💰 Token amount', value: tokenDisplay, inline: false },
               { name: '🆔 Submission ID', value: `\`${submissionId}\``, inline: false },
-              { name: '🔗 View Submission', value: `[Click Here](https://discord.com/channels/${interaction.guildId}/${submissionsChannel.id}/${sentMessage.id})`, inline: false }
+              { name: '🔗 View post', value: `[Open in Discord](https://discord.com/channels/${interaction.guildId}/${submissionsChannel.id}/${sentMessage.id})`, inline: false }
             ];
 
             // Add collaboration field if present
@@ -851,11 +851,11 @@ module.exports = {
 
             const notificationEmbed = new EmbedBuilder()
               .setColor('#FF6B35') // Orange for writing
-              .setTitle('📝 PENDING WRITING SUBMISSION!')
-              .setDescription('⏳ **Please approve within 24 hours!**')
+              .setTitle('📝 Pending writing submission')
+              .setDescription(getPendingSubmissionApprovalDescription())
               .addFields(notificationFields)
               .setImage('https://storage.googleapis.com/tinglebot/Graphics/border.png')
-              .setFooter({ text: 'WRITING Submission Approval Required' })
+              .setFooter({ text: 'WRITING — awaiting mod review' })
               .setTimestamp();
 
             const notificationMessage = await approvalChannel.send({ embeds: [notificationEmbed] });
