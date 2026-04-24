@@ -1420,9 +1420,14 @@ async function initializeClient() {
     logger.divider();
     
     // Note: http is already required above for error handling
+    const healthPath = (raw) => {
+      const p = (raw || '/').split('?')[0].replace(/\/+$/, '');
+      return p || '/';
+    };
     const healthcheckServer = http.createServer((req, res) => {
+      const pathOnly = healthPath(req.url);
       // Dashboard → bot: approve/deny pending art/writing submissions (same logic as /mod approve)
-      if (req.method === 'POST' && req.url === '/internal/pending-submissions') {
+      if (req.method === 'POST' && pathOnly === '/internal/pending-submissions') {
         const secret = process.env.BOT_INTERNAL_API_SECRET;
         const headerSecret = req.headers['x-bot-internal-secret'];
         if (!secret || headerSecret !== secret) {
@@ -1461,12 +1466,12 @@ async function initializeClient() {
       }
 
       // Log all healthcheck requests for debugging
-      if (req.url === '/health' || req.url === '/healthcheck') {
+      if (pathOnly === '/health' || pathOnly === '/healthcheck') {
         logger.info('HEALTHCHECK', `Healthcheck request received from ${req.headers['user-agent'] || 'unknown'}`);
       }
       
       // Only respond to healthcheck endpoint
-      if (req.url === '/health' || req.url === '/healthcheck') {
+      if (pathOnly === '/health' || pathOnly === '/healthcheck') {
         try {
           const memoryMonitor = getMemoryMonitor();
           if (!memoryMonitor) {
