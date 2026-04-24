@@ -30,9 +30,14 @@ function stackModifierHearts(raw: unknown): number {
   return Math.max(0, Math.floor(n));
 }
 
-function formatElixirStackLabel(baseName: string, elixirLevel: number, modifierHearts: number): string {
+function formatElixirStackLabel(
+  baseName: string,
+  elixirLevel: number,
+  modifierHearts: number,
+  isLegacy: boolean
+): string {
   const lv = normalizeElixirLevel(elixirLevel);
-  const tier = ["Basic", "Mid", "High"][lv - 1] || "Basic";
+  const tier = isLegacy ? "Legacy" : (["Basic", "Mid", "High"][lv - 1] || "Basic");
   const mh = stackModifierHearts(modifierHearts);
   return `${baseName} [${tier}|m${mh}]`;
 }
@@ -152,16 +157,19 @@ export async function GET(
       const qty = Number(item.quantity) || 0;
       const equipped = item.Equipped === true;
       const isElixir = isElixirLikeName(baseName);
+      const isLegacyElixirStack = isElixir ? (item as any).elixirLevel == null : false;
       const lv = isElixir ? normalizeElixirLevel((item as any).elixirLevel) : null;
       const mh = isElixir ? stackModifierHearts((item as any).modifierHearts) : null;
-      const key = isElixir ? `${baseKey}|lv${lv}|m${mh}` : baseKey;
+      const key = isElixir ? `${baseKey}|${isLegacyElixirStack ? "legacy" : "new"}|lv${lv}|m${mh}` : baseKey;
 
       const existing = byKey.get(key);
       if (existing) {
         existing.quantity += qty;
         if (equipped) existing.Equipped = true;
       } else {
-        const displayName = isElixir ? formatElixirStackLabel(baseName, lv ?? 1, mh ?? 0) : baseName;
+        const displayName = isElixir
+          ? formatElixirStackLabel(baseName, lv ?? 1, mh ?? 0, isLegacyElixirStack)
+          : baseName;
         byKey.set(key, {
           itemName: displayName,
           baseItemName: baseName,

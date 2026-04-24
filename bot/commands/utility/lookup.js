@@ -970,19 +970,45 @@ async function handleCraftingLookup(interaction, characterName) {
 async function fetchCharactersWithItem(itemName) {
   const characters = await Character.find().lean().exec();
   const charactersWithItem = [];
+  const isElix = itemName && typeof itemName === 'string' ? itemName.trim().toLowerCase().endsWith('elixir') || itemName.trim().toLowerCase() === 'fairy tonic' : false;
 
   for (const char of characters) {
     const inventoryCollection = await getCharacterInventoryCollection(char.name);
     const inventory = await inventoryCollection.find().toArray();
 
-    // Find all entries for this item and combine their quantities
-    const matchingItems = inventory.filter(item => 
-      item.itemName.toLowerCase() === itemName.toLowerCase()
+    const matchingItems = inventory.filter(
+      (item) => item?.itemName && item.itemName.toLowerCase() === itemName.toLowerCase()
     );
-    
-    if (matchingItems.length > 0) {
-      // Sum up quantities from all matching entries (like inventory view does)
-      const totalQuantity = matchingItems.reduce((sum, item) => sum + (item.quantity || 0), 0);
+
+    if (matchingItems.length === 0) continue;
+
+    // Elixirs: don't merge legacy/new/tier stacks together.
+    if (isElix) {
+      const byStack = new Map();
+      for (const row of matchingItems) {
+        const qty = Math.max(0, Number(row.quantity) || 0);
+        if (qty <= 0) continue;
+        const legacy = row.elixirLevel == null;
+        const lv = normalizeElixirLevel(row.elixirLevel);
+        const mh = Math.max(0, Math.floor(Number(row.modifierHearts) || 0));
+        const key = `${legacy ? 'legacy' : 'new'}|lv${lv}|m${mh}`;
+        byStack.set(key, (byStack.get(key) || 0) + qty);
+      }
+      for (const [key, quantity] of byStack.entries()) {
+        const [, lvPart, mPart] = key.split('|');
+        const lv = Number(String(lvPart || '').replace('lv', '')) || 1;
+        const mh = Number(String(mPart || '').replace('m', '')) || 0;
+        const legacy = key.startsWith('legacy|');
+        const tierLabel = legacy ? 'Legacy' : (['Basic', 'Mid', 'High'][normalizeElixirLevel(lv) - 1] || 'Basic');
+        const label = `${char.name} · ${tierLabel}${mh > 0 ? ` · +${mh}♥` : ''}`;
+        charactersWithItem.push({ name: label, quantity });
+      }
+      continue;
+    }
+
+    // Non-elixirs: sum across matching rows
+    const totalQuantity = matchingItems.reduce((sum, item) => sum + Math.max(0, item.quantity || 0), 0);
+    if (totalQuantity > 0) {
       charactersWithItem.push({ name: char.name, quantity: totalQuantity });
     }
   }

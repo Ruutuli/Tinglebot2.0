@@ -439,12 +439,13 @@ function getBrewPreviewForElixir(elixirName, level, fairyHealHearts = 0, preview
 }
 
 /** `/item` autocomplete `value`: unique per stack (Discord returns this string unchanged). */
-function formatElixirItemOptionValue(lowercaseItemName, elixirLevel, modifierHearts) {
+function formatElixirItemOptionValue(lowercaseItemName, elixirLevel, modifierHearts, options = {}) {
   const name = String(lowercaseItemName || '')
     .trim()
     .toLowerCase();
   const lv = normalizeElixirLevel(elixirLevel);
-  const lab = ELIXIR_LEVEL_NAMES[lv];
+  const isLegacy = options && options.legacy === true;
+  const lab = isLegacy ? 'Legacy' : ELIXIR_LEVEL_NAMES[lv];
   const mh = Math.max(0, Math.floor(Number(modifierHearts) || 0));
   return `${name} [${lab}|m${mh}]`;
 }
@@ -456,24 +457,28 @@ function formatElixirItemOptionValue(lowercaseItemName, elixirLevel, modifierHea
  */
 function parseElixirTierFromItemOption(raw) {
   const s = String(raw || '').trim();
-  const withM = s.match(/^(.+?)\s+\[(Basic|Mid|High)\|m(\d+)\]\s*$/i);
+  const withM = s.match(/^(.+?)\s+\[(Basic|Mid|High|Legacy)\|m(\d+)\]\s*$/i);
   if (withM) {
     const tag = withM[2].toLowerCase();
-    const elixirLevel = tag === 'basic' ? 1 : tag === 'mid' ? 2 : 3;
+    const isLegacy = tag === 'legacy';
+    const elixirLevel = isLegacy ? 1 : tag === 'basic' ? 1 : tag === 'mid' ? 2 : 3;
     return {
       baseName: withM[1].trim(),
       elixirLevel,
       modifierHearts: Math.max(0, parseInt(withM[3], 10) || 0),
+      isLegacy,
     };
   }
-  const short = s.match(/^(.+?)\s+\[(Basic|Mid|High)\]\s*$/i);
+  const short = s.match(/^(.+?)\s+\[(Basic|Mid|High|Legacy)\]\s*$/i);
   if (short) {
     const tag = short[2].toLowerCase();
-    const elixirLevel = tag === 'basic' ? 1 : tag === 'mid' ? 2 : 3;
+    const isLegacy = tag === 'legacy';
+    const elixirLevel = isLegacy ? 1 : tag === 'basic' ? 1 : tag === 'mid' ? 2 : 3;
     return {
       baseName: short[1].trim(),
       elixirLevel,
       modifierHearts: null,
+      isLegacy,
     };
   }
   return null;
@@ -498,6 +503,19 @@ const applyElixirBuff = (character, elixirName, elixirLevel = 1) => {
     maxHeartsForHearty: character?.maxHearts,
     maxStaminaForEnduring: character?.maxStamina,
   });
+
+  // Energizing Elixir is instant-only: restore stamina and do not persist a buff.
+  if (elixir.type === 'energizing') {
+    applyImmediateEffects(character, key, effects);
+    // Ensure no lingering buff remains (covers legacy/stuck cases where energizing was treated as persistent).
+    if (character.buff?.active && character.buff.type === 'energizing') {
+      character.buff.active = false;
+      character.buff.type = null;
+      character.buff.elixirLevel = null;
+      character.buff.effects = {};
+    }
+    return character;
+  }
 
   character.buff = {
     active: true,

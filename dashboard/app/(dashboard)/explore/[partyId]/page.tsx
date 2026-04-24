@@ -492,6 +492,13 @@ function normalizeVillage(v: string): string {
   return (v || "").trim().toLowerCase();
 }
 
+function stripElixirStackSuffix(itemName: string): string {
+  const s = (itemName || "").trim();
+  // Inventory elixir stacks are stored like: "Energizing Elixir [lv2|m0]"
+  // For exploration-item allowlist checks, we match against the base catalog name.
+  return s.replace(/\s*\[lv\d+\|m\d+\]\s*$/i, "").trim();
+}
+
 // ------------------- buildExploreInventoryList ------------------
 // Builds sorted explore inventory list from API data (byName, bundles, fromInventory, fromBundles). -
 
@@ -510,7 +517,13 @@ function buildExploreInventoryList(
   const validLower = new Set([...exploreItemNames].map((n) => n.toLowerCase()));
   const bundles = bundleQuantities(byName);
   const fromInventory = Array.from(byName.entries())
-    .filter(([k]) => validLower.has(k) && k !== "eldin ore" && k !== "wood")
+    .filter(([k]) => {
+      if (k === "eldin ore" || k === "wood") return false;
+      if (validLower.has(k)) return true;
+      // Allow elixir stacks (e.g. "Energizing Elixir [lv2|m0]") by matching their base name.
+      const base = stripElixirStackSuffix(k).toLowerCase();
+      return base !== k && validLower.has(base);
+    })
     .map(([k, q]) => ({ itemName: all.find((v) => v.itemName.toLowerCase() === k)?.itemName ?? k, quantity: q }));
   const fromBundles = (["Eldin Ore Bundle", "Wood Bundle"] as const)
     .filter((name) => exploreItemNames.has(name) && (bundles[name] ?? 0) > 0)

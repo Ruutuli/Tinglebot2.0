@@ -28,6 +28,13 @@ function escapeRegExp(s: string): string {
   return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
+function stripElixirStackSuffix(itemName: string): string {
+  const s = (itemName || "").trim();
+  // Inventory elixir stacks are stored like: "Energizing Elixir [lv2|m0]"
+  // For catalog lookups we need the base name.
+  return s.replace(/\s*\[lv\d+\|m\d+\]\s*$/i, "").trim();
+}
+
 /** Relic belongs to this character (characterId; legacy: no characterId + case-insensitive discoveredBy). Matches bot relicUtils.relicOwnerMatchQuery. */
 function relicOwnerMatchQuery(character: { _id?: unknown; name?: string }): Record<string, unknown> {
   const id = character?._id;
@@ -114,6 +121,7 @@ export async function POST(
     }
 
     const names = itemNames.map((n) => (n || "").trim()).filter(Boolean);
+    const catalogNames = names.map((n) => stripElixirStackSuffix(n));
 
     await connect();
 
@@ -300,7 +308,9 @@ export async function POST(
       ],
     };
     const foundItems: Array<{ itemName: string; modifierHearts?: number; staminaRecovered?: number; emoji?: string }> = [];
-    for (const itemName of names) {
+    for (let i = 0; i < names.length; i++) {
+      const itemName = names[i]!;
+      const catalogItemName = catalogNames[i]!;
       const bundleSpec = PAVING_BUNDLES[itemName];
       if (bundleSpec) {
         foundItems.push({
@@ -312,19 +322,20 @@ export async function POST(
         continue;
       }
       const docs = await Item.find({
-        itemName,
+        itemName: catalogItemName,
         categoryGear: { $nin: ["Weapon", "Armor"] },
         ...explorationItemFilter,
       }).lean();
       if (docs.length === 0) {
         return NextResponse.json(
-          { error: `"${itemName}" is not a valid exploration item.` },
+          { error: `"${catalogItemName}" is not a valid exploration item.` },
           { status: 400 }
         );
       }
       const doc = docs[0] as Record<string, unknown>;
       foundItems.push({
-        itemName: doc.itemName as string,
+        // Keep the exact inventory stack name (e.g. "... [lv2|m0]") so we can deduct/refund correctly.
+        itemName,
         modifierHearts: (doc.modifierHearts as number) ?? 0,
         staminaRecovered: (doc.staminaRecovered as number) ?? 0,
         emoji: (doc.emoji as string) ?? "🔹",

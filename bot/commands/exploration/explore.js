@@ -5120,24 +5120,25 @@ module.exports = {
        rollStaminaCost = effectiveStatus === "secured" ? 0 : 1;
       }
       // Quadrant stays unexplored until roll outcome "explored" (see DESIGN NOTE at top of file). Do NOT mark explored here.
-      // Known ruin-rest spot: auto-recover stamina when rolling here again — only if THIS expedition found a camp here
-      // Primary source: party.ruinRestQuadrants (stores stamina value); fallback: Square DB
+      // Known ruin-rest spot: auto-recover stamina when rolling here again.
+      // Primary source: party.ruinRestQuadrants (this expedition), fallback: Square DB (persisted / pinned rest spots).
       const ruinRestEntry = (party.ruinRestQuadrants || []).find(
        (r) => String(r?.squareId || "").toUpperCase() === String(party.square || "").toUpperCase() && String(r?.quadrantId || "").toUpperCase() === String(party.quadrant || "").toUpperCase()
       );
       const restStamina = ruinRestEntry?.stamina ?? (typeof q?.ruinRestStamina === "number" && q.ruinRestStamina > 0 ? q.ruinRestStamina : 0);
-      if (restStamina > 0 && ruinRestEntry && character) {
-       const add = restStamina;
-       if (add > 0) {
-        const caps = await getPartyPoolCaps(party);
-        const poolStam = party.totalStamina ?? 0;
-        party.totalStamina = Math.min(caps.maxStamina, poolStam + add);
-        party.markModified("totalStamina");
-        ruinRestRecovered = (party.totalStamina ?? 0) - poolStam;
-        logger.info("EXPLORE", `[explore.js] id=${party.partyId ?? "?"} ruin_rest 🟩${poolStam} +${ruinRestRecovered} → 🟩${party.totalStamina ?? 0}`);
-        await party.save();
+      if (restStamina > 0 && character) {
+       const addRequested = restStamina;
+       const caps = await getPartyPoolCaps(party);
+       const poolStam = party.totalStamina ?? 0;
+       party.totalStamina = Math.min(caps.maxStamina, poolStam + addRequested);
+       party.markModified("totalStamina");
+       ruinRestRecovered = (party.totalStamina ?? 0) - poolStam;
+       if (ruinRestRecovered > 0) {
         const locationRuinRest = `${party.square} ${party.quadrant}`;
-        pushProgressLog(party, character.name, "ruin_rest", `Known ruin-rest spot in ${locationRuinRest}: +${add} stamina.`, undefined, { staminaRecovered: add });
+        const sourceLabel = ruinRestEntry ? "this expedition" : "pinned map";
+        logger.info("EXPLORE", `[explore.js] id=${party.partyId ?? "?"} ruin_rest (${sourceLabel}) 🟩${poolStam} +${ruinRestRecovered} → 🟩${party.totalStamina ?? 0}`);
+        pushProgressLog(party, character.name, "ruin_rest", `Known ruin-rest spot (${sourceLabel}) in ${locationRuinRest}: +${ruinRestRecovered} stamina.`, undefined, { staminaRecovered: ruinRestRecovered });
+        await party.save();
        }
       }
      }

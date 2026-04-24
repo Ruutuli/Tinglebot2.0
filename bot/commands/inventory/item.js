@@ -1056,8 +1056,13 @@ module.exports = {
         const elixirInstantNoPersistentBuff =
           canonicalItemName === 'Hearty Elixir' ||
           canonicalItemName === 'Fairy Tonic' ||
-          canonicalItemName === 'Enduring Elixir';
+          canonicalItemName === 'Enduring Elixir' ||
+          canonicalItemName === 'Energizing Elixir';
         let priorBuffDisplayName = null;
+        // Safety: old bug could leave an Energizing buff stuck; always clear it when using any elixir.
+        if (character.buff?.active && character.buff.type === 'energizing') {
+          consumeElixirBuff(character);
+        }
         if (character.buff?.active && !elixirInstantNoPersistentBuff) {
           const rawType = character.buff.type;
           const typeForLookup = rawType === 'fireproof' ? 'chilly' : rawType;
@@ -1150,6 +1155,24 @@ module.exports = {
               type: null,
               effects: {}
             };
+          } else if (canonicalItemName === 'Energizing Elixir') {
+            const scaledEnergizing = scaleElixirEffects(
+              'Energizing Elixir',
+              ELIXIR_EFFECTS['Energizing Elixir'].effects,
+              invElixirLevel
+            );
+            const staminaToRestore = scaledEnergizing.staminaRecovery || 0;
+            const roomStamina = Math.max(0, character.maxStamina - character.currentStamina);
+            const actualRestore = Math.min(staminaToRestore, roomStamina);
+            if (actualRestore > 0) {
+              character.currentStamina += actualRestore;
+              await updateCurrentStamina(character._id, character.currentStamina);
+            }
+            character.buff = {
+              active: false,
+              type: null,
+              effects: {}
+            };
           } else {
             applyElixirBuff(character, canonicalItemName, invElixirLevel);
           }
@@ -1163,7 +1186,8 @@ module.exports = {
           const isInstantElixir =
             canonicalItemName === 'Hearty Elixir' ||
             canonicalItemName === 'Fairy Tonic' ||
-            canonicalItemName === 'Enduring Elixir';
+            canonicalItemName === 'Enduring Elixir' ||
+            canonicalItemName === 'Energizing Elixir';
           if (!isInstantElixir) {
             if (character.currentHearts !== beforeHearts) {
               await updateCurrentHearts(character._id, character.currentHearts);
@@ -1225,7 +1249,8 @@ module.exports = {
         const isImmediateElixir =
           canonicalItemName === 'Hearty Elixir' ||
           canonicalItemName === 'Fairy Tonic' ||
-          canonicalItemName === 'Enduring Elixir';
+          canonicalItemName === 'Enduring Elixir' ||
+          canonicalItemName === 'Energizing Elixir';
 
         let displayCurrentHearts = character.currentHearts;
         let displayMaxHearts = originalMaxHearts;

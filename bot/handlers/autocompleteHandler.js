@@ -2838,22 +2838,49 @@ async function handleGiftItemAutocomplete(interaction, focusedOption) {
     if (!fromCharacter) return await safeAutocompleteResponse(interaction, []);
     const inventoryCollection = await DatabaseConnectionManager.getInventoryCollection(fromCharacter);
     const items = await inventoryCollection.find().toArray();
-    // Aggregate by name, exclude 'Initial Item' and items with quantity <= 0
+    // Aggregate by stack key, exclude 'Initial Item' and items with quantity <= 0
     const itemMap = new Map();
     for (const item of items) {
       if (!item.itemName || item.itemName.toLowerCase() === 'initial item') continue;
       if (item.quantity <= 0) continue;
-      const key = item.itemName.trim().toLowerCase();
+      const isElix = isElixirItemName(item.itemName);
+      const legacy = isElix ? (item.elixirLevel == null) : false;
+      const lv = isElix ? normalizeElixirLevel(item.elixirLevel) : null;
+      const mh = isElix ? Math.max(0, Math.floor(Number(item.modifierHearts) || 0)) : null;
+      const key = isElix
+        ? `${item.itemName.trim().toLowerCase()}|${legacy ? 'legacy' : 'new'}|lv${lv}|m${mh}`
+        : item.itemName.trim().toLowerCase();
       if (!itemMap.has(key)) {
-        itemMap.set(key, { name: item.itemName, quantity: item.quantity });
+        itemMap.set(key, {
+          name: item.itemName,
+          quantity: item.quantity,
+          isElix,
+          legacy,
+          elixirLevel: item.elixirLevel,
+          modifierHearts: item.modifierHearts,
+        });
       } else {
         itemMap.get(key).quantity += item.quantity;
       }
     }
-    const choices = Array.from(itemMap.values()).map(item => ({
-      name: `${capitalizeWords(item.name)} (Qty: ${item.quantity})`,
-      value: item.name
-    }));
+    const choices = Array.from(itemMap.values()).map(item => {
+      if (!item.isElix) {
+        return {
+          name: `${capitalizeWords(item.name)} (Qty: ${item.quantity})`,
+          value: item.name,
+        };
+      }
+      const lv = normalizeElixirLevel(item.elixirLevel);
+      const mh = Math.max(0, Math.floor(Number(item.modifierHearts) || 0));
+      const tier = item.legacy ? 'Legacy' : (ELIXIR_LEVEL_NAMES[lv] || String(lv));
+      let label = `${capitalizeWords(item.name)} · ${tier}`;
+      if (mh > 0) label += ` · +${mh}♥`;
+      label += ` (Qty: ${item.quantity})`;
+      return {
+        name: label,
+        value: formatElixirItemOptionValue(item.name.toLowerCase(), lv, mh, { legacy: item.legacy === true }),
+      };
+    });
     return await respondWithFilteredChoices(interaction, focusedOption, choices);
   } catch (error) {
     handleError(error, "autocompleteHandler.js");
@@ -2997,9 +3024,10 @@ async function handleShopItemAutocomplete(interaction, focusedValue) {
       // Create a unique key that includes name, crafting status, boost status, and elixir stack (tier + Fairy mix)
       let key = `${item.itemName.trim().toLowerCase()}-${isCrafted ? 'crafted' : 'regular'}-${hasFortuneTellerBoost ? 'boosted' : 'normal'}`;
       if (isElixirItemName(item.itemName)) {
+        const legacy = item.elixirLevel == null;
         const lv = normalizeElixirLevel(item.elixirLevel);
         const mh = Math.max(0, Math.floor(Number(item.modifierHearts) || 0));
-        key += `-elx-${lv}-${mh}`;
+        key += `-elx-${legacy ? 'legacy' : 'new'}-${lv}-${mh}`;
       }
       
       if (!itemMap.has(key)) {
@@ -3032,16 +3060,18 @@ async function handleShopItemAutocomplete(interaction, focusedValue) {
       if (!indicators) indicators = '📦 ';
       let tierLabel = '';
       if (isElixirItemName(item.name)) {
+        const legacy = item.elixirLevel == null;
         const lv = normalizeElixirLevel(item.elixirLevel);
-        const lab = ELIXIR_LEVEL_NAMES[lv] || String(lv);
+        const lab = legacy ? 'Legacy' : (ELIXIR_LEVEL_NAMES[lv] || String(lv));
         const mh = Math.max(0, Math.floor(Number(item.modifierHearts) || 0));
         tierLabel = mh > 0 ? ` [${lab}|m${mh}]` : ` [${lab}]`;
       }
       let value = item.name;
       if (isElixirItemName(item.name)) {
+        const legacy = item.elixirLevel == null;
         const lv = normalizeElixirLevel(item.elixirLevel);
         const mh = Math.max(0, Math.floor(Number(item.modifierHearts) || 0));
-        value = formatElixirItemOptionValue(item.name.toLowerCase(), lv, mh);
+        value = formatElixirItemOptionValue(item.name.toLowerCase(), lv, mh, { legacy });
       }
       return {
         name: `${indicators}${item.name}${tierLabel} - Qty: ${item.quantity}`,
@@ -3148,13 +3178,26 @@ async function handleTransferItemAutocomplete(interaction, focusedValue) {
     const inventoryCollection = await DatabaseConnectionManager.getInventoryCollection(fromCharacter);
     const items = await inventoryCollection.find().toArray();
 
-    // Aggregate by name, exclude 'Initial Item'
+    // Aggregate by stack key, exclude 'Initial Item'
     const itemMap = new Map();
     for (const item of items) {
       if (!item.itemName || item.itemName.toLowerCase() === 'initial item') continue;
-      const key = item.itemName.trim().toLowerCase();
+      const isElix = isElixirItemName(item.itemName);
+      const legacy = isElix ? (item.elixirLevel == null) : false;
+      const lv = isElix ? normalizeElixirLevel(item.elixirLevel) : null;
+      const mh = isElix ? Math.max(0, Math.floor(Number(item.modifierHearts) || 0)) : null;
+      const key = isElix
+        ? `${item.itemName.trim().toLowerCase()}|${legacy ? 'legacy' : 'new'}|lv${lv}|m${mh}`
+        : item.itemName.trim().toLowerCase();
       if (!itemMap.has(key)) {
-        itemMap.set(key, { name: item.itemName, quantity: item.quantity });
+        itemMap.set(key, {
+          name: item.itemName,
+          quantity: item.quantity,
+          isElix,
+          legacy,
+          elixirLevel: item.elixirLevel,
+          modifierHearts: item.modifierHearts,
+        });
       } else {
         itemMap.get(key).quantity += item.quantity;
       }
@@ -3166,10 +3209,21 @@ async function handleTransferItemAutocomplete(interaction, focusedValue) {
       item.name.toLowerCase().includes(searchTerm)
     );
 
-    const choices = filteredItems.map(item => ({
-      name: `${capitalizeWords(item.name)} (Qty: ${item.quantity})`,
-      value: item.name
-    }));
+    const choices = filteredItems.map(item => {
+      if (!item.isElix) {
+        return { name: `${capitalizeWords(item.name)} (Qty: ${item.quantity})`, value: item.name };
+      }
+      const lv = normalizeElixirLevel(item.elixirLevel);
+      const mh = Math.max(0, Math.floor(Number(item.modifierHearts) || 0));
+      const tier = item.legacy ? 'Legacy' : (ELIXIR_LEVEL_NAMES[lv] || String(lv));
+      let label = `${capitalizeWords(item.name)} · ${tier}`;
+      if (mh > 0) label += ` · +${mh}♥`;
+      label += ` (Qty: ${item.quantity})`;
+      return {
+        name: label,
+        value: formatElixirItemOptionValue(item.name.toLowerCase(), lv, mh, { legacy: item.legacy === true }),
+      };
+    });
 
     const focusedOption = { value: focusedValue || '', name: '' };
     await respondWithFilteredChoices(interaction, focusedOption, choices);
@@ -3261,12 +3315,13 @@ async function handleItemAutocomplete(interaction, focusedOption) {
             let label = `${craftingIcon} ${capitalizeWords(item.name)}`;
             let value = item.name;
             if (isElix) {
-              const lv = normalizeElixirLevel(item.elixirLevel);
-              const mh = Math.max(0, Math.floor(Number(item.modifierHearts) || 0));
-              label += ` · ${ELIXIR_LEVEL_NAMES[lv]}`;
+          const isLegacyElixirStack = item.elixirLevel == null;
+          const lv = normalizeElixirLevel(item.elixirLevel);
+          const mh = Math.max(0, Math.floor(Number(item.modifierHearts) || 0));
+          label += ` · ${isLegacyElixirStack ? 'Legacy' : ELIXIR_LEVEL_NAMES[lv]}`;
               if (mh > 0) label += ` · +${mh}♥`;
               label += ` (Qty: ${item.quantity}) - Sell: ${sellPrice}`;
-              value = formatElixirItemOptionValue(item.name, lv, mh);
+          value = formatElixirItemOptionValue(item.name, lv, mh, { legacy: isLegacyElixirStack });
             } else {
               label += ` (Qty: ${item.quantity}) - Sell: ${sellPrice}`;
             }
@@ -3278,10 +3333,11 @@ async function handleItemAutocomplete(interaction, focusedOption) {
         for (const item of processedItems) {
           if (item.name === "initial item") continue;
           const isElix = isElixirItemName(item.name);
+          const legacy = isElix ? (item.elixirLevel == null) : false;
           const elv = isElix ? normalizeElixirLevel(item.elixirLevel) : 'na';
           const mh = isElix ? Math.max(0, Math.floor(Number(item.modifierHearts) || 0)) : 0;
           const key = isElix
-            ? `${item.name}-${item.isCrafted ? 'crafted' : 'regular'}-${item.hasFortuneTellerBoost ? 'boosted' : 'normal'}-elv${elv}-mh${mh}`
+            ? `${item.name}-${item.isCrafted ? 'crafted' : 'regular'}-${item.hasFortuneTellerBoost ? 'boosted' : 'normal'}-${legacy ? 'legacy' : 'new'}-elv${elv}-mh${mh}`
             : `${item.name}-${item.isCrafted ? 'crafted' : 'regular'}-${item.hasFortuneTellerBoost ? 'boosted' : 'normal'}`;
           if (!itemMap.has(key)) {
             itemMap.set(key, {
@@ -3291,6 +3347,7 @@ async function handleItemAutocomplete(interaction, focusedOption) {
               hasFortuneTellerBoost: item.hasFortuneTellerBoost,
               elixirLevel: item.elixirLevel,
               modifierHearts: item.modifierHearts,
+              legacy,
             });
           } else {
             const existing = itemMap.get(key);
@@ -3313,14 +3370,15 @@ async function handleItemAutocomplete(interaction, focusedOption) {
               value: item.name,
             };
           }
+          const isLegacyElixirStack = item.legacy === true || item.elixirLevel == null;
           const lv = normalizeElixirLevel(item.elixirLevel);
           const mh = Math.max(0, Math.floor(Number(item.modifierHearts) || 0));
-          let name = `${craftingIcon} ${capitalizeWords(item.name)} · ${ELIXIR_LEVEL_NAMES[lv]}`;
+          let name = `${craftingIcon} ${capitalizeWords(item.name)} · ${isLegacyElixirStack ? 'Legacy' : ELIXIR_LEVEL_NAMES[lv]}`;
           if (mh > 0) name += ` · +${mh}♥`;
           name += ` (Qty: ${item.quantity})`;
           return {
             name,
-            value: formatElixirItemOptionValue(item.name, lv, mh),
+            value: formatElixirItemOptionValue(item.name, lv, mh, { legacy: isLegacyElixirStack }),
           };
         });
       }

@@ -91,6 +91,7 @@ function parseEconomyItemSpecifier(rawName) {
         tierParse.modifierHearts != null
           ? Math.max(0, Math.floor(Number(tierParse.modifierHearts) || 0))
           : null, // null means "any mix-in for that tier"
+      elixirLegacy: tierParse.isLegacy === true,
       specifiedTier: true,
     };
   }
@@ -99,6 +100,7 @@ function parseEconomyItemSpecifier(rawName) {
     isElixir: isElixirItemName(raw),
     elixirLevel: null,
     modifierHearts: null,
+    elixirLegacy: false,
     specifiedTier: false,
   };
 }
@@ -115,17 +117,22 @@ function computeElixirStackMovesFromInventoryEntries(entries, quantityNeeded, sp
   if (need <= 0) return [];
   const desiredLevel = spec.elixirLevel != null ? normalizeElixirLevel(spec.elixirLevel) : null;
   const desiredMod = spec.modifierHearts != null ? Math.max(0, Math.floor(Number(spec.modifierHearts) || 0)) : null;
+  const desiredLegacy = spec.elixirLegacy === true ? true : (spec.elixirLegacy === false ? false : null);
 
   const rows = (Array.isArray(entries) ? entries : [])
     .filter((e) => (e?.quantity || 0) > 0)
     .map((e) => ({
       elixirLevel: normalizeElixirLevel(e.elixirLevel),
       modifierHearts: stackModifierHeartsFromInventoryRow(e),
+      legacy: e?.elixirLevel == null,
       quantity: Math.max(0, Math.floor(Number(e.quantity) || 0)),
     }))
     .filter((e) => e.quantity > 0);
 
   let filtered = rows;
+  if (desiredLegacy != null) {
+    filtered = filtered.filter((r) => r.legacy === desiredLegacy);
+  }
   if (desiredLevel != null) {
     filtered = filtered.filter((r) => r.elixirLevel === desiredLevel);
   }
@@ -135,7 +142,7 @@ function computeElixirStackMovesFromInventoryEntries(entries, quantityNeeded, sp
 
   // Deterministic order: Basic→Mid→High, then lower mix-in first
   filtered.sort(
-    (a, b) => a.elixirLevel - b.elixirLevel || a.modifierHearts - b.modifierHearts
+    (a, b) => (a.legacy === b.legacy ? 0 : (a.legacy ? -1 : 1)) || a.elixirLevel - b.elixirLevel || a.modifierHearts - b.modifierHearts
   );
 
   const moves = [];
