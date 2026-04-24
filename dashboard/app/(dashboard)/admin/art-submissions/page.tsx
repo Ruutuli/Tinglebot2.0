@@ -204,8 +204,17 @@ export default function AdminArtSubmissionsPage() {
             body: JSON.stringify({ action: "approve" }),
           }
         );
-        const data = await res.json();
+        const data = (await res.json()) as { ok?: boolean; error?: string };
         if (!res.ok || !data.ok) {
+          if (res.status === 404 || res.status === 409) {
+            await fetchItems();
+            setError(
+              typeof data.error === "string"
+                ? `${data.error} The list was refreshed.`
+                : "This submission is no longer pending. The list was refreshed."
+            );
+            return;
+          }
           setError(typeof data.error === "string" ? data.error : "Failed to approve");
           return;
         }
@@ -238,8 +247,17 @@ export default function AdminArtSubmissionsPage() {
             body: JSON.stringify({ action: "deny", reason }),
           }
         );
-        const data = await res.json();
+        const data = (await res.json()) as { ok?: boolean; error?: string };
         if (!res.ok || !data.ok) {
+          if (res.status === 404 || res.status === 409) {
+            await fetchItems();
+            setError(
+              typeof data.error === "string"
+                ? `${data.error} The list was refreshed.`
+                : "This submission is no longer pending. The list was refreshed."
+            );
+            return;
+          }
           setError(typeof data.error === "string" ? data.error : "Failed to deny");
           return;
         }
