@@ -14,6 +14,14 @@ function normalizeSubmissionId(raw: unknown): string {
     .trim();
 }
 
+/** Same as GET /api/admin/pending-submissions: id shown in the admin list for a TempData row. */
+function listDisplaySubmissionId(doc: { key: string; data?: unknown }): string {
+  const d = (doc.data || {}) as Record<string, unknown>;
+  return (
+    normalizeSubmissionId(d.submissionId) || normalizeSubmissionId(doc.key) || String(doc.key ?? "")
+  );
+}
+
 /** POST /api/admin/pending-submissions/[submissionId] — approve or deny via bot (Discord reactions, DMs, tokens, quests). */
 export async function POST(
   request: NextRequest,
@@ -90,11 +98,40 @@ export async function POST(
       keyOrIdClauses.push({ key: rawDecoded }, { "data.submissionId": rawDecoded });
     }
 
-    const existing = await TempData.findOne({
+    type SubmissionRow = { data?: unknown; key: string };
+
+    let existing: SubmissionRow | null = (await TempData.findOne({
       type: "submission",
       expiresAt: { $gt: now },
       $or: keyOrIdClauses,
-    }).exec();
+    })
+      .sort({ createdAt: -1 })
+      .exec()) as SubmissionRow | null;
+
+    if (!existing) {
+      // Strict key / data.submissionId equality can miss rows where the list ID is built from
+      // `normalize(d.submissionId) || normalize(key)` (see GET) but stored key ≠ normalized id.
+      const allPending = await TempData.find({
+        type: "submission",
+        expiresAt: { $gt: now },
+      })
+        .sort({ createdAt: -1 })
+        .lean();
+
+      for (const row of allPending) {
+        const k = listDisplaySubmissionId(row);
+        if (
+          k === submissionId ||
+          (k && k.toLowerCase() === submissionId.toLowerCase()) ||
+          (rawDecoded &&
+            (k === normalizeSubmissionId(rawDecoded) ||
+              k.toLowerCase() === String(rawDecoded).toLowerCase()))
+        ) {
+          existing = row as SubmissionRow;
+          break;
+        }
+      }
+    }
 
     if (!existing) {
       return NextResponse.json(

@@ -133,7 +133,10 @@ export async function GET() {
       return tb - ta;
     });
     const { isConfigured: botInternalApiConfigured } = getBotInternalApiConfig();
-    return NextResponse.json({ items: list, botInternalApiConfigured });
+    return NextResponse.json(
+      { items: list, botInternalApiConfigured },
+      { headers: { "Cache-Control": "no-store" } }
+    );
   } catch (e) {
     const msg = e instanceof Error ? e.message : "Failed to load pending submissions";
     return NextResponse.json({ error: msg }, { status: 500 });
