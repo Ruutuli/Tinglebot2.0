@@ -385,11 +385,11 @@ function createWarningEmbed(weather, village) {
       description: `**No special items to gather in ${village} during ${weather.special.label}.**\n\n⚠️ **Exercise caution when:**\n• **Traveling** - Risk of flood exposure\n\n🌊 The floodwaters create dangerous conditions. Consider waiting for the waters to recede.`
     },
     "Blight Rain": {
-      title: `🌧️🧿 **${weather.special.label} Warning**`,
+      title: `🩸 **${weather.special.label} Warning**`,
       description: `**No special items to gather in ${village} during ${weather.special.label}.**\n\n⚠️ **Exercise caution when:**\n• **Traveling** - Risk of blight exposure\n\n<:blight_eye:805576955725611058> The blighted rain creates dangerous conditions. Consider waiting for clearer weather.`
     },
     "Lightning Storm": {
-      title: `⚡⛈️ **${weather.special.label} Warning**`,
+      title: `⚡ **${weather.special.label} Warning**`,
       description: `**No special items to gather in ${village} during ${weather.special.label}.**\n\nLightning crackles across the sky in a dangerous storm! The storm is unpredictable and dangerous - any character who gathers, loots, or travels in this village today risks being struck by lightning!`
     },
     "Avalanche": {

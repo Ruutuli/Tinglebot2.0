@@ -2661,7 +2661,7 @@ if (boostInfo && boostInfo.boosterJob?.toLowerCase() === 'teacher' && boostInfo.
  // Add blight rain message if available
  if (blightRainMessage) {
   embed.addFields({
-   name: "🌧️ __Blight Rain__",
+   name: "🩸 __Blight Rain__",
    value: blightRainMessage,
    inline: false,
   });

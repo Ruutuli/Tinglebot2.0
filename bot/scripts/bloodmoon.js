@@ -34,9 +34,11 @@ const { EmbedBuilder } = require('discord.js');
 const { convertToHyruleanDate, bloodmoonDates, isBloodmoon } = require('../modules/calendarModule');
 const BloodMoonTracking = require('@/models/BloodMoonTrackingModel');
 const { getWeatherWithoutGeneration } = require('@/services/weatherService');
+const { specials } = require('../data/weatherData');
 
-/** Prepend to town-hall names when the village’s current special weather is Blight Rain. */
-const BLIGHT_RAIN_TOWNHALL_PREFIX = '\uD83E\uDE78'; // (🩸)
+/** Blight Rain town-hall prefix (same as weatherData `specials` emoji). */
+const BLIGHT_RAIN_TOWNHALL_PREFIX = '\uD83E\uDE78'; // 🩸
+const BLIGHT_RAIN_LABEL = 'Blight Rain';
 
 const TOWNHALL_VILLAGES = ['Rudania', 'Inariko', 'Vhintl'];
 const TOWNHALL_CHANNEL_ENV = {
@@ -416,20 +418,53 @@ function getBloodMoonChannelMappings() {
   }
 }
 
+// ------------------- firstGrapheme -------------------
+// First visual emoji/character only (town-hall names must not stack multiple emoji).
+function firstGrapheme(s) {
+  if (!s) return '';
+  try {
+    const seg = new Intl.Segmenter(undefined, { granularity: 'grapheme' });
+    for (const { segment } of seg.segment(s)) {
+      return segment;
+    }
+  } catch {
+    // ignore
+  }
+  return s;
+}
+
+// ------------------- getSpecialTownHallPrefix -------------------
+// One emoji prepended to town-hall names when the village has a known special weather (see weatherData specials).
+function getSpecialTownHallPrefix(specialLabel) {
+  if (!specialLabel || typeof specialLabel !== 'string') {
+    return '';
+  }
+  const trimmed = specialLabel.trim();
+  const entry = specials.find((s) => s.label.toLowerCase() === trimmed.toLowerCase());
+  if (!entry) {
+    return '';
+  }
+  if (entry.label === BLIGHT_RAIN_LABEL) {
+    return BLIGHT_RAIN_TOWNHALL_PREFIX;
+  }
+  return firstGrapheme(entry.emoji || '');
+}
+
 // ------------------- getDesiredTownHallName -------------------
-// Picks default vs. Blood Moon name, then prepends the Blight Rain hint when the village is under Blight Rain.
-function getDesiredTownHallName(channelId, isBlightRain) {
+// Picks default vs. Blood Moon name, then prepends a special-weather hint when applicable.
+function getDesiredTownHallName(channelId, specialLabel) {
   const defaultNames = getChannelMappings();
   const bloodNames = getBloodMoonChannelMappings();
   const base = isBloodMoonDay() ? bloodNames[channelId] : defaultNames[channelId];
   if (!base) {
     return null;
   }
-  return isBlightRain ? `${BLIGHT_RAIN_TOWNHALL_PREFIX}${base}` : base;
+  const prefix = getSpecialTownHallPrefix(specialLabel);
+  return prefix ? `${prefix}${base}` : base;
 }
 
 // ------------------- syncTownHallChannelNames -------------------
-// Updates all village town-hall channel names to match Blood Moon, Blight Rain, or normal branding.
+// Updates all village town-hall channel names to match Blood Moon, active special weather, or normal branding.
 async function syncTownHallChannelNames(client) {
   if (!client?.channels) {
     return;
@@ -440,15 +475,15 @@ async function syncTownHallChannelNames(client) {
     if (!channelId) {
       continue;
     }
-    let isBlightRain = false;
+    let specialLabel = null;
     try {
       const w = await getWeatherWithoutGeneration(village);
-      isBlightRain = w?.special?.label === 'Blight Rain';
+      specialLabel = w?.special?.label || null;
     } catch (error) {
       handleError(error, 'bloodmoon.js');
       logger.error('BLOODMOON', `Could not read weather for ${village} when syncing town-hall name: ${error.message}`, error);
     }
-    const newName = getDesiredTownHallName(channelId, isBlightRain);
+    const newName = getDesiredTownHallName(channelId, specialLabel);
     if (newName) {
       await changeChannelName(client, channelId, newName);
     }
@@ -495,13 +530,13 @@ async function changeChannelName(client, channelId, newName) {
 }
 
 // ------------------- renameChannels -------------------
-// Public hook used by manual Blood Moon triggers: applies full town-hall naming (Blood Moon + Blight Rain where relevant).
+// Public hook used by manual Blood Moon triggers: applies full town-hall naming (Blood Moon + special weather where relevant).
 async function renameChannels(client) {
   await syncTownHallChannelNames(client);
 }
 
 // ------------------- revertChannelNames -------------------
-// Reverts to non–Blood-Moon state where applicable; also reflects Blight Rain in channel names.
+// Reverts to non–Blood-Moon state where applicable; also reflects active special weather in channel names.
 async function revertChannelNames(client) {
   await syncTownHallChannelNames(client);
 }

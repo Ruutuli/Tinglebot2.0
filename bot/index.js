@@ -595,10 +595,10 @@ async function initializeClient() {
         // Check blood moon status
         logBloodMoonStatus();
 
-        // Town hall channel names: Blood Moon + Blight Rain hint (🩸) match DB weather on startup
+        // Town hall channel names: Blood Moon + special-weather emoji match DB weather on startup
         try {
           await syncTownHallChannelNames(client);
-          logger.info('SYSTEM', 'Town hall channel names synced (Blood Moon + Blight Rain when applicable)');
+          logger.info('SYSTEM', 'Town hall channel names synced (Blood Moon + special weather when applicable)');
         } catch (err) {
           logger.error('SYSTEM', `Failed to sync town hall channel names on startup: ${err.message}`);
         }

@@ -58,15 +58,17 @@ const precipitations = [
   { label: "Thunderstorm", emoji: "⛈️", conditions: { temperature: [">= 44°F"], wind: ["any"] } }
 ];
 
+// One emoji per row (used in embeds, UI, and town-hall name hints). Labels must match every
+// `Special: [...]` entry across villages/seasons in seasonsData.js (currently 12 types).
 const specials = [
   { label: "Avalanche", emoji: "🏔️", conditions: { temperature: ["<= 36°F"], wind: ["any"], precipitation: ["snow"] } },
-  { label: "Blight Rain", emoji: "🌧️🧿", conditions: { temperature: [">= 44°F"], wind: ["any"], precipitation: ["rain"] } },
+  { label: "Blight Rain", emoji: "🩸", conditions: { temperature: [">= 44°F"], wind: ["any"], precipitation: ["rain"] } },
   { label: "Drought", emoji: "🌵", conditions: { temperature: [">= 97°F"], wind: ["any"], precipitation: ["sunny"] } },
   { label: "Fairy Circle", emoji: "🍄", conditions: { temperature: [">= 52°F"], wind: ["< 63 km/h"], precipitation: ["sunny", "partly cloudy"] } },
   { label: "Flood", emoji: "🌊", conditions: { temperature: [">= 24°F"], wind: ["any"], precipitation: ["Heavy Rain"] } },
   { label: "Flower Bloom", emoji: "🌼", conditions: { temperature: [">= 72°F"], wind: ["any"], precipitation: ["any"] } },
   { label: "Jubilee", emoji: "🐟", conditions: { temperature: ["any"], wind: ["any"], precipitation: ["any"] } },
-  { label: "Lightning Storm", emoji: "⚡⛈️", conditions: { temperature: [">= 44°F"], wind: ["any"], precipitation: ["Thunderstorm"] } },
+  { label: "Lightning Storm", emoji: "⚡", conditions: { temperature: [">= 44°F"], wind: ["any"], precipitation: ["Thunderstorm"] } },
   { label: "Meteor Shower", emoji: "☄️", conditions: { temperature: ["any"], wind: ["any"], precipitation: ["sunny"] } },
   { label: "Muggy", emoji: "🐛", conditions: { temperature: [">= 72°F"], wind: ["any"], precipitation: ["rain", "fog", "cloudy"] } },
   { label: "Rock Slide", emoji: "⛏️", conditions: { temperature: ["any"], wind: ["any"], precipitation: ["any"] } }
