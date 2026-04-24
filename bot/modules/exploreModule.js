@@ -45,7 +45,8 @@ const LOC_IN_MESSAGE_RE = /\s+(?:in|at)\s+([A-J](?:[1-9]|1[0-2]))\s+(Q[1-4])/i;
 
 // Stamina revisit lines (explore.js roll) — same outcome as pinable "Found a ruin rest spot" but not a separate map discovery.
 function isRuinRestRevisitMessage(message) {
-    return /Known ruin-rest spot\s+in\s+[A-J](?:[1-9]|1[0-2])\s+Q[1-4]/i.test(String(message || ""));
+    // Allow optional source tag in parentheses, e.g. "(pinned map)" or "(this expedition)".
+    return /Known ruin-rest spot(?:\s*\([^)]*\))?\s+in\s+[A-J](?:[1-9]|1[0-2])\s+Q[1-4]/i.test(String(message || ""));
 }
 
 function shouldSkipDiscoveryCleanupEntry(e) {
