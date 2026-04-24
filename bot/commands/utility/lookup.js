@@ -9,6 +9,7 @@ const { handleAutocomplete } = require('../../handlers/autocompleteHandler.js');
 const { getCategoryColor } = require('../../modules/formattingModule.js');
 const { formatItemDetails } = require('../../embeds/embeds.js');
 const generalCategories = require('@/models/GeneralItemCategories.js');
+const { normalizeElixirLevel } = require('@/modules/elixirModule.js');
 
 // ------------------- Constants -------------------
 const ITEMS_PER_PAGE = 25;
