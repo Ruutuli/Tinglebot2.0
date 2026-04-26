@@ -123,12 +123,7 @@ function canUseDailyRoll(character, activity, userId) {
   }
 
   const now = new Date();
-  // Compute the most recent 13:00 UTC (8am EST) rollover
-  const rollover = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate(), 13, 0, 0, 0));
-  if (now < rollover) {
-    // If before today's 13:00 UTC, use yesterday's 13:00 UTC
-    rollover.setUTCDate(rollover.getUTCDate() - 1);
-  }
+  const rollover = getMostRecentEasternRolloverUtc(now);
 
   // Check both gather and loot activities since they share the same daily limit
   const lastGatherRoll = character.dailyRoll?.get('gather');
@@ -152,14 +147,57 @@ function canUseDailyRoll(character, activity, userId) {
   return true;
 }
 
-// Same 8am Eastern / 13:00 UTC window boundary as canUseDailyRoll (gather + loot share this period).
-function getGatherLootRolloverBoundary() {
-  const now = new Date();
-  const rollover = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate(), 13, 0, 0, 0));
-  if (now < rollover) {
-    rollover.setUTCDate(rollover.getUTCDate() - 1);
+/**
+ * Returns the most recent 8:00 AM America/New_York boundary as a UTC Date.
+ * This must use IANA timezone to stay correct through EST/EDT changes.
+ */
+function getMostRecentEasternRolloverUtc(now = new Date()) {
+  const tz = 'America/New_York';
+
+  const getEasternYmd = (d) => {
+    const parts = new Intl.DateTimeFormat('en-US', {
+      timeZone: tz,
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+    }).formatToParts(d);
+    const get = (type) => parts.find((p) => p.type === type)?.value;
+    return { y: Number(get('year')), m: Number(get('month')), day: Number(get('day')) };
+  };
+
+  const getEasternOffsetMinutesAt = (d) => {
+    const parts = new Intl.DateTimeFormat('en-US', {
+      timeZone: tz,
+      timeZoneName: 'shortOffset',
+    }).formatToParts(d);
+    const tzName = parts.find((p) => p.type === 'timeZoneName')?.value || 'GMT+0';
+    const m = tzName.match(/GMT([+-])(\d{1,2})(?::(\d{2}))?/);
+    if (!m) return 0;
+    const sign = m[1] === '-' ? -1 : 1;
+    const hours = Number(m[2] || 0);
+    const mins = Number(m[3] || 0);
+    return sign * (hours * 60 + mins);
+  };
+
+  const ymd = getEasternYmd(now);
+  // First guess: "today at 8:00 AM Eastern" converted to UTC via the offset at 'now'.
+  // We only need correctness around the current period boundary; using offset-at-now is safe.
+  const offsetMinutes = getEasternOffsetMinutesAt(now);
+  let rolloverUtc = new Date(Date.UTC(ymd.y, ymd.m - 1, ymd.day, 8, 0, 0, 0) - offsetMinutes * 60 * 1000);
+
+  if (now < rolloverUtc) {
+    // If we're before today's 8AM Eastern, recompute for yesterday (in Eastern calendar).
+    const yesterdayEastern = getEasternYmd(new Date(now.getTime() - 24 * 60 * 60 * 1000));
+    const offsetMinutesYesterday = getEasternOffsetMinutesAt(new Date(now.getTime() - 24 * 60 * 60 * 1000));
+    rolloverUtc = new Date(Date.UTC(yesterdayEastern.y, yesterdayEastern.m - 1, yesterdayEastern.day, 8, 0, 0, 0) - offsetMinutesYesterday * 60 * 1000);
   }
-  return rollover.toISOString();
+
+  return rolloverUtc;
+}
+
+// Same 8am Eastern window boundary as canUseDailyRoll (gather + loot share this period).
+function getGatherLootRolloverBoundary() {
+  return getMostRecentEasternRolloverUtc(new Date()).toISOString();
 }
 
 /**
@@ -215,12 +253,10 @@ async function tryClaimGatherDailyRoll(character) {
 }
 
 async function sendDailyGatheringLimitEmbed(safeReply, characterName) {
-  const nextRollover = new Date();
-  nextRollover.setUTCHours(13, 0, 0, 0); // 8AM EST = 13:00 UTC
-  if (nextRollover < new Date()) {
-    nextRollover.setUTCDate(nextRollover.getUTCDate() + 1);
-  }
-  const unixTimestamp = Math.floor(nextRollover.getTime() / 1000);
+  const now = new Date();
+  const mostRecent = getMostRecentEasternRolloverUtc(now);
+  const next = new Date(mostRecent.getTime() + 24 * 60 * 60 * 1000);
+  const unixTimestamp = Math.floor(next.getTime() / 1000);
   await safeReply({
     embeds: [{
       color: 0x008B8B,
@@ -320,6 +356,15 @@ module.exports = {
       if (!character) {
         await safeReply({
           content: `❌ **Character ${characterName} not found or does not belong to you.**`,
+        });
+        return;
+      }
+
+      // Prevent race: if a Job Voucher activation is mid-flight, do not consume the daily roll.
+      if (character.jobVoucherActivating && !character.jobVoucher) {
+        await safeReply({
+          content: `⏳ **Job Voucher activation in progress for ${character.name}.** Please wait a moment and try \`/gather\` again.`,
+          flags: 64
         });
         return;
       }

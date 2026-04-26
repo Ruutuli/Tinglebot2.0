@@ -145,6 +145,12 @@ const modCharacterSchema = new Schema({
     default: false,
     required: true
   },
+  // Set true briefly while `/item` is activating a voucher.
+  // Used to prevent a race where `/gather` or `/loot` consumes a daily roll mid-activation.
+  jobVoucherActivating: {
+    type: Boolean,
+    default: false
+  },
   jobVoucherJob: {
     type: String,
     default: null

@@ -237,6 +237,7 @@ const speciesRollPermissions = {
     shellreptile: ['petforage'],
     smallcanine: ['petprey', 'petforage', 'petmon'],
     smallfeline: ['petprey', 'petforage', 'petmon'],
+    rodent: ['petforage'],
     smallreptile: ['petprey', 'petforage'],
     walltula: ['petprey', 'petmon'],
     smallspecial: ['petprey', 'petforage', 'petmon'],

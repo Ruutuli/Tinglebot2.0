@@ -629,15 +629,38 @@ module.exports = {
         }
 
         // --- Only now activate voucher and remove from inventory ---
-        // Use the appropriate update function based on character type
+        // Mark activation in-progress to prevent a race where another command consumes the daily roll.
         const updateFunction = character.isModCharacter ? updateModCharacterById : updateCharacterById;
-        const updatedCharacter = await updateFunction(character._id, { jobVoucher: true, jobVoucherJob: jobName });
-        // Update the character object with the new values
-        if (updatedCharacter) {
-          character.jobVoucher = updatedCharacter.jobVoucher;
-          character.jobVoucherJob = updatedCharacter.jobVoucherJob;
+        let activationFlagSet = false;
+        try {
+          await updateFunction(character._id, { jobVoucherActivating: true });
+          activationFlagSet = true;
+
+          const updatedCharacter = await updateFunction(character._id, {
+            jobVoucher: true,
+            jobVoucherJob: jobName,
+            jobVoucherActivating: false
+          });
+          // Update the character object with the new values
+          if (updatedCharacter) {
+            character.jobVoucher = updatedCharacter.jobVoucher;
+            character.jobVoucherJob = updatedCharacter.jobVoucherJob;
+            character.jobVoucherActivating = updatedCharacter.jobVoucherActivating;
+          } else {
+            character.jobVoucher = true;
+            character.jobVoucherJob = jobName;
+            character.jobVoucherActivating = false;
+          }
+
+          await removeItemInventoryDatabase(character._id, 'Job Voucher', 1, interaction, `Used for job voucher: ${jobName}`);
+        } finally {
+          // Best-effort cleanup in case of unexpected errors after setting the flag.
+          if (activationFlagSet) {
+            try {
+              await updateFunction(character._id, { jobVoucherActivating: false });
+            } catch {}
+          }
         }
-        await removeItemInventoryDatabase(character._id, 'Job Voucher', 1, interaction, `Used for job voucher: ${jobName}`);
 
         // If this character is the booster of an active Teacher or Entertainer Crafting boost, mark second voucher as used
         const jobNameNormalized = (jobName || '').trim().toLowerCase();
