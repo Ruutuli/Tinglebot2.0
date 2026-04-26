@@ -215,7 +215,9 @@ module.exports = {
           });
         }
         await ensureBlupeeTable();
-        await interaction.deferReply();
+        if (!interaction.deferred && !interaction.replied) {
+          await interaction.deferReply();
+        }
         return rollBlupee(interaction, character, sessionId);
       } else if (subcommand === 'blupee-stats') {
         const { connectToTinglebot } = require('@/database/db');
