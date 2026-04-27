@@ -1484,13 +1484,9 @@ async function execute(interaction) {
     const subcommandGroup = interaction.options.getSubcommandGroup(false);
     const subcommand = interaction.options.getSubcommand(false);
     
-    // Only defer with ephemeral for non-mount and non-weather commands
+    // Moderation commands should be public by default (not ephemeral).
     try {
-      if (subcommand !== 'mount' && subcommandGroup !== 'weather') {
-        await interaction.deferReply({ flags: [MessageFlags.Ephemeral] });
-      } else {
-        await interaction.deferReply();
-      }
+      await interaction.deferReply();
     } catch (deferError) {
       console.error('[mod.js]: Failed to defer reply:', deferError);
       // If defer fails, the interaction is likely invalid, so we can't proceed
@@ -2727,23 +2723,21 @@ async function attemptDMWithRetry(user, message, retries = 3) {
 
 async function reply(interaction, content) {
   if (typeof content === 'string') {
-    return interaction.editReply({ content, ephemeral: true });
+    return interaction.editReply({ content });
   } else {
-    return interaction.editReply({ ...content, ephemeral: true });
+    return interaction.editReply({ ...content });
   }
 }
 
 // ------------------- Function: safeReply -------------------
 // Helper function to safely send replies, handling invalid interactions
-async function safeReply(interaction, content, ephemeral = true) {
+async function safeReply(interaction, content, ephemeral = false) {
   try {
     if (interaction.replied || interaction.deferred) {
       return await interaction.editReply(content);
     } else {
       const replyContent = typeof content === 'string' ? { content } : content;
-      if (ephemeral && !replyContent.ephemeral) {
-        replyContent.ephemeral = true;
-      }
+      if (ephemeral && !replyContent.ephemeral) replyContent.ephemeral = true;
       return await interaction.reply(replyContent);
     }
   } catch (error) {
@@ -6512,8 +6506,7 @@ async function handleLevel(interaction) {
         
       default:
         return await interaction.editReply({
-          content: '❌ Invalid action specified.',
-          flags: [MessageFlags.Ephemeral]
+          content: '❌ Invalid action specified.'
         });
     }
     
@@ -6569,8 +6562,7 @@ async function handleLevel(interaction) {
     }
     
     await interaction.editReply({
-      embeds: [embed],
-      flags: [MessageFlags.Ephemeral]
+      embeds: [embed]
     });
     
   } catch (error) {
