@@ -33,7 +33,7 @@ const { capitalizeWords } = require('../../modules/formattingModule.js');
 const logger = require('@/utils/logger.js');
 const { validateJobVoucher, activateJobVoucher, fetchJobVoucherItem, deactivateJobVoucher, getJobVoucherErrorMessage } = require('../../modules/jobVoucherModule.js');
 const { applyGatheringBoost } = require('../../modules/boostIntegration');
-const { clearBoostAfterUse, retrieveBoostingRequestFromTempDataByCharacter } = require('./boosting');
+const { clearBoostAfterUse, retrieveBoostingRequestFromTempDataByCharacter, getEffectiveJob } = require('./boosting');
 
 // ============================================================================
 // ------------------- Utilities -------------------
@@ -848,7 +848,7 @@ module.exports = {
               const { fetchCharacterByName } = require('@/database/db');
               const boosterCharacter = await fetchCharacterByName(character.boostedBy);
               const isEntertainerBoost = boosterCharacter &&
-                (boosterCharacter.job === 'Entertainer' || boosterCharacter.job?.toLowerCase() === 'entertainer');
+                getEffectiveJob(boosterCharacter)?.toLowerCase() === 'entertainer';
 
               if (isEntertainerBoost) {
                 const itemsForBonus = await fetchAllItems();
@@ -1006,7 +1006,7 @@ module.exports = {
           boosterCharacter = await fetchCharacterByName(character.boostedBy);
           
                      // Handle Scholar boost (cross-region gathering) before filtering items
-           if (boosterCharacter && boosterCharacter.job?.toLowerCase() === 'scholar') {
+           if (boosterCharacter && getEffectiveJob(boosterCharacter)?.toLowerCase() === 'scholar') {
              // Get the boost data to find the target village
              const boostData = await retrieveBoostingRequestFromTempDataByCharacter(character.name);
              
@@ -1067,11 +1067,14 @@ module.exports = {
         let isEntertainerBoost = false;
         
         if (character.boostedBy && boosterCharacter) {
+          const effectiveBoosterJob = getEffectiveJob(boosterCharacter);
+          const boosterJobLower = effectiveBoosterJob?.toLowerCase() ?? '';
           // Entertainer: main item from normal table; ADDITIONAL bonus item from performer-marked (entertainerItems === true) pool.
-          if (boosterCharacter.job === 'Entertainer') {
+          // Must not route Entertainer through applyGatheringBoost — that applies applyEntertainerGatheringBoost and replaces the table with entertainer-only items (empty for many job/region combos).
+          if (boosterJobLower === 'entertainer') {
             isEntertainerBoost = true;
             // Keep main pool as normal (boostedAvailableItems stays availableItems)
-          } else if (boosterCharacter.job !== 'Scholar') {
+          } else if (boosterJobLower !== 'scholar') {
             // Normal boost application for all other jobs (including Priest) - apply to available items
             // Skip Scholar since we already handled the region change above
             boostedAvailableItems = await applyGatheringBoost(character.name, availableItems);

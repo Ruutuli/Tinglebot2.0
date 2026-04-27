@@ -29,7 +29,7 @@ const { capitalizeWords } = require('../../modules/formattingModule');
 const { applyStealingBoost, applyStealingJailBoost, applyStealingLootBoost } = require('../../modules/boostIntegration');
 const { generateBoostFlavorText } = require('../../modules/flavorTextModule');
 const { getBoostInfo, addBoostFlavorText, buildFooterText } = require('../../embeds/embeds');
-const { getActiveBuffEffects, rollStickyBonusExtraQuantity } = require('../../modules/elixirModule');
+const { getActiveBuffEffects, rollStickyBonusExtraQuantity, normalizeElixirLevel, ELIXIR_LEVEL_NAMES } = require('../../modules/elixirModule');
 const logger = require('@/utils/logger');
 const { retrieveBoostingRequestFromTempDataByCharacter, saveBoostingRequestToTempData, clearBoostAfterUse } = require('../jobs/boosting');
 const { checkJailStatus, sendToJail, formatJailTimeLeftDaysHours, DEFAULT_JAIL_DURATION_MS } = require('@/utils/jailCheck');
@@ -396,9 +396,11 @@ async function createStealResultEmbed(thiefCharacter, targetCharacter, item, qua
     if (thiefCharacter.buff?.active) {
         const buffEffects = getActiveBuffEffects(thiefCharacter);
         if (buffEffects && buffEffects.stealthBoost > 0) {
+            const elixirLv = normalizeElixirLevel(thiefCharacter.buff.elixirLevel);
+            const tierLabel = ELIXIR_LEVEL_NAMES[elixirLv] ?? 'Basic';
             embed.addFields({
                 name: '🧪 Active Elixir',
-                value: `> **${thiefCharacter.buff.type}** buff (Level ${thiefCharacter.buff.level}) - Stealth +${buffEffects.stealthBoost}`,
+                value: `> **${thiefCharacter.buff.type}** buff (Level ${tierLabel}) - Stealth +${buffEffects.stealthBoost}`,
                 inline: false
             });
         }

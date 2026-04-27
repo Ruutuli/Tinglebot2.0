@@ -361,6 +361,9 @@ async function syncToInventoryDatabase(character, item, interaction) {
       };
       if (syncIsElixir && syncStackElixirLevel != null) {
         insertDoc.elixirLevel = syncStackElixirLevel;
+        if (syncStackModifierHearts != null && syncStackModifierHearts > 0) {
+          insertDoc.modifierHearts = syncStackModifierHearts;
+        }
       }
       await inventoryCollection.insertOne(insertDoc);
       logger.success('INVENTORY', `Added new item ${itemNameForQuery} to database`);
