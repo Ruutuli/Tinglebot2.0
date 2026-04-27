@@ -489,7 +489,7 @@ module.exports = {
      content: isGift
       ? `The gift command can only be used in <#${ECONOMY_CHANNEL_ID}> or in a village town hall where both characters are located.`
       : `Economy commands can only be used in <#${ECONOMY_CHANNEL_ID}>. Please go there to use gift, shop, trade, or transfer.`,
-     flags: MessageFlags.Ephemeral
+     flags: 0
     });
     return;
    }
@@ -524,7 +524,7 @@ module.exports = {
  },
 };
 
-async function ensureDeferred(interaction, opts = { ephemeral: true }) {
+async function ensureDeferred(interaction, opts = { ephemeral: false }) {
   if (!interaction) return;
   if (interaction.deferred || interaction.replied) return;
   try {
@@ -593,7 +593,7 @@ for (const { quantity } of parsedItems) {
           text: 'Quantity Validation'
         }
       }],
-      ephemeral: true,
+      ephemeral: false,
     });
     return;
   }
@@ -614,7 +614,7 @@ for (const { baseName } of parsedItems) {
           text: 'Item Protection'
         }
       }],
-      ephemeral: true,
+      ephemeral: false,
     });
     return;
   }
@@ -635,7 +635,7 @@ for (const { baseName } of parsedItems) {
           text: 'Item Protection'
         }
       }],
-      ephemeral: true,
+      ephemeral: false,
     });
     return;
   }
@@ -671,7 +671,7 @@ for (const { baseName } of parsedItems) {
         .setImage('https://storage.googleapis.com/tinglebot/border%20error.png')
         .setFooter({ text: 'Character Validation' })
         .setTimestamp()],
-      ephemeral: true
+      ephemeral: false
     });
     return;
   }
@@ -719,7 +719,7 @@ for (const { baseName } of parsedItems) {
         text: 'Character Validation'
       }
     }],
-    ephemeral: true
+    ephemeral: false
    });
    return;
   }
@@ -750,7 +750,7 @@ for (const { baseName } of parsedItems) {
           text: 'Inventory Sync Required'
         }
       }],
-      ephemeral: true
+      ephemeral: false
     });
     return;
   }
@@ -787,7 +787,7 @@ for (const { baseName } of parsedItems) {
         text: 'Village Check'
       }
     }],
-    ephemeral: true
+    ephemeral: false
    });
    return;
   }
@@ -827,7 +827,7 @@ for (const { baseName } of parsedItems) {
           text: 'Channel Validation'
         }
       }],
-      ephemeral: true
+      ephemeral: false
     });
     return;
   }
@@ -947,7 +947,7 @@ for (const { baseName } of parsedItems) {
         text: 'Inventory Check'
       }
     }],
-    ephemeral: true
+    ephemeral: false
    });
    return;
   }
@@ -969,7 +969,7 @@ for (const { baseName } of parsedItems) {
         text: 'Inventory Link Required'
       }
     }],
-    ephemeral: true
+    ephemeral: false
    });
    return;
   }
@@ -1008,7 +1008,7 @@ for (const { baseName } of parsedItems) {
        if (!addResult) {
          await interaction.editReply({
            content: `❌ Failed to add ${canonicalBaseName} to recipient's inventory. Please try again.`,
-           ephemeral: true
+           ephemeral: false
          });
          return;
        }
@@ -1039,7 +1039,7 @@ for (const { baseName } of parsedItems) {
          }
          await interaction.editReply({
            content: `❌ Failed to remove ${canonicalBaseName} from your inventory. The item has been removed from the recipient's inventory. Please try again.`,
-           ephemeral: true
+           ephemeral: false
          });
          return;
        }
@@ -1066,7 +1066,7 @@ for (const { baseName } of parsedItems) {
      if (movedTotal !== quantity) {
        await interaction.editReply({
          content: `❌ Could not gift the requested quantity of ${canonicalBaseName}. Please try again.`,
-         ephemeral: true
+         ephemeral: false
        });
        return;
      }
@@ -1088,7 +1088,7 @@ for (const { baseName } of parsedItems) {
    if (!addResult) {
      await interaction.editReply({
        content: `❌ Failed to add ${itemNameToAdd} to recipient's inventory. Please try again.`,
-       ephemeral: true
+       ephemeral: false
      });
      return;
    }
@@ -1116,7 +1116,7 @@ for (const { baseName } of parsedItems) {
      }
      await interaction.editReply({
        content: `❌ Failed to remove ${itemNameToRemove} from your inventory. The item has been removed from the recipient's inventory. Please try again.`,
-       ephemeral: true
+       ephemeral: false
      });
      return;
    }
@@ -1169,7 +1169,7 @@ for (const { baseName } of parsedItems) {
         text: 'Error Handling'
       }
     }],
-    ephemeral: true
+    ephemeral: false
   });
  }
 }
@@ -1362,7 +1362,7 @@ async function handleShopView(interaction) {
      try {
        await i.followUp({
          content: "❌ An error occurred while processing your request.",
-         ephemeral: true
+         ephemeral: false
        }).catch(() => {}); // Ignore if this fails too
      } catch (replyError) {
        logger.error('INTERACTION', 'Error sending error message');
@@ -1394,7 +1394,7 @@ async function handleShopView(interaction) {
 
 async function handleShopBuy(interaction) {
   try {
-    await ensureDeferred(interaction, { ephemeral: true });
+    await ensureDeferred(interaction, { ephemeral: false });
 
     const user = await getOrCreateToken(interaction.user.id);
 
@@ -1452,7 +1452,7 @@ async function handleShopBuy(interaction) {
             text: 'Character Validation'
           }
         }],
-        ephemeral: true
+        ephemeral: false
       });
     }
 
@@ -1539,7 +1539,7 @@ async function handleShopBuy(interaction) {
             text: 'Shop Validation'
           }
         }],
-        ephemeral: true
+        ephemeral: false
       });
     }
 
@@ -1558,7 +1558,7 @@ async function handleShopBuy(interaction) {
             text: 'Shop Validation'
           }
         }],
-        ephemeral: true
+        ephemeral: false
       });
     }
 
@@ -1575,7 +1575,7 @@ async function handleShopBuy(interaction) {
             text: 'Shop Validation'
           }
         }],
-        ephemeral: true
+        ephemeral: false
       });
     }
 
@@ -1595,7 +1595,7 @@ async function handleShopBuy(interaction) {
             text: 'Item Validation'
           }
         }],
-        ephemeral: true
+        ephemeral: false
       });
     }
 
@@ -1665,7 +1665,7 @@ async function handleShopBuy(interaction) {
             text: 'Token Balance Check'
           }
         }],
-        ephemeral: true
+        ephemeral: false
       });
     }
 
@@ -1828,14 +1828,14 @@ async function handleShopBuy(interaction) {
           text: 'Error Handling'
         }
       }],
-      ephemeral: true
+      ephemeral: false
     });
   }
 }
 
 async function handleShopSell(interaction) {
  try {
-  await ensureDeferred(interaction, { ephemeral: true });
+  await ensureDeferred(interaction, { ephemeral: false });
 
   const characterName = interaction.options.getString("charactername");
   const itemNameRaw = interaction.options.getString("itemname");
@@ -1860,7 +1860,7 @@ async function handleShopSell(interaction) {
     const { fullMessage } = handleTokenError(new Error('Invalid URL'), interaction);
     return interaction.editReply({
       content: fullMessage,
-      ephemeral: true,
+      ephemeral: false,
     });
   }
 
@@ -1868,7 +1868,7 @@ async function handleShopSell(interaction) {
 if (quantity <= 0) {
   await interaction.editReply({
     content: `❌ You must sell a **positive quantity** of items. Negative numbers are not allowed.`,
-    ephemeral: true,
+    ephemeral: false,
   });
   return;
 }
@@ -1894,7 +1894,7 @@ if (quantity <= 0) {
         text: 'Character Validation'
       }
     }],
-    ephemeral: true
+    ephemeral: false
    });
   }
 
@@ -1913,7 +1913,7 @@ if (quantity <= 0) {
           text: 'Character Ownership'
         }
       }],
-      ephemeral: true
+      ephemeral: false
     });
   }
 
@@ -2037,7 +2037,7 @@ if (quantity <= 0) {
         text: 'Inventory Validation'
       }
     }],
-    ephemeral: true
+    ephemeral: false
    });
   }
 
@@ -2343,12 +2343,12 @@ if (quantity <= 0) {
     const { fullMessage } = handleTokenError(error, interaction);
     await interaction.editReply({
       content: fullMessage,
-      ephemeral: true,
+      ephemeral: false,
     });
   } else {
     await interaction.editReply({
       content: `❌ **An error occurred while processing your sale request.**\n\nThis appears to be a system error. Please try again in a moment, or contact a moderator if the problem persists.\n\n**Error Details:** ${error.message || 'Unknown error'}`,
-      ephemeral: true,
+      ephemeral: false,
     });
   }
  }
@@ -2356,7 +2356,7 @@ if (quantity <= 0) {
 
 
 async function handleTransfer(interaction) {
- await ensureDeferred(interaction, { ephemeral: true });
+ await ensureDeferred(interaction, { ephemeral: false });
 
  const fromCharacterName = interaction.options.getString("fromcharacter");
  const toCharacterName = interaction.options.getString("tocharacter");
@@ -2409,7 +2409,7 @@ for (const { quantity } of parsedItems) {
           text: 'Quantity Validation'
         }
       }],
-      ephemeral: true,
+      ephemeral: false,
     });
     return;
   }
@@ -2430,7 +2430,7 @@ for (const { baseName } of parsedItems) {
           text: 'Item Protection'
         }
       }],
-      ephemeral: true,
+      ephemeral: false,
     });
     return;
   }
@@ -2477,7 +2477,7 @@ for (const { baseName } of parsedItems) {
         text: 'Character Validation'
       }
     }],
-    ephemeral: true,
+    ephemeral: false,
    });
    return;
   }
@@ -2498,7 +2498,7 @@ for (const { baseName } of parsedItems) {
       image: { url: 'https://storage.googleapis.com/tinglebot/Graphics/border.png' },
       footer: { text: 'Expedition Rules' }
     }],
-    ephemeral: true,
+    ephemeral: false,
    });
    return;
   }
@@ -2559,7 +2559,7 @@ for (const { baseName } of parsedItems) {
             image: { url: 'https://storage.googleapis.com/tinglebot/Graphics/border.png' },
             footer: { text: 'Equipment Check' }
           }],
-          ephemeral: true,
+          ephemeral: false,
         });
         return;
       }
@@ -2679,7 +2679,7 @@ for (const { baseName } of parsedItems) {
         text: 'Inventory Check'
       }
     }],
-    ephemeral: true,
+    ephemeral: false,
    });
    return;
   }
@@ -2701,7 +2701,7 @@ for (const { baseName } of parsedItems) {
         text: 'Inventory Link Required'
       }
     }],
-    ephemeral: true,
+    ephemeral: false,
    });
    return;
   }
@@ -2896,7 +2896,7 @@ for (const { baseName } of parsedItems) {
         text: 'Error Handling'
       }
     }],
-    ephemeral: true
+    ephemeral: false
   });
  }
 }
@@ -3311,7 +3311,7 @@ async function handleTrade(interaction) {
   const userId = interaction.user.id;
 
   try {
-    await ensureDeferred(interaction, { ephemeral: true });
+    await ensureDeferred(interaction, { ephemeral: false });
 
     // ------------------- Clean Item Names from Copy-Paste -------------------
     // Remove emoji prefixes and quantity information from item names if users copy-paste autocomplete text
@@ -3365,7 +3365,7 @@ async function handleTrade(interaction) {
             text: 'Item Validation'
           }
         }],
-        ephemeral: true,
+        ephemeral: false,
       });
       return;
     }
@@ -3385,7 +3385,7 @@ async function handleTrade(interaction) {
               text: 'Quantity Validation'
             }
           }],
-          ephemeral: true,
+          ephemeral: false,
         });
         return;
       }
@@ -3418,7 +3418,7 @@ async function handleTrade(interaction) {
               text: 'Item Protection'
             }
           }],
-          ephemeral: true,
+          ephemeral: false,
         });
         return;
       }
@@ -3446,7 +3446,7 @@ async function handleTrade(interaction) {
           .setImage('https://storage.googleapis.com/tinglebot/border%20error.png')
           .setFooter({ text: 'Character Validation' })
           .setTimestamp()],
-        ephemeral: true,
+        ephemeral: false,
       });
       return;
     }
@@ -3473,7 +3473,7 @@ async function handleTrade(interaction) {
           .setImage('https://storage.googleapis.com/tinglebot/border%20error.png')
           .setFooter({ text: 'Character Validation' })
           .setTimestamp()],
-        ephemeral: true,
+        ephemeral: false,
       });
       return;
     }
@@ -3506,7 +3506,7 @@ async function handleTrade(interaction) {
             text: 'Village Check'
           }
         }],
-        ephemeral: true
+        ephemeral: false
       });
       return;
     }
@@ -3534,7 +3534,7 @@ async function handleTrade(interaction) {
                 text: 'Trade Validation'
               }
             }],
-            ephemeral: true,
+            ephemeral: false,
           });
           return;
         }
@@ -3553,7 +3553,7 @@ async function handleTrade(interaction) {
                 text: 'Trade Timeout'
               }
             }],
-            ephemeral: true,
+            ephemeral: false,
           });
           await TempData.deleteOne({ _id: trade._id });
           return;
@@ -3577,7 +3577,7 @@ async function handleTrade(interaction) {
                 text: 'Trade Validation'
               }
             }],
-            ephemeral: true,
+            ephemeral: false,
           });
           return;
         }
@@ -3612,7 +3612,7 @@ async function handleTrade(interaction) {
                 text: 'Character Validation'
               }
             }],
-            ephemeral: true,
+            ephemeral: false,
           });
           return;
         }
@@ -3633,7 +3633,7 @@ async function handleTrade(interaction) {
                 text: 'Trade Status'
               }
             }],
-            ephemeral: true,
+            ephemeral: false,
           });
           return;
         }
@@ -3691,7 +3691,7 @@ async function handleTrade(interaction) {
           
           await interaction.editReply({
             content: `✅ Trade completed successfully.`,
-            ephemeral: true,
+            ephemeral: false,
           });
         } else {
           // Only send confirmation message if one doesn't already exist
@@ -3729,7 +3729,7 @@ async function handleTrade(interaction) {
         logger.error('ECONOMY', 'Error handling trade completion');
         await interaction.editReply({
           content: `❌ An error occurred while processing the trade.`,
-          ephemeral: true,
+          ephemeral: false,
         });
       }
     } else {
@@ -3878,7 +3878,7 @@ async function handleTrade(interaction) {
         } else {
           await interaction.editReply({
             content: `**HEY! <@${interaction.user.id}>!** 🚨\n\nWhatever you're doing is causing an error! Please stop using the command and submit a bug report!\n\n**Error:** ${error.message || 'Unknown error occurred'}`,
-            ephemeral: true
+            ephemeral: false
           });
         }
         return;
@@ -3901,7 +3901,7 @@ async function handleTrade(interaction) {
     // Create a generic error message with user mention
     await interaction.editReply({
       content: `**HEY! <@${interaction.user.id}>!** 🚨\n\nWhatever you're doing is causing an error! Please stop using the command and submit a bug report!\n\n**Error:** ${error.message || 'Unknown error occurred'}`,
-      ephemeral: true
+      ephemeral: false
     });
   }
 }

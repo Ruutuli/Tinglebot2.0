@@ -1881,7 +1881,7 @@ async function handleGrottoCleanse(i, msg, party, expeditionId, characterIndex, 
  const freshParty = await Party.findActiveByPartyId(expeditionId);
  if (!freshParty) {
   logger.warn("EXPLORE", `[explore.js]⚠️ Expedition not found: id=${expeditionId}`);
-  await i.followUp({ embeds: [createExplorationErrorEmbed("❌ **Expedition not found**", "Expedition not found.")], ephemeral: true }).catch(() => {});
+  await i.followUp({ embeds: [createExplorationErrorEmbed("❌ **Expedition not found**", "Expedition not found.")], ephemeral: false }).catch(() => {});
   return;
  }
  const squareIdCheck = (freshParty.square && String(freshParty.square).trim()) || "";
@@ -5936,7 +5936,7 @@ module.exports = {
          // Ruins exploration: charge 3 stamina, then roll one of chest/camp/landmark/relic/old_map/star_fragment/blight/goddess_plume
          const freshParty = await Party.findActiveByPartyId(expeditionId);
          if (!freshParty) {
-          await i.followUp({ embeds: [createExplorationErrorEmbed("❌ **Expedition not found**", "Expedition not found.")], ephemeral: true }).catch(() => {});
+          await i.followUp({ embeds: [createExplorationErrorEmbed("❌ **Expedition not found**", "Expedition not found.")], ephemeral: false }).catch(() => {});
           return;
          }
          const parts = i.customId.split("|");
@@ -5946,7 +5946,7 @@ module.exports = {
          const ruinsCharSlot = freshParty.characters[ruinsCharIndex];
          const ruinsCharacter = await Character.findById(ruinsCharSlot._id);
          if (!ruinsCharacter) {
-          await i.followUp({ embeds: [createExplorationErrorEmbed("❌ **Character not found**", "Character not found or you do not own this character.")], ephemeral: true }).catch(() => {});
+          await i.followUp({ embeds: [createExplorationErrorEmbed("❌ **Character not found**", "Character not found or you do not own this character.")], ephemeral: false }).catch(() => {});
           return;
          }
          // Consume the one-find-per-expedition only when they choose to explore (not when they skip)
@@ -6474,7 +6474,7 @@ module.exports = {
          if (monsterCampChoice === "fight") {
           const freshParty = await Party.findActiveByPartyId(expeditionId);
           if (!freshParty) {
-           await i.followUp({ embeds: [createExplorationErrorEmbed("❌ **Expedition not found**", "Expedition not found.")], ephemeral: true }).catch(() => {});
+           await i.followUp({ embeds: [createExplorationErrorEmbed("❌ **Expedition not found**", "Expedition not found.")], ephemeral: false }).catch(() => {});
            return;
           }
           const squareId = (freshParty.square && String(freshParty.square).trim()) || "";
@@ -6486,7 +6486,7 @@ module.exports = {
            camp = await MonsterCamp.createCamp(squareId, quadrantId, regionCapitalized);
           } catch (err) {
            logger.error("EXPLORE", `[explore.js]❌ MonsterCamp createCamp: ${err?.message || err}`);
-           await i.followUp({ embeds: [createExplorationErrorEmbed("❌ **Monster camp failed**", "Failed to create monster camp.")], ephemeral: true }).catch(() => {});
+           await i.followUp({ embeds: [createExplorationErrorEmbed("❌ **Monster camp failed**", "Failed to create monster camp.")], ephemeral: false }).catch(() => {});
            return;
           }
           const isFightable = await MonsterCamp.isFightable(camp);
@@ -6522,7 +6522,7 @@ module.exports = {
            waveResult = await startWave(village, monsterCount, difficultyGroup, modifiedInteraction);
           } catch (waveErr) {
            logger.error("EXPLORE", `[explore.js]❌ startWave (monster camp): ${waveErr?.message || waveErr}`);
-           await i.followUp({ embeds: [createExplorationErrorEmbed("❌ **Wave failed to start**", `Failed to start wave: ${waveErr?.message || "Unknown error"}`)], ephemeral: true }).catch(() => {});
+           await i.followUp({ embeds: [createExplorationErrorEmbed("❌ **Wave failed to start**", `Failed to start wave: ${waveErr?.message || "Unknown error"}`)], ephemeral: false }).catch(() => {});
            return;
           }
           const { waveId, waveData } = waveResult;
@@ -6845,7 +6845,7 @@ module.exports = {
       if (character.blighted && character.blightStage >= 3) {
         return interaction.editReply({
           embeds: [createExplorationErrorEmbed("❌ **Cannot encounter monsters**", `${character.name} cannot encounter monsters during exploration!\n\n<:blight_eye:805576955725611058> At **Blight Stage ${character.blightStage}**, monsters no longer attack your character. You cannot encounter monsters until you are healed.`, { party, expeditionId, location: `${party.square} ${party.quadrant}`, nextCharacter: party?.characters?.[party?.currentTurn] ?? null, showNextAndCommands: true })],
-          ephemeral: true
+          ephemeral: false
         });
       }
 
@@ -7533,18 +7533,18 @@ module.exports = {
       // Confirm: re-fetch and re-validate, then pay and secure
       const freshParty = await Party.findActiveByPartyId(expeditionId);
       if (!freshParty) {
-       await i.followUp({ embeds: [createExplorationErrorEmbed("❌ **Expedition not found**", "Expedition not found. No changes made.")], ephemeral: true }).catch(() => {});
+       await i.followUp({ embeds: [createExplorationErrorEmbed("❌ **Expedition not found**", "Expedition not found. No changes made.")], ephemeral: false }).catch(() => {});
        collector.stop();
        return;
       }
       const freshCharIndex = freshParty.characters.findIndex((c) => c.userId === i.user.id);
       if (freshCharIndex === -1 || freshParty.currentTurn !== freshCharIndex) {
-       await i.followUp({ embeds: [createExplorationErrorEmbed("❌ **Not your turn**", "It's not your turn or you're not in this expedition. No changes made.")], ephemeral: true }).catch(() => {});
+       await i.followUp({ embeds: [createExplorationErrorEmbed("❌ **Not your turn**", "It's not your turn or you're not in this expedition. No changes made.")], ephemeral: false }).catch(() => {});
        collector.stop();
        return;
       }
       if (freshParty.quadrantState !== "explored") {
-       await i.followUp({ embeds: [createExplorationErrorEmbed("❌ **Cannot secure**", "This quadrant is no longer in a state that can be secured. No changes made.")], ephemeral: true }).catch(() => {});
+       await i.followUp({ embeds: [createExplorationErrorEmbed("❌ **Cannot secure**", "This quadrant is no longer in a state that can be secured. No changes made.")], ephemeral: false }).catch(() => {});
        collector.stop();
        return;
       }
@@ -7555,7 +7555,7 @@ module.exports = {
       if (!isAtStartConfirm) {
        const hasAdjacentConfirm = await hasAdjacentSecuredQuadrant(freshParty.square, freshParty.quadrant);
        if (!hasAdjacentConfirm) {
-        await i.followUp({ embeds: [createExplorationErrorEmbed("❌ **Cannot secure**", "This quadrant can no longer be secured (no adjacent secured quadrant). No changes made.")], ephemeral: true }).catch(() => {});
+        await i.followUp({ embeds: [createExplorationErrorEmbed("❌ **Cannot secure**", "This quadrant can no longer be secured (no adjacent secured quadrant). No changes made.")], ephemeral: false }).catch(() => {});
         collector.stop();
         return;
        }
@@ -7566,7 +7566,7 @@ module.exports = {
        )
       );
       if (!freshHasResources) {
-       await i.followUp({ embeds: [createExplorationErrorEmbed("❌ **Missing materials**", "Party no longer has Wood and Eldin Ore. No changes made.")], ephemeral: true }).catch(() => {});
+       await i.followUp({ embeds: [createExplorationErrorEmbed("❌ **Missing materials**", "Party no longer has Wood and Eldin Ore. No changes made.")], ephemeral: false }).catch(() => {});
        collector.stop();
        return;
       }
@@ -7737,7 +7737,7 @@ module.exports = {
      } catch (err) {
       logger.error("EXPLORE", `[explore.js]❌ Secure confirm: ${err?.message || err}`);
       collector.stop();
-      await i.followUp({ embeds: [createExplorationErrorEmbed("❌ **Secure failed**", `Something went wrong. Please try ${getExploreCommandId() ? `</explore secure:${getExploreCommandId()}>` : "`/explore secure`"} again.`)], ephemeral: true }).catch(() => {});
+      await i.followUp({ embeds: [createExplorationErrorEmbed("❌ **Secure failed**", `Something went wrong. Please try ${getExploreCommandId() ? `</explore secure:${getExploreCommandId()}>` : "`/explore secure`"} again.`)], ephemeral: false }).catch(() => {});
      }
     });
     return;
@@ -8579,7 +8579,7 @@ module.exports = {
       .setColor(0xE74C3C)
       .setTitle("❤️ Hearts are full")
       .setDescription(`Party is at **${currentHearts}/${itemCaps.maxHearts}** hearts. Save **${carried.itemName}** for when the party takes damage.\n\n_Your turn was **not** used — you can take another action._`);
-     return interaction.editReply({ embeds: [fullHeartsEmbed], ephemeral: true });
+     return interaction.editReply({ embeds: [fullHeartsEmbed], ephemeral: false });
     }
 
     if (!isHazardElixirUse && stamina > 0 && hearts === 0 && staminaAtMax) {
@@ -8587,7 +8587,7 @@ module.exports = {
       .setColor(0x2ECC71)
       .setTitle("🟩 Stamina is full")
       .setDescription(`Party is at **${currentStamina}/${itemCaps.maxStamina}** stamina. Save **${carried.itemName}** for when the party needs more.\n\n_Your turn was **not** used — you can take another action._`);
-     return interaction.editReply({ embeds: [fullStaminaEmbed], ephemeral: true });
+     return interaction.editReply({ embeds: [fullStaminaEmbed], ephemeral: false });
     }
 
     if (!isHazardElixirUse && hearts > 0 && stamina > 0 && heartsAtMax && staminaAtMax) {
@@ -8595,7 +8595,7 @@ module.exports = {
       .setColor(0x9B59B6)
       .setTitle("❤️🟩 Hearts and stamina are full")
       .setDescription(`Party is at **${currentHearts}/${itemCaps.maxHearts}** ❤ and **${currentStamina}/${itemCaps.maxStamina}** 🟩. Save **${carried.itemName}** for later.\n\n_Your turn was **not** used — you can take another action._`);
-     return interaction.editReply({ embeds: [fullPoolEmbed], ephemeral: true });
+     return interaction.editReply({ embeds: [fullPoolEmbed], ephemeral: false });
     }
 
     // Item = turn: during active wave/raid, only the current turn participant may use an item. Check before applying any effects.
@@ -8612,7 +8612,7 @@ module.exports = {
        .setImage(NOT_YOUR_TURN_BORDER_URL)
        .setFooter({ text: "Expedition" })
        .setTimestamp();
-      return interaction.editReply({ embeds: [notYourTurnEmbed], ephemeral: true });
+      return interaction.editReply({ embeds: [notYourTurnEmbed], ephemeral: false });
      }
     }
     if (activeRaidForItem) {
@@ -8626,7 +8626,7 @@ module.exports = {
        .setImage(NOT_YOUR_TURN_BORDER_URL)
        .setFooter({ text: "Expedition" })
        .setTimestamp();
-      return interaction.editReply({ embeds: [notYourTurnEmbed], ephemeral: true });
+      return interaction.editReply({ embeds: [notYourTurnEmbed], ephemeral: false });
      }
     }
 
@@ -8643,7 +8643,7 @@ module.exports = {
        .setImage(NOT_YOUR_TURN_BORDER_URL)
        .setFooter({ text: "Expedition" })
        .setTimestamp();
-      return interaction.editReply({ embeds: [notYourTurnEmbed], ephemeral: true });
+      return interaction.editReply({ embeds: [notYourTurnEmbed], ephemeral: false });
      }
     }
 
@@ -9190,7 +9190,7 @@ module.exports = {
     if (!raid) {
      return interaction.editReply({
       embeds: [createExplorationErrorEmbed("❌ **Cannot retreat**", `Your party is not in a tier 5+ monster battle. Use ${getExploreCommandId() ? `</explore retreat:${getExploreCommandId()}>` : "**/explore retreat**"} only during such a battle (when a tier 5+ encounter started a raid).`, { party, expeditionId, location: `${party.square} ${party.quadrant}`, nextCharacter: party?.characters?.[party?.currentTurn] ?? null, showNextAndCommands: true })],
-      ephemeral: true
+      ephemeral: false
      });
     }
 
@@ -9213,7 +9213,7 @@ module.exports = {
     if (raid.grottoId) {
      return interaction.editReply({
       embeds: [createExplorationErrorEmbed("❌ **Cannot retreat**", "You cannot retreat from a Grotto Test of Power. Defeat the monster to continue your expedition.", { party, expeditionId, location: `${party.square} ${party.quadrant}`, nextCharacter: party?.characters?.[party?.currentTurn] ?? null, showNextAndCommands: true })],
-      ephemeral: true
+      ephemeral: false
      });
     }
 
