@@ -49,9 +49,15 @@ function isRuinRestRevisitMessage(message) {
     return /Known ruin-rest spot(?:\s*\([^)]*\))?\s+in\s+[A-J](?:[1-9]|1[0-2])\s+Q[1-4]/i.test(String(message || ""));
 }
 
+// Grotto revisit cleanse lines (explore.js discovery revisit). These are not new map discoveries and should not block actions.
+function isGrottoCleansedRevisitMessage(message) {
+    return /Cleansed grotto\b[\s\S]*\(\s*revisit\s*\)[\s\S]*\s+(?:in|at)\s+[A-J](?:[1-9]|1[0-2])\s+Q[1-4]/i.test(String(message || ""));
+}
+
 function shouldSkipDiscoveryCleanupEntry(e) {
     if (!e) return false;
     if (e.outcome === "ruin_rest" && isRuinRestRevisitMessage(e.message)) return true;
+    if (e.outcome === "grotto_cleansed" && isGrottoCleansedRevisitMessage(e.message)) return true;
     return false;
 }
 
