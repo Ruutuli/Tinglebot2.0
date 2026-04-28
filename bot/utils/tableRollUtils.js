@@ -454,12 +454,36 @@ function assertTablerollRollAllowed(interaction, character, tableDoc) {
     const curLower = villageKey.toLowerCase();
     const allowedLower = new Set(allowedOnTable.map((v) => String(v).trim().toLowerCase()).filter(Boolean));
     if (!allowedLower.has(curLower)) {
-      const pretty = [...new Set(allowedOnTable.map((v) => capitalizeWords(String(v))))].join(', ');
+      const unique = [...new Set(allowedOnTable.map((v) => capitalizeWords(String(v))))];
+      const boldV = unique.map((n) => `**${n}**`);
+      const villageListMd =
+        boldV.length === 1
+          ? boldV[0]
+          : boldV.length === 2
+            ? `${boldV[0]} or ${boldV[1]}`
+            : `${boldV.slice(0, -1).join(', ')}, or ${boldV[boldV.length - 1]}`;
+      const hallLine =
+        boldV.length === 1
+          ? `You must roll in **${unique[0]} Town Hall** (or a thread there).`
+          : `When you roll, use **that village's Town Hall** (matching where you're stationed), or a thread there.`;
+
+      const embed = new EmbedBuilder()
+        .setColor(0x008b8b)
+        .setTitle('🏘️ Village restriction')
+        .setDescription(
+          [
+            `**${tableDoc.name?.trim() || 'This table roll'}** is only available to characters stationed in ${villageListMd}.`,
+            hallLine,
+            '',
+            `**${character.name}** is currently stationed in **${villageKey || 'unknown'}**.`,
+          ].join('\n')
+        )
+        .setFooter({ text: 'Table roll' })
+        .setImage('https://storage.googleapis.com/tinglebot/Graphics/border.png');
       return {
         ok: false,
         reply: {
-          content:
-            `❌ **${tableDoc.name || 'This table'}** can only be rolled while **${character.name}** is stationed in: **${pretty}**.\n📍 Currently: **${villageKey || 'unknown'}**`,
+          embeds: [embed],
           flags: [MessageFlags.Ephemeral],
         },
       };

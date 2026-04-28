@@ -325,12 +325,18 @@ async function createCompletionNotificationEmbed(quest, participant) {
         addQuestInfoFields(embed, quest, additionalFields);
 
         // Add quest-specific information
-        if (quest.tableRollName && quest.questType === 'Interactive') {
-            embed.addFields({
-                name: 'Table Roll',
-                value: quest.tableRollName,
-                inline: true
-            });
+        if (
+          (Array.isArray(quest.tableRollNames) && quest.tableRollNames.length > 0) ||
+          quest.tableRollName
+        ) {
+          embed.addFields({
+            name: "Table rolls",
+            value:
+              Array.isArray(quest.tableRollNames) && quest.tableRollNames.length > 0
+                ? quest.tableRollNames.join(", ")
+                : String(quest.tableRollName),
+            inline: true,
+          });
         }
 
         if (quest.requiredVillage && quest.questType === 'RP') {

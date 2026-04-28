@@ -39,6 +39,18 @@ function formatRollFrequency(maxRollsPerDay) {
   return `${maxRollsPerDay}x per day`;
 }
 
+/** Names attached to this quest (multi-table Interactive support). */
+function getQuestTableRollNamesForMatch(quest) {
+  if (!quest) return [];
+  if (typeof quest.getEffectiveTableRollNames === 'function') {
+    return quest.getEffectiveTableRollNames();
+  }
+  if (Array.isArray(quest.tableRollNames) && quest.tableRollNames.length) {
+    return [...new Set(quest.tableRollNames.map((n) => String(n).trim()).filter(Boolean))];
+  }
+  return quest.tableRollName ? [String(quest.tableRollName).trim()].filter(Boolean) : [];
+}
+
 // ------------------- Helper function to get item emoji from database -------------------
 async function getItemEmoji(itemName) {
   try {
@@ -80,9 +92,10 @@ async function findActiveInteractiveQuests(userId) {
       [`participants.${userId}`]: { $exists: true }
     });
     
-    return quests.filter(quest => {
+    return quests.filter((quest) => {
       const participant = quest.participants.get(userId);
-      return participant && participant.progress === 'active' && quest.tableRollName;
+      const names = getQuestTableRollNamesForMatch(quest);
+      return participant && participant.progress === 'active' && names.length > 0;
     });
   } catch (error) {
     console.error(`Error finding active interactive quests for user ${userId}:`, error);
@@ -459,7 +472,7 @@ module.exports = {
       
       for (const quest of activeInteractiveQuests) {
         // Check if this quest uses the same table roll
-        if (quest.tableRollName === tableName) {
+        if (getQuestTableRollNamesForMatch(quest).includes(tableName)) {
           console.log(`[tableroll.js] Processing table roll for quest ${quest.questID} (${quest.title})`);
           try {
             // Use the new completion method that handles quest completion
@@ -496,7 +509,7 @@ module.exports = {
             });
           }
         } else {
-          console.log(`[tableroll.js] Quest ${quest.questID} uses table '${quest.tableRollName}', skipping (current table: '${tableName}')`);
+          console.log(`[tableroll.js] Quest ${quest.questID} uses table(s) '${getQuestTableRollNamesForMatch(quest).join(', ')}', skipping (current table: '${tableName}')`);
         }
       }
       
@@ -656,7 +669,10 @@ module.exports = {
          questFields.forEach(field => embed.addFields(field));
        } else if (activeInteractiveQuests.length > 0) {
          // User has active interactive quests but none use this table
-         const questNames = activeInteractiveQuests.map(q => `**${q.title}** (uses \`${q.tableRollName}\`)`).join('\n');
+         const questNames = activeInteractiveQuests.map((q) => {
+           const tn = getQuestTableRollNamesForMatch(q).join('`, `') || '`—`';
+           return `**${q.title}** (uses \`${tn}\`)`;
+         }).join('\n');
          embed.addFields({
            name: '__ℹ️ Quest Information__',
            value: `> You have active interactive quests, but none use the **${tableName}** table:\n> ${questNames}`,

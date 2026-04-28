@@ -216,7 +216,19 @@ async function buildQuestPreviewEmbed(body: Record<string, unknown>) {
     : timeLimit;
   const signupDeadlineDisplay = formatSignupDeadline(body.signupDeadline);
 
-  const tableroll = (body.tableroll as string)?.trim() || "";
+  const trList =
+    Array.isArray(body.tableRollNames) && body.tableRollNames.length > 0
+      ? [
+          ...new Set(
+            (body.tableRollNames as unknown[])
+              .filter((x): x is string => typeof x === "string")
+              .map((s) => s.trim())
+              .filter(Boolean)
+          ),
+        ]
+      : [];
+  const tablerollLegacy = (body.tableroll as string)?.trim() || "";
+  const tableroll = trList.length > 0 ? trList.join(", ") : tablerollLegacy;
   const participantCap =
     body.participantCap != null && !Number.isNaN(Number(body.participantCap))
       ? Number(body.participantCap)
@@ -225,7 +237,10 @@ async function buildQuestPreviewEmbed(body: Record<string, unknown>) {
   if (participantCap != null) participationLines.push(`👥 Participation cap: ${participantCap}`);
   if (minRequirements && minRequirements !== "0") participationLines.push(`📝 Participation Requirement: ${minRequirements}`);
   if (questType === "RP") participationLines.push(`📝 Post requirement: ${postReq}`);
-  if (tableroll) participationLines.push(`🎲 Table roll: **${tableroll}**`);
+  if (tableroll)
+    participationLines.push(
+      `🎲 Table roll${tableroll.includes(",") ? "s" : ""}: **${tableroll}**`
+    );
   const participationValue = participationLines.length ? participationLines.join("\n") : "—";
 
   const detailsLines = [

@@ -170,7 +170,8 @@ const additionalFields = {
     // Art / Writing: 'both' = require art AND writing; 'either' = require art OR writing
     artWritingMode: { type: String, enum: ['both', 'either'], default: 'both' },
     // Interactive Quest Table Roll Fields
-    tableRollName: { type: String, default: null }, // Name of the table roll to use
+    tableRollName: { type: String, default: null }, // Legacy; first of tableRollNames when set
+    tableRollNames: { type: [String], default: [] },
     tableRollConfig: { type: Schema.Types.Mixed, default: null }, // Configuration for table roll requirements
     requiredRolls: { type: Number, default: 1 }, // Number of successful rolls required
     rollSuccessCriteria: { type: String, default: null } // What constitutes a successful roll
@@ -912,6 +913,20 @@ questSchema.methods.linkSubmission = async function(userId, submissionData) {
     }
 };
 
+// ------------------- Effective table roll names (single + multi) ------------------
+questSchema.methods.getEffectiveTableRollNames = function() {
+    const fromArr = Array.isArray(this.tableRollNames)
+        ? this.tableRollNames.map((n) => String(n).trim()).filter(Boolean)
+        : [];
+    if (fromArr.length) {
+        return [...new Set(fromArr)];
+    }
+    if (this.tableRollName && String(this.tableRollName).trim()) {
+        return [String(this.tableRollName).trim()];
+    }
+    return [];
+};
+
 // ------------------- Interactive Quest Completion from Table Roll ------------------
 questSchema.methods.completeFromTableRoll = async function(userId, rollResult) {
     try {
@@ -965,7 +980,7 @@ questSchema.methods.completeFromTableRoll = async function(userId, rollResult) {
 };
 
 // ------------------- Interactive Quest Table Roll Methods ------------------
-questSchema.methods.setTableRollConfig = function(tableRollName, config = {}) {
+questSchema.methods.setTableRollConfig = function(tableRollNameOrNames, config = {}) {
     if (this.questType !== 'Interactive') {
         throw new Error(`Quest ${this.questID} is not an Interactive quest`);
     }
@@ -978,7 +993,15 @@ questSchema.methods.setTableRollConfig = function(tableRollName, config = {}) {
         }
     }
     
-    this.tableRollName = tableRollName;
+    let names = [];
+    if (Array.isArray(tableRollNameOrNames)) {
+        names = tableRollNameOrNames.map((n) => String(n).trim()).filter(Boolean);
+    } else if (tableRollNameOrNames != null && String(tableRollNameOrNames).trim()) {
+        names = [String(tableRollNameOrNames).trim()];
+    }
+    names = [...new Set(names)];
+    this.tableRollNames = names;
+    this.tableRollName = names[0] || null;
     this.tableRollConfig = config;
     this.requiredRolls = config.requiredRolls || 1;
     this.rollSuccessCriteria = config.successCriteria || null;
@@ -1129,7 +1152,7 @@ questSchema.methods.processTableRoll = async function(userId, rollResult) {
             return { success: false, reason: 'Participant not active' };
         }
         
-        if (!this.tableRollName) {
+        if (!this.getEffectiveTableRollNames || this.getEffectiveTableRollNames().length === 0) {
             throw new Error(`Quest ${this.questID} has no table roll configured`);
         }
         

@@ -1242,7 +1242,10 @@ function buildQuestPostEmbed(quest) {
     ? `${durationStr} | Ends ${formatQuestEndDate(endDate)}`
     : timeLimit;
 
-  const tableroll = quest.tableroll?.trim() || '';
+  const rollList = Array.isArray(quest.tableRollNames)
+    ? [...new Set(quest.tableRollNames.map((s) => String(s).trim()).filter(Boolean))]
+    : [];
+  const tableroll = rollList.length > 0 ? rollList.join(', ') : (quest.tableroll?.trim() || '');
   const participantCap = quest.participantCap != null && !isNaN(Number(quest.participantCap))
     ? Number(quest.participantCap)
     : null;
@@ -1250,7 +1253,7 @@ function buildQuestPostEmbed(quest) {
   if (participantCap != null) participationLines.push(`👥 Participation cap: ${participantCap}`);
   if (minRequirements && minRequirements !== '0') participationLines.push(`📝 Participation Requirement: ${minRequirements}`);
   if (questType === 'RP') participationLines.push(`📝 Post requirement: ${postReq}`);
-  if (tableroll) participationLines.push(`🎲 Table roll: **${tableroll}**`);
+  if (tableroll) participationLines.push(`🎲 Table roll${tableroll.includes(',') ? 's' : ''}: **${tableroll}**`);
   const participationValue = participationLines.length ? participationLines.join('\n') : '—';
 
   const detailsLines = [

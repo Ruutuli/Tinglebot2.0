@@ -72,6 +72,57 @@ function parseItemRewards(
   return result;
 }
 
+/** Interactive: multiple table names; RP/other: single name. Syncs tableroll string for embeds/legacy readers. */
+function resolveTableRollFromBody(
+  body: Record<string, unknown>,
+  questType: string
+): {
+  tableRollNames: string[];
+  tableRollName: string | null;
+  tableroll: string | null;
+} {
+  let names: string[] = [];
+  if (Array.isArray(body.tableRollNames) && body.tableRollNames.length > 0) {
+    names = [
+      ...new Set(
+        (body.tableRollNames as unknown[])
+          .filter((x): x is string => typeof x === "string")
+          .map((s) => s.trim())
+          .filter(Boolean)
+      ),
+    ];
+  }
+  const tn = typeof body.tableRollName === "string" ? body.tableRollName.trim() : "";
+  const tb = typeof body.tableroll === "string" ? body.tableroll.trim() : "";
+  const legacy = tn || tb;
+
+  if (questType === "Interactive") {
+    if (names.length === 0 && legacy) {
+      names = [
+        ...new Set(
+          legacy.split(/[\n,]+/).map((s) => s.trim()).filter(Boolean)
+        ),
+      ];
+    }
+  } else if (names.length === 0 && legacy) {
+    const first = legacy.split(/[\n,]+/).map((s) => s.trim()).find(Boolean);
+    names = first ? [first] : [];
+  }
+
+  const first = names[0] ?? null;
+  const tablerollStr =
+    questType === "Interactive"
+      ? names.length === 0
+        ? null
+        : names.join(", ")
+      : first;
+  return {
+    tableRollNames: names,
+    tableRollName: first,
+    tableroll: tablerollStr,
+  };
+}
+
 function convertParticipantsMapToObject(quest: Record<string, unknown>): Record<string, unknown> {
   const out = { ...quest };
   if (out.participants instanceof Map) {
@@ -236,12 +287,7 @@ export async function POST(req: NextRequest) {
           ? itemParsed.itemRewards
           : undefined;
 
-    const tableRollNameVal =
-      typeof body.tableRollName === "string"
-        ? body.tableRollName.trim() || null
-        : typeof body.tableroll === "string"
-          ? body.tableroll.trim() || null
-          : null;
+    const tr = resolveTableRollFromBody(body as Record<string, unknown>, questType);
     const requiredRollsVal =
       body.requiredRolls != null && !Number.isNaN(Number(body.requiredRolls))
         ? Math.max(1, Number(body.requiredRolls))
@@ -276,8 +322,9 @@ export async function POST(req: NextRequest) {
           ? Number(body.postRequirement)
           : null,
       minRequirements: body.minRequirements ?? 0,
-      tableroll: tableRollNameVal,
-      tableRollName: tableRollNameVal,
+      tableroll: tr.tableroll,
+      tableRollName: tr.tableRollName,
+      tableRollNames: tr.tableRollNames,
       requiredRolls: requiredRollsVal,
       tokenReward: tokenRewardVal,
       itemReward: itemRewardsFinal?.length === 1 ? itemRewardsFinal[0].name : itemParsed.itemReward,

@@ -112,6 +112,7 @@ type QuestDoc = {
   signupDeadline?: string | null;
   tableroll?: string | null;
   tableRollName?: string | null;
+  tableRollNames?: string[] | null;
   specialNote?: string | null;
   isMemberQuest?: boolean;
   runByUsername?: string | null;
@@ -156,13 +157,23 @@ export function buildQuestEmbed(quest: QuestDoc): Record<string, unknown> {
   const durationDisplay = endDate ? `${timeLimit} | Ends ${formatEndDateWithTime(endDate)}` : timeLimit;
   const signupDeadlineDisplay = formatSignupDeadline(quest.signupDeadline);
 
-  const tableroll = (quest.tableroll ?? quest.tableRollName ?? "").trim();
+  const rollNameList =
+    Array.isArray(quest.tableRollNames) && quest.tableRollNames.length > 0
+      ? [...new Set(quest.tableRollNames.map((s) => String(s).trim()).filter(Boolean))]
+      : [];
+  const tableroll =
+    rollNameList.length > 0
+      ? rollNameList.join(", ")
+      : (quest.tableroll ?? quest.tableRollName ?? "").trim();
   const participantCap = quest.participantCap != null && !Number.isNaN(Number(quest.participantCap)) ? Number(quest.participantCap) : null;
   const participationLines: string[] = [];
   if (participantCap != null) participationLines.push(`👥 Participation cap: ${participantCap}`);
   if (minRequirements && minRequirements !== "0") participationLines.push(`📝 Participation Requirement: ${minRequirements}`);
   if (questType === "RP") participationLines.push(`📝 Post requirement: ${postReq}`);
-  if (tableroll) participationLines.push(`🎲 Table roll: **${tableroll}**`);
+  if (tableroll)
+    participationLines.push(
+      `🎲 Table roll${tableroll.includes(",") ? "s" : ""}: **${tableroll}**`
+    );
   const participationValue = participationLines.length ? participationLines.join("\n") : "—";
 
   const detailsLines = [

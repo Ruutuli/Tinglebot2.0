@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
+import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { useSession } from "@/hooks/use-session";
 import { Loading, Modal } from "@/components/ui";
@@ -28,6 +28,24 @@ function villagesToRestrictions(arr: string[] | undefined | null) {
     restrictInariko: set.has("inariko"),
     restrictVhintl: set.has("vhintl"),
   };
+}
+
+/** How many rolls per Discord day (shared pool for the whole table doc). */
+function formatDailyLimitDisplay(maxPerDay?: number | null): string {
+  const n =
+    maxPerDay == null || typeof maxPerDay !== "number" || Number.isNaN(maxPerDay) ? 0 : Math.max(0, Math.floor(maxPerDay));
+  if (n === 0) return "Unlimited";
+  if (n === 1) return "1/day";
+  return `${n}/day`;
+}
+
+function formatVillageLockDisplay(allowed?: string[] | null): string {
+  const list =
+    Array.isArray(allowed) && allowed.length > 0
+      ? [...new Set(allowed.map((s) => String(s).trim()).filter(Boolean))]
+      : [];
+  if (list.length === 0) return "Any village";
+  return list.join(", ");
 }
 
 function ItemNameAutocomplete({
@@ -184,7 +202,7 @@ const emptyEntry: FormEntry = { weight: "1", flavor: "", item: "", thumbnailImag
 function defaultForm(): FormState {
   return {
     name: "",
-    isActive: true,
+    isActive: false,
     maxRollsPerDay: "0",
     restrictRudania: false,
     restrictInariko: false,
@@ -338,8 +356,16 @@ export default function AdminTablerollsPage() {
   const [csvImportText, setCsvImportText] = useState("");
   const [showCsvImport, setShowCsvImport] = useState(false);
   const [listViewMode, setListViewMode] = useState<"table" | "cards">("table");
+  /** Admin list filter: drafts do not appear in Discord /tableroll or public pickers regardless. */
+  const [publishedListFilter, setPublishedListFilter] = useState<"all" | "published" | "draft">("all");
   const [nameValidationMessage, setNameValidationMessage] = useState<string | null>(null);
   const initialFormRef = useRef<string>("");
+
+  const filteredList = useMemo(() => {
+    if (publishedListFilter === "published") return list.filter((r) => r.isActive);
+    if (publishedListFilter === "draft") return list.filter((r) => !r.isActive);
+    return list;
+  }, [list, publishedListFilter]);
 
   const fetchList = useCallback(async () => {
     setLoading(true);
@@ -488,7 +514,15 @@ export default function AdminTablerollsPage() {
         if (!res.ok) {
           throw new Error(data.message ?? data.error ?? "Request failed");
         }
-        setSuccess(editingId ? "Table roll updated." : "Table roll created.");
+        if (editingId) {
+          setSuccess(
+            body.isActive ? "Table roll updated." : "Table roll updated — draft (hidden from Discord until published)."
+          );
+        } else {
+          setSuccess(
+            body.isActive ? "Table roll created." : "Table roll created as draft — not visible in Discord until published."
+          );
+        }
         doCloseForm();
         await fetchList();
       } catch (e) {
@@ -537,7 +571,7 @@ export default function AdminTablerollsPage() {
           const data = await res.json().catch(() => ({}));
           throw new Error((data as { message?: string }).message ?? "Failed to update");
         }
-        setSuccess(row.isActive ? "Table roll deactivated." : "Table roll activated.");
+        setSuccess(row.isActive ? "Marked as draft — hidden from Discord lists and autocomplete." : "Published — visible in /tableroll and quest selectors.");
         await fetchList();
       } catch (e) {
         setError(e instanceof Error ? e.message : String(e));
@@ -632,7 +666,7 @@ export default function AdminTablerollsPage() {
               <img src="/Side=Right.svg" alt="" className="h-6 sm:h-8 w-auto opacity-80" />
             </div>
             <p className="text-sm text-[var(--totk-grey-200)]">
-              Create and manage table rolls (used by quests and /tableroll)
+              Create and manage table rolls (used by quests and /tableroll). Drafts stay admin-only until you publish.
             </p>
           </div>
           {!showForm && (
@@ -698,15 +732,22 @@ export default function AdminTablerollsPage() {
                       <p className="mt-1 text-xs text-[var(--totk-grey-200)]">Letters, numbers, spaces, hyphens, underscores only.</p>
                     )}
                   </div>
-                  <div className="flex items-end gap-4">
-                    <label className="flex items-center gap-2 text-sm font-medium text-[var(--totk-grey-200)] cursor-pointer">
+                  <div className="flex flex-col gap-2 sm:col-span-2">
+                    <label className="flex items-start gap-2 text-sm font-medium text-[var(--totk-grey-200)] cursor-pointer">
                       <input
                         type="checkbox"
                         checked={form.isActive}
                         onChange={(e) => setField("isActive", e.target.checked)}
-                        className="rounded border-[var(--totk-dark-ocher)] focus:ring-2 focus:ring-[var(--totk-mid-ocher)]/50"
+                        className="mt-0.5 rounded border-[var(--totk-dark-ocher)] focus:ring-2 focus:ring-[var(--totk-mid-ocher)]/50"
                       />
-                      Active (visible for quests / rolling)
+                      <span>
+                        Published — show in Discord <code className="text-xs">/tableroll</code>, autocomplete, and quest table pickers
+                        {!form.isActive && (
+                          <span className="block mt-1 text-xs font-normal text-[var(--totk-grey-200)]">
+                            Unchecked = draft only (editable here; not visible to players anywhere).
+                          </span>
+                        )}
+                      </span>
                     </label>
                   </div>
                   <div>
@@ -956,9 +997,26 @@ export default function AdminTablerollsPage() {
         )}
 
         <section className="rounded-xl border-2 border-[var(--totk-dark-ocher)] bg-gradient-to-br from-[var(--botw-warm-black)] to-[var(--botw-black)] p-5 sm:p-6 shadow-lg">
-          <div className="flex flex-wrap items-center justify-between gap-4 mb-4">
-            <h2 className="text-lg font-semibold text-[var(--totk-ivory)]">Table rolls</h2>
-            <div className="flex items-center gap-2">
+            <div className="flex flex-wrap items-center justify-between gap-4 mb-4">
+              <div>
+                <h2 className="text-lg font-semibold text-[var(--totk-ivory)]">Table rolls</h2>
+                <p className="text-xs text-[var(--totk-grey-200)] mt-1">
+                  Daily limit applies to each table globally (Discord day). Village lock means only characters stationed there may roll—still uses Town Hall channel rules. Draft rolls do not appear in Discord or public selectors.
+                </p>
+              </div>
+            <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+              <label className="flex items-center gap-2 text-xs text-[var(--totk-grey-200)]">
+                <span className="text-[var(--totk-grey-200)] whitespace-nowrap">List:</span>
+                <select
+                  value={publishedListFilter}
+                  onChange={(e) => setPublishedListFilter(e.target.value as "all" | "published" | "draft")}
+                  className="rounded-md border border-[var(--totk-dark-ocher)] bg-[var(--botw-warm-black)] px-2 py-1.5 text-xs text-[var(--totk-ivory)]"
+                >
+                  <option value="all">All</option>
+                  <option value="published">Published only</option>
+                  <option value="draft">Draft only</option>
+                </select>
+              </label>
               <span className="text-xs text-[var(--totk-grey-200)]">View:</span>
               <button
                 type="button"
@@ -1000,9 +1058,21 @@ export default function AdminTablerollsPage() {
                 Create table roll
               </button>
             </div>
+          ) : filteredList.length === 0 ? (
+            <div className="rounded-lg border border-[var(--totk-dark-ocher)]/60 bg-[var(--botw-black)]/30 px-4 py-8 text-center text-sm text-[var(--totk-grey-200)]">
+              No table rolls match this list filter.{publishedListFilter !== "all" && (
+                <button
+                  type="button"
+                  onClick={() => setPublishedListFilter("all")}
+                  className="ml-2 underline text-[var(--totk-light-green)] hover:text-[var(--totk-ivory)]"
+                >
+                  Show all
+                </button>
+              )}
+            </div>
           ) : listViewMode === "cards" ? (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-              {list.map((row) => (
+              {filteredList.map((row) => (
                 <div
                   key={row._id}
                   className="rounded-lg border-2 border-[var(--totk-dark-ocher)] bg-[var(--botw-warm-black)] p-4 hover:border-[var(--totk-light-green)] transition-colors"
@@ -1015,18 +1085,33 @@ export default function AdminTablerollsPage() {
                           ? "bg-[var(--totk-light-green)]/20 text-[var(--totk-light-green)]"
                           : "bg-[var(--totk-grey-200)]/20 text-[var(--totk-grey-200)]"
                       }`}
+                      title={row.isActive ? "Visible in Discord and selectors" : "Draft — hidden from Discord lists"}
                     >
-                      {row.isActive ? "Active" : "Inactive"}
+                      {row.isActive ? "Published" : "Draft"}
                     </span>
                   </div>
-                  <p className="text-xs text-[var(--totk-grey-200)] mb-4">
-                    {row.entries?.length ?? 0} entries · Total weight {row.totalWeight ?? "—"} · Max/day{" "}
-                    {row.maxRollsPerDay == null || row.maxRollsPerDay === 0 ? "Unlimited" : row.maxRollsPerDay}{" "}
-                    {Array.isArray(row.allowedVillages) && row.allowedVillages.length > 0
-                      ? ` · Villages ${row.allowedVillages.join(", ")}`
-                      : ""}{" "}
-                    · Updated {formatDate(row.updatedAt)}
-                  </p>
+                  <dl className="text-xs space-y-1 mb-4 text-[var(--totk-grey-200)]">
+                    <div className="flex justify-between gap-2">
+                      <dt className="text-[var(--totk-grey-200)] shrink-0">Entries / weight</dt>
+                      <dd className="text-right text-[var(--totk-ivory)] tabular-nums">
+                        {(row.entries?.length ?? 0).toString()} · {row.totalWeight ?? "—"}
+                      </dd>
+                    </div>
+                    <div className="flex justify-between gap-2">
+                      <dt className="text-[var(--totk-grey-200)] shrink-0">Daily limit</dt>
+                      <dd className="text-right font-medium text-[var(--totk-ivory)]">{formatDailyLimitDisplay(row.maxRollsPerDay)}</dd>
+                    </div>
+                    <div className="flex justify-between gap-2 items-start">
+                      <dt className="text-[var(--totk-grey-200)] shrink-0 pt-0.5">Villages</dt>
+                      <dd className="text-right text-[var(--totk-ivory)] leading-snug max-w-[65%]" title={formatVillageLockDisplay(row.allowedVillages)}>
+                        {formatVillageLockDisplay(row.allowedVillages)}
+                      </dd>
+                    </div>
+                    <div className="flex justify-between gap-2 pt-1 border-t border-[var(--totk-dark-ocher)]/40">
+                      <dt className="text-[var(--totk-grey-200)]">Updated</dt>
+                      <dd className="text-[var(--totk-grey-200)]">{formatDate(row.updatedAt)}</dd>
+                    </div>
+                  </dl>
                   <div className="flex flex-wrap gap-2">
                     <button
                       type="button"
@@ -1041,7 +1126,7 @@ export default function AdminTablerollsPage() {
                       disabled={togglingId === row._id}
                       className="rounded-md border border-[var(--totk-dark-ocher)] px-3 py-1.5 text-xs text-[var(--totk-grey-200)] hover:bg-[var(--totk-dark-ocher)]/30 disabled:opacity-50"
                     >
-                      {togglingId === row._id ? "…" : row.isActive ? "Deactivate" : "Activate"}
+                      {togglingId === row._id ? "…" : row.isActive ? "Unpublish (draft)" : "Publish"}
                     </button>
                     <button
                       type="button"
@@ -1060,16 +1145,27 @@ export default function AdminTablerollsPage() {
                 <thead>
                   <tr className="border-b-2 border-[var(--totk-dark-ocher)] bg-[var(--botw-warm-black)] text-left text-[var(--totk-grey-200)]">
                     <th className="pb-2 pt-2 pr-4 pl-4 font-semibold">Name</th>
-                    <th className="pb-2 pt-2 pr-4 font-semibold">Status</th>
+                    <th className="pb-2 pt-2 pr-4 font-semibold">Visibility</th>
                     <th className="pb-2 pt-2 pr-4 font-semibold">Entries</th>
                     <th className="pb-2 pt-2 pr-4 font-semibold">Total weight</th>
-                    <th className="pb-2 pt-2 pr-4 font-semibold">Max/day</th>
+                    <th
+                      className="pb-2 pt-2 pr-4 font-semibold max-w-[7rem]"
+                      title="Max rolls on this table per day (shared across everyone). 0 = unlimited."
+                    >
+                      Daily limit
+                    </th>
+                    <th
+                      className="pb-2 pt-2 pr-4 font-semibold min-w-[6rem]"
+                      title="If set, characters must be stationed in one of these villages to roll."
+                    >
+                      Villages
+                    </th>
                     <th className="pb-2 pt-2 pr-4 font-semibold">Updated</th>
                     <th className="pb-2 pt-2 pr-4 font-semibold">Actions</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {list.map((row) => (
+                  {filteredList.map((row) => (
                     <tr key={row._id} className="border-b border-[var(--totk-dark-ocher)]/50 hover:bg-[var(--totk-dark-ocher)]/10 transition-colors">
                       <td className="py-2 pr-4 pl-4 font-medium text-[var(--totk-ivory)]">{row.name}</td>
                       <td className="py-2 pr-4">
@@ -1079,14 +1175,24 @@ export default function AdminTablerollsPage() {
                               ? "bg-[var(--totk-light-green)]/20 text-[var(--totk-light-green)]"
                               : "bg-[var(--totk-grey-200)]/20 text-[var(--totk-grey-200)]"
                           }`}
+                          title={row.isActive ? "Visible in Discord and selectors" : "Draft — hidden from Discord lists"}
                         >
-                          {row.isActive ? "Active" : "Inactive"}
+                          {row.isActive ? "Published" : "Draft"}
                         </span>
                       </td>
                       <td className="py-2 pr-4 text-[var(--totk-ivory)]">{row.entries?.length ?? 0}</td>
                       <td className="py-2 pr-4 text-[var(--totk-ivory)]">{row.totalWeight ?? "—"}</td>
-                      <td className="py-2 pr-4 text-[var(--totk-ivory)]">
-                        {row.maxRollsPerDay == null || row.maxRollsPerDay === 0 ? "Unlimited" : row.maxRollsPerDay}
+                      <td
+                        className="py-2 pr-4 text-[var(--totk-ivory)] tabular-nums"
+                        title="Shared daily cap on this table in Discord."
+                      >
+                        {formatDailyLimitDisplay(row.maxRollsPerDay)}
+                      </td>
+                      <td
+                        className="py-2 pr-4 max-w-[10rem] text-[var(--totk-ivory)] truncate"
+                        title={formatVillageLockDisplay(row.allowedVillages)}
+                      >
+                        {formatVillageLockDisplay(row.allowedVillages)}
                       </td>
                       <td className="py-2 pr-4 text-[var(--totk-grey-200)]">{formatDate(row.updatedAt)}</td>
                       <td className="py-2 pr-4">
@@ -1104,7 +1210,7 @@ export default function AdminTablerollsPage() {
                             disabled={togglingId === row._id}
                             className="rounded-md border border-[var(--totk-dark-ocher)] px-2.5 py-1 text-xs text-[var(--totk-grey-200)] hover:bg-[var(--totk-dark-ocher)]/30 disabled:opacity-50"
                           >
-                            {togglingId === row._id ? "…" : row.isActive ? "Deactivate" : "Activate"}
+                            {togglingId === row._id ? "…" : row.isActive ? "Unpublish (draft)" : "Publish"}
                           </button>
                           <button
                             type="button"

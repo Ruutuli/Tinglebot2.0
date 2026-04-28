@@ -264,6 +264,7 @@ type QuestRecord = {
   itemReward?: string;
   itemRewardQty?: number;
   tableRollName?: string;
+  tableRollNames?: string[];
   requiredRolls?: number;
   participants?: Record<
     string,
@@ -322,7 +323,27 @@ function viewQuestToPreviewBody(q: QuestRecord): Record<string, unknown> {
   const signupDeadline = (q as Record<string, unknown>).signupDeadline as string | undefined;
   const collabAllowed = (q as Record<string, unknown>).collabAllowed as boolean | undefined;
   const collabRule = (q as Record<string, unknown>).collabRule as string | undefined;
-  const tableroll = q.tableRollName ?? (q as Record<string, unknown>).tableroll as string | undefined;
+  const qr = Array.isArray((q as QuestRecord).tableRollNames)
+    ? (q as QuestRecord).tableRollNames!.filter((x): x is string => typeof x === "string").map((s) => s.trim()).filter(Boolean)
+    : [];
+  const legacyRoll = q.tableRollName ?? (q as Record<string, unknown>).tableroll as string | undefined;
+  let namesResolved = qr;
+  if (
+    !namesResolved.length &&
+    q.questType === "Interactive" &&
+    typeof legacyRoll === "string" &&
+    legacyRoll.trim()
+  ) {
+    namesResolved = [
+      ...new Set(legacyRoll.split(/[\n,]+/).map((s) => s.trim()).filter(Boolean)),
+    ];
+  }
+  const tableroll =
+    namesResolved.length > 0
+      ? namesResolved.join(", ")
+      : typeof legacyRoll === "string"
+        ? legacyRoll.trim()
+        : "";
   const postRequirement = (q as Record<string, unknown>).postRequirement as number | undefined;
   const minRequirements = (q as Record<string, unknown>).minRequirements;
   const itemRewards = q.itemRewards ?? (q.itemReward ? [{ name: String(q.itemReward), quantity: q.itemRewardQty ?? 1 }] : []);
@@ -346,8 +367,9 @@ function viewQuestToPreviewBody(q: QuestRecord): Record<string, unknown> {
     collabAllowed: collabAllowed ?? false,
     collabRule: collabRule ?? null,
     itemRewards: Array.isArray(itemRewards) ? itemRewards : [],
-    tableroll: tableroll ?? null,
-    tableRollName: tableroll ?? null,
+    tableroll: tableroll || null,
+    tableRollName: (namesResolved[0] ?? (typeof legacyRoll === "string" ? legacyRoll.trim() || null : null)),
+    tableRollNames: namesResolved,
     postRequirement: postRequirement ?? 15,
     minRequirements: minRequirements ?? "",
   };
@@ -474,6 +496,10 @@ function parseTokenReward(tokenReward: string | number | undefined): ParsedToken
   return { ...empty, tokenRewardCustom: raw.trim() };
 }
 
+function parseInteractiveTablerollTokens(raw: string): string[] {
+  return [...new Set(raw.split(/[\n,]+/).map((s) => s.trim()).filter(Boolean))];
+}
+
 function questToForm(q: QuestRecord): FormState {
   const itemRewardsRaw = (q.itemRewards as Array<{ name: string; quantity: number }> | undefined) ?? [];
   const itemRewards: ItemRewardRow[] =
@@ -493,7 +519,22 @@ function questToForm(q: QuestRecord): FormState {
   const timeLimit = timePreset ?? (timeStr ? "Custom" : "1 month");
   const timeLimitCustom = timeLimit === "Custom" ? timeStr : "";
   const parsed = parseTokenReward(q.tokenReward);
-  const tableRollName = q.tableRollName ?? q.tableroll;
+  const qr = Array.isArray(q.tableRollNames)
+    ? q.tableRollNames
+        .filter((x): x is string => typeof x === "string")
+        .map((s) => s.trim())
+        .filter(Boolean)
+    : [];
+  const legacyRoll = q.tableRollName ?? q.tableroll;
+  const legacyStr = legacyRoll != null ? String(legacyRoll).trim() : "";
+  const qt = String(q.questType ?? "RP");
+  const tablerollForm =
+    qt === "Interactive"
+      ? qr.length > 0
+        ? qr.join(", ")
+        : legacyStr
+      : legacyStr.split(/[\n,]+/).map((s) => s.trim()).find(Boolean) ?? "";
+
   return {
     title: String(q.title ?? ""),
     description: String(q.description ?? ""),
@@ -525,7 +566,7 @@ function questToForm(q: QuestRecord): FormState {
       q.minRequirements != null && typeof q.minRequirements !== "object"
         ? String(q.minRequirements)
         : "",
-    tableroll: String(tableRollName ?? ""),
+    tableroll: tablerollForm,
     requiredRolls: q.requiredRolls != null ? String(q.requiredRolls) : "1",
     tokenFlat: parsed.tokenFlat,
     tokenPerUnit: parsed.tokenPerUnit,
@@ -606,11 +647,22 @@ function formToBody(f: FormState, isEdit: boolean): Record<string, unknown> {
     })(),
     botNotes: f.botNotes.trim() || null,
     itemRewards: f.itemRewards.filter((r) => r.name.trim()).map((r) => ({ name: r.name.trim(), quantity: Math.max(0, r.quantity) || 1 })),
-    tableroll: f.tableroll.trim() || null,
-    tableRollName: f.tableroll.trim() || null,
     requiredRolls: parseInt(f.requiredRolls, 10) || 1,
     artWritingMode: f.artWritingMode === "either" ? "either" : "both",
   };
+
+  if (f.questType === "Interactive") {
+    const tabs = parseInteractiveTablerollTokens(f.tableroll);
+    body.tableRollNames = tabs;
+    body.tableRollName = tabs[0] ?? null;
+    body.tableroll = tabs.length <= 1 ? tabs[0] ?? null : tabs.join(", ");
+  } else {
+    body.tableroll = f.tableroll.trim() || null;
+    body.tableRollName =
+      typeof body.tableroll === "string" && body.tableroll.trim() ? body.tableroll.trim() : null;
+    body.tableRollNames = [];
+  }
+
   if (isEdit && f.questID.trim()) body.questID = f.questID.trim();
   if (f.participantCap.trim() !== "") {
     const n = parseInt(f.participantCap, 10);
@@ -843,7 +895,10 @@ function QuestEmbedPreview({ form }: { form: FormState }) {
               <div>📝 Post requirement: {postReqVal}</div>
             )}
             {form.tableroll.trim() && (
-              <div>🎲 Table roll: <span className="font-medium">{form.tableroll.trim()}</span></div>
+              <div>
+                🎲 Table roll{parseInteractiveTablerollTokens(form.tableroll).length > 1 ? "s" : ""}:{" "}
+                <span className="font-medium">{form.tableroll.trim()}</span>
+              </div>
             )}
             {!cap && (!form.minRequirements.trim() || form.minRequirements.trim() === "0") && form.questType !== "RP" && !form.tableroll.trim() && <div>—</div>}
           </div>
@@ -1732,14 +1787,18 @@ export default function AdminQuestsPage() {
                         )}
                         {form.questType === "Interactive" && (
                           <>
-                            <div>
-                              <label className="mb-1 block text-sm font-medium text-[var(--totk-grey-200)]">Table roll</label>
-                              <select value={form.tableroll} onChange={(e) => setField("tableroll", e.target.value)} className="w-full rounded border border-[var(--totk-dark-ocher)] bg-[var(--botw-warm-black)] pl-3 pr-8 py-2 text-[var(--totk-ivory)]">
-                                <option value="">—</option>
-                                {[...new Set([form.tableroll, ...tablerollNames].filter(Boolean))].sort((a, b) => a.localeCompare(b)).map((name) => (
-                                  <option key={name} value={name}>{name}</option>
-                                ))}
-                              </select>
+                            <div className="sm:col-span-2">
+                              <label className="mb-1 block text-sm font-medium text-[var(--totk-grey-200)]">Table rolls</label>
+                              <p className="mb-1 text-xs text-[var(--totk-grey-200)]">
+                                One name per line, or comma-separated. Rolls on any listed table count toward this quest (same success rules for all).
+                              </p>
+                              <textarea
+                                rows={4}
+                                value={form.tableroll}
+                                onChange={(e) => setField("tableroll", e.target.value)}
+                                placeholder={"Loot_A\nLoot_B\n(or: Loot_A, Loot_B)"}
+                                className="w-full rounded border border-[var(--totk-dark-ocher)] bg-[var(--botw-warm-black)] px-3 py-2 text-sm font-mono text-[var(--totk-ivory)] placeholder:text-[var(--totk-grey-200)]/60 resize-y min-h-[6rem]"
+                              />
                             </div>
                             <div>
                               <label className="mb-1 block text-sm font-medium text-[var(--totk-grey-200)]">Required rolls</label>
