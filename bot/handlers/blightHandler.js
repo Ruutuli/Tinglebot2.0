@@ -3692,14 +3692,17 @@ async function checkMissedRolls(client) {
       // Enhanced logging for debugging
       logger.info('BLIGHT', `Checking ${character.name} - UTC Time: ${now.toISOString()}, Last roll: ${lastRollDate.toISOString()}, Obligation window start: ${obligationWindowStart.toISOString()}, Current 8pm boundary: ${currentRollBoundary.toISOString()}, Time since roll: ${Math.floor(timeSinceLastRoll / (1000 * 60 * 60))} hours`);
       
-      // ---- SKIP missed roll progression if newly blighted after previous blight call ----
+      // ---- Skip auto-progress until first roll obligation (infection day exempt; see getFirstBlightRollObligationBoundary) ----
       if (character.blightedAt) {
-        // Grace period: if they were infected after the start of the current rolling window,
-        // they shouldn't be penalized for missing this window's roll call.
-        const isBlightedAfterCurrentWindowStart = character.blightedAt >= currentRollBoundary;
-        
-        if (isBlightedAfterCurrentWindowStart) {
-          console.log(`[blightHandler]: Skipping missed roll for ${character.name} (blightedAt=${character.blightedAt.toISOString()}, windowStart=${currentRollBoundary.toISOString()}) - infected after current rolling window start.`);
+        const firstObligationBoundary = getFirstBlightRollObligationBoundary(character.blightedAt);
+        if (
+          firstObligationBoundary &&
+          obligationWindowStart.getTime() < firstObligationBoundary.getTime()
+        ) {
+          const blightedAtIso = new Date(character.blightedAt).toISOString();
+          console.log(
+            `[blightHandler]: Skipping missed roll for ${character.name} (blightedAt=${blightedAtIso}, obligationWindowStart=${obligationWindowStart.toISOString()}, firstObligationBoundary=${firstObligationBoundary.toISOString()}) - not yet subject to this roll window.`
+          );
           continue;
         }
       }
