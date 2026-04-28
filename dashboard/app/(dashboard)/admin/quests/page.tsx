@@ -2183,7 +2183,7 @@ export default function AdminQuestsPage() {
                                   <td className="py-2 pr-3 font-medium text-[var(--totk-ivory)]">
                                     {p?.characterName ?? "—"}
                                   </td>
-                                  {isRpStyleQuestType(manageQuest.questType) && (() => {
+                                  {isRpStyleQuestType(manageQuest.questType ?? "") && (() => {
                                     const current = p?.rpPostCount ?? 0;
                                     const required = typeof manageQuest.postRequirement === "number" ? manageQuest.postRequirement : (manageQuest.postRequirement != null ? Number(manageQuest.postRequirement) : 15);
                                     return (
