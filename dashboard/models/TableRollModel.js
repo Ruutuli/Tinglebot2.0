@@ -94,7 +94,18 @@ const TableRollSchema = new Schema({
     min: 0
   },
 
-
+  // If non-empty, character must be stationed in one of these villages to roll
+  allowedVillages: {
+    type: [String],
+    default: [],
+    validate: {
+      validator(arr) {
+        if (!Array.isArray(arr)) return false;
+        return arr.every((v) => typeof v === 'string' && v.length > 0 && v.length <= 32);
+      },
+      message: 'allowedVillages must be strings',
+    },
+  },
 
   maxRollsPerDay: {
     type: Number,
@@ -153,58 +164,75 @@ TableRollSchema.pre('validate', function(next) {
 // ------------------- Static methods -------------------
 
 // ------------------- Roll on a table with enhanced features -------------------
-TableRollSchema.statics.rollOnTable = function(tableName, options = {}) {
-  return this.findOne({ name: tableName, isActive: true })
-    .then(table => {
-      if (!table) {
-        throw new Error(`Table '${tableName}' not found or inactive`);
-      }
-      
-      if (table.entries.length === 0) {
-        throw new Error(`Table '${tableName}' has no entries`);
-      }
+function maybeApplyDailyRollReset(doc) {
+  if (!doc?.dailyRollReset) return;
+  const now = new Date();
+  const resetDate = new Date(doc.dailyRollReset);
+  if (
+    now.getDate() !== resetDate.getDate() ||
+    now.getMonth() !== resetDate.getMonth() ||
+    now.getFullYear() !== resetDate.getFullYear()
+  ) {
+    doc.dailyRollCount = 0;
+    doc.dailyRollReset = now;
+  }
+}
 
-      // Check daily roll limit
-      if (table.maxRollsPerDay > 0 && table.dailyRollCount >= table.maxRollsPerDay) {
-        throw new Error(`Table '${tableName}' has reached its daily roll limit`);
-      }
-      
-      // Generate random number between 0 and total weight
-      const randomValue = Math.random() * table.totalWeight;
-      
-      // Find the entry based on weight
-      let currentWeight = 0;
-      let selectedEntry = null;
-      
-      for (const entry of table.entries) {
-        currentWeight += entry.weight;
-        if (randomValue <= currentWeight) {
-          selectedEntry = entry;
-          break;
-        }
-      }
-      
-      // Fallback to last entry (shouldn't happen with proper weight calculation)
-      if (!selectedEntry) {
-        selectedEntry = table.entries[table.entries.length - 1];
-      }
+TableRollSchema.statics.rollOnTable = async function (tableName) {
+  const table = await this.findOne({ name: tableName, isActive: true });
+  if (!table) {
+    throw new Error(`Table '${tableName}' not found or inactive`);
+  }
 
-             // Update daily roll count
-       table.dailyRollCount += 1;
-      
-      // Save the updated statistics
-      table.save().catch(err => {
-        console.error(`[TableRollModel] Error updating roll statistics:`, err);
-      });
+  if (table.entries.length === 0) {
+    throw new Error(`Table '${tableName}' has no entries`);
+  }
 
-             return {
-         table: table,
-         result: selectedEntry,
-         rollValue: randomValue,
-         dailyRollsRemaining: table.maxRollsPerDay > 0 ? 
-           Math.max(0, table.maxRollsPerDay - table.dailyRollCount) : null
-       };
-    });
+  maybeApplyDailyRollReset(table);
+
+  if (table.maxRollsPerDay > 0 && table.dailyRollCount >= table.maxRollsPerDay) {
+    throw new Error(`Table '${tableName}' has reached its daily roll limit`);
+  }
+
+  const totalW = table.totalWeight > 0 ? table.totalWeight : table.entries.reduce((s, e) => s + (e.weight || 0), 0);
+  const randomValue = Math.random() * (totalW || 1);
+
+  let currentWeight = 0;
+  let selectedEntry = null;
+  let entryIndex = 0;
+
+  for (let i = 0; i < table.entries.length; i++) {
+    const entry = table.entries[i];
+    currentWeight += entry.weight;
+    if (randomValue <= currentWeight) {
+      selectedEntry = entry;
+      entryIndex = i;
+      break;
+    }
+  }
+
+  if (!selectedEntry) {
+    entryIndex = Math.max(0, table.entries.length - 1);
+    selectedEntry = table.entries[entryIndex];
+  }
+
+  table.dailyRollCount += 1;
+
+  try {
+    await table.save();
+  } catch (err) {
+    console.error('[TableRollModel] Error updating roll statistics:', err);
+    throw err;
+  }
+
+  return {
+    table,
+    result: selectedEntry,
+    entryIndex,
+    rollValue: randomValue,
+    dailyRollsRemaining:
+      table.maxRollsPerDay > 0 ? Math.max(0, table.maxRollsPerDay - table.dailyRollCount) : null,
+  };
 };
 
 // ------------------- Search tables by text -------------------
@@ -294,7 +322,8 @@ TableRollSchema.methods.duplicate = function(newName, newCreator) {
     name: newName,
     entries: this.entries,
     createdBy: newCreator,
-    maxRollsPerDay: this.maxRollsPerDay
+    maxRollsPerDay: this.maxRollsPerDay,
+    allowedVillages: Array.isArray(this.allowedVillages) ? [...this.allowedVillages] : [],
   });
   
   return duplicate.save();

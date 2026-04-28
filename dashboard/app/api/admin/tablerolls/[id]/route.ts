@@ -10,6 +10,24 @@ import { connect } from "@/lib/db";
 import { getSession, isAdminUser } from "@/lib/session";
 
 const NAME_REGEX = /^[a-zA-Z0-9\s\-_]+$/;
+const KNOWN_ALLOWED_VILLAGES = ["Rudania", "Inariko", "Vhintl"] as const;
+const KNOWN_ALLOWED_SET = new Set(KNOWN_ALLOWED_VILLAGES.map((v) => v.toLowerCase()));
+
+function normalizeAllowedVillages(raw: unknown): string[] | null {
+  if (raw === undefined || raw === null) return [];
+  if (!Array.isArray(raw)) return null;
+  const out = new Set<string>();
+  for (const x of raw) {
+    if (typeof x !== "string") return null;
+    const t = x.trim();
+    if (!t) continue;
+    const lower = t.toLowerCase();
+    if (!KNOWN_ALLOWED_SET.has(lower)) return null;
+    const canon = KNOWN_ALLOWED_VILLAGES.find((k) => k.toLowerCase() === lower)!;
+    out.add(canon);
+  }
+  return [...out];
+}
 
 function normalizeEntry(raw: unknown): { weight: number; flavor: string; item: string; thumbnailImage: string } {
   if (!raw || typeof raw !== "object") {
@@ -124,6 +142,21 @@ export async function PUT(
     }
     if (typeof body.maxRollsPerDay === "number" && body.maxRollsPerDay >= 0) {
       doc.maxRollsPerDay = body.maxRollsPerDay;
+    }
+
+    if (Array.isArray(body.allowedVillages)) {
+      const normalizedVillages = normalizeAllowedVillages(body.allowedVillages);
+      if (normalizedVillages === null) {
+        return NextResponse.json(
+          {
+            error: "Bad request",
+            message:
+              `allowedVillages must be an array of villages: ${KNOWN_ALLOWED_VILLAGES.join(", ")}`,
+          },
+          { status: 400 }
+        );
+      }
+      doc.allowedVillages = normalizedVillages;
     }
 
     await doc.save();

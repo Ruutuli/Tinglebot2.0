@@ -7,6 +7,29 @@ import { Loading, Modal } from "@/components/ui";
 
 const NAME_REGEX = /^[a-zA-Z0-9\s\-_]+$/;
 
+const VILLAGES = ["Rudania", "Inariko", "Vhintl"] as const;
+
+function villagesFromRestrictions(
+  rudania: boolean,
+  inariko: boolean,
+  vhintl: boolean
+): string[] {
+  const out: string[] = [];
+  if (rudania) out.push("Rudania");
+  if (inariko) out.push("Inariko");
+  if (vhintl) out.push("Vhintl");
+  return out;
+}
+
+function villagesToRestrictions(arr: string[] | undefined | null) {
+  const set = new Set((arr ?? []).map((s) => s.trim().toLowerCase()).filter(Boolean));
+  return {
+    restrictRudania: set.has("rudania"),
+    restrictInariko: set.has("inariko"),
+    restrictVhintl: set.has("vhintl"),
+  };
+}
+
 function ItemNameAutocomplete({
   value,
   onChange,
@@ -138,6 +161,7 @@ type TableRollRecord = {
   entries: TableRollEntry[];
   totalWeight?: number;
   maxRollsPerDay?: number;
+  allowedVillages?: string[];
   createdBy?: string;
   createdAt?: string;
   updatedAt?: string;
@@ -149,6 +173,9 @@ type FormState = {
   name: string;
   isActive: boolean;
   maxRollsPerDay: string;
+  restrictRudania: boolean;
+  restrictInariko: boolean;
+  restrictVhintl: boolean;
   entries: FormEntry[];
 };
 
@@ -159,15 +186,22 @@ function defaultForm(): FormState {
     name: "",
     isActive: true,
     maxRollsPerDay: "0",
+    restrictRudania: false,
+    restrictInariko: false,
+    restrictVhintl: false,
     entries: [{ ...emptyEntry }],
   };
 }
 
 function recordToForm(r: TableRollRecord): FormState {
+  const vr = villagesToRestrictions(r.allowedVillages);
   return {
     name: r.name ?? "",
     isActive: r.isActive ?? true,
     maxRollsPerDay: String(r.maxRollsPerDay ?? 0),
+    restrictRudania: vr.restrictRudania,
+    restrictInariko: vr.restrictInariko,
+    restrictVhintl: vr.restrictVhintl,
     entries:
       r.entries?.length > 0
         ? r.entries.map((e) => ({
@@ -185,6 +219,7 @@ function formToBody(form: FormState): {
   isActive: boolean;
   maxRollsPerDay: number;
   entries: TableRollEntry[];
+  allowedVillages: string[];
 } {
   const entries = form.entries
     .map((e) => {
@@ -203,6 +238,7 @@ function formToBody(form: FormState): {
     isActive: form.isActive,
     maxRollsPerDay: Math.max(0, parseInt(form.maxRollsPerDay, 10) || 0),
     entries: entries.length ? entries : [{ weight: 1, flavor: "", item: "", thumbnailImage: "" }],
+    allowedVillages: villagesFromRestrictions(form.restrictRudania, form.restrictInariko, form.restrictVhintl),
   };
 }
 
@@ -684,6 +720,40 @@ export default function AdminTablerollsPage() {
                     />
                     <p className="mt-1 text-xs text-[var(--totk-grey-200)]">0 = unlimited</p>
                   </div>
+                  <div className="sm:col-span-2">
+                    <p className="mb-2 block text-sm font-medium text-[var(--totk-grey-200)]">Village restriction (optional)</p>
+                    <p className="mb-2 text-xs text-[var(--totk-grey-200)]">
+                      Leave unchecked to allow any village. Checked = table only usable when the character is stationed there (rolls still occur in Town Hall channels).
+                    </p>
+                    <div className="flex flex-wrap gap-4">
+                      {VILLAGES.map((v) => (
+                        <label key={v} className="flex items-center gap-2 text-sm text-[var(--totk-ivory)] cursor-pointer">
+                          <input
+                            type="checkbox"
+                            checked={
+                              v === "Rudania"
+                                ? form.restrictRudania
+                                : v === "Inariko"
+                                  ? form.restrictInariko
+                                  : form.restrictVhintl
+                            }
+                            onChange={(e) =>
+                              setField(
+                                v === "Rudania"
+                                  ? "restrictRudania"
+                                  : v === "Inariko"
+                                    ? "restrictInariko"
+                                    : "restrictVhintl",
+                                e.target.checked
+                              )
+                            }
+                            className="rounded border-[var(--totk-dark-ocher)] focus:ring-2 focus:ring-[var(--totk-mid-ocher)]/50"
+                          />
+                          {v}
+                        </label>
+                      ))}
+                    </div>
+                  </div>
                 </div>
               </div>
 
@@ -950,7 +1020,12 @@ export default function AdminTablerollsPage() {
                     </span>
                   </div>
                   <p className="text-xs text-[var(--totk-grey-200)] mb-4">
-                    {row.entries?.length ?? 0} entries · Total weight {row.totalWeight ?? "—"} · Max/day {row.maxRollsPerDay == null || row.maxRollsPerDay === 0 ? "Unlimited" : row.maxRollsPerDay} · Updated {formatDate(row.updatedAt)}
+                    {row.entries?.length ?? 0} entries · Total weight {row.totalWeight ?? "—"} · Max/day{" "}
+                    {row.maxRollsPerDay == null || row.maxRollsPerDay === 0 ? "Unlimited" : row.maxRollsPerDay}{" "}
+                    {Array.isArray(row.allowedVillages) && row.allowedVillages.length > 0
+                      ? ` · Villages ${row.allowedVillages.join(", ")}`
+                      : ""}{" "}
+                    · Updated {formatDate(row.updatedAt)}
                   </p>
                   <div className="flex flex-wrap gap-2">
                     <button

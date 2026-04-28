@@ -3,9 +3,14 @@
 // Utility functions for table roll operations, validation, and CSV processing
 // ============================================================================
 
+const { EmbedBuilder, MessageFlags } = require('discord.js');
 const TableRoll = require('../models/TableRollModel');
 const { handleError } = require('./globalErrorHandler');
 const { connectToTinglebot } = require('../database/db');
+const { capitalizeWords } = require('../modules/formattingModule');
+
+const KNOWN_VILLAGES = Object.freeze(['Rudania', 'Inariko', 'Vhintl']);
+const KNOWN_VILLAGES_LOWER = new Set(KNOWN_VILLAGES.map((v) => v.toLowerCase()));
 
 // ============================================================================
 // ------------------- Validation Functions -------------------
@@ -349,6 +354,156 @@ function getCategoryEmoji(category) {
 }
 
 // ============================================================================
+// ------------------- Location & village rules (Discord + character) -------------------
+// ============================================================================
+
+function getVillageTownHallChannelIds() {
+  return {
+    Rudania: process.env.RUDANIA_TOWNHALL,
+    Inariko: process.env.INARIKO_TOWNHALL,
+    Vhintl: process.env.VHINTL_TOWNHALL,
+  };
+}
+
+/** Same default as crafting/travel tooling; optional TABLEROOLL_TEST_CHANNEL_IDS (comma-separated) and TABLEROOLL_TEST_CHANNEL_ID. */
+function getTablerollBypassChannelIds() {
+  const ids = new Set();
+  const list = String(process.env.TABLEROLL_TEST_CHANNEL_IDS || '')
+    .split(/[\s,]+/)
+    .map((s) => s.trim())
+    .filter(Boolean);
+  list.forEach((id) => ids.add(id));
+  const single = String(process.env.TABLEROLL_TEST_CHANNEL_ID || '').trim();
+  if (single) ids.add(single);
+  ids.add('1391812848099004578'); // crafting / misc test channel override
+  return [...ids];
+}
+
+function normalizeCharacterVillageName(character) {
+  const raw = character?.currentVillage ?? character?.homeVillage ?? '';
+  const s = capitalizeWords(String(raw || '').trim()) || '';
+  return s || '';
+}
+
+/** Parse comma/semicolon village list from slash command or CSV note. */
+function parseAllowedVillagesInput(raw) {
+  if (raw == null || raw === '') {
+    return { valid: true, villages: [] };
+  }
+  if (typeof raw !== 'string') {
+    return { valid: false, error: 'Village list must be text', villages: [] };
+  }
+  const trimmed = raw.trim();
+  if (!trimmed) {
+    return { valid: true, villages: [] };
+  }
+  const parts = trimmed.split(/[,;]+/).map((p) => p.trim()).filter(Boolean);
+  const out = [];
+  const bad = [];
+  for (const p of parts) {
+    const key = p.toLowerCase();
+    if (KNOWN_VILLAGES_LOWER.has(key)) {
+      out.push(capitalizeWords(p));
+    } else {
+      bad.push(p);
+    }
+  }
+  if (bad.length) {
+    return {
+      valid: false,
+      error: `Unknown village name(s): ${bad.join(', ')}. Use: ${KNOWN_VILLAGES.join(', ')}`,
+      villages: [],
+    };
+  }
+  return { valid: true, villages: [...new Set(out)] };
+}
+
+function isChannelOrThreadOf(interaction, channelId) {
+  if (!channelId) return false;
+  if (interaction.channelId === channelId) return true;
+  const parentId = interaction.channel?.parentId;
+  return Boolean(parentId && parentId === channelId);
+}
+
+function isOnBypassList(interaction, bypassIds) {
+  return bypassIds.some((id) => isChannelOrThreadOf(interaction, id));
+}
+
+/**
+ * Enforces: roll in guild; character village town hall (or bypass test channel); optional table.allowedVillages.
+ * @returns {{ ok: true } | { ok: false, reply: object }}
+ */
+function assertTablerollRollAllowed(interaction, character, tableDoc) {
+  if (!interaction.guildId) {
+    return {
+      ok: false,
+      reply: {
+        content:
+          '❌ Use `/tableroll roll` in your village **Town Hall** channel (or a thread there), not in DMs.',
+        flags: [MessageFlags.Ephemeral],
+      },
+    };
+  }
+
+  const villageKey = normalizeCharacterVillageName(character);
+  const villages = getVillageTownHallChannelIds();
+  const bypass = getTablerollBypassChannelIds();
+
+  const allowedOnTable = Array.isArray(tableDoc?.allowedVillages) ? tableDoc.allowedVillages : [];
+  if (allowedOnTable.length > 0) {
+    const curLower = villageKey.toLowerCase();
+    const allowedLower = new Set(allowedOnTable.map((v) => String(v).trim().toLowerCase()).filter(Boolean));
+    if (!allowedLower.has(curLower)) {
+      const pretty = [...new Set(allowedOnTable.map((v) => capitalizeWords(String(v))))].join(', ');
+      return {
+        ok: false,
+        reply: {
+          content:
+            `❌ **${tableDoc.name || 'This table'}** can only be rolled while **${character.name}** is stationed in: **${pretty}**.\n📍 Currently: **${villageKey || 'unknown'}**`,
+          flags: [MessageFlags.Ephemeral],
+        },
+      };
+    }
+  }
+
+  if (isOnBypassList(interaction, bypass)) {
+    return { ok: true };
+  }
+
+  const allowedChannelId = villages[villageKey];
+
+  if (!allowedChannelId) {
+    const embed = new EmbedBuilder()
+      .setColor(0x008b8b)
+      .setDescription(
+        `⚠️ **Town hall channel is not configured** for **${villageKey || 'this village'}** (check server env: RUDANIA_TOWNHALL / INARIKO_TOWNHALL / VHINTL_TOWNHALL).\n📍 Character location: **${villageKey || 'unknown'}**`
+      )
+      .setFooter({ text: 'Channel configuration' })
+      .setImage('https://storage.googleapis.com/tinglebot/Graphics/border.png');
+    return { ok: false, reply: { embeds: [embed], flags: [MessageFlags.Ephemeral] } };
+  }
+
+  if (!isChannelOrThreadOf(interaction, allowedChannelId)) {
+    const embed = new EmbedBuilder()
+      .setColor(0x008b8b)
+      .setDescription(
+        `*${character.name} looks around, confused by their surroundings...*\n\n**Channel restriction**\nYou can only roll in **${villageKey}** Town Hall.\n\n📍 **Current location:** ${villageKey}\n💬 **Roll here:** <#${allowedChannelId}>`
+      )
+      .setFooter({ text: 'Table roll' })
+      .setImage('https://storage.googleapis.com/tinglebot/Graphics/border.png');
+    return { ok: false, reply: { embeds: [embed], flags: [MessageFlags.Ephemeral] } };
+  }
+
+  return { ok: true };
+}
+
+function formatAllowedVillagesShort(table) {
+  const a = Array.isArray(table?.allowedVillages) ? table.allowedVillages.filter(Boolean) : [];
+  if (a.length === 0) return '';
+  return ` · 🏘️ ${[...new Set(a.map((v) => capitalizeWords(String(v))))].join(', ')}`;
+}
+
+// ============================================================================
 // ------------------- Module Exports -------------------
 // ============================================================================
 
@@ -362,5 +517,9 @@ module.exports = {
   exportTableToCSV,
   getRarityColor,
   getRarityEmoji,
-  getCategoryEmoji
+  getCategoryEmoji,
+  KNOWN_VILLAGES,
+  parseAllowedVillagesInput,
+  assertTablerollRollAllowed,
+  formatAllowedVillagesShort,
 }; 

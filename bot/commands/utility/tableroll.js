@@ -5,7 +5,7 @@ const fs = require('fs');
 const path = require('path');
 const { v4: uuidv4 } = require('uuid');
 const { handleInteractionError } = require('@/utils/globalErrorHandler');
-const { connectToTinglebot, fetchCharacterByNameAndUserId, fetchItemByName } = require('@/database/db');
+const { connectToTinglebot, fetchCharacterByNameAndUserId, fetchModCharacterByNameAndUserId, fetchItemByName } = require('@/database/db');
 const TableRoll = require('@/models/TableRollModel');
 const Quest = require('@/models/QuestModel');
 const { addItemInventoryDatabase } = require('@/utils/inventoryUtils');
@@ -16,9 +16,12 @@ const {
 } = require('@/utils/aprilFoolsRoll.js');
 // Google Sheets functionality removed
 const { DEFAULT_IMAGE_URL } = require('../../embeds/embeds.js');
-const { 
-  validateTableName, 
-  parseCSVData
+const {
+  validateTableName,
+  parseCSVData,
+  parseAllowedVillagesInput,
+  assertTablerollRollAllowed,
+  formatAllowedVillagesShort,
 } = require('@/utils/tableRollUtils');
 
 // Roll frequency choices for slash options (value = maxRollsPerDay, 0 = unlimited)
@@ -112,6 +115,15 @@ module.exports = {
             .setRequired(false)
             .addChoices(...ROLL_LIMIT_CHOICES)
         )
+        .addStringOption(option =>
+          option
+            .setName('villages')
+            .setDescription(
+              'Optional: only allow rolls while characters are in these villages (e.g. Rudania or Rudania,Vhintl)'
+            )
+            .setRequired(false)
+            .setMaxLength(120)
+        )
     )
     .addSubcommand(subcommand =>
       subcommand
@@ -167,6 +179,13 @@ module.exports = {
             .setDescription('How often this table can be rolled (optional; leave blank to keep current)')
             .setRequired(false)
             .addChoices(...ROLL_LIMIT_CHOICES)
+        )
+        .addStringOption(option =>
+          option
+            .setName('villages')
+            .setDescription('Optional village restriction (comma-separated). Blank = unchanged. Use clear to remove')
+            .setRequired(false)
+            .setMaxLength(120)
         )
     )
     .addSubcommand(subcommand =>
@@ -264,6 +283,14 @@ module.exports = {
       });
     }
 
+    const villageParse = parseAllowedVillagesInput(interaction.options.getString('villages'));
+    if (!villageParse.valid) {
+      return await interaction.reply({
+        content: `❌ ${villageParse.error}`,
+        flags: [MessageFlags.Ephemeral]
+      });
+    }
+
     // Check if table already exists and delete it to overwrite
     const existingTable = await TableRoll.findOne({ name: name });
     if (existingTable) {
@@ -274,8 +301,23 @@ module.exports = {
 
     try {
       // Download and parse CSV
-      const response = await fetch(attachment.url);
-      const csvText = await response.text();
+      let csvText;
+      try {
+        const signal =
+          typeof AbortSignal !== 'undefined' && typeof AbortSignal.timeout === 'function'
+            ? AbortSignal.timeout(45000)
+            : undefined;
+        const response = await fetch(attachment.url, signal ? { signal } : {});
+        if (!response.ok) {
+          throw new Error(`HTTP ${response.status}`);
+        }
+        csvText = await response.text();
+      } catch (fetchErr) {
+        return await interaction.editReply({
+          content: `❌ Could not download the CSV (${fetchErr.message || fetchErr}). Try again or re-upload.`,
+          flags: [MessageFlags.Ephemeral],
+        });
+      }
       
       // Use consolidated CSV parsing
       const parseResult = parseCSVData(csvText);
@@ -301,7 +343,8 @@ module.exports = {
           name: name,
           entries: parseResult.entries,
           createdBy: interaction.user.id,
-          maxRollsPerDay: isNaN(maxRollsPerDay) ? 0 : Math.max(0, maxRollsPerDay)
+          maxRollsPerDay: isNaN(maxRollsPerDay) ? 0 : Math.max(0, maxRollsPerDay),
+          allowedVillages: villageParse.villages || [],
         });
 
       await table.save();
@@ -325,6 +368,12 @@ module.exports = {
           { name: '🔄 Roll limit', value: formatRollFrequency(table.maxRollsPerDay), inline: true }
         )
         .setTimestamp();
+
+      const vLbl =
+        villageParse.villages && villageParse.villages.length
+          ? villageParse.villages.join(', ')
+          : 'Any village (Town Hall)';
+      embed.addFields({ name: '🏘️ Village restriction', value: vLbl, inline: false });
 
       // Add sample entries if available
       if (sampleEntries) {
@@ -368,7 +417,10 @@ module.exports = {
           flags: [MessageFlags.Ephemeral]
         });
       }
-      const character = await fetchCharacterByNameAndUserId(characterName, userId);
+      let character = await fetchCharacterByNameAndUserId(characterName, userId);
+      if (!character) {
+        character = await fetchModCharacterByNameAndUserId(characterName, userId);
+      }
       if (!character) {
         return await interaction.reply({
           content: `❌ Character '${characterName}' not found or does not belong to you.`,
@@ -376,7 +428,6 @@ module.exports = {
         });
       }
 
-      // Fetch the table first
       const table = await TableRoll.findOne({ name: tableName, isActive: true });
       if (!table) {
         return await interaction.reply({
@@ -385,16 +436,20 @@ module.exports = {
         });
       }
 
-      // Defer reply to extend timeout for database operations
+      const locationCheck = assertTablerollRollAllowed(interaction, character, table);
+      if (!locationCheck.ok) {
+        return await interaction.reply(locationCheck.reply);
+      }
+
       await interaction.deferReply();
 
-      // Roll on the table
       const result = await TableRoll.rollOnTable(tableName);
       const rolledItemName = result.result.item;
       const rolledFlavor = result.result.flavor;
       const rolledThumbnail = result.result.thumbnailImage;
-      const rolledRarity = result.result.rarity;
       const totalEntries = table.entries.length;
+
+      // Prefer model-provided entry index (correct when duplicate rows match)
       
       // Check for active interactive quests and process table roll
       const activeInteractiveQuests = await findActiveInteractiveQuests(userId);
@@ -445,12 +500,15 @@ module.exports = {
         }
       }
       
-      // Find the rolled index in the table
-      const rolledIndex = table.entries.findIndex(e => 
-        e.item === rolledItemName && 
-        e.flavor === rolledFlavor && 
-        e.thumbnailImage === rolledThumbnail
-      );
+      let rolledIndex = typeof result.entryIndex === 'number' ? result.entryIndex : -1;
+      if (rolledIndex < 0) {
+        rolledIndex = table.entries.findIndex(
+          (e) =>
+            e.item === rolledItemName &&
+            e.flavor === rolledFlavor &&
+            e.thumbnailImage === rolledThumbnail
+        );
+      }
 
       const hasItemGrant = Boolean(rolledItemName && rolledItemName.trim());
       let displayItemName = rolledItemName;
@@ -463,8 +521,9 @@ module.exports = {
         displayFlavor = getAprilFoolsFlavorLine();
       }
 
-      // Build roll result string
-      const rollResultString = `**🎲 d${totalEntries} → ${rolledIndex + 1}**`;
+      const rollFace = totalEntries > 0 ? totalEntries : table.entries.length || 1;
+      const slotDisp = rolledIndex >= 0 ? rolledIndex + 1 : '?';
+      const rollResultString = `**🎲 d${rollFace} → slot ${slotDisp}**`;
 
              // Build embed
        const embed = new EmbedBuilder()
@@ -526,7 +585,7 @@ module.exports = {
 
              // Add footer with table info
        embed.setFooter({
-         text: `Table: ${tableName}`,
+         text: `Table: ${tableName}${character.currentVillage ? ` · 📍 ${character.currentVillage}` : ''}`,
        });
 
              // Add item to database and Google Sheets if it's a valid item
@@ -647,7 +706,9 @@ module.exports = {
       const embed = new EmbedBuilder()
         .setColor(0x0099FF)
         .setTitle('🎲 Available Tables')
-        .setDescription(`Use \`/tableroll roll name:tableName\` to roll on a table`)
+        .setDescription(
+          `Tables must be rolled from your character's village **Town Hall** (or threads there). Restricted tables may require specific villages.`,
+        )
         .setImage(DEFAULT_IMAGE_URL)
         .setFooter({ text: `Found ${tables.length} active table${tables.length !== 1 ? 's' : ''}` })
         .setTimestamp();
@@ -657,7 +718,7 @@ module.exports = {
         const entryCount = table.entries.length;
         const totalWeight = table.totalWeight;
         const rollLimit = formatRollFrequency(table.maxRollsPerDay);
-        return `**${table.name}**\n└ 📊 ${entryCount} entries | 🎲 ${totalWeight} weight | 🔄 ${rollLimit}`;
+        return `**${table.name}**\n└ 📊 ${entryCount} entries | 🎲 ${totalWeight} weight | 🔄 ${rollLimit}${formatAllowedVillagesShort(table)}`;
       }).join('\n\n');
 
       embed.addFields({
@@ -726,6 +787,15 @@ module.exports = {
         });
       }
 
+      embed.addFields({
+        name: '🏘️ Village restriction',
+        value:
+          Array.isArray(table.allowedVillages) && table.allowedVillages.length > 0
+            ? table.allowedVillages.join(', ')
+            : 'Any village (rolls still must be done in Town Hall)',
+        inline: false
+      });
+
       // Show all entries in a cleaner format
       const allEntries = table.entries.map((entry, index) => {
         const displayText = entry.item || entry.flavor || 'Empty Entry';
@@ -789,13 +859,40 @@ module.exports = {
         });
       }
 
+      const villagesOpt = interaction.options.getString('villages');
+      if (villagesOpt !== null && villagesOpt.trim() !== '') {
+        const trimmed = villagesOpt.trim();
+        if (!/^clear$/i.test(trimmed) && trimmed !== '-') {
+          const pv = parseAllowedVillagesInput(trimmed);
+          if (!pv.valid) {
+            return await interaction.reply({
+              content: `❌ ${pv.error}`,
+              flags: [MessageFlags.Ephemeral]
+            });
+          }
+        }
+      }
+
       await interaction.deferReply();
 
-      // Download and parse CSV
-      const response = await fetch(attachment.url);
-      const csvText = await response.text();
-      
-      // Use consolidated CSV parsing
+      let csvText;
+      try {
+        const signal =
+          typeof AbortSignal !== 'undefined' && typeof AbortSignal.timeout === 'function'
+            ? AbortSignal.timeout(45000)
+            : undefined;
+        const response = await fetch(attachment.url, signal ? { signal } : {});
+        if (!response.ok) {
+          throw new Error(`HTTP ${response.status}`);
+        }
+        csvText = await response.text();
+      } catch (fetchErr) {
+        return await interaction.editReply({
+          content: `❌ Could not download the CSV (${fetchErr.message || fetchErr}). Try again.`,
+          flags: [MessageFlags.Ephemeral],
+        });
+      }
+
       const parseResult = parseCSVData(csvText);
       if (!parseResult.success) {
         return await interaction.editReply({
@@ -822,6 +919,17 @@ module.exports = {
         table.maxRollsPerDay = isNaN(maxRollsPerDay) ? 0 : Math.max(0, maxRollsPerDay);
       }
 
+      const villagesApply = interaction.options.getString('villages');
+      if (villagesApply !== null) {
+        const t = villagesApply.trim();
+        if (/^clear$/i.test(t) || t === '-') {
+          table.allowedVillages = [];
+        } else if (t !== '') {
+          const pv = parseAllowedVillagesInput(t);
+          table.allowedVillages = pv.villages || [];
+        }
+      }
+
       await table.save();
 
       const embed = new EmbedBuilder()
@@ -842,6 +950,15 @@ module.exports = {
           inline: true
         });
       }
+
+      embed.addFields({
+        name: '🏘️ Village restriction',
+        value:
+          Array.isArray(table.allowedVillages) && table.allowedVillages.length > 0
+            ? table.allowedVillages.join(', ')
+            : 'Any village',
+        inline: false
+      });
 
       // Show first few entries as preview
       const previewEntries = table.entries.slice(0, 5).map((entry, index) => {
@@ -918,7 +1035,7 @@ module.exports = {
       
       await interaction.reply({
         content: '❌ Failed to delete table.',
-        ephemeral: true
+        flags: [MessageFlags.Ephemeral]
       });
     }
   },
