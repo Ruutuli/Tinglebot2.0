@@ -655,21 +655,53 @@ export default function AdminTablerollsPage() {
 
   return (
     <div className="min-h-screen p-4 sm:p-6 md:p-8 bg-[var(--totk-light-green)]/10">
-      <div className="mx-auto max-w-[90rem] space-y-6">
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
-          <div className="flex flex-col items-center sm:items-start gap-2">
-            <div className="flex items-center gap-4 sm:gap-6">
-              <img src="/Side=Left.svg" alt="" className="h-6 sm:h-8 w-auto opacity-80" />
-              <h1 className="text-3xl sm:text-4xl md:text-5xl font-black text-[var(--totk-light-ocher)] tracking-tighter uppercase italic">
-                Table Rolls
-              </h1>
-              <img src="/Side=Right.svg" alt="" className="h-6 sm:h-8 w-auto opacity-80" />
+      <div className={`mx-auto space-y-6 ${showForm ? "max-w-5xl" : "max-w-[90rem]"}`}>
+        {showForm ? (
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between border-b border-[var(--totk-dark-ocher)]/50 pb-5">
+            <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+              <button
+                type="button"
+                onClick={() => handleCloseForm()}
+                className="inline-flex items-center gap-2 rounded-lg border border-[var(--totk-dark-ocher)] bg-[var(--botw-warm-black)]/80 px-3 py-2 text-sm font-medium text-[var(--totk-grey-200)] transition-colors hover:border-[var(--totk-mid-ocher)] hover:text-[var(--totk-ivory)]"
+              >
+                <i className="fa-solid fa-arrow-left text-xs" aria-hidden="true" />
+                All table rolls
+              </button>
+              <div>
+                <div className="flex flex-wrap items-center gap-2">
+                  <h1 className="text-2xl sm:text-3xl font-bold text-[var(--totk-light-ocher)] tracking-tight">
+                    {editingId ? `Edit "${(form.name || "…").trim() || "Untitled"}"` : "New table roll"}
+                  </h1>
+                  {!form.isActive ? (
+                    <span className="rounded-md border border-[var(--totk-dark-ocher)] bg-[var(--totk-grey-200)]/10 px-2 py-0.5 text-xs font-semibold uppercase tracking-wide text-[var(--totk-grey-200)]">
+                      Draft
+                    </span>
+                  ) : (
+                    <span className="rounded-md border border-[var(--totk-light-green)]/40 bg-[var(--totk-light-green)]/10 px-2 py-0.5 text-xs font-semibold uppercase tracking-wide text-[var(--totk-light-green)]">
+                      Published
+                    </span>
+                  )}
+                </div>
+                <p className="mt-1 text-sm text-[var(--totk-grey-200)]">
+                  Name, loot weights, Discord visibility, optional village locks and daily caps.
+                </p>
+              </div>
             </div>
-            <p className="text-sm text-[var(--totk-grey-200)]">
-              Create and manage table rolls (used by quests and /tableroll). Drafts stay admin-only until you publish.
-            </p>
           </div>
-          {!showForm && (
+        ) : (
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-2">
+            <div className="flex flex-col items-center sm:items-start gap-2">
+              <div className="flex items-center gap-4 sm:gap-6">
+                <img src="/Side=Left.svg" alt="" className="h-6 sm:h-8 w-auto opacity-80" />
+                <h1 className="text-3xl sm:text-4xl md:text-5xl font-black text-[var(--totk-light-ocher)] tracking-tighter uppercase italic">
+                  Table Rolls
+                </h1>
+                <img src="/Side=Right.svg" alt="" className="h-6 sm:h-8 w-auto opacity-80" />
+              </div>
+              <p className="text-sm text-[var(--totk-grey-200)] text-center sm:text-left max-w-xl">
+                Create and manage rolls for quests and <code className="text-xs">/tableroll</code>. Drafts stay admin-only until you publish.
+              </p>
+            </div>
             <button
               type="button"
               onClick={handleOpenCreate}
@@ -678,8 +710,8 @@ export default function AdminTablerollsPage() {
               <i className="fa-solid fa-plus mr-2" aria-hidden="true" />
               Create table roll
             </button>
-          )}
-        </div>
+          </div>
+        )}
 
         {error && (
           <div className="rounded-lg border-2 border-red-500/60 bg-red-500/10 px-4 py-3 text-sm text-red-200">
@@ -693,302 +725,348 @@ export default function AdminTablerollsPage() {
         )}
 
         {showForm && (
-          <section className="rounded-xl border-2 border-[var(--totk-dark-ocher)] bg-gradient-to-br from-[var(--botw-warm-black)] to-[var(--botw-black)] p-5 sm:p-6 shadow-lg">
-            <div className="flex flex-wrap items-center justify-between gap-4 mb-6">
-              <h2 className="text-lg font-semibold text-[var(--totk-ivory)]">
-                {editingId ? "Edit table roll" : "Create table roll"}
-              </h2>
-              <button
-                type="button"
-                onClick={() => handleCloseForm()}
-                className="text-sm text-[var(--totk-light-green)] hover:underline transition-colors focus:ring-2 focus:ring-offset-2 focus:ring-[var(--totk-mid-ocher)]/50 rounded"
-              >
-                Cancel
-              </button>
-            </div>
-            <form onSubmit={handleSubmit} className="space-y-6">
-              <div className="rounded-lg border border-[var(--totk-dark-ocher)]/60 bg-[var(--botw-black)]/30 p-4 space-y-4">
-                <h3 className="text-sm font-semibold text-[var(--totk-ivory)]">Details</h3>
-                <div className="grid gap-4 sm:grid-cols-2">
-                  <div>
-                    <label className="mb-1 block text-sm font-medium text-[var(--totk-grey-200)]">Name *</label>
-                    <input
-                      type="text"
-                      value={form.name}
-                      onChange={(e) => { setField("name", e.target.value); setNameValidationMessage(null); }}
-                      onBlur={() => {
-                        const n = form.name.trim();
-                        if (!n) setNameValidationMessage("Name is required.");
-                        else if (!NAME_REGEX.test(n)) setNameValidationMessage("Only letters, numbers, spaces, hyphens, and underscores.");
-                        else setNameValidationMessage(null);
-                      }}
-                      className="w-full rounded border border-[var(--totk-dark-ocher)] bg-[var(--botw-warm-black)] px-3 py-2 text-[var(--totk-ivory)] focus:ring-2 focus:ring-[var(--totk-mid-ocher)]/50 focus:border-[var(--totk-mid-ocher)] transition-colors"
-                      placeholder="e.g. Loot Table A"
-                      required
-                    />
-                    {nameValidationMessage ? (
-                      <p className="mt-1 text-xs text-red-400">{nameValidationMessage}</p>
-                    ) : (
-                      <p className="mt-1 text-xs text-[var(--totk-grey-200)]">Letters, numbers, spaces, hyphens, underscores only.</p>
-                    )}
+          <section className="rounded-2xl border-2 border-[var(--totk-dark-ocher)] bg-gradient-to-br from-[var(--botw-warm-black)] to-[var(--botw-black)] shadow-[0_8px_40px_rgba(0,0,0,0.35)] overflow-hidden">
+            <form onSubmit={handleSubmit} className="flex flex-col">
+              <div className="p-5 sm:p-7 space-y-8">
+                {/* Identity & visibility */}
+                <div className="space-y-5">
+                  <div className="flex flex-wrap items-baseline justify-between gap-2 border-b border-[var(--totk-dark-ocher)]/40 pb-3">
+                    <h2 className="text-base font-semibold text-[var(--totk-ivory)]">Basics</h2>
+                    <span className="text-xs text-[var(--totk-grey-200)]">Required fields marked *</span>
                   </div>
-                  <div className="flex flex-col gap-2 sm:col-span-2">
-                    <label className="flex items-start gap-2 text-sm font-medium text-[var(--totk-grey-200)] cursor-pointer">
+                  <div className="grid gap-5 sm:grid-cols-2">
+                    <div className="sm:col-span-2">
+                      <label className="mb-1.5 block text-sm font-medium text-[var(--totk-grey-200)]">Table name *</label>
                       <input
-                        type="checkbox"
-                        checked={form.isActive}
-                        onChange={(e) => setField("isActive", e.target.checked)}
-                        className="mt-0.5 rounded border-[var(--totk-dark-ocher)] focus:ring-2 focus:ring-[var(--totk-mid-ocher)]/50"
+                        type="text"
+                        value={form.name}
+                        onChange={(e) => {
+                          setField("name", e.target.value);
+                          setNameValidationMessage(null);
+                        }}
+                        onBlur={() => {
+                          const n = form.name.trim();
+                          if (!n) setNameValidationMessage("Name is required.");
+                          else if (!NAME_REGEX.test(n)) setNameValidationMessage("Only letters, numbers, spaces, hyphens, and underscores.");
+                          else setNameValidationMessage(null);
+                        }}
+                        className="w-full rounded-lg border border-[var(--totk-dark-ocher)] bg-[var(--botw-warm-black)] px-3.5 py-2.5 text-[var(--totk-ivory)] focus:ring-2 focus:ring-[var(--totk-mid-ocher)]/50 focus:border-[var(--totk-mid-ocher)] transition-colors"
+                        placeholder="e.g. fishing_loot_rare"
+                        autoComplete="off"
+                        required
                       />
-                      <span>
-                        Published — show in Discord <code className="text-xs">/tableroll</code>, autocomplete, and quest table pickers
+                      {nameValidationMessage ? (
+                        <p className="mt-1.5 text-xs text-red-400">{nameValidationMessage}</p>
+                      ) : (
+                        <p className="mt-1.5 text-xs text-[var(--totk-grey-200)]">Letters, numbers, spaces, hyphens, underscores only.</p>
+                      )}
+                    </div>
+
+                    <button
+                      type="button"
+                      role="switch"
+                      aria-checked={form.isActive}
+                      onClick={() => setField("isActive", !form.isActive)}
+                      className={`rounded-xl border-2 px-4 py-3 text-left transition-all sm:col-span-2 flex flex-wrap items-start gap-4 ${
+                        form.isActive
+                          ? "border-[var(--totk-light-green)]/45 bg-[var(--totk-light-green)]/[0.06]"
+                          : "border-[var(--totk-dark-ocher)] bg-[var(--botw-black)]/30"
+                      }`}
+                    >
+                      <span
+                        className={`relative mt-0.5 inline-flex h-8 w-14 shrink-0 cursor-pointer rounded-full transition-colors border ${
+                          form.isActive ? "bg-[var(--totk-light-green)]/40 border-[var(--totk-light-green)]/50" : "bg-[var(--totk-dark-ocher)]/40 border-[var(--totk-dark-ocher)]"
+                        }`}
+                      >
+                        <span
+                          className={`pointer-events-none absolute top-1 h-6 w-6 rounded-full shadow transition-all ${
+                            form.isActive
+                              ? "left-8 bg-[var(--totk-light-green)]"
+                              : "left-1 bg-[var(--totk-grey-200)]"
+                          }`}
+                        />
+                      </span>
+                      <span className="min-w-0 flex-1">
+                        <span className="font-semibold text-[var(--totk-ivory)]">{form.isActive ? "Published" : "Draft"}</span>
+                        <span className="block text-sm text-[var(--totk-grey-200)] mt-0.5">
+                          When published, appears in Discord <code className="text-[0.8125rem]">/tableroll</code>, autocomplete, and quest pickers.
+                        </span>
                         {!form.isActive && (
-                          <span className="block mt-1 text-xs font-normal text-[var(--totk-grey-200)]">
-                            Unchecked = draft only (editable here; not visible to players anywhere).
-                          </span>
+                          <span className="inline-block mt-2 text-xs text-[var(--totk-grey-200)]">Drafts stay private here until you publish.</span>
                         )}
                       </span>
-                    </label>
+                    </button>
                   </div>
-                  <div>
-                    <label className="mb-1 block text-sm font-medium text-[var(--totk-grey-200)]">Max rolls per day</label>
-                    <input
-                      type="number"
-                      min={0}
-                      value={form.maxRollsPerDay}
-                      onChange={(e) => setField("maxRollsPerDay", e.target.value)}
-                      className="w-full rounded border border-[var(--totk-dark-ocher)] bg-[var(--botw-warm-black)] px-3 py-2 text-[var(--totk-ivory)] focus:ring-2 focus:ring-[var(--totk-mid-ocher)]/50 focus:border-[var(--totk-mid-ocher)] transition-colors"
-                    />
-                    <p className="mt-1 text-xs text-[var(--totk-grey-200)]">0 = unlimited</p>
+                </div>
+
+                {/* Roll limits & villages */}
+                <div className="space-y-5">
+                  <div className="border-b border-[var(--totk-dark-ocher)]/40 pb-3">
+                    <h2 className="text-base font-semibold text-[var(--totk-ivory)]">Where &amp; how often</h2>
+                    <p className="mt-1 text-xs text-[var(--totk-grey-200)]">Optional locks; rolls always use Town Hall channel rules per village.</p>
                   </div>
-                  <div className="sm:col-span-2">
-                    <p className="mb-2 block text-sm font-medium text-[var(--totk-grey-200)]">Village restriction (optional)</p>
-                    <p className="mb-2 text-xs text-[var(--totk-grey-200)]">
-                      Leave unchecked to allow any village. Checked = table only usable when the character is stationed there (rolls still occur in Town Hall channels).
-                    </p>
-                    <div className="flex flex-wrap gap-4">
-                      {VILLAGES.map((v) => (
-                        <label key={v} className="flex items-center gap-2 text-sm text-[var(--totk-ivory)] cursor-pointer">
-                          <input
-                            type="checkbox"
-                            checked={
-                              v === "Rudania"
+                  <div className="grid gap-5 sm:grid-cols-2">
+                    <div>
+                      <label className="mb-1.5 block text-sm font-medium text-[var(--totk-grey-200)]">Max rolls per day</label>
+                      <input
+                        type="number"
+                        min={0}
+                        value={form.maxRollsPerDay}
+                        onChange={(e) => setField("maxRollsPerDay", e.target.value)}
+                        className="w-full max-w-[12rem] rounded-lg border border-[var(--totk-dark-ocher)] bg-[var(--botw-warm-black)] px-3.5 py-2.5 text-[var(--totk-ivory)] tabular-nums focus:ring-2 focus:ring-[var(--totk-mid-ocher)]/50 focus:border-[var(--totk-mid-ocher)]"
+                      />
+                      <p className="mt-1.5 text-xs text-[var(--totk-grey-200)]">Shared across everyone for this table · 0 = unlimited</p>
+                    </div>
+                    <div className="sm:col-span-2">
+                      <p className="mb-2 block text-sm font-medium text-[var(--totk-grey-200)]">Village restriction</p>
+                      <p className="mb-3 text-xs text-[var(--totk-grey-200)] max-w-xl">
+                        Leave unchecked for any village. Select villages to restrict to characters stationed there only.
+                      </p>
+                      <div className="flex flex-wrap gap-2">
+                        {VILLAGES.map((v) => (
+                          <label
+                            key={v}
+                            className={`inline-flex cursor-pointer items-center gap-2 rounded-lg border px-3 py-2 text-sm transition-colors ${
+                              (v === "Rudania"
                                 ? form.restrictRudania
                                 : v === "Inariko"
                                   ? form.restrictInariko
-                                  : form.restrictVhintl
-                            }
-                            onChange={(e) =>
-                              setField(
-                                v === "Rudania"
-                                  ? "restrictRudania"
-                                  : v === "Inariko"
-                                    ? "restrictInariko"
-                                    : "restrictVhintl",
-                                e.target.checked
-                              )
-                            }
-                            className="rounded border-[var(--totk-dark-ocher)] focus:ring-2 focus:ring-[var(--totk-mid-ocher)]/50"
-                          />
-                          {v}
-                        </label>
-                      ))}
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              <div className="rounded-lg border border-[var(--totk-dark-ocher)]/60 bg-[var(--botw-black)]/30 p-4 space-y-2">
-                <button
-                  type="button"
-                  onClick={() => setShowCsvImport((v) => !v)}
-                  className="text-sm font-medium text-[var(--totk-light-green)] hover:underline transition-colors"
-                >
-                  {showCsvImport ? "Hide CSV import" : "Import from CSV"}
-                </button>
-                {showCsvImport && (
-                  <>
-                    <p className="text-xs text-[var(--totk-grey-200)]">
-                      First line = header (skipped). Columns: <strong>weight</strong>, <strong>flavor</strong>, <strong>item</strong>, <strong>thumbnail URL</strong>. Use double quotes for values that contain commas.
-                    </p>
-                    <textarea
-                      value={csvImportText}
-                      onChange={(e) => setCsvImportText(e.target.value)}
-                      placeholder={"weight,flavor,item,thumbnailURL\n1,A Korok pops out...,Acorn,https://..."}
-                      rows={5}
-                      className="w-full rounded border border-[var(--totk-dark-ocher)] bg-[var(--botw-warm-black)] px-3 py-2 text-sm text-[var(--totk-ivory)] placeholder:text-[var(--totk-grey-200)]/60 font-mono focus:ring-2 focus:ring-[var(--totk-mid-ocher)]/50 focus:border-[var(--totk-mid-ocher)]"
-                    />
-                    <div className="flex gap-2">
-                      <button
-                        type="button"
-                        onClick={() => applyCsvImport(false)}
-                        disabled={!csvImportText.trim()}
-                        className="rounded-lg border border-[var(--totk-dark-ocher)] bg-[var(--totk-mid-ocher)]/30 px-3 py-1.5 text-sm font-medium text-[var(--totk-ivory)] transition-colors hover:bg-[var(--totk-mid-ocher)]/50 disabled:opacity-50"
-                      >
-                        Replace entries with CSV
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => applyCsvImport(true)}
-                        disabled={!csvImportText.trim()}
-                        className="rounded-lg border border-[var(--totk-dark-ocher)] px-3 py-1.5 text-sm text-[var(--totk-grey-200)] transition-colors hover:bg-[var(--totk-dark-ocher)]/30 disabled:opacity-50"
-                      >
-                        Append CSV to entries
-                      </button>
-                    </div>
-                  </>
-                )}
-              </div>
-
-              <div className="space-y-2">
-                <h3 className="text-sm font-semibold text-[var(--totk-ivory)]">Entries</h3>
-                <div className="sticky top-0 z-10 flex flex-wrap items-center justify-between gap-2 rounded-lg border border-[var(--totk-dark-ocher)]/60 bg-[var(--botw-warm-black)]/95 px-3 py-2 backdrop-blur-sm">
-                  <span className="text-sm font-medium text-[var(--totk-grey-200)]">
-                    Entries * ({form.entries.length})
-                  </span>
-                  <div className="flex flex-wrap items-center gap-2">
-                    <input
-                      type="text"
-                      value={entryFilter}
-                      onChange={(e) => setEntryFilter(e.target.value)}
-                      placeholder="Filter by flavor, item, URL…"
-                      className="w-48 rounded border border-[var(--totk-dark-ocher)] bg-[var(--botw-warm-black)] px-2 py-1.5 text-sm text-[var(--totk-ivory)] placeholder:text-[var(--totk-grey-200)]/70 focus:ring-1 focus:ring-[var(--totk-mid-ocher)]/50 focus:border-[var(--totk-mid-ocher)]"
-                    />
-                    <button
-                      type="button"
-                      onClick={addEntry}
-                      className="rounded-md border border-[var(--totk-dark-ocher)] bg-[var(--totk-mid-ocher)]/30 px-3 py-1.5 text-xs font-medium text-[var(--totk-ivory)] transition-colors hover:bg-[var(--totk-mid-ocher)]/50"
-                    >
-                      Add row
-                    </button>
-                    <button
-                      type="button"
-                      onClick={addFiveEntries}
-                      className="rounded-md border border-[var(--totk-dark-ocher)] px-3 py-1.5 text-xs text-[var(--totk-grey-200)] transition-colors hover:bg-[var(--totk-dark-ocher)]/30"
-                    >
-                      Add 5 rows
-                    </button>
-                  </div>
-                </div>
-                <div className="rounded-lg border border-[var(--totk-dark-ocher)]/60 overflow-hidden">
-                  <div className="max-h-[50vh] overflow-auto bg-[var(--botw-black)]/50">
-                    <table className="w-full border-collapse text-sm">
-                      <thead className="sticky top-0 bg-[var(--botw-warm-black)] shadow-sm">
-                        <tr className="text-left text-xs text-[var(--totk-grey-200)]">
-                          <th className="w-10 py-2 pl-2 pr-1 font-medium">#</th>
-                          <th className="w-16 py-2 px-1 font-medium">Weight</th>
-                          <th className="min-w-[180px] py-2 px-1 font-medium">Flavor</th>
-                          <th className="w-32 py-2 px-1 font-medium">Item</th>
-                          <th className="min-w-[120px] py-2 px-1 font-medium">Thumbnail URL</th>
-                          <th className="w-14 py-2 pr-2 pl-1"></th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {form.entries.map((entry, i) => {
-                          const show = entryMatchesFilter(entry, entryFilter);
-                          return (
-                          <tr
-                            key={i}
-                            className={`border-t border-[var(--totk-dark-ocher)]/30 hover:bg-[var(--totk-dark-ocher)]/10 transition-colors ${!show ? "hidden" : ""}`}
+                                  : form.restrictVhintl)
+                                ? "border-[var(--totk-light-green)]/50 bg-[var(--totk-light-green)]/[0.08] text-[var(--totk-ivory)]"
+                                : "border-[var(--totk-dark-ocher)]/80 bg-[var(--botw-black)]/20 text-[var(--totk-grey-200)] hover:border-[var(--totk-mid-ocher)]/50"
+                            }`}
                           >
-                            <td className="py-1 pl-2 pr-1 text-[var(--totk-grey-200)]">
-                              {i + 1}
-                            </td>
-                            <td className="py-1 px-1">
-                              <input
-                                type="number"
-                                min={1}
-                                step={1}
-                                value={entry.weight}
-                                onChange={(e) => setEntry(i, "weight", e.target.value)}
-                                className="w-full rounded border border-[var(--totk-dark-ocher)] bg-[var(--botw-warm-black)] px-2 py-1 text-[var(--totk-ivory)] focus:ring-1 focus:ring-[var(--totk-mid-ocher)]/50 focus:border-[var(--totk-mid-ocher)]"
-                                title="Weight"
-                              />
-                            </td>
-                            <td className="py-1 px-1 min-w-0 max-w-[280px]">
-                              <input
-                                type="text"
-                                value={entry.flavor}
-                                onChange={(e) => setEntry(i, "flavor", e.target.value)}
-                                className="w-full rounded border border-[var(--totk-dark-ocher)] bg-[var(--botw-warm-black)] px-2 py-1 text-[var(--totk-ivory)] placeholder:text-[var(--totk-grey-200)]/60 focus:ring-1 focus:ring-[var(--totk-mid-ocher)]/50 focus:border-[var(--totk-mid-ocher)]"
-                                placeholder="Flavor text"
-                                title={entry.flavor || "Flavor text"}
-                              />
-                            </td>
-                            <td className="py-1 px-1">
-                              <ItemNameAutocomplete
-                                value={entry.item}
-                                onChange={(name) => setEntry(i, "item", name)}
-                                placeholder="Item name"
-                                className="w-full rounded border border-[var(--totk-dark-ocher)] bg-[var(--botw-warm-black)] px-2 py-1 text-[var(--totk-ivory)] placeholder:text-[var(--totk-grey-200)]/60 focus:ring-1 focus:ring-[var(--totk-mid-ocher)]/50 focus:border-[var(--totk-mid-ocher)]"
-                              />
-                            </td>
-                            <td className="py-1 px-1 min-w-0">
-                              <input
-                                type="text"
-                                value={entry.thumbnailImage}
-                                onChange={(e) => setEntry(i, "thumbnailImage", e.target.value)}
-                                className="w-full rounded border border-[var(--totk-dark-ocher)] bg-[var(--botw-warm-black)] px-2 py-1 text-[var(--totk-ivory)] placeholder:text-[var(--totk-grey-200)]/60 focus:ring-1 focus:ring-[var(--totk-mid-ocher)]/50 focus:border-[var(--totk-mid-ocher)]"
-                                placeholder="https://…"
-                              />
-                            </td>
-                            <td className="py-1 pr-2 pl-1">
-                              <button
-                                type="button"
-                                onClick={() => removeEntry(i)}
-                                disabled={form.entries.length <= 1}
-                                className="rounded border border-red-500/60 px-2 py-1 text-red-300 hover:bg-red-500/20 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
-                                title="Remove row"
-                              >
-                                <i className="fa-solid fa-trash text-xs" aria-hidden="true" />
-                              </button>
-                            </td>
-                          </tr>
-                          );
-                        })}
-                      </tbody>
-                    </table>
+                            <input
+                              type="checkbox"
+                              className="sr-only"
+                              checked={
+                                v === "Rudania"
+                                  ? form.restrictRudania
+                                  : v === "Inariko"
+                                    ? form.restrictInariko
+                                    : form.restrictVhintl
+                              }
+                              onChange={(e) =>
+                                setField(
+                                  v === "Rudania"
+                                    ? "restrictRudania"
+                                    : v === "Inariko"
+                                      ? "restrictInariko"
+                                      : "restrictVhintl",
+                                  e.target.checked
+                                )
+                              }
+                            />
+                            <span>{v}</span>
+                          </label>
+                        ))}
+                      </div>
+                    </div>
                   </div>
                 </div>
-                <p className="text-xs text-[var(--totk-grey-200)]">
-                  Use the filter to find entries by flavor, item, or URL. Scroll the table to see all. Hover over a flavor field to see full text.
-                </p>
-              </div>
 
-              <div className="pt-2 border-t border-[var(--totk-dark-ocher)]/40 space-y-3">
-                {(() => {
-                  const name = form.name.trim();
-                  const hasValidEntry = form.entries.some((e) => parseInt(e.weight, 10) >= 1);
-                  const valid = name && NAME_REGEX.test(name) && hasValidEntry;
-                  const hint = !name
-                    ? "Name is required."
-                    : !NAME_REGEX.test(name)
-                      ? "Name can only contain letters, numbers, spaces, hyphens, and underscores."
-                      : !hasValidEntry
-                        ? "At least one entry with a weight of 1 or more is required."
-                        : null;
-                  return (
-                    <>
-                      {hint && (
-                        <p className="text-xs text-[var(--totk-grey-200)]">{hint}</p>
-                      )}
-                      <div className="flex gap-3">
+                {/* CSV */}
+                <div className="rounded-xl border border-[var(--totk-dark-ocher)]/70 bg-[var(--botw-black)]/35 p-4">
+                  <button
+                    type="button"
+                    onClick={() => setShowCsvImport((prev) => !prev)}
+                    className="flex w-full items-center justify-between gap-2 text-left text-sm font-medium text-[var(--totk-light-green)] hover:text-[var(--totk-ivory)]"
+                  >
+                    <span>Bulk import (CSV)</span>
+                    <i className={`fa-solid fa-chevron-${showCsvImport ? "up" : "down"} text-xs opacity-80`} aria-hidden="true" />
+                  </button>
+                  {showCsvImport && (
+                    <div className="mt-4 space-y-3 border-t border-[var(--totk-dark-ocher)]/40 pt-4">
+                      <p className="text-xs text-[var(--totk-grey-200)]">
+                        First row = header (skipped). Columns: <strong>weight</strong>, <strong>flavor</strong>,{" "}
+                        <strong>item</strong>, <strong>thumbnail URL</strong>. Quote fields that contain commas.
+                      </p>
+                      <textarea
+                        value={csvImportText}
+                        onChange={(e) => setCsvImportText(e.target.value)}
+                        placeholder={"weight,flavor,item,thumbnailURL\n1,A Korok pops out...,Acorn,https://..."}
+                        rows={5}
+                        className="w-full rounded-lg border border-[var(--totk-dark-ocher)] bg-[var(--botw-warm-black)] px-3 py-2.5 text-sm text-[var(--totk-ivory)] placeholder:text-[var(--totk-grey-200)]/60 font-mono focus:ring-2 focus:ring-[var(--totk-mid-ocher)]/50 focus:border-[var(--totk-mid-ocher)]"
+                      />
+                      <div className="flex flex-wrap gap-2">
                         <button
-                          type="submit"
-                          disabled={submitting || !valid}
-                          className="rounded-lg bg-[var(--totk-mid-ocher)] px-4 py-2.5 text-sm font-bold text-[var(--totk-ivory)] transition-colors hover:bg-[var(--totk-dark-ocher)] disabled:opacity-50 focus:ring-2 focus:ring-offset-2 focus:ring-[var(--totk-mid-ocher)]/50"
+                          type="button"
+                          onClick={() => applyCsvImport(false)}
+                          disabled={!csvImportText.trim()}
+                          className="rounded-lg border border-[var(--totk-dark-ocher)] bg-[var(--totk-mid-ocher)]/30 px-3 py-2 text-sm font-medium text-[var(--totk-ivory)] transition-colors hover:bg-[var(--totk-mid-ocher)]/50 disabled:opacity-50"
                         >
-                          {submitting ? "Saving…" : editingId ? "Update" : "Create"}
+                          Replace all entries
                         </button>
                         <button
                           type="button"
-                          onClick={() => handleCloseForm()}
-                          className="rounded-lg border border-[var(--totk-dark-ocher)] px-4 py-2.5 text-sm text-[var(--totk-ivory)] transition-colors hover:bg-[var(--totk-dark-ocher)]/30 focus:ring-2 focus:ring-offset-2 focus:ring-[var(--totk-mid-ocher)]/50"
+                          onClick={() => applyCsvImport(true)}
+                          disabled={!csvImportText.trim()}
+                          className="rounded-lg border border-[var(--totk-dark-ocher)] px-3 py-2 text-sm text-[var(--totk-grey-200)] transition-colors hover:bg-[var(--totk-dark-ocher)]/30 disabled:opacity-50"
                         >
-                          Cancel
+                          Append rows
                         </button>
                       </div>
-                    </>
+                    </div>
+                  )}
+                </div>
+
+                {/* Entries */}
+                <div className="space-y-4">
+                  <div className="flex flex-wrap items-start justify-between gap-3 border-b border-[var(--totk-dark-ocher)]/40 pb-3">
+                    <div>
+                      <h2 className="text-base font-semibold text-[var(--totk-ivory)]">
+                        Entries <span className="tabular-nums text-[var(--totk-mid-ocher)]">{form.entries.length}</span>
+                      </h2>
+                      <p className="mt-1 text-xs text-[var(--totk-grey-200)]">Weight = relative chance · each row must have weight ≥ 1.</p>
+                    </div>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <input
+                        type="text"
+                        value={entryFilter}
+                        onChange={(e) => setEntryFilter(e.target.value)}
+                        placeholder="Filter rows…"
+                        className="w-44 rounded-lg border border-[var(--totk-dark-ocher)] bg-[var(--botw-warm-black)] px-3 py-2 text-sm text-[var(--totk-ivory)] placeholder:text-[var(--totk-grey-200)]/70 focus:ring-2 focus:ring-[var(--totk-mid-ocher)]/50 focus:border-[var(--totk-mid-ocher)]"
+                      />
+                      <button
+                        type="button"
+                        onClick={addEntry}
+                        className="rounded-lg border border-[var(--totk-dark-ocher)] bg-[var(--totk-mid-ocher)]/30 px-3 py-2 text-xs font-medium text-[var(--totk-ivory)] transition-colors hover:bg-[var(--totk-mid-ocher)]/50"
+                      >
+                        + Row
+                      </button>
+                      <button
+                        type="button"
+                        onClick={addFiveEntries}
+                        className="rounded-lg border border-[var(--totk-dark-ocher)] px-3 py-2 text-xs text-[var(--totk-grey-200)] transition-colors hover:bg-[var(--totk-dark-ocher)]/30"
+                      >
+                        + 5 rows
+                      </button>
+                    </div>
+                  </div>
+                  <div className="rounded-xl border border-[var(--totk-dark-ocher)]/60 overflow-hidden">
+                    <div className="max-h-[min(60vh,560px)] overflow-auto">
+                      <table className="w-full border-collapse text-sm">
+                        <thead className="sticky top-0 z-[1] bg-[var(--botw-warm-black)] shadow-[0_1px_0_0_rgba(0,0,0,0.2)]">
+                          <tr className="text-left text-xs uppercase tracking-wide text-[var(--totk-grey-200)]">
+                            <th className="w-10 py-3 pl-3 pr-1 font-semibold">#</th>
+                            <th className="w-14 py-3 px-1 font-semibold">Wt</th>
+                            <th className="min-w-[140px] py-3 px-1 font-semibold">Flavor</th>
+                            <th className="min-w-[100px] py-3 px-1 font-semibold">Item</th>
+                            <th className="min-w-[100px] py-3 px-1 font-semibold">Image URL</th>
+                            <th className="w-12 py-3 pr-3 pl-1"></th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {form.entries.map((entry, i) => {
+                            const show = entryMatchesFilter(entry, entryFilter);
+                            return (
+                              <tr
+                                key={i}
+                                className={`border-t border-[var(--totk-dark-ocher)]/25 transition-colors ${
+                                  i % 2 === 1 ? "bg-[var(--totk-dark-ocher)]/[0.12]" : "bg-transparent"
+                                } ${show ? "" : "hidden"} hover:bg-[var(--totk-mid-ocher)]/[0.08]`}
+                              >
+                                <td className="py-2 pl-3 pr-1 align-middle text-xs text-[var(--totk-grey-200)]">{i + 1}</td>
+                                <td className="py-2 px-1 align-middle">
+                                  <input
+                                    type="number"
+                                    min={1}
+                                    step={1}
+                                    value={entry.weight}
+                                    onChange={(e) => setEntry(i, "weight", e.target.value)}
+                                    className="w-full min-w-[3rem] rounded-md border border-[var(--totk-dark-ocher)] bg-[var(--botw-warm-black)] px-2 py-1.5 text-[var(--totk-ivory)] tabular-nums focus:ring-2 focus:ring-[var(--totk-mid-ocher)]/50 focus:border-[var(--totk-mid-ocher)]"
+                                    title="Weight"
+                                  />
+                                </td>
+                                <td className="py-2 px-1 align-middle min-w-0">
+                                  <input
+                                    type="text"
+                                    value={entry.flavor}
+                                    onChange={(e) => setEntry(i, "flavor", e.target.value)}
+                                    className="w-full rounded-md border border-[var(--totk-dark-ocher)] bg-[var(--botw-warm-black)] px-2 py-1.5 text-[var(--totk-ivory)] placeholder:text-[var(--totk-grey-200)]/60 focus:ring-2 focus:ring-[var(--totk-mid-ocher)]/50 focus:border-[var(--totk-mid-ocher)]"
+                                    placeholder="Flavor text"
+                                  />
+                                </td>
+                                <td className="py-2 px-1 align-middle">
+                                  <ItemNameAutocomplete
+                                    value={entry.item}
+                                    onChange={(name) => setEntry(i, "item", name)}
+                                    placeholder="Item"
+                                    className="w-full rounded-md border border-[var(--totk-dark-ocher)] bg-[var(--botw-warm-black)] px-2 py-1.5 text-[var(--totk-ivory)] placeholder:text-[var(--totk-grey-200)]/60 focus:ring-2 focus:ring-[var(--totk-mid-ocher)]/50 focus:border-[var(--totk-mid-ocher)]"
+                                  />
+                                </td>
+                                <td className="py-2 px-1 align-middle min-w-0">
+                                  <input
+                                    type="text"
+                                    value={entry.thumbnailImage}
+                                    onChange={(e) => setEntry(i, "thumbnailImage", e.target.value)}
+                                    className="w-full rounded-md border border-[var(--totk-dark-ocher)] bg-[var(--botw-warm-black)] px-2 py-1.5 text-xs text-[var(--totk-ivory)] placeholder:text-[var(--totk-grey-200)]/60 focus:ring-2 focus:ring-[var(--totk-mid-ocher)]/50 focus:border-[var(--totk-mid-ocher)]"
+                                    placeholder="https://…"
+                                  />
+                                </td>
+                                <td className="py-2 pr-3 pl-1 align-middle">
+                                  <button
+                                    type="button"
+                                    onClick={() => removeEntry(i)}
+                                    disabled={form.entries.length <= 1}
+                                    className="rounded-md border border-red-500/50 px-2 py-1.5 text-red-300 hover:bg-red-500/15 disabled:opacity-40 disabled:cursor-not-allowed"
+                                    title="Remove row"
+                                  >
+                                    <i className="fa-solid fa-trash text-xs" aria-hidden="true" />
+                                  </button>
+                                </td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                  <p className="text-xs text-[var(--totk-grey-200)]">
+                    Filter hides non-matching rows; all rows stay saved. Hover flavor or scroll horizontally on small screens if needed.
+                  </p>
+
+                  {/* Validation hint */}
+                  {(() => {
+                    const nameTrim = form.name.trim();
+                    const hasValidEntry = form.entries.some((e) => parseInt(e.weight, 10) >= 1);
+                    const hint = !nameTrim
+                      ? "Name is required."
+                      : !NAME_REGEX.test(nameTrim)
+                        ? "Name can only contain letters, numbers, spaces, hyphens, and underscores."
+                        : !hasValidEntry
+                          ? "At least one row with weight ≥ 1."
+                          : null;
+                    return hint ? (
+                      <p className="text-xs text-amber-100/95 bg-amber-500/[0.12] rounded-lg px-3 py-2 border border-amber-500/35">{hint}</p>
+                    ) : null;
+                  })()}
+                </div>
+              </div>
+
+              {/* Sticky actions */}
+              <div className="sticky bottom-0 z-10 border-t border-[var(--totk-dark-ocher)] bg-gradient-to-t from-[var(--botw-black)] via-[var(--botw-black)]/95 to-[var(--botw-warm-black)]/90 backdrop-blur-sm px-5 py-4 sm:px-7">
+                {(() => {
+                  const nameTrim = form.name.trim();
+                  const hasValidEntry = form.entries.some((e) => parseInt(e.weight, 10) >= 1);
+                  const valid = nameTrim && NAME_REGEX.test(nameTrim) && hasValidEntry;
+                  return (
+                    <div className="flex flex-wrap items-center justify-end gap-3">
+                      <button
+                        type="button"
+                        onClick={() => handleCloseForm()}
+                        className="rounded-lg border border-[var(--totk-dark-ocher)] px-5 py-2.5 text-sm font-medium text-[var(--totk-grey-200)] transition-colors hover:bg-[var(--totk-dark-ocher)]/40"
+                      >
+                        Cancel
+                      </button>
+                      <button
+                        type="submit"
+                        disabled={submitting || !valid}
+                        className="rounded-lg bg-[var(--totk-mid-ocher)] px-6 py-2.5 text-sm font-bold text-[var(--totk-ivory)] shadow-lg transition-colors hover:bg-[var(--totk-dark-ocher)] disabled:opacity-50 focus:outline-none focus:ring-2 focus:ring-[var(--totk-mid-ocher)] focus:ring-offset-2 focus:ring-offset-[var(--botw-black)]"
+                      >
+                        {submitting ? "Saving…" : editingId ? "Save changes" : "Create table roll"}
+                      </button>
+                    </div>
                   );
                 })()}
               </div>
@@ -996,6 +1074,7 @@ export default function AdminTablerollsPage() {
           </section>
         )}
 
+        {!showForm && (
         <section className="rounded-xl border-2 border-[var(--totk-dark-ocher)] bg-gradient-to-br from-[var(--botw-warm-black)] to-[var(--botw-black)] p-5 sm:p-6 shadow-lg">
             <div className="flex flex-wrap items-center justify-between gap-4 mb-4">
               <div>
@@ -1228,6 +1307,7 @@ export default function AdminTablerollsPage() {
             </div>
           )}
         </section>
+        )}
 
         <Modal
           open={deleteConfirmId != null}

@@ -169,7 +169,7 @@ export function buildQuestEmbed(quest: QuestDoc): Record<string, unknown> {
   const participationLines: string[] = [];
   if (participantCap != null) participationLines.push(`👥 Participation cap: ${participantCap}`);
   if (minRequirements && minRequirements !== "0") participationLines.push(`📝 Participation Requirement: ${minRequirements}`);
-  if (questType === "RP") participationLines.push(`📝 Post requirement: ${postReq}`);
+  if (questType === "RP" || questType === "Interactive / RP") participationLines.push(`📝 Post requirement: ${postReq}`);
   if (tableroll)
     participationLines.push(
       `🎲 Table roll${tableroll.includes(",") ? "s" : ""}: **${tableroll}**`

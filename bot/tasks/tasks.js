@@ -1252,7 +1252,7 @@ function buildQuestPostEmbed(quest) {
   const participationLines = [];
   if (participantCap != null) participationLines.push(`👥 Participation cap: ${participantCap}`);
   if (minRequirements && minRequirements !== '0') participationLines.push(`📝 Participation Requirement: ${minRequirements}`);
-  if (questType === 'RP') participationLines.push(`📝 Post requirement: ${postReq}`);
+  if (questType === 'RP' || questType === 'Interactive / RP') participationLines.push(`📝 Post requirement: ${postReq}`);
   if (tableroll) participationLines.push(`🎲 Table roll${tableroll.includes(',') ? 's' : ''}: **${tableroll}**`);
   const participationValue = participationLines.length ? participationLines.join('\n') : '—';
 

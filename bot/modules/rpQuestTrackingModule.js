@@ -63,9 +63,10 @@ const VALIDATION_REGEX = {
     KEYBOARD_MASH: /^[qwertyuiopasdfghjklzxcvbnm]{10,}$/i
 };
 
+const QUEST_SEARCH_TYPES = [QUEST_TYPES.RP, QUEST_TYPES.INTERACTIVE_RP];
+
 const QUEST_SEARCH_CRITERIA = {
     STATUS: 'active',
-    QUEST_TYPE: QUEST_TYPES.RP
 };
 
 // ============================================================================
@@ -126,7 +127,11 @@ function isRPQuestThread(channel) {
 }
 
 function isValidRPQuest(quest) {
-    return quest && quest.questType === QUEST_SEARCH_CRITERIA.QUEST_TYPE && quest.status === QUEST_SEARCH_CRITERIA.STATUS;
+    return (
+        quest &&
+        QUEST_SEARCH_TYPES.includes(quest.questType) &&
+        quest.status === 'active'
+    );
 }
 
 // ------------------- Process Valid RP Post -------------------
@@ -249,8 +254,8 @@ const QUEST_CATEGORY_ID = '717090310911426590';
 async function findQuestByThreadId(threadId, options = {}) {
     try {
         const quest = await Quest.findOne({
-            status: QUEST_SEARCH_CRITERIA.STATUS,
-            questType: QUEST_SEARCH_CRITERIA.QUEST_TYPE,
+            status: 'active',
+            questType: { $in: QUEST_SEARCH_TYPES },
             $or: [
                 { rpThreadId: threadId },
                 { rpThreadParentChannel: threadId }
@@ -281,9 +286,9 @@ async function findQuestByThreadId(threadId, options = {}) {
 // ------------------- Find Quest by Participant Thread ID -------------------
 async function findQuestByParticipantThreadId(threadId) {
     try {
-        const quests = await Quest.find({ 
-            status: QUEST_SEARCH_CRITERIA.STATUS,
-            questType: QUEST_SEARCH_CRITERIA.QUEST_TYPE
+        const quests = await Quest.find({
+            status: 'active',
+            questType: { $in: QUEST_SEARCH_TYPES },
         });
 
         for (const quest of quests) {
@@ -478,8 +483,10 @@ async function getRPQuestStatus(questID) {
             throw new Error(`Quest ${questID} not found`);
         }
 
-        if (quest.questType !== QUEST_SEARCH_CRITERIA.QUEST_TYPE) {
-            throw new Error(`Quest ${questID} is not an RP quest`);
+        const isTrackedType =
+            quest.questType === QUEST_TYPES.RP || quest.questType === QUEST_TYPES.INTERACTIVE_RP;
+        if (!isTrackedType) {
+            throw new Error(`Quest ${questID} is not an RP or Interactive / RP quest`);
         }
 
         const participants = Array.from(quest.participants.values());

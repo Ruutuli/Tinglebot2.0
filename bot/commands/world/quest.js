@@ -232,9 +232,9 @@ module.exports = {
   // Process quest join
   await this.processQuestJoin(interaction, quest, userID, characterName);
 
-  // Handle RP quest specific requirements
-  if (quest.questType.toLowerCase() === 'rp') {
-   await this.handleRPQuestJoin(quest, character);
+  // Handle RP / Interactive+RP quest specific requirements (village lock, thread)
+  if (quest.questType === QUEST_TYPES.RP || quest.questType === QUEST_TYPES.INTERACTIVE_RP) {
+    await this.handleRPQuestJoin(quest, character);
   }
 
   await quest.save();
@@ -1195,10 +1195,13 @@ formatQuestCount(count = 0) {
     };
    }
 
-   // Update quest type specific fields
+   // Update quest type specific fields (RP boards + roll progress for hybrids)
    if (quest.questType === 'RP') {
     this.updateRPQuestFields(quest, embed);
-   } else if (quest.questType === 'Interactive') {
+   } else if (quest.questType === QUEST_TYPES.INTERACTIVE) {
+    await this.updateInteractiveQuestFields(quest, embed);
+   } else if (quest.questType === QUEST_TYPES.INTERACTIVE_RP) {
+    this.updateRPQuestFields(quest, embed);
     await this.updateInteractiveQuestFields(quest, embed);
    }
 
@@ -1404,9 +1407,9 @@ formatQuestCount(count = 0) {
     });
    }
 
-   if (quest.questType !== QUEST_TYPES.RP && quest.questType !== QUEST_TYPES.INTERACTIVE) {
+   if (quest.questType !== QUEST_TYPES.RP && quest.questType !== QUEST_TYPES.INTERACTIVE && quest.questType !== QUEST_TYPES.INTERACTIVE_RP) {
     return interaction.reply({
-     content: "[quest.js]❌ This command only works with RP and Interactive quests. The specified quest is not an RP or Interactive quest.",
+     content: "[quest.js]❌ This command only works with RP, Interactive, and Interactive / RP quests. The specified quest type is not supported.",
      flags: MessageFlags.Ephemeral,
     });
    }
@@ -1879,7 +1882,10 @@ formatQuestCount(count = 0) {
 
  async addUserToRPThread(interaction, quest, userID, userName) {
   const threadId = quest.rpThreadId || quest.rpThreadParentChannel;
-  if (quest.questType.toLowerCase() === 'rp' && threadId) {
+  if (
+    (quest.questType.toLowerCase() === 'rp' || quest.questType === QUEST_TYPES.INTERACTIVE_RP) &&
+    threadId
+  ) {
    try {
     const rpThread = interaction.guild.channels.cache.get(threadId);
     if (rpThread && rpThread.isThread()) {
@@ -1929,10 +1935,9 @@ formatQuestCount(count = 0) {
   const questTypeCheck = await this.handleQuestTypeRulesValidation(interaction, quest);
   if (!questTypeCheck) return { success: false };
 
-  // For RP quests, validate character is in the correct village
-  if (quest.questType.toLowerCase() === QUEST_TYPES.RP.toLowerCase()) {
-   const villageCheck = await this.handleRPQuestVillageValidation(interaction, quest, character);
-   if (!villageCheck) return { success: false };
+  if (quest.questType === QUEST_TYPES.RP || quest.questType === QUEST_TYPES.INTERACTIVE_RP) {
+    const villageCheck = await this.handleRPQuestVillageValidation(interaction, quest, character);
+    if (!villageCheck) return { success: false };
   }
 
   return { success: true, quest, character };
@@ -2061,6 +2066,7 @@ formatQuestCount(count = 0) {
    [QUEST_TYPES.ART.toLowerCase()]: '🎨',
    [QUEST_TYPES.WRITING.toLowerCase()]: '✍️',
    [QUEST_TYPES.INTERACTIVE.toLowerCase()]: '🎮',
+   [QUEST_TYPES.INTERACTIVE_RP.toLowerCase()]: '🎭🎮',
    [QUEST_TYPES.ART_WRITING.toLowerCase()]: '🎨✍️'
   };
 
@@ -2137,6 +2143,7 @@ formatQuestCount(count = 0) {
    [QUEST_TYPES.ART.toLowerCase()]: '🎨',
    [QUEST_TYPES.WRITING.toLowerCase()]: '✍️',
    [QUEST_TYPES.INTERACTIVE.toLowerCase()]: '🎮',
+   [QUEST_TYPES.INTERACTIVE_RP.toLowerCase()]: '🎭🎮',
    [QUEST_TYPES.ART_WRITING.toLowerCase()]: '🎨✍️'
   };
   
@@ -2153,10 +2160,20 @@ formatQuestCount(count = 0) {
 📍 Location: ${quest.location}`;
 
   // Add quest-specific progress info
-  if (quest.questType.toLowerCase() === QUEST_TYPES.RP.toLowerCase() && quest.postRequirement) {
+  if (
+    (quest.questType.toLowerCase() === QUEST_TYPES.RP.toLowerCase() || quest.questType === QUEST_TYPES.INTERACTIVE_RP) &&
+    quest.postRequirement
+  ) {
    const rpPostCount = participant.rpPostCount || 0;
    const progress = Math.min((rpPostCount / quest.postRequirement) * 100, 100);
    questInfo += `\n📝 RP Progress: ${rpPostCount}/${quest.postRequirement} posts (${Math.round(progress)}%)`;
+  }
+
+  if (quest.questType === QUEST_TYPES.INTERACTIVE || quest.questType === QUEST_TYPES.INTERACTIVE_RP) {
+   const reqR = quest.requiredRolls || 1;
+   const sr = participant.successfulRolls || 0;
+   const rollPct = Math.min((sr / reqR) * 100, 100);
+   questInfo += `\n🎲 Rolls: ${sr}/${reqR} (${Math.round(rollPct)}%)`;
   }
 
   if (quest.participantCap) {
@@ -2193,7 +2210,7 @@ formatQuestCount(count = 0) {
   );
   
   embed.addFields(
-   { name: quest.questType === 'RP' ? 'Post Requirement' : 'Roll Requirement', value: `${requirementValue} ${requirementText}`, inline: true },
+   { name: quest.questType === QUEST_TYPES.INTERACTIVE_RP ? "Requirements" : (quest.questType === 'RP' ? 'Post Requirement' : 'Roll Requirement'), value: `${requirementValue} ${requirementText}`, inline: true },
    { name: 'Participants', value: participants.length.toString(), inline: true }
   );
   
@@ -2207,6 +2224,8 @@ formatQuestCount(count = 0) {
   name:
    quest.questType === 'RP'
     ? '__❌ Posts That DON\'T Count__'
+    : quest.questType === QUEST_TYPES.INTERACTIVE_RP
+      ? '__📋 Post & roll rules__'
     : isBlupeeInteractiveQuest(quest)
       ? '__✨ Blupee Instructions__'
       : '__🎲 Roll Instructions__',
@@ -2215,13 +2234,13 @@ formatQuestCount(count = 0) {
   });
   
   embed.addFields({
-   name: quest.questType === 'RP' ? '__💬 Meta Comments__' : '__📊 Quest Progress__',
+   name: quest.questType === 'RP' ? '__💬 Meta Comments__' : quest.questType === QUEST_TYPES.INTERACTIVE_RP ? '__📊 Quest progress__' : '__📊 Quest Progress__',
    value: this.getQuestMetaInfo(quest),
    inline: false
   });
 
-  // Add table roll information for RP quests if applicable
-  if (quest.questType === 'RP' && quest.tableroll) {
+  // Add table roll information for RP / hybrid when a table is linked
+  if ((quest.questType === 'RP' || quest.questType === QUEST_TYPES.INTERACTIVE_RP) && quest.tableroll) {
    embed.addFields({
     name: '__🎲 Optional Table Roll__',
     value: `This RP quest has an optional table roll available!\n• Use </tableroll roll:1389946995468271729> to roll on **${quest.tableroll}** table\n• Table rolls are optional and don't affect quest completion\n• They may provide additional rewards or flavor text`,
@@ -2235,7 +2254,14 @@ formatQuestCount(count = 0) {
  getQuestRequirements(quest) {
   if (quest.questType === QUEST_TYPES.RP) {
    return { requirementValue: quest.postRequirement || 15, requirementText: "posts" };
-  } else if (quest.questType === QUEST_TYPES.INTERACTIVE) {
+  }
+  if (quest.questType === QUEST_TYPES.INTERACTIVE_RP) {
+    return {
+      requirementValue: `${quest.postRequirement || 15} posts & ${quest.requiredRolls || 1} successful rolls`,
+      requirementText: "(both required)",
+    };
+  }
+  if (quest.questType === QUEST_TYPES.INTERACTIVE) {
    return { requirementValue: quest.requiredRolls || 1, requirementText: "successful rolls" };
   }
   return { requirementValue: 0, requirementText: "" };
@@ -2263,6 +2289,15 @@ formatQuestCount(count = 0) {
   if (participant.progress === 'disqualified') {
    status = "🚫";
    statusText = ` (DISQUALIFIED: ${participant.disqualificationReason || 'Left quest village'})`;
+  } else if (quest.questType === QUEST_TYPES.INTERACTIVE_RP) {
+   const postsReq = quest.postRequirement || 15;
+   const rollsReq = quest.requiredRolls || 1;
+   const postsOk = participant.rpPostCount >= postsReq;
+   const rollsOk = participant.successfulRolls >= rollsReq;
+   if (postsOk && rollsOk) {
+    status = "✅";
+   }
+   progressText = `📝 ${participant.rpPostCount}/${postsReq} posts · 🎲 ${participant.successfulRolls}/${rollsReq} rolls`;
   } else if (quest.questType === QUEST_TYPES.RP) {
    if (participant.rpPostCount >= requirementValue) {
     status = "✅";
@@ -2283,6 +2318,14 @@ formatQuestCount(count = 0) {
  },
 
  getQuestInstructions(quest, requirementValue) {
+  if (quest.questType === QUEST_TYPES.INTERACTIVE_RP) {
+   return (
+    `**RP posts (valid):** quality RP in the quest thread; short/reaction-only posts don't count (see server RP rules).\n\n` +
+    `**Posts that don't count:**\n• Messages under 20 characters\n• Just emojis or reactions\n• GIFs/stickers without text\n• Messages with "))" (reaction posts)\n• Just numbers, symbols, or punctuation\n• Single words repeated multiple times\n• URLs, mentions, or pings only\n• Keyboard mashing or spam\n• Messages with less than 30% letters\n\n` +
+    `**Table rolls:** follow the quest's roll rules. You need **both** enough valid posts **and** enough successful rolls (see requirements).`
+   );
+  }
+
   if (quest.questType === QUEST_TYPES.RP) {
    return `• Messages under 20 characters\n• Just emojis or reactions\n• GIFs/stickers without text\n• Messages with "))" (reaction posts)\n• Just numbers, symbols, or punctuation\n• Single words repeated multiple times\n• URLs, mentions, or pings only\n• Keyboard mashing or spam\n• Messages with less than 30% letters`;
   }
@@ -2296,6 +2339,13 @@ formatQuestCount(count = 0) {
  },
 
  getQuestMetaInfo(quest) {
+  if (quest.questType === QUEST_TYPES.INTERACTIVE_RP) {
+   return (
+    `**RP:** For meta discussion, use gossip/mossy stone or format thread comments "like this ))" — those don't count as RP posts.\n` +
+    `**Rolls:** Use \`/tableroll roll\` on the quest's table(s). Progress completes when **both** post and roll requirements are met.`
+   );
+  }
+
   if (quest.questType === QUEST_TYPES.RP) {
    return `If you want to talk outside of the RP for meta reasons, please use the gossip and mossy stone or format your comments in this thread "like this text lorem ipsum yada yada ))" - messages with this format don't count as RP posts.`;
   }

@@ -31,6 +31,7 @@ const QUEST_TYPES = {
     ART: 'Art',
     WRITING: 'Writing',
     INTERACTIVE: 'Interactive',
+    INTERACTIVE_RP: 'Interactive / RP',
     RP: 'RP',
     ART_WRITING: 'Art / Writing'
 };
@@ -270,9 +271,16 @@ async function getQuestNotificationChannel(quest, participant) {
             return participant.rpThreadId;
         }
 
-        // Art, Writing, Art/Writing, and Interactive quest completion notifications always go to Sheikah Slate (641858948802150400)
+        // Art, Writing, Art/Writing, Interactive, and Interactive/RP quest completion notifications...
         const questType = (quest.questType || '').toLowerCase();
-        if (questType === 'art' || questType === 'writing' || questType === 'art / writing' || questType === 'art/writing' || questType === 'interactive') {
+        if (
+            questType === 'art' ||
+            questType === 'writing' ||
+            questType === 'art / writing' ||
+            questType === 'art/writing' ||
+            questType === 'interactive' ||
+            questType === 'interactive / rp'
+        ) {
             return SHEIKAH_SLATE_CHANNEL_ID;
         }
 
@@ -339,7 +347,7 @@ async function createCompletionNotificationEmbed(quest, participant) {
           });
         }
 
-        if (quest.requiredVillage && quest.questType === 'RP') {
+        if (quest.requiredVillage && (quest.questType === 'RP' || quest.questType === QUEST_TYPES.INTERACTIVE_RP)) {
             embed.addFields({
                 name: 'Quest Village',
                 value: quest.requiredVillage.charAt(0).toUpperCase() + quest.requiredVillage.slice(1),
@@ -578,6 +586,17 @@ const QUEST_TYPE_HANDLERS = {
         },
         getTitle: () => '🎨✍️ Art & Writing Quest Completed!',
         getDescription: (characterName) => `**${characterName}** has successfully submitted for the quest!`
+    },
+    [QUEST_TYPES.INTERACTIVE_RP]: {
+        checkRequirements: () => true,
+        getProgressField: (participant, quest) => ({
+            name: 'Progress',
+            value: `📝 Posts ${participant.rpPostCount}/${quest.postRequirement || DEFAULT_POST_REQUIREMENT}\n🎲 Rolls ${participant.successfulRolls}/${quest.requiredRolls || DEFAULT_ROLL_REQUIREMENT}`,
+            inline: false,
+        }),
+        getTitle: () => '🎭🎮 Interactive / RP Quest Completed!',
+        getDescription: (characterName) =>
+            `**${characterName}** has met the RP posts and table roll requirements for this quest!`,
     },
     [QUEST_TYPES.INTERACTIVE]: {
         checkRequirements: () => true, // Interactive quests have different completion logic
@@ -830,7 +849,7 @@ async function buildQuestRewardContext(quest, participants = []) {
         inspectedParticipants: 0
     };
 
-    if (quest?.questType !== QUEST_TYPES.RP) {
+    if (quest?.questType !== QUEST_TYPES.RP && quest?.questType !== QUEST_TYPES.INTERACTIVE_RP) {
         logger.debug(
             'QUEST',
             `[Entertainer bonus] Skipped: Ballad of the Goddess is RP quests only (questType=${quest?.questType || 'unknown'})`
@@ -2354,7 +2373,7 @@ async function validateRPQuestVillage(interaction, quest, character) {
 
 // ------------------- Check Character Village for Quest ------------------
 async function checkCharacterVillageForQuest(character, quest) {
-    if (quest.questType !== QUEST_TYPES.RP) {
+    if (quest.questType !== QUEST_TYPES.RP && quest.questType !== QUEST_TYPES.INTERACTIVE_RP) {
         return { valid: true, reason: 'Not an RP quest' };
     }
     
@@ -2423,6 +2442,7 @@ async function validateQuestTypeRules(quest) {
     
     switch (quest.questType.toLowerCase()) {
         case QUEST_TYPES.RP.toLowerCase():
+        case QUEST_TYPES.INTERACTIVE_RP.toLowerCase():
             if (quest.posted) {
                 const questPostDate = new Date(quest.date);
                 const rpSignupDeadline = new Date(

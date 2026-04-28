@@ -98,7 +98,15 @@ const QUEST_TABS: { value: QuestTab; label: string; icon: string }[] = [
   { value: "list", label: "Quest list", icon: "fa-list" },
 ];
 
-const QUEST_TYPES = ["Art", "Writing", "Interactive", "RP", "Art / Writing"] as const;
+const QUEST_TYPES = ["Art", "Writing", "Interactive", "Interactive / RP", "RP", "Art / Writing"] as const;
+
+function isInteractiveStyleQuestType(t: string): boolean {
+  return t === "Interactive" || t === "Interactive / RP";
+}
+
+function isRpStyleQuestType(t: string): boolean {
+  return t === "RP" || t === "Interactive / RP";
+}
 const STATUSES = ["draft", "pending", "active", "completed"] as const;
 const STATUS_OPTIONS: { value: string; label: string }[] = [
   { value: "draft", label: "Draft" },
@@ -330,7 +338,7 @@ function viewQuestToPreviewBody(q: QuestRecord): Record<string, unknown> {
   let namesResolved = qr;
   if (
     !namesResolved.length &&
-    q.questType === "Interactive" &&
+    isInteractiveStyleQuestType(String(q.questType ?? "")) &&
     typeof legacyRoll === "string" &&
     legacyRoll.trim()
   ) {
@@ -529,7 +537,7 @@ function questToForm(q: QuestRecord): FormState {
   const legacyStr = legacyRoll != null ? String(legacyRoll).trim() : "";
   const qt = String(q.questType ?? "RP");
   const tablerollForm =
-    qt === "Interactive"
+    isInteractiveStyleQuestType(qt)
       ? qr.length > 0
         ? qr.join(", ")
         : legacyStr
@@ -651,7 +659,7 @@ function formToBody(f: FormState, isEdit: boolean): Record<string, unknown> {
     artWritingMode: f.artWritingMode === "either" ? "either" : "both",
   };
 
-  if (f.questType === "Interactive") {
+  if (isInteractiveStyleQuestType(f.questType)) {
     const tabs = parseInteractiveTablerollTokens(f.tableroll);
     body.tableRollNames = tabs;
     body.tableRollName = tabs[0] ?? null;
@@ -891,7 +899,7 @@ function QuestEmbedPreview({ form }: { form: FormState }) {
                 <span className="whitespace-pre-line">{form.minRequirements.trim()}</span>
               </div>
             ) : null}
-            {form.questType === "RP" && (
+            {isRpStyleQuestType(form.questType) && (
               <div>📝 Post requirement: {postReqVal}</div>
             )}
             {form.tableroll.trim() && (
@@ -900,7 +908,7 @@ function QuestEmbedPreview({ form }: { form: FormState }) {
                 <span className="font-medium">{form.tableroll.trim()}</span>
               </div>
             )}
-            {!cap && (!form.minRequirements.trim() || form.minRequirements.trim() === "0") && form.questType !== "RP" && !form.tableroll.trim() && <div>—</div>}
+            {!cap && (!form.minRequirements.trim() || form.minRequirements.trim() === "0") && !isRpStyleQuestType(form.questType) && !form.tableroll.trim() && <div>—</div>}
           </div>
         </div>
 
@@ -1554,8 +1562,8 @@ export default function AdminQuestsPage() {
                             onChange={(e) => {
                               const newType = e.target.value;
                               setField("questType", newType);
-                              if (newType === "RP" && !form.rules.trim()) setField("rules", DEFAULT_RP_RULES);
-                              if (newType !== "RP") setField("rules", "");
+                              if ((newType === "RP" || newType === "Interactive / RP") && !form.rules.trim()) setField("rules", DEFAULT_RP_RULES);
+                              if (newType !== "RP" && newType !== "Interactive / RP") setField("rules", "");
                             }}
                             className="w-full rounded border border-[var(--totk-dark-ocher)] bg-[var(--botw-warm-black)] pl-3 pr-8 py-2 text-[var(--totk-ivory)]"
                           >
@@ -1754,7 +1762,7 @@ export default function AdminQuestsPage() {
                             <p className="mt-1 text-xs text-[var(--totk-grey-200)]">Choose whether participants must submit both, or just one of art or writing.</p>
                           </div>
                         )}
-                        {form.questType === "RP" && (
+                        {isRpStyleQuestType(form.questType) && (
                           <>
                             <div>
                               <label className="mb-1 block text-sm font-medium text-[var(--totk-grey-200)]">Post requirement</label>
@@ -1774,6 +1782,7 @@ export default function AdminQuestsPage() {
                                 <p className="mt-1 text-xs text-[var(--totk-grey-200)]">Paste the Discord thread ID if you created the thread yourself (e.g. after a failed or wrong-type auto-create). Leave empty to use auto-created or existing.</p>
                               </div>
                             )}
+                            {form.questType === "RP" && (
                             <div>
                               <label className="mb-1 block text-sm font-medium text-[var(--totk-grey-200)]">Table roll (optional)</label>
                               <select value={form.tableroll} onChange={(e) => setField("tableroll", e.target.value)} className="w-full rounded border border-[var(--totk-dark-ocher)] bg-[var(--botw-warm-black)] pl-3 pr-8 py-2 text-[var(--totk-ivory)]">
@@ -1783,9 +1792,10 @@ export default function AdminQuestsPage() {
                                 ))}
                               </select>
                             </div>
+                            )}
                           </>
                         )}
-                        {form.questType === "Interactive" && (
+                        {isInteractiveStyleQuestType(form.questType) && (
                           <>
                             <div className="sm:col-span-2">
                               <label className="mb-1 block text-sm font-medium text-[var(--totk-grey-200)]">Table rolls</label>
@@ -2111,7 +2121,7 @@ export default function AdminQuestsPage() {
                               <th className="py-2 pl-3 pr-2 text-[var(--totk-grey-200)] font-semibold">Mark completed</th>
                               <th className="py-2 pr-3 text-[var(--totk-grey-200)] font-semibold">User</th>
                               <th className="py-2 pr-3 text-[var(--totk-grey-200)] font-semibold">Character</th>
-                              {manageQuest.questType === "RP" && (
+                              {isRpStyleQuestType(manageQuest.questType ?? "") && (
                                 <th className="py-2 pr-3 text-[var(--totk-grey-200)] font-semibold">Posts (min)</th>
                               )}
                               <th className="py-2 pr-3 text-[var(--totk-grey-200)] font-semibold min-w-[10rem]">Status</th>
@@ -2173,7 +2183,7 @@ export default function AdminQuestsPage() {
                                   <td className="py-2 pr-3 font-medium text-[var(--totk-ivory)]">
                                     {p?.characterName ?? "—"}
                                   </td>
-                                  {manageQuest.questType === "RP" && (() => {
+                                  {isRpStyleQuestType(manageQuest.questType) && (() => {
                                     const current = p?.rpPostCount ?? 0;
                                     const required = typeof manageQuest.postRequirement === "number" ? manageQuest.postRequirement : (manageQuest.postRequirement != null ? Number(manageQuest.postRequirement) : 15);
                                     return (

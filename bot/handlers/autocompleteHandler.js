@@ -4475,7 +4475,7 @@ async function handleQuestIdAutocomplete(interaction, focusedOption, options = {
       }
 
       if (rpOnly) {
-        quests = quests.filter((q) => q.questType === 'RP');
+        quests = quests.filter((q) => q.questType === 'RP' || q.questType === 'Interactive / RP');
       }
 
       const choices = quests.map(quest => ({

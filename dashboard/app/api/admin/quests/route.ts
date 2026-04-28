@@ -10,7 +10,7 @@ import { getSession, isAdminUser } from "@/lib/session";
 import { generateUniqueId } from "@/lib/uniqueId";
 import { logger } from "@/utils/logger";
 
-const QUEST_TYPES = ["Art", "Writing", "Interactive", "RP", "Art / Writing"] as const;
+const QUEST_TYPES = ["Art", "Writing", "Interactive", "Interactive / RP", "RP", "Art / Writing"] as const;
 const STATUSES = ["draft", "pending", "active", "completed"] as const;
 
 type QuestType = (typeof QUEST_TYPES)[number];
@@ -96,7 +96,10 @@ function resolveTableRollFromBody(
   const tb = typeof body.tableroll === "string" ? body.tableroll.trim() : "";
   const legacy = tn || tb;
 
-  if (questType === "Interactive") {
+  const interactiveStyle =
+    questType === "Interactive" || questType === "Interactive / RP";
+
+  if (interactiveStyle) {
     if (names.length === 0 && legacy) {
       names = [
         ...new Set(
@@ -111,7 +114,7 @@ function resolveTableRollFromBody(
 
   const first = names[0] ?? null;
   const tablerollStr =
-    questType === "Interactive"
+    interactiveStyle
       ? names.length === 0
         ? null
         : names.join(", ")

@@ -19,7 +19,11 @@ const Character = require('./CharacterModel');
 const basicQuestFields = {
     title: { type: String, required: true },
     description: { type: String, required: true },
-    questType: { type: String, required: true, enum: ['Art', 'Writing', 'Interactive', 'RP', 'Art / Writing'] },
+    questType: {
+        type: String,
+        required: true,
+        enum: ['Art', 'Writing', 'Interactive', 'Interactive / RP', 'RP', 'Art / Writing'],
+    },
     location: { type: String, required: true },
     timeLimit: { type: String, required: true },
     minRequirements: { type: Schema.Types.Mixed, default: 0 }, // Can be number or table roll config
@@ -258,9 +262,20 @@ const QUEST_TYPES = {
     ART: 'Art',
     WRITING: 'Writing',
     INTERACTIVE: 'Interactive',
+    INTERACTIVE_RP: 'Interactive / RP',
     RP: 'RP',
-    ART_WRITING: 'Art / Writing'
+    ART_WRITING: 'Art / Writing',
 };
+
+/** Table-roll quest progress (Interactive or hybrid Interactive / RP). */
+function questTypeUsesInteractiveRolls(qt) {
+    return qt === QUEST_TYPES.INTERACTIVE || qt === QUEST_TYPES.INTERACTIVE_RP;
+}
+
+/** RP thread posts + village tracking (RP or hybrid Interactive / RP). */
+function questTypeUsesRpFlow(qt) {
+    return qt === QUEST_TYPES.RP || qt === QUEST_TYPES.INTERACTIVE_RP;
+}
 
 // Submission Types - moved from questRewardModule to avoid circular dependency
 const SUBMISSION_TYPES = {
@@ -397,7 +412,14 @@ const DEFAULT_ROLL_REQUIREMENT = 1;
 function meetsRequirements(participant, quest) {
     const { questType, postRequirement, requiredRolls } = quest;
     const { rpPostCount, submissions, successfulRolls } = participant;
-    
+
+    if (questType === QUEST_TYPES.INTERACTIVE_RP) {
+        const postsOk = rpPostCount >= (postRequirement || DEFAULT_POST_REQUIREMENT);
+        const rollsOk =
+            successfulRolls >= (requiredRolls != null ? requiredRolls : DEFAULT_ROLL_REQUIREMENT);
+        return postsOk && rollsOk;
+    }
+
     if (questType === QUEST_TYPES.RP) {
         return rpPostCount >= (postRequirement || DEFAULT_POST_REQUIREMENT);
     }
@@ -653,7 +675,7 @@ questSchema.methods.disqualifyParticipant = function(userId, reason) {
 };
 
 questSchema.methods.checkAllParticipantsVillages = async function() {
-    if (this.questType !== 'RP' || !this.requiredVillage) {
+    if (!questTypeUsesRpFlow(this.questType) || !this.requiredVillage) {
         return { checked: 0, disqualified: 0 };
     }
     
@@ -687,7 +709,7 @@ questSchema.methods.checkAllParticipantsVillages = async function() {
 
 // ------------------- Check Village Violations for Completed Participants ------------------
 questSchema.methods.checkCompletedParticipantsVillages = async function() {
-    if (this.questType !== 'RP' || !this.requiredVillage) {
+    if (!questTypeUsesRpFlow(this.questType) || !this.requiredVillage) {
         return { checked: 0, disqualified: 0 };
     }
     
@@ -716,7 +738,7 @@ questSchema.methods.checkCompletedParticipantsVillages = async function() {
 
 // ------------------- Get Village Tracking Statistics ------------------
 questSchema.methods.getVillageTrackingStats = function() {
-    if (this.questType !== 'RP' || !this.requiredVillage) {
+    if (!questTypeUsesRpFlow(this.questType) || !this.requiredVillage) {
         return { totalParticipants: 0, activeParticipants: 0, completedParticipants: 0, disqualifiedParticipants: 0 };
     }
     
@@ -737,7 +759,7 @@ questSchema.methods.checkParticipantVillage = async function(userId) {
     const participant = this.getParticipant(userId);
     if (!participant) return { valid: false, reason: 'Participant not found' };
     
-    if (this.questType !== 'RP') {
+    if (!questTypeUsesRpFlow(this.questType)) {
         return { valid: true, reason: 'Not an RP quest' };
     }
     
@@ -961,7 +983,7 @@ questSchema.methods.completeFromTableRoll = async function(userId, rollResult) {
             throw new Error(`User ${userId} is not a participant in quest ${this.questID}`);
         }
         
-        if (this.questType !== 'Interactive') {
+        if (!questTypeUsesInteractiveRolls(this.questType)) {
             throw new Error(`Quest ${this.questID} is not an Interactive quest`);
         }
         
@@ -1008,7 +1030,7 @@ questSchema.methods.completeFromTableRoll = async function(userId, rollResult) {
 
 // ------------------- Interactive Quest Table Roll Methods ------------------
 questSchema.methods.setTableRollConfig = function(tableRollNameOrNames, config = {}) {
-    if (this.questType !== 'Interactive') {
+    if (!questTypeUsesInteractiveRolls(this.questType)) {
         throw new Error(`Quest ${this.questID} is not an Interactive quest`);
     }
     
@@ -1170,7 +1192,7 @@ questSchema.methods.processTableRoll = async function(userId, rollResult) {
             throw new Error(`User ${userId} is not a participant in quest ${this.questID}`);
         }
         
-        if (this.questType !== 'Interactive') {
+        if (!questTypeUsesInteractiveRolls(this.questType)) {
             throw new Error(`Quest ${this.questID} is not an Interactive quest`);
         }
         
@@ -1204,14 +1226,22 @@ questSchema.methods.processTableRoll = async function(userId, rollResult) {
         await this.save();
         
         console.log(`[QuestModel.js] ✅ Table roll processed for ${participant.characterName} in quest ${this.questID} - Success: ${isSuccess}`);
-        
-        return { 
-            success: true, 
-            rollEntry, 
+
+        const reqRolls =
+            this.requiredRolls != null && Number.isFinite(Number(this.requiredRolls))
+                ? Number(this.requiredRolls)
+                : DEFAULT_ROLL_REQUIREMENT;
+        const rollsMet = participant.successfulRolls >= reqRolls;
+        const questCompleted =
+            this.questType === QUEST_TYPES.INTERACTIVE_RP ? meetsRequirements(participant, this) : rollsMet;
+
+        return {
+            success: true,
+            rollEntry,
             isSuccess,
             totalSuccessfulRolls: participant.successfulRolls,
             requiredRolls: this.requiredRolls,
-            questCompleted: participant.successfulRolls >= this.requiredRolls
+            questCompleted,
         };
         
     } catch (error) {
@@ -1517,15 +1547,15 @@ questSchema.methods.checkAutoCompletion = async function(forceCheck = false) {
                 console.error(`[QuestModel.js] ❌ Error recording quest completion safeguard:`, error);
             }
             
-            // Send completion notification for non-RP quests (RP quests handle their own notifications)
+            // Send completion notification for non-RP quests (pure RP quests handle their own notifications)
             if (this.questType !== QUEST_TYPES.RP) {
                 await sendCompletionNotification(this, participant);
             }
         }
     }
     
-    // For RP quests, check village locations and disqualify if needed
-    if (this.questType === QUEST_TYPES.RP) {
+    // For RP / hybrid quests, check village locations and disqualify if needed
+    if (questTypeUsesRpFlow(this.questType)) {
         const villageCheckResult = await this.checkAllParticipantsVillages();
         if (villageCheckResult.disqualified > 0) {
             console.log(`[QuestModel.js] ⚠️ Disqualified ${villageCheckResult.disqualified} participants for leaving quest village`);

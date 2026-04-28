@@ -88,7 +88,7 @@ async function findActiveInteractiveQuests(userId) {
   try {
     const quests = await Quest.find({
       status: 'active',
-      questType: 'Interactive',
+      questType: { $in: ['Interactive', 'Interactive / RP'] },
       [`participants.${userId}`]: { $exists: true }
     });
     
