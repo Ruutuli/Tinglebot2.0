@@ -37,16 +37,16 @@ export async function GET() {
     const tablerolls = await TableRoll.find(filter)
       .select({ name: 1, isActive: 1 })
       .sort({ name: 1 })
-      .lean();
+      .lean()
+      .exec();
 
-    const payload: Array<{ name: string; isActive: boolean }> = (
-      tablerolls as Array<{ name: string; isActive?: boolean }>
-    ).map((t) => ({
-      name: t.name,
+    const rows = tablerolls as unknown as Array<{ name?: string; isActive?: boolean }>;
+    const payload: Array<{ name: string; isActive: boolean }> = rows.map((t) => ({
+      name: typeof t.name === "string" ? t.name : "",
       isActive: t.isActive !== false,
     }));
 
-    return NextResponse.json(payload);
+    return NextResponse.json(payload.filter((p) => p.name.trim().length > 0));
   } catch (err) {
     console.error("[tablerolls] GET error:", err);
     return NextResponse.json({ error: "Failed to fetch tablerolls" }, { status: 500 });
