@@ -2239,13 +2239,29 @@ formatQuestCount(count = 0) {
    inline: false
   });
 
-  // Add table roll information for RP / hybrid when a table is linked
-  if ((quest.questType === 'RP' || quest.questType === QUEST_TYPES.INTERACTIVE_RP) && quest.tableroll) {
-   embed.addFields({
-    name: '__🎲 Optional Table Roll__',
-    value: `This RP quest has an optional table roll available!\n• Use </tableroll roll:1389946995468271729> to roll on **${quest.tableroll}** table\n• Table rolls are optional and don't affect quest completion\n• They may provide additional rewards or flavor text`,
-    inline: false
-   });
+  // Add table roll information for RP / hybrid when linked table(s) exist
+  if (quest.questType === 'RP' || quest.questType === QUEST_TYPES.INTERACTIVE_RP) {
+    const fromArr = Array.isArray(quest.tableRollNames)
+      ? quest.tableRollNames.map((n) => String(n).trim()).filter(Boolean)
+      : [];
+    const fromLegacy = quest.tableroll && String(quest.tableroll).trim()
+      ? [...new Set(String(quest.tableroll).split(/[\n,]+/).map((s) => s.trim()).filter(Boolean))]
+      : [];
+    const uniq = [...new Set([...fromArr, ...fromLegacy])];
+    if (uniq.length === 1) {
+      embed.addFields({
+        name: '__🎲 Optional Table Roll__',
+        value: `This RP quest has an optional table roll available!\n• Use </tableroll roll:1389946995468271729> to roll on **${uniq[0]}** table\n• Table rolls are optional and don't affect quest completion\n• They may provide additional rewards or flavor text`,
+        inline: false
+      });
+    } else if (uniq.length > 1) {
+      embed.addFields({
+        name: '__🎲 Optional Table Rolls__',
+        value:
+          `This RP quest has optional table rolls available!\n• Use </tableroll roll:1389946995468271729> to roll on any of:\n${uniq.map((t) => `• **${t}**`).join('\n')}\n• Table rolls are optional and don't affect quest completion\n• They may provide additional rewards or flavor text`,
+        inline: false
+      });
+    }
   }
 
   return embed;

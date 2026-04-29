@@ -72,7 +72,7 @@ function parseItemRewards(
   return result;
 }
 
-/** Interactive: multiple table names; RP/other: single name. Syncs tableroll string for embeds/legacy readers. */
+/** Interactive: multiple table names; RP: optional multiple; Art/Writing: legacy single via string. Syncs tableroll for embeds. */
 function resolveTableRollFromBody(
   body: Record<string, unknown>,
   questType: string
@@ -98,15 +98,15 @@ function resolveTableRollFromBody(
 
   const interactiveStyle =
     questType === "Interactive" || questType === "Interactive / RP";
+  const rpMultipleOptional = questType === "RP";
 
-  if (interactiveStyle) {
-    if (names.length === 0 && legacy) {
-      names = [
-        ...new Set(
-          legacy.split(/[\n,]+/).map((s) => s.trim()).filter(Boolean)
-        ),
-      ];
-    }
+  const splitLegacyMulti = (): void => {
+    if (names.length > 0 || !legacy) return;
+    names = [...new Set(legacy.split(/[\n,]+/).map((s) => s.trim()).filter(Boolean))];
+  };
+
+  if (interactiveStyle || rpMultipleOptional) {
+    splitLegacyMulti();
   } else if (names.length === 0 && legacy) {
     const first = legacy.split(/[\n,]+/).map((s) => s.trim()).find(Boolean);
     names = first ? [first] : [];
@@ -114,7 +114,7 @@ function resolveTableRollFromBody(
 
   const first = names[0] ?? null;
   const tablerollStr =
-    interactiveStyle
+    interactiveStyle || rpMultipleOptional
       ? names.length === 0
         ? null
         : names.join(", ")

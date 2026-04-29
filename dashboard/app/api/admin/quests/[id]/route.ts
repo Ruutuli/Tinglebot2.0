@@ -103,15 +103,15 @@ function resolveTableRollFromBody(
 
   const interactiveStyle =
     questType === "Interactive" || questType === "Interactive / RP";
+  const rpMultipleOptional = questType === "RP";
 
-  if (interactiveStyle) {
-    if (names.length === 0 && legacy) {
-      names = [
-        ...new Set(
-          legacy.split(/[\n,]+/).map((s) => s.trim()).filter(Boolean)
-        ),
-      ];
-    }
+  const splitLegacyMulti = (): void => {
+    if (names.length > 0 || !legacy) return;
+    names = [...new Set(legacy.split(/[\n,]+/).map((s) => s.trim()).filter(Boolean))];
+  };
+
+  if (interactiveStyle || rpMultipleOptional) {
+    splitLegacyMulti();
   } else if (names.length === 0 && legacy) {
     const firstLegacy = legacy.split(/[\n,]+/).map((s) => s.trim()).find(Boolean);
     names = firstLegacy ? [firstLegacy] : [];
@@ -119,7 +119,7 @@ function resolveTableRollFromBody(
 
   const first = names[0] ?? null;
   const tablerollStr =
-    interactiveStyle
+    interactiveStyle || rpMultipleOptional
       ? names.length === 0
         ? null
         : names.join(", ")

@@ -336,9 +336,10 @@ function viewQuestToPreviewBody(q: QuestRecord): Record<string, unknown> {
     : [];
   const legacyRoll = q.tableRollName ?? (q as Record<string, unknown>).tableroll as string | undefined;
   let namesResolved = qr;
+  const qtPv = String(q.questType ?? "");
   if (
     !namesResolved.length &&
-    isInteractiveStyleQuestType(String(q.questType ?? "")) &&
+    (isInteractiveStyleQuestType(qtPv) || qtPv === "RP") &&
     typeof legacyRoll === "string" &&
     legacyRoll.trim()
   ) {
@@ -508,6 +509,58 @@ function parseInteractiveTablerollTokens(raw: string): string[] {
   return [...new Set(raw.split(/[\n,]+/).map((s) => s.trim()).filter(Boolean))];
 }
 
+/** Toggle known catalog tables while preserving custom names typed in the field. */
+function toggleTablerollPickerToken(tableroll: string, name: string, catalog: string[]): string {
+  const catalogSet = new Set(catalog.map((x) => x.trim()).filter(Boolean));
+  const tokens = parseInteractiveTablerollTokens(tableroll);
+  const picked = tokens.filter((t) => catalogSet.has(t));
+  const custom = tokens.filter((t) => !catalogSet.has(t));
+  const set = new Set(picked);
+  if (set.has(name)) set.delete(name);
+  else set.add(name);
+  const merged = [...set, ...custom];
+  merged.sort((a, b) => a.localeCompare(b));
+  return merged.join("\n");
+}
+
+function TablerollNamePicker({
+  tableroll,
+  catalog,
+  onChangeTableroll,
+}: {
+  tableroll: string;
+  catalog: string[];
+  onChangeTableroll: (v: string) => void;
+}) {
+  const sorted = [...new Set(catalog.filter(Boolean))].sort((a, b) => a.localeCompare(b));
+  if (sorted.length === 0) return null;
+  return (
+    <div className="sm:col-span-2 space-y-2">
+      <p className="text-xs text-[var(--totk-grey-200)]">
+        Select configured table roll names (tick all that apply). You can still add custom names below.
+      </p>
+      <div className="max-h-44 overflow-y-auto rounded border border-[var(--totk-dark-ocher)]/60 bg-[var(--botw-warm-black)]/40 p-3 grid gap-2 sm:grid-cols-2 shadow-[inset_0_0_0_1px_rgba(0,0,0,0.2)]">
+        {sorted.map((name) => (
+          <label
+            key={name}
+            className="flex cursor-pointer items-start gap-2 text-sm text-[var(--totk-ivory)]"
+          >
+            <input
+              type="checkbox"
+              className="mt-0.5 shrink-0 rounded border-[var(--totk-dark-ocher)]"
+              checked={parseInteractiveTablerollTokens(tableroll).includes(name)}
+              onChange={() =>
+                onChangeTableroll(toggleTablerollPickerToken(tableroll, name, catalog))
+              }
+            />
+            <span className="font-mono text-xs leading-snug break-all">{name}</span>
+          </label>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 function questToForm(q: QuestRecord): FormState {
   const itemRewardsRaw = (q.itemRewards as Array<{ name: string; quantity: number }> | undefined) ?? [];
   const itemRewards: ItemRewardRow[] =
@@ -536,12 +589,17 @@ function questToForm(q: QuestRecord): FormState {
   const legacyRoll = q.tableRollName ?? q.tableroll;
   const legacyStr = legacyRoll != null ? String(legacyRoll).trim() : "";
   const qt = String(q.questType ?? "RP");
-  const tablerollForm =
-    isInteractiveStyleQuestType(qt)
-      ? qr.length > 0
-        ? qr.join(", ")
-        : legacyStr
-      : legacyStr.split(/[\n,]+/).map((s) => s.trim()).find(Boolean) ?? "";
+  const tablerollForm = (() => {
+    if (isInteractiveStyleQuestType(qt)) {
+      return qr.length > 0 ? qr.join(", ") : legacyStr;
+    }
+    if (qt === "RP") {
+      if (qr.length > 0) return qr.join("\n");
+      const all = [...new Set(legacyStr.split(/[\n,]+/).map((s) => s.trim()).filter(Boolean))];
+      return all.join("\n");
+    }
+    return legacyStr.split(/[\n,]+/).map((s) => s.trim()).find(Boolean) ?? "";
+  })();
 
   return {
     title: String(q.title ?? ""),
@@ -664,6 +722,12 @@ function formToBody(f: FormState, isEdit: boolean): Record<string, unknown> {
     body.tableRollNames = tabs;
     body.tableRollName = tabs[0] ?? null;
     body.tableroll = tabs.length <= 1 ? tabs[0] ?? null : tabs.join(", ");
+  } else if (f.questType === "RP") {
+    const tabs = parseInteractiveTablerollTokens(f.tableroll);
+    body.tableRollNames = tabs;
+    body.tableRollName = tabs[0] ?? null;
+    body.tableroll =
+      tabs.length === 0 ? null : tabs.length === 1 ? tabs[0] ?? null : tabs.join(", ");
   } else {
     body.tableroll = f.tableroll.trim() || null;
     body.tableRollName =
@@ -1783,24 +1847,40 @@ export default function AdminQuestsPage() {
                               </div>
                             )}
                             {form.questType === "RP" && (
-                            <div>
-                              <label className="mb-1 block text-sm font-medium text-[var(--totk-grey-200)]">Table roll (optional)</label>
-                              <select value={form.tableroll} onChange={(e) => setField("tableroll", e.target.value)} className="w-full rounded border border-[var(--totk-dark-ocher)] bg-[var(--botw-warm-black)] pl-3 pr-8 py-2 text-[var(--totk-ivory)]">
-                                <option value="">—</option>
-                                {[...new Set([form.tableroll, ...tablerollNames].filter(Boolean))].sort((a, b) => a.localeCompare(b)).map((name) => (
-                                  <option key={name} value={name}>{name}</option>
-                                ))}
-                              </select>
-                            </div>
+                              <>
+                                <TablerollNamePicker
+                                  tableroll={form.tableroll}
+                                  catalog={tablerollNames}
+                                  onChangeTableroll={(v) => setField("tableroll", v)}
+                                />
+                                <div className="sm:col-span-2">
+                                  <label className="mb-1 block text-sm font-medium text-[var(--totk-grey-200)]">Optional table rolls</label>
+                                  <p className="mb-1 text-xs text-[var(--totk-grey-200)]">
+                                    One name per line, or comma-separated. Optional flavor rolls—not required for RP completion unless your rules say otherwise.
+                                  </p>
+                                  <textarea
+                                    rows={4}
+                                    value={form.tableroll}
+                                    onChange={(e) => setField("tableroll", e.target.value)}
+                                    placeholder={"Loot_A\nLoot_B"}
+                                    className="w-full rounded border border-[var(--totk-dark-ocher)] bg-[var(--botw-warm-black)] px-3 py-2 text-sm font-mono text-[var(--totk-ivory)] placeholder:text-[var(--totk-grey-200)]/60 resize-y min-h-[6rem]"
+                                  />
+                                </div>
+                              </>
                             )}
                           </>
                         )}
                         {isInteractiveStyleQuestType(form.questType) && (
                           <>
+                            <TablerollNamePicker
+                              tableroll={form.tableroll}
+                              catalog={tablerollNames}
+                              onChangeTableroll={(v) => setField("tableroll", v)}
+                            />
                             <div className="sm:col-span-2">
                               <label className="mb-1 block text-sm font-medium text-[var(--totk-grey-200)]">Table rolls</label>
                               <p className="mb-1 text-xs text-[var(--totk-grey-200)]">
-                                One name per line, or comma-separated. Rolls on any listed table count toward this quest (same success rules for all).
+                                Use the checklist above and/or enter names: one per line, or comma-separated. Rolls on any listed table count toward this quest (same success rules for all).
                               </p>
                               <textarea
                                 rows={4}
