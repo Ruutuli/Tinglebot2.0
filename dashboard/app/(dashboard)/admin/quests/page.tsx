@@ -509,9 +509,11 @@ function parseInteractiveTablerollTokens(raw: string): string[] {
   return [...new Set(raw.split(/[\n,]+/).map((s) => s.trim()).filter(Boolean))];
 }
 
-/** Toggle known catalog tables while preserving custom names typed in the field. */
-function toggleTablerollPickerToken(tableroll: string, name: string, catalog: string[]): string {
-  const catalogSet = new Set(catalog.map((x) => x.trim()).filter(Boolean));
+/** Table row from GET /api/models/tablerolls when logged in as admin/mod (includes drafts). */
+type TablerollCatalogEntry = { name: string; isActive: boolean };
+
+function toggleTablerollPickerToken(tableroll: string, name: string, catalogNames: string[]): string {
+  const catalogSet = new Set(catalogNames.map((x) => x.trim()).filter(Boolean));
   const tokens = parseInteractiveTablerollTokens(tableroll);
   const picked = tokens.filter((t) => catalogSet.has(t));
   const custom = tokens.filter((t) => !catalogSet.has(t));
@@ -529,33 +531,44 @@ function TablerollNamePicker({
   onChangeTableroll,
 }: {
   tableroll: string;
-  catalog: string[];
+  catalog: TablerollCatalogEntry[];
   onChangeTableroll: (v: string) => void;
 }) {
-  const sorted = [...new Set(catalog.filter(Boolean))].sort((a, b) => a.localeCompare(b));
+  const catalogNames = catalog.map((c) => c.name);
+  const sorted = [...catalog].sort((a, b) => a.name.localeCompare(b.name));
   if (sorted.length === 0) return null;
   return (
     <div className="sm:col-span-2 space-y-2">
       <p className="text-xs text-[var(--totk-grey-200)]">
-        Select configured table roll names (tick all that apply). You can still add custom names below.
+        Select configured table roll names (tick all that apply). Published and draft tables are listed when you are signed in with staff access; you can still add custom names below.
       </p>
       <div className="max-h-44 overflow-y-auto rounded border border-[var(--totk-dark-ocher)]/60 bg-[var(--botw-warm-black)]/40 p-3 grid gap-2 sm:grid-cols-2 shadow-[inset_0_0_0_1px_rgba(0,0,0,0.2)]">
-        {sorted.map((name) => (
+        {sorted.map((entry) => {
+          const name = entry.name;
+          return (
           <label
             key={name}
-            className="flex cursor-pointer items-start gap-2 text-sm text-[var(--totk-ivory)]"
+            className={`flex cursor-pointer items-start gap-2 text-sm ${entry.isActive ? "text-[var(--totk-ivory)]" : "text-[var(--totk-grey-200)]"}`}
           >
             <input
               type="checkbox"
               className="mt-0.5 shrink-0 rounded border-[var(--totk-dark-ocher)]"
               checked={parseInteractiveTablerollTokens(tableroll).includes(name)}
               onChange={() =>
-                onChangeTableroll(toggleTablerollPickerToken(tableroll, name, catalog))
+                onChangeTableroll(toggleTablerollPickerToken(tableroll, name, catalogNames))
               }
             />
-            <span className="font-mono text-xs leading-snug break-all">{name}</span>
+            <span className="min-w-0 font-mono text-xs leading-snug break-all">
+              <span className={entry.isActive ? "" : "opacity-90"}>{name}</span>
+              {!entry.isActive && (
+                <span className="ml-1 inline-block rounded border border-amber-600/50 bg-amber-900/25 px-1.5 py-0.5 text-[10px] font-sans font-medium uppercase tracking-wide text-amber-200/95">
+                  Draft
+                </span>
+              )}
+            </span>
           </label>
-        ))}
+          );
+        })}
       </div>
     </div>
   );
@@ -1047,7 +1060,7 @@ export default function AdminQuestsPage() {
   const [deleteFromListId, setDeleteFromListId] = useState<string | null>(null);
   const [previewPosting, setPreviewPosting] = useState(false);
   const [viewPreviewPosting, setViewPreviewPosting] = useState(false);
-  const [tablerollNames, setTablerollNames] = useState<string[]>([]);
+  const [tablerollCatalog, setTablerollCatalog] = useState<TablerollCatalogEntry[]>([]);
   const [sortDateOrder, setSortDateOrder] = useState<"newest" | "oldest">("newest");
   const [manageModalMounted, setManageModalMounted] = useState(false);
   useEffect(() => {
@@ -1063,10 +1076,33 @@ export default function AdminQuestsPage() {
   }, [quests, sortDateOrder]);
 
   useEffect(() => {
-    fetch("/api/models/tablerolls")
+    fetch("/api/models/tablerolls", { credentials: "include" })
       .then((r) => r.json())
-      .then((names: string[]) => setTablerollNames(Array.isArray(names) ? names : []))
-      .catch(() => setTablerollNames([]));
+      .then((data: unknown) => {
+        if (!Array.isArray(data)) {
+          setTablerollCatalog([]);
+          return;
+        }
+        const normalized: TablerollCatalogEntry[] = [];
+        for (const row of data) {
+          if (
+            row &&
+            typeof row === "object" &&
+            "name" in row &&
+            typeof (row as { name: unknown }).name === "string"
+          ) {
+            const rec = row as { name: string; isActive?: unknown };
+            normalized.push({
+              name: rec.name.trim(),
+              isActive: rec.isActive !== false,
+            });
+          } else if (typeof row === "string" && row.trim()) {
+            normalized.push({ name: row.trim(), isActive: true });
+          }
+        }
+        setTablerollCatalog(normalized.filter((e) => e.name.length > 0));
+      })
+      .catch(() => setTablerollCatalog([]));
   }, []);
 
   const handlePostPreview = useCallback(async () => {
@@ -1850,7 +1886,7 @@ export default function AdminQuestsPage() {
                               <>
                                 <TablerollNamePicker
                                   tableroll={form.tableroll}
-                                  catalog={tablerollNames}
+                                  catalog={tablerollCatalog}
                                   onChangeTableroll={(v) => setField("tableroll", v)}
                                 />
                                 <div className="sm:col-span-2">
@@ -1874,7 +1910,7 @@ export default function AdminQuestsPage() {
                           <>
                             <TablerollNamePicker
                               tableroll={form.tableroll}
-                              catalog={tablerollNames}
+                              catalog={tablerollCatalog}
                               onChangeTableroll={(v) => setField("tableroll", v)}
                             />
                             <div className="sm:col-span-2">
