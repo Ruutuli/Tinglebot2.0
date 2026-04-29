@@ -48,6 +48,17 @@ function formatVillageLockDisplay(allowed?: string[] | null): string {
   return list.join(", ");
 }
 
+/** Rows for flavor textareas (~72ch wrapping in the narrow table column). */
+function flavorEditRowCount(text: string): number {
+  let lines = Math.max(1, text.split("\n").length);
+  for (const segment of text.split("\n")) {
+    if (segment.length > 72) {
+      lines += Math.ceil(segment.length / 72) - 1;
+    }
+  }
+  return Math.min(14, Math.max(4, lines));
+}
+
 function ItemNameAutocomplete({
   value,
   onChange,
@@ -950,7 +961,7 @@ export default function AdminTablerollsPage() {
                           <tr className="text-left text-xs uppercase tracking-wide text-[var(--totk-grey-200)]">
                             <th className="w-10 py-3 pl-3 pr-1 font-semibold">#</th>
                             <th className="w-14 py-3 px-1 font-semibold">Wt</th>
-                            <th className="min-w-[140px] py-3 px-1 font-semibold">Flavor</th>
+                            <th className="min-w-[220px] sm:min-w-[280px] py-3 px-1 font-semibold">Flavor</th>
                             <th className="min-w-[100px] py-3 px-1 font-semibold">Item</th>
                             <th className="min-w-[100px] py-3 px-1 font-semibold">Image URL</th>
                             <th className="w-12 py-3 pr-3 pl-1"></th>
@@ -978,12 +989,12 @@ export default function AdminTablerollsPage() {
                                     title="Weight"
                                   />
                                 </td>
-                                <td className="py-2 px-1 align-middle min-w-0">
-                                  <input
-                                    type="text"
+                                <td className="py-2 px-1 align-top min-w-0">
+                                  <textarea
                                     value={entry.flavor}
                                     onChange={(e) => setEntry(i, "flavor", e.target.value)}
-                                    className="w-full rounded-md border border-[var(--totk-dark-ocher)] bg-[var(--botw-warm-black)] px-2 py-1.5 text-[var(--totk-ivory)] placeholder:text-[var(--totk-grey-200)]/60 focus:ring-2 focus:ring-[var(--totk-mid-ocher)]/50 focus:border-[var(--totk-mid-ocher)]"
+                                    rows={flavorEditRowCount(entry.flavor)}
+                                    className="w-full rounded-md border border-[var(--totk-dark-ocher)] bg-[var(--botw-warm-black)] px-2 py-1.5 text-sm leading-snug text-[var(--totk-ivory)] placeholder:text-[var(--totk-grey-200)]/60 focus:ring-2 focus:ring-[var(--totk-mid-ocher)]/50 focus:border-[var(--totk-mid-ocher)] min-h-[5.5rem] resize-y overflow-y-auto"
                                     placeholder="Flavor text"
                                   />
                                 </td>
@@ -1023,7 +1034,7 @@ export default function AdminTablerollsPage() {
                     </div>
                   </div>
                   <p className="text-xs text-[var(--totk-grey-200)]">
-                    Filter hides non-matching rows; all rows stay saved. Hover flavor or scroll horizontally on small screens if needed.
+                    Filter hides non-matching rows; all rows stay saved. Flavor uses a tall textarea (drag corner to resize). On small screens scroll the table horizontally if needed.
                   </p>
 
                   {/* Validation hint */}
