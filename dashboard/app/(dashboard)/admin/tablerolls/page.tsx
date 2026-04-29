@@ -666,7 +666,7 @@ export default function AdminTablerollsPage() {
 
   return (
     <div className="min-h-screen p-4 sm:p-6 md:p-8 bg-[var(--totk-light-green)]/10">
-      <div className={`mx-auto space-y-6 ${showForm ? "max-w-5xl" : "max-w-[90rem]"}`}>
+      <div className={`mx-auto space-y-6 ${showForm ? "max-w-7xl" : "max-w-[90rem]"}`}>
         {showForm ? (
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between border-b border-[var(--totk-dark-ocher)]/50 pb-5">
             <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
