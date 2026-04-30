@@ -297,6 +297,21 @@ type QuestRecord = {
   [key: string]: unknown;
 };
 
+function buildRpParentsForForm(q: QuestRecord, threadCount: number): string[] {
+  const n = Math.min(10, Math.max(1, threadCount));
+  const rawArr = (q as Record<string, unknown>).rpThreadParentChannels;
+  let slots: string[] = [];
+  if (Array.isArray(rawArr) && rawArr.length > 0) {
+    slots = rawArr.slice(0, n).map((x) => String(x ?? "").trim());
+  }
+  const legacy = String((q as Record<string, unknown>).rpThreadParentChannel ?? "").trim();
+  while (slots.length < n) {
+    const prev = slots[slots.length - 1];
+    slots.push((prev ?? legacy ?? "").trim() || legacy || "");
+  }
+  return slots.slice(0, n);
+}
+
 /** Parse quest date (e.g. "January 2026" or "2026-01") to a sortable string YYYY-MM, or use createdAt. */
 function getQuestSortKey(q: QuestRecord): string {
   const dateStr = String(q.date ?? "").trim();
@@ -415,6 +430,8 @@ type FormState = {
   tokenRewardCustom: string;
   itemRewards: ItemRewardRow[];
   rpThreadParentChannel: string;
+  /** One Discord parent channel ID per RP thread slot (same length semantically as rpThreadCount). */
+  rpThreadParentChannels: string[];
   rpThreadCount: string;
   rpThreadId: string;
   collabAllowed: boolean;
@@ -458,6 +475,7 @@ const emptyForm: FormState = {
   tokenRewardCustom: "",
   itemRewards: [],
   rpThreadParentChannel: "",
+  rpThreadParentChannels: [""],
   rpThreadCount: "1",
   rpThreadId: "",
   collabAllowed: false,
@@ -620,6 +638,16 @@ function questToForm(q: QuestRecord): FormState {
     return legacyStr.split(/[\n,]+/).map((s) => s.trim()).find(Boolean) ?? "";
   })();
 
+  const rpCnt =
+    (q as { rpThreadCount?: number }).rpThreadCount != null &&
+    !Number.isNaN(Number((q as { rpThreadCount?: number }).rpThreadCount))
+      ? Math.min(
+          10,
+          Math.max(1, Math.floor(Number((q as { rpThreadCount?: number }).rpThreadCount)))
+        )
+      : 1;
+  const rpParentsForm = buildRpParentsForForm(q, rpCnt);
+
   return {
     title: String(q.title ?? ""),
     description: String(q.description ?? ""),
@@ -662,17 +690,9 @@ function questToForm(q: QuestRecord): FormState {
     tokenCollabBonus: parsed.tokenCollabBonus,
     tokenRewardCustom: parsed.tokenRewardCustom,
     itemRewards,
-    rpThreadParentChannel: String(q.rpThreadParentChannel ?? ""),
-    rpThreadCount:
-      (q as { rpThreadCount?: number }).rpThreadCount != null &&
-      !Number.isNaN(Number((q as { rpThreadCount?: number }).rpThreadCount))
-        ? String(
-            Math.min(
-              10,
-              Math.max(1, Math.floor(Number((q as { rpThreadCount?: number }).rpThreadCount)))
-            )
-          )
-        : "1",
+    rpThreadParentChannel: rpParentsForm[0]?.trim() || String(q.rpThreadParentChannel ?? ""),
+    rpThreadParentChannels: rpParentsForm,
+    rpThreadCount: String(rpCnt),
     rpThreadId: String((q as { rpThreadId?: string }).rpThreadId ?? ""),
     collabAllowed: Boolean(q.collabAllowed),
     collabRule: String(q.collabRule ?? ""),
@@ -720,6 +740,12 @@ function formToBody(f: FormState, isEdit: boolean): Record<string, unknown> {
       : null;
   const resolvedEndDate = explicitEnd ?? computeDefaultTimeLimitEndDateYyyyMmDd(f);
 
+  const rpN = Math.min(10, Math.max(1, parseInt(f.rpThreadCount, 10) || 1));
+  const rpParentsBody = [...f.rpThreadParentChannels].slice(0, rpN);
+  while (rpParentsBody.length < rpN) {
+    rpParentsBody.push("");
+  }
+
   const body: Record<string, unknown> = {
     title: f.title.trim(),
     description: f.description.trim(),
@@ -732,8 +758,10 @@ function formToBody(f: FormState, isEdit: boolean): Record<string, unknown> {
     signupDeadline: f.signupDeadline.trim() || null,
     status: f.status,
     tokenReward,
-    rpThreadParentChannel: f.rpThreadParentChannel.trim() || null,
-    rpThreadCount: Math.min(10, Math.max(1, parseInt(f.rpThreadCount, 10) || 1)),
+    rpThreadParentChannel:
+      rpParentsBody[0]?.trim() || f.rpThreadParentChannel.trim() || null,
+    rpThreadParentChannels: rpParentsBody,
+    rpThreadCount: rpN,
     rpThreadId: f.rpThreadId.trim() || null,
     collabAllowed: f.collabAllowed,
     collabRule: f.collabRule.trim() || null,
@@ -1520,6 +1548,49 @@ export default function AdminQuestsPage() {
     setForm((prev) => ({ ...prev, [key]: value }));
   }, []);
 
+  const syncRpParentsCount = useCallback((nextCountNum: number) => {
+    const n = Math.min(10, Math.max(1, nextCountNum));
+    setForm((prev) => {
+      let channels = [...prev.rpThreadParentChannels];
+      if (channels.length === 0) {
+        channels = [prev.rpThreadParentChannel || ""];
+      }
+      if (n > channels.length) {
+        const pad =
+          (channels[channels.length - 1] ?? "").trim() ||
+          (channels[0] ?? "").trim() ||
+          prev.rpThreadParentChannel ||
+          "";
+        while (channels.length < n) channels.push(pad || "");
+      } else {
+        channels = channels.slice(0, n);
+      }
+      const prim = (channels[0] || prev.rpThreadParentChannel || "").trim();
+      return {
+        ...prev,
+        rpThreadCount: String(n),
+        rpThreadParentChannels: channels,
+        rpThreadParentChannel: prim,
+      };
+    });
+  }, []);
+
+  const setRpThreadParentAt = useCallback((index: number, value: string) => {
+    setForm((prev) => {
+      const n = Math.min(10, Math.max(1, parseInt(prev.rpThreadCount, 10) || 1));
+      const next = [...prev.rpThreadParentChannels];
+      while (next.length < n) next.push(prev.rpThreadParentChannel || next[0] || "");
+      next[index] = value;
+      return {
+        ...prev,
+        rpThreadParentChannels: next.slice(0, n),
+        ...(index === 0 ? { rpThreadParentChannel: value } : {}),
+      };
+    });
+  }, []);
+
+  const rpThreadSlotCount = Math.min(10, Math.max(1, parseInt(form.rpThreadCount, 10) || 1));
+
   const addItemReward = useCallback(() => {
     setForm((prev) => ({ ...prev, itemRewards: [...prev.itemRewards, { name: "", quantity: 1 }] }));
   }, []);
@@ -1888,26 +1959,55 @@ export default function AdminQuestsPage() {
                               <label className="mb-1 block text-sm font-medium text-[var(--totk-grey-200)]">Post requirement</label>
                               <input type="number" min={0} value={form.postRequirement} onChange={(e) => setField("postRequirement", e.target.value)} className="w-full rounded border border-[var(--totk-dark-ocher)] bg-[var(--botw-warm-black)] px-3 py-2 text-[var(--totk-ivory)]" />
                             </div>
-                            <div className="sm:col-span-2">
-                              <label className="mb-1 block text-sm font-medium text-[var(--totk-grey-200)]">RP Thread Parent Channel (Discord ID)</label>
-                              <select value={form.rpThreadParentChannel} onChange={(e) => setField("rpThreadParentChannel", e.target.value)} className="w-full rounded border border-[var(--totk-dark-ocher)] bg-[var(--botw-warm-black)] pl-3 pr-8 py-2 text-[var(--totk-ivory)]">
-                                <option value="">—</option>
-                                {RP_THREAD_CHANNELS.map((ch) => <option key={ch.id} value={ch.id}>{ch.name}</option>)}
-                              </select>
-                            </div>
-                            <div>
-                              <label className="mb-1 block text-sm font-medium text-[var(--totk-grey-200)]">Number of RP threads</label>
-                              <input
-                                type="number"
-                                min={1}
-                                max={10}
-                                value={form.rpThreadCount}
-                                onChange={(e) => setField("rpThreadCount", e.target.value)}
-                                className="w-full rounded border border-[var(--totk-dark-ocher)] bg-[var(--botw-warm-black)] px-3 py-2 text-[var(--totk-ivory)]"
-                              />
-                              <p className="mt-1 text-xs text-[var(--totk-grey-200)]">
-                                Creates this many threads when the quest is posted (1–10). Names are numbered when more than one.
-                              </p>
+                            <div className="sm:col-span-2 space-y-4">
+                              <div>
+                                <label className="mb-1 block text-sm font-medium text-[var(--totk-grey-200)]">Number of RP threads</label>
+                                <input
+                                  type="number"
+                                  min={1}
+                                  max={10}
+                                  value={form.rpThreadCount}
+                                  onChange={(e) =>
+                                    syncRpParentsCount(
+                                      Math.min(10, Math.max(1, parseInt(e.target.value, 10) || 1))
+                                    )
+                                  }
+                                  className="w-full max-w-[8rem] rounded border border-[var(--totk-dark-ocher)] bg-[var(--botw-warm-black)] px-3 py-2 text-[var(--totk-ivory)]"
+                                />
+                                <p className="mt-1 text-xs text-[var(--totk-grey-200)]">
+                                  When posted, this many Discord threads are created (1–10). Names include a number when there is more than one.
+                                </p>
+                              </div>
+                              <div className="space-y-3">
+                                <div>
+                                  <p className="text-sm font-medium text-[var(--totk-grey-200)]">Parent channel per thread</p>
+                                  <p className="mt-1 text-xs text-[var(--totk-grey-200)]">
+                                    Pick each thread&apos;s forum or RP channel—for example rudania on thread 1 and inariko on thread 2. Extra threads copy thread 1&apos;s channel until you change them.
+                                  </p>
+                                </div>
+                                {Array.from({ length: rpThreadSlotCount }, (_, i) => (
+                                  <div
+                                    key={`rp-parent-slot-${i}`}
+                                    className="flex flex-col gap-1.5 rounded-md border border-[var(--totk-dark-ocher)]/40 bg-[var(--botw-warm-black)]/40 px-3 py-2 sm:flex-row sm:items-center sm:gap-3"
+                                  >
+                                    <span className="shrink-0 text-xs font-medium text-[var(--totk-grey-200)] sm:w-24">
+                                      Thread {i + 1}
+                                    </span>
+                                    <select
+                                      value={form.rpThreadParentChannels[i] ?? ""}
+                                      onChange={(e) => setRpThreadParentAt(i, e.target.value)}
+                                      className="w-full flex-1 rounded border border-[var(--totk-dark-ocher)] bg-[var(--botw-warm-black)] pl-3 pr-8 py-2 text-[var(--totk-ivory)]"
+                                    >
+                                      <option value="">—</option>
+                                      {RP_THREAD_CHANNELS.map((ch) => (
+                                        <option key={ch.id} value={ch.id}>
+                                          {ch.name}
+                                        </option>
+                                      ))}
+                                    </select>
+                                  </div>
+                                ))}
+                              </div>
                             </div>
                             {editingId && (
                               <div className="sm:col-span-2">

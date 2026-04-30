@@ -72,6 +72,7 @@ const integrationFields = {
     roleID: { type: String, default: null },
     guildId: { type: String, default: null },
     rpThreadParentChannel: { type: String, default: null },
+    rpThreadParentChannels: { type: [String], default: [] },
     rpThreadId: { type: String, default: null },
     /** How many Discord RP threads to create for this quest (1–10). Primary thread id is still `rpThreadId` (first of `rpThreadIds`). */
     rpThreadCount: { type: Number, default: 1, min: 1, max: 10 },
@@ -603,6 +604,33 @@ questSchema.methods.getAllRpThreadIds = function() {
         return [String(this.rpThreadId).trim()];
     }
     return [];
+};
+
+/** Parent forum/text channel Discord ID for thread slot index (1-based). */
+questSchema.methods.getRpThreadParentChannelForSlot = function(slotIndex1Based) {
+    const desired = typeof this.getDesiredRpThreadCount === 'function'
+        ? this.getDesiredRpThreadCount()
+        : 1;
+    const slot = Math.max(1, Math.min(desired, Math.floor(Number(slotIndex1Based)) || 1));
+    const legacy =
+        this.rpThreadParentChannel != null ? String(this.rpThreadParentChannel).trim() : '';
+    const arr = Array.isArray(this.rpThreadParentChannels) ? this.rpThreadParentChannels : [];
+    const idx = slot - 1;
+    let resolved = '';
+    if (idx >= 0 && idx < arr.length && arr[idx] != null) {
+        resolved = String(arr[idx]).trim();
+    }
+    if (!resolved) {
+        for (let i = 0; i < arr.length; i++) {
+            const cand = arr[i] == null ? '' : String(arr[i]).trim();
+            if (cand) {
+                resolved = cand;
+                break;
+            }
+        }
+    }
+    if (!resolved) resolved = legacy;
+    return resolved || null;
 };
 
 questSchema.methods.syncRpThreadPrimaryId = function() {

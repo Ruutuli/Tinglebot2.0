@@ -25,6 +25,26 @@ function normalizeRpThreadCountOnCreate(raw: unknown): number {
   return Math.min(MAX_QUEST_RP_THREADS_CREATE, Math.max(1, Math.floor(n)));
 }
 
+/** Per-slot parent Discord channel IDs when creating a quest (length matches thread count). */
+function normalizeRpThreadParentsForCreate(
+  rpThreadCount: number,
+  body: Record<string, unknown>,
+  legacySingle: string | null
+): string[] {
+  const n = Math.min(MAX_QUEST_RP_THREADS_CREATE, Math.max(1, rpThreadCount));
+  const legacyTrim = legacySingle?.trim() || "";
+  let slots: string[] = [];
+  if (Array.isArray(body.rpThreadParentChannels)) {
+    slots = (body.rpThreadParentChannels as unknown[])
+      .map((x) => String(x ?? "").trim())
+      .slice(0, n);
+  }
+  while (slots.length < n) slots.push("");
+  slots = slots.slice(0, n);
+  const defaultRoot = slots.find(Boolean) || legacyTrim;
+  return slots.map((id) => (id || defaultRoot || "").trim());
+}
+
 /** Interactive quests: whether requiredRolls means criteria passes vs every roll on quest table(s). */
 function normalizeRollRequirementCounts(raw: unknown): "successful" | "any_roll" {
   return typeof raw === "string" && raw.trim().toLowerCase() === "any_roll"
@@ -320,6 +340,18 @@ export async function POST(req: NextRequest) {
           ? new Date()
           : null;
 
+    const rpThreadCountCreate = normalizeRpThreadCountOnCreate(body.rpThreadCount);
+    const rpLegacy =
+      typeof body.rpThreadParentChannel === "string"
+        ? body.rpThreadParentChannel.trim() || null
+        : null;
+    const rpThreadParentsArr = normalizeRpThreadParentsForCreate(
+      rpThreadCountCreate,
+      body as Record<string, unknown>,
+      rpLegacy
+    );
+    const rpThreadPrimary = rpThreadParentsArr.find(Boolean) || rpLegacy;
+
     const questData: Record<string, unknown> = {
       title,
       description,
@@ -350,11 +382,9 @@ export async function POST(req: NextRequest) {
       itemReward: itemRewardsFinal?.length === 1 ? itemRewardsFinal[0].name : itemParsed.itemReward,
       itemRewardQty: itemRewardsFinal?.length === 1 ? itemRewardsFinal[0].quantity : itemParsed.itemRewardQty,
       itemRewards: itemRewardsFinal,
-      rpThreadParentChannel:
-        typeof body.rpThreadParentChannel === "string"
-          ? body.rpThreadParentChannel.trim() || null
-          : null,
-      rpThreadCount: normalizeRpThreadCountOnCreate(body.rpThreadCount),
+      rpThreadParentChannel: rpThreadPrimary,
+      rpThreadParentChannels: rpThreadParentsArr,
+      rpThreadCount: rpThreadCountCreate,
       rpThreadIds: [],
       collabAllowed: Boolean(body.collabAllowed),
       collabRule: typeof body.collabRule === "string" ? body.collabRule.trim() || null : null,

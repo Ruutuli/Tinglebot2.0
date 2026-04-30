@@ -1453,7 +1453,16 @@ async function createRpThreadInParentChannel(parentChannel, threadName, messageC
  * If the parent path fails for the first slot only, falls back to a thread started from the quest-board message.
  */
 async function createRpQuestThreads(client, quest, { postedQuestMessage = null } = {}) {
-  if (!client?.channels || !questTypeUsesRpThreads(quest.questType) || !quest.rpThreadParentChannel) {
+  const legacyParent =
+    quest.rpThreadParentChannel != null ? String(quest.rpThreadParentChannel).trim() : '';
+  const hasArrayParents =
+    Array.isArray(quest.rpThreadParentChannels) &&
+    quest.rpThreadParentChannels.some((x) => x != null && String(x).trim());
+  if (
+    !client?.channels ||
+    !questTypeUsesRpThreads(quest.questType) ||
+    (!legacyParent && !hasArrayParents)
+  ) {
     return { createdIds: [], primaryError: null, fallbackError: null };
   }
 
@@ -1473,19 +1482,25 @@ async function createRpQuestThreads(client, quest, { postedQuestMessage = null }
   let fallbackError = null;
   const createdIds = [];
 
-  let parentChannel = null;
-  try {
-    parentChannel = await client.channels.fetch(quest.rpThreadParentChannel);
-  } catch (fetchErr) {
-    primaryError = fetchErr.message;
-    logger.warn(
-      'SCHEDULED',
-      `quest-posting-check: Could not fetch RP parent ${quest.rpThreadParentChannel} for quest ${quest.questID}: ${fetchErr.message}`
-    );
-  }
-
   for (let i = 0; i < toCreate; i++) {
     const slotIndex = existing.length + i + 1;
+    const slotParentId =
+      typeof quest.getRpThreadParentChannelForSlot === 'function'
+        ? quest.getRpThreadParentChannelForSlot(slotIndex)
+        : legacyParent || null;
+    let parentChannel = null;
+    try {
+      if (slotParentId) {
+        parentChannel = await client.channels.fetch(slotParentId);
+      }
+    } catch (fetchErr) {
+      primaryError = primaryError || fetchErr.message;
+      logger.warn(
+        'SCHEDULED',
+        `quest-posting-check: Could not fetch RP parent ${slotParentId} for quest ${quest.questID} slot ${slotIndex}: ${fetchErr.message}`
+      );
+    }
+
     const threadName = buildRpQuestThreadName(quest, slotIndex, desired);
     const messageContent = buildRpQuestThreadStarterContent(quest, slotIndex, desired);
     let threadId = null;
@@ -1501,7 +1516,9 @@ async function createRpQuestThreads(client, quest, { postedQuestMessage = null }
         );
       }
     } else if (!primaryError) {
-      primaryError = 'Parent channel not found or does not support threads';
+      primaryError = slotParentId
+        ? `Parent channel not found or does not support threads (${slotParentId})`
+        : 'Parent channel not found or does not support threads';
     }
 
     if (
