@@ -433,7 +433,7 @@ export async function PUT(
     if (Array.isArray(body.rpThreadIds)) {
       const parsed = [
         ...new Set(
-          body.rpThreadIds.map((x) => String(x ?? "").trim()).filter(Boolean)
+          body.rpThreadIds.map((x: unknown) => String(x ?? "").trim()).filter(Boolean)
         ),
       ];
       if (parsed.length) nextRpThreadIds = parsed;
