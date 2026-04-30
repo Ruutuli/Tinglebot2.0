@@ -246,7 +246,9 @@ const weatherWeightModifiers = {
         "Light Rain": 1.3
       },
       special: {
-        "Flower Bloom": 1.8
+        "Flower Bloom": 1.8,
+        // Rare Blight vs Jubilee on rainy spring days (otherwise Blight dominates the valid pool).
+        "Blight Rain": 0.05
       }
     },
     Summer: {

@@ -246,7 +246,8 @@ const weatherWeightModifiers = {
         "Light Rain": 1.3
       },
       special: {
-        "Flower Bloom": 1.8
+        "Flower Bloom": 1.8,
+        "Blight Rain": 0.05
       }
     },
     Summer: {

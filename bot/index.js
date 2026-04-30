@@ -528,6 +528,14 @@ async function initializeClient() {
         // Initialize topic filter (trigger & greylist)
         const { initializeTopicFilter } = require('./modules/topicFilterModule');
         initializeTopicFilter(client);
+
+        try {
+          const { bootstrapMemberCapTracker } = require('./modules/memberCapModule');
+          await bootstrapMemberCapTracker(client);
+          logger.info('SYSTEM', 'Member cap tracker posted or refreshed');
+        } catch (err) {
+          logger.warn('SYSTEM', `Member cap tracker bootstrap: ${err.message}`);
+        }
         
         // Initialize universal scheduler (Agenda) and register tasks
         const scheduler = require('@/utils/scheduler');
@@ -790,6 +798,9 @@ async function initializeClient() {
     client.on("messageCreate", async (message) => {
       await handleChannelMessage(message, NEW_CHANNEL_ID, handleWishlistMessage);
     });
+
+    const { registerMemberCapTracking } = require('./modules/memberCapModule');
+    registerMemberCapTracking(client);
 
     // ------------------- RP Quest Post Tracking ------------------
     client.on("messageCreate", async (message) => {
