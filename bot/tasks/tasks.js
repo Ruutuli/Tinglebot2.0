@@ -1347,9 +1347,12 @@ async function notifyModsQuestRpThreadFailure(client, quest, { primaryError, fal
   const parent = quest.rpThreadParentChannel
     ? `<#${quest.rpThreadParentChannel}> (\`${quest.rpThreadParentChannel}\`)`
     : '(none)';
+  const desired =
+    typeof quest.getDesiredRpThreadCount === 'function' ? quest.getDesiredRpThreadCount() : 1;
   const body = [
-    '**Quest RP thread (public) could not be created automatically.**',
+    '**Quest RP thread(s) could not be created automatically.**',
     `Quest: **${titleSafe}** (\`${questId}\`)`,
+    `Target thread count: ${desired}`,
     `RP parent channel: ${parent}`,
     primaryError ? `Primary error: ${primaryError}` : null,
     fallbackError ? `Fallback (thread from quest board post) error: ${fallbackError}` : null,
@@ -1372,136 +1375,172 @@ async function notifyModsQuestRpThreadFailure(client, quest, { primaryError, fal
   }
 }
 
-/**
- * Creates a public RP thread. Text/announcement parents use "start thread from message" (type 11 / public).
- * Forum parents use forum thread create. On failure, falls back to a public thread from the quest board message.
- */
-async function createRPQuestThread(client, quest, { postedQuestMessage = null } = {}) {
-  if (!client?.channels || (quest.questType || '').toLowerCase() !== 'rp' || !quest.rpThreadParentChannel || quest.rpThreadId) {
-    return null;
+const RP_QUEST_THREAD_AUTO_ARCHIVE_MS = 10080;
+
+function questTypeUsesRpThreads(questType) {
+  const s = (questType || '').toLowerCase().replace(/\s*\/\s*/g, '/').trim();
+  return s === 'rp' || s === 'interactive/rp';
+}
+
+function buildRpQuestThreadBaseLabel(quest) {
+  return `📜 ${(quest.title || 'Quest').toString().trim()} (${quest.questID || ''})`;
+}
+
+function buildRpQuestThreadName(quest, slotIndex1Based, totalSlots) {
+  const base = buildRpQuestThreadBaseLabel(quest);
+  const suffix =
+    totalSlots > 1
+      ? ` — RP ${slotIndex1Based}/${totalSlots}`
+      : ' - RP Thread';
+  return (base + suffix).slice(0, 100);
+}
+
+function buildRpQuestThreadStarterContent(quest, slotIndex1Based, totalSlots) {
+  const title = (quest.title || 'Quest').toString().trim().slice(0, 80);
+  const qid = quest.questID || '';
+  const part = totalSlots > 1 ? ` (thread ${slotIndex1Based} of ${totalSlots})` : '';
+  return `RP thread${part} for **${title}** (${qid}). Use this thread for quest roleplay.`;
+}
+
+async function tryStartPublicThreadFromMessage(message, threadName) {
+  if (!message || typeof message.startThread !== 'function') {
+    return { id: null, err: null };
   }
-  const threadName = (`📜 ${(quest.title || 'Quest').toString().trim()} (${quest.questID || ''}) - RP Thread`).slice(0, 100);
-  const messageContent = `RP thread for **${(quest.title || 'Quest').toString().trim().slice(0, 80)}** (${quest.questID || ''}). Use this thread for quest roleplay.`;
-
-  async function tryThreadFromQuestBoardMessage() {
-    if (!postedQuestMessage || typeof postedQuestMessage.startThread !== 'function') {
-      return { id: null, err: null };
-    }
-    try {
-      const thr = await postedQuestMessage.startThread({
-        name: threadName,
-        autoArchiveDuration: 10080,
-      });
-      return { id: thr?.id ?? null, err: null };
-    } catch (e) {
-      return { id: null, err: e.message };
-    }
-  }
-
-  let primaryError = null;
-
   try {
-    const parentChannel = await client.channels.fetch(quest.rpThreadParentChannel);
-    if (!parentChannel || !parentChannel.threads) {
-      logger.warn('SCHEDULED', `quest-posting-check: RP parent channel ${quest.rpThreadParentChannel} not found or not threadable for quest ${quest.questID}`);
-      primaryError = 'Parent channel not found or does not support threads';
-      const { id, err } = await tryThreadFromQuestBoardMessage();
-      if (id) {
-        logger.info('SCHEDULED', `quest-posting-check: Created RP thread ${id} from quest board message (fallback) for quest ${quest.questID}`);
-        return id;
-      }
-      await notifyModsQuestRpThreadFailure(client, quest, { primaryError, fallbackError: err || undefined });
-      return null;
-    }
+    const thr = await message.startThread({
+      name: threadName,
+      autoArchiveDuration: RP_QUEST_THREAD_AUTO_ARCHIVE_MS,
+    });
+    return { id: thr?.id ?? null, err: null };
+  } catch (e) {
+    return { id: null, err: e.message };
+  }
+}
 
-    const channelType = parentChannel.type;
-    const isForum = channelType === ChannelType.GuildForum;
-    const isTextOrAnnouncement =
-      channelType === ChannelType.GuildText || channelType === ChannelType.GuildAnnouncement;
+async function createRpThreadInParentChannel(parentChannel, threadName, messageContent) {
+  if (!parentChannel?.threads) {
+    throw new Error('Parent channel not found or does not support threads');
+  }
+  const channelType = parentChannel.type;
+  const isForum = channelType === ChannelType.GuildForum;
+  const isTextOrAnnouncement =
+    channelType === ChannelType.GuildText || channelType === ChannelType.GuildAnnouncement;
 
-    if (isForum) {
-      try {
-        const thread = await parentChannel.threads.create({
-          name: threadName,
-          message: { content: messageContent },
-          autoArchiveDuration: 10080,
-        });
-        return thread?.id ?? null;
-      } catch (forumErr) {
-        primaryError = forumErr.message;
-        logger.warn(
-          'SCHEDULED',
-          `quest-posting-check: Forum RP thread create failed for quest ${quest.questID}: ${forumErr.message}`
-        );
-        const { id, err } = await tryThreadFromQuestBoardMessage();
-        if (id) {
-          logger.info(
-            'SCHEDULED',
-            `quest-posting-check: Created RP thread ${id} from quest board message (fallback after forum failure) for quest ${quest.questID}`
-          );
-          return id;
-        }
-        await notifyModsQuestRpThreadFailure(client, quest, { primaryError, fallbackError: err || undefined });
-        return null;
-      }
-    }
+  if (isForum) {
+    const thread = await parentChannel.threads.create({
+      name: threadName,
+      message: { content: messageContent },
+      autoArchiveDuration: RP_QUEST_THREAD_AUTO_ARCHIVE_MS,
+    });
+    return thread?.id ?? null;
+  }
 
-    if (isTextOrAnnouncement) {
-      try {
-        const starter = await parentChannel.send({ content: messageContent });
-        const thread = await starter.startThread({
-          name: threadName,
-          autoArchiveDuration: 10080,
-        });
-        return thread?.id ?? null;
-      } catch (textErr) {
-        primaryError = textErr.message;
-        logger.warn(
-          'SCHEDULED',
-          `quest-posting-check: Public RP thread (from message) failed for quest ${quest.questID}: ${textErr.message}`
-        );
-        const { id, err } = await tryThreadFromQuestBoardMessage();
-        if (id) {
-          logger.info(
-            'SCHEDULED',
-            `quest-posting-check: Created RP thread ${id} from quest board message (fallback) for quest ${quest.questID}`
-          );
-          return id;
-        }
-        await notifyModsQuestRpThreadFailure(client, quest, { primaryError, fallbackError: err || undefined });
-        return null;
-      }
-    }
+  if (isTextOrAnnouncement) {
+    const starter = await parentChannel.send({ content: messageContent });
+    const thread = await starter.startThread({
+      name: threadName,
+      autoArchiveDuration: RP_QUEST_THREAD_AUTO_ARCHIVE_MS,
+    });
+    return thread?.id ?? null;
+  }
 
-    primaryError = `Channel type ${channelType} is not threadable`;
+  throw new Error(`Channel type ${channelType} is not threadable`);
+}
+
+/**
+ * Creates one or more public RP threads. Forum parents: create threads with starter messages.
+ * Text/announcement: post a starter per thread, then start thread from that message.
+ * If the parent path fails for the first slot only, falls back to a thread started from the quest-board message.
+ */
+async function createRpQuestThreads(client, quest, { postedQuestMessage = null } = {}) {
+  if (!client?.channels || !questTypeUsesRpThreads(quest.questType) || !quest.rpThreadParentChannel) {
+    return { createdIds: [], primaryError: null, fallbackError: null };
+  }
+
+  const desired =
+    typeof quest.getDesiredRpThreadCount === 'function'
+      ? quest.getDesiredRpThreadCount()
+      : 1;
+  const existing =
+    typeof quest.getAllRpThreadIds === 'function' ? quest.getAllRpThreadIds() : quest.rpThreadId ? [quest.rpThreadId] : [];
+
+  if (existing.length >= desired) {
+    return { createdIds: [], primaryError: null, fallbackError: null };
+  }
+
+  const toCreate = desired - existing.length;
+  let primaryError = null;
+  let fallbackError = null;
+  const createdIds = [];
+
+  let parentChannel = null;
+  try {
+    parentChannel = await client.channels.fetch(quest.rpThreadParentChannel);
+  } catch (fetchErr) {
+    primaryError = fetchErr.message;
     logger.warn(
       'SCHEDULED',
-      `quest-posting-check: Channel ${quest.rpThreadParentChannel} type ${channelType} is not threadable for quest ${quest.questID}`
+      `quest-posting-check: Could not fetch RP parent ${quest.rpThreadParentChannel} for quest ${quest.questID}: ${fetchErr.message}`
     );
-    const { id, err } = await tryThreadFromQuestBoardMessage();
-    if (id) {
-      logger.info(
-        'SCHEDULED',
-        `quest-posting-check: Created RP thread ${id} from quest board message (fallback) for quest ${quest.questID}`
-      );
-      return id;
-    }
-    await notifyModsQuestRpThreadFailure(client, quest, { primaryError, fallbackError: err || undefined });
-    return null;
-  } catch (err) {
-    primaryError = err.message;
-    logger.error('SCHEDULED', `quest-posting-check: Failed to create RP thread for quest ${quest.questID}: ${err.message}`);
-    const { id, err: fbErr } = await tryThreadFromQuestBoardMessage();
-    if (id) {
-      logger.info(
-        'SCHEDULED',
-        `quest-posting-check: Created RP thread ${id} from quest board message (fallback) for quest ${quest.questID}`
-      );
-      return id;
-    }
-    await notifyModsQuestRpThreadFailure(client, quest, { primaryError, fallbackError: fbErr || undefined });
-    return null;
   }
+
+  for (let i = 0; i < toCreate; i++) {
+    const slotIndex = existing.length + i + 1;
+    const threadName = buildRpQuestThreadName(quest, slotIndex, desired);
+    const messageContent = buildRpQuestThreadStarterContent(quest, slotIndex, desired);
+    let threadId = null;
+
+    if (parentChannel?.threads) {
+      try {
+        threadId = await createRpThreadInParentChannel(parentChannel, threadName, messageContent);
+      } catch (e) {
+        primaryError = primaryError || e.message;
+        logger.warn(
+          'SCHEDULED',
+          `quest-posting-check: RP thread ${slotIndex}/${desired} create failed for quest ${quest.questID}: ${e.message}`
+        );
+      }
+    } else if (!primaryError) {
+      primaryError = 'Parent channel not found or does not support threads';
+    }
+
+    if (
+      !threadId &&
+      existing.length === 0 &&
+      i === 0 &&
+      postedQuestMessage &&
+      typeof postedQuestMessage.startThread === 'function'
+    ) {
+      const { id: fid, err: fbErr } = await tryStartPublicThreadFromMessage(
+        postedQuestMessage,
+        threadName
+      );
+      if (fid) {
+        threadId = fid;
+        logger.info(
+          'SCHEDULED',
+          `quest-posting-check: Created RP thread ${fid} from quest board message (fallback) for quest ${quest.questID}`
+        );
+      } else if (fbErr) {
+        fallbackError = fallbackError || fbErr;
+      }
+    }
+
+    if (threadId) {
+      createdIds.push(threadId);
+    }
+  }
+
+  if (createdIds.length === 0 && toCreate > 0) {
+    await notifyModsQuestRpThreadFailure(client, quest, { primaryError, fallbackError });
+  } else if (createdIds.length < toCreate) {
+    logger.warn(
+      'SCHEDULED',
+      `quest-posting-check: Partial RP thread create for quest ${quest.questID}: ${createdIds.length}/${toCreate} new thread(s)`
+    );
+  }
+
+  return { createdIds, primaryError, fallbackError };
 }
 
 function getCurrentMonthFormats() {
@@ -1581,12 +1620,21 @@ async function questPostingCheck(client, _data = {}) {
           quest.guildId = message.guildId;
           await quest.save();
 
-          const rpThreadId = await createRPQuestThread(client, quest, { postedQuestMessage: message });
-          if (rpThreadId) {
-            quest.rpThreadId = rpThreadId;
+          const { createdIds: newRpThreadIds } = await createRpQuestThreads(client, quest, {
+            postedQuestMessage: message,
+          });
+          if (newRpThreadIds.length > 0) {
+            const merged = [...new Set([...quest.getAllRpThreadIds(), ...newRpThreadIds])];
+            quest.rpThreadIds = merged;
+            quest.syncRpThreadPrimaryId();
             await quest.save();
-            logger.info('SCHEDULED', `quest-posting-check: Created RP thread ${rpThreadId} for quest ${quest.questID}`);
-            await addQuestParticipantsToThread(client, rpThreadId, quest);
+            logger.info(
+              'SCHEDULED',
+              `quest-posting-check: Created RP thread(s) ${newRpThreadIds.join(', ')} for quest ${quest.questID}`
+            );
+            for (const tid of newRpThreadIds) {
+              await addQuestParticipantsToThread(client, tid, quest);
+            }
           }
 
           postedCount++;

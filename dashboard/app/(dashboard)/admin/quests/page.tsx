@@ -412,6 +412,7 @@ type FormState = {
   tokenRewardCustom: string;
   itemRewards: ItemRewardRow[];
   rpThreadParentChannel: string;
+  rpThreadCount: string;
   rpThreadId: string;
   collabAllowed: boolean;
   collabRule: string;
@@ -453,6 +454,7 @@ const emptyForm: FormState = {
   tokenRewardCustom: "",
   itemRewards: [],
   rpThreadParentChannel: "",
+  rpThreadCount: "1",
   rpThreadId: "",
   collabAllowed: false,
   collabRule: "",
@@ -655,6 +657,16 @@ function questToForm(q: QuestRecord): FormState {
     tokenRewardCustom: parsed.tokenRewardCustom,
     itemRewards,
     rpThreadParentChannel: String(q.rpThreadParentChannel ?? ""),
+    rpThreadCount:
+      (q as { rpThreadCount?: number }).rpThreadCount != null &&
+      !Number.isNaN(Number((q as { rpThreadCount?: number }).rpThreadCount))
+        ? String(
+            Math.min(
+              10,
+              Math.max(1, Math.floor(Number((q as { rpThreadCount?: number }).rpThreadCount)))
+            )
+          )
+        : "1",
     rpThreadId: String((q as { rpThreadId?: string }).rpThreadId ?? ""),
     collabAllowed: Boolean(q.collabAllowed),
     collabRule: String(q.collabRule ?? ""),
@@ -715,6 +727,7 @@ function formToBody(f: FormState, isEdit: boolean): Record<string, unknown> {
     status: f.status,
     tokenReward,
     rpThreadParentChannel: f.rpThreadParentChannel.trim() || null,
+    rpThreadCount: Math.min(10, Math.max(1, parseInt(f.rpThreadCount, 10) || 1)),
     rpThreadId: f.rpThreadId.trim() || null,
     collabAllowed: f.collabAllowed,
     collabRule: f.collabRule.trim() || null,
@@ -1874,6 +1887,20 @@ export default function AdminQuestsPage() {
                                 <option value="">—</option>
                                 {RP_THREAD_CHANNELS.map((ch) => <option key={ch.id} value={ch.id}>{ch.name}</option>)}
                               </select>
+                            </div>
+                            <div>
+                              <label className="mb-1 block text-sm font-medium text-[var(--totk-grey-200)]">Number of RP threads</label>
+                              <input
+                                type="number"
+                                min={1}
+                                max={10}
+                                value={form.rpThreadCount}
+                                onChange={(e) => setField("rpThreadCount", e.target.value)}
+                                className="w-full rounded border border-[var(--totk-dark-ocher)] bg-[var(--botw-warm-black)] px-3 py-2 text-[var(--totk-ivory)]"
+                              />
+                              <p className="mt-1 text-xs text-[var(--totk-grey-200)]">
+                                Creates this many threads when the quest is posted (1–10). Names are numbered when more than one.
+                              </p>
                             </div>
                             {editingId && (
                               <div className="sm:col-span-2">

@@ -1881,22 +1881,45 @@ formatQuestCount(count = 0) {
  },
 
  async addUserToRPThread(interaction, quest, userID, userName) {
-  const threadId = quest.rpThreadId || quest.rpThreadParentChannel;
-  if (
-    (quest.questType.toLowerCase() === 'rp' || quest.questType === QUEST_TYPES.INTERACTIVE_RP) &&
-    threadId
-  ) {
+  const isRpType =
+    quest.questType?.toLowerCase() === 'rp' ||
+    quest.questType === QUEST_TYPES.INTERACTIVE_RP;
+  if (!isRpType) return;
+
+  let threadIds;
+  if (typeof quest.getAllRpThreadIds === 'function') {
+    threadIds = quest.getAllRpThreadIds();
+  } else if (Array.isArray(quest.rpThreadIds) && quest.rpThreadIds.length) {
+    threadIds = [
+      ...new Set(
+        quest.rpThreadIds.map((id) => String(id ?? '').trim()).filter(Boolean)
+      ),
+    ];
+  } else {
+    threadIds = [quest.rpThreadId].filter(Boolean);
+  }
+
+  if (threadIds.length === 0) return;
+
+  let added = 0;
+  for (const threadId of threadIds) {
    try {
     const rpThread = interaction.guild.channels.cache.get(threadId);
     if (rpThread && rpThread.isThread()) {
      await rpThread.members.add(userID);
-     logger.info('QUEST', `Added ${userName} to RP thread for quest ${quest.title}`);
+     added += 1;
     } else {
      logger.warn('QUEST', `RP thread not found for quest ${quest.title} (ID: ${threadId})`);
     }
    } catch (error) {
     logger.error('QUEST', `Failed to add user to RP thread: ${error.message}`, error);
    }
+  }
+  if (added > 0) {
+    logger.info(
+      'QUEST',
+      `Added ${userName} to ${added} RP thread(s) for quest ${quest.title}`
+    );
   }
  },
 

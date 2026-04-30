@@ -350,6 +350,60 @@ function parseCSVToEntries(csvText: string): { success: true; entries: FormEntry
   }
 }
 
+const CSV_HEADER_ROW = "weight,flavor,item,thumbnailURL";
+
+function escapeCSVCell(raw: string): string {
+  const s = raw ?? "";
+  if (/[",\r\n]/.test(s)) {
+    return `"${s.replace(/"/g, '""')}"`;
+  }
+  return s;
+}
+
+/** Serialize entries to CSV (same columns as bulk import / bot parseCSVData). */
+function tableRollEntriesToCsv(
+  entries: Array<{
+    weight: number | string;
+    flavor?: string;
+    item?: string;
+    thumbnailImage?: string;
+  }>
+): string {
+  const lines: string[] = [CSV_HEADER_ROW];
+  for (const e of entries) {
+    const rawW = typeof e.weight === "number" ? e.weight : parseInt(String(e.weight), 10);
+    const weight = Number.isFinite(rawW) && rawW >= 1 ? Math.round(rawW) : 1;
+    const flavor = escapeCSVCell(typeof e.flavor === "string" ? e.flavor : "");
+    const item = escapeCSVCell(typeof e.item === "string" ? e.item : "");
+    const thumb = escapeCSVCell(typeof e.thumbnailImage === "string" ? e.thumbnailImage : "");
+    lines.push(`${weight},${flavor},${item},${thumb}`);
+  }
+  return lines.join("\r\n");
+}
+
+function safeTablerollCsvFilename(name: string): string {
+  const base =
+    name
+      .trim()
+      .replace(/[^a-zA-Z0-9\-_\s]+/g, "")
+      .replace(/\s+/g, "_")
+      .slice(0, 80) || "tableroll";
+  return `${base}.csv`;
+}
+
+function triggerDownloadCsv(filename: string, csvText: string) {
+  const blob = new Blob([csvText], { type: "text/csv;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  a.rel = "noopener";
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+}
+
 export default function AdminTablerollsPage() {
   const { isAdmin, loading: sessionLoading } = useSession();
   const [list, setList] = useState<TableRollRecord[]>([]);
@@ -449,6 +503,16 @@ export default function AdminTablerollsPage() {
     setCsvImportText("");
     setShowCsvImport(false);
   }, [csvImportText]);
+
+  const downloadFormEntriesCsv = useCallback(() => {
+    const csv = tableRollEntriesToCsv(form.entries);
+    triggerDownloadCsv(safeTablerollCsvFilename(form.name.trim() || "tableroll"), csv);
+  }, [form.entries, form.name]);
+
+  const downloadRecordCsv = useCallback((row: TableRollRecord) => {
+    const csv = tableRollEntriesToCsv(row.entries ?? []);
+    triggerDownloadCsv(safeTablerollCsvFilename(row.name), csv);
+  }, []);
 
   const setField = useCallback(<K extends keyof FormState>(key: K, value: FormState[K]) => {
     setForm((prev) => ({ ...prev, [key]: value }));
@@ -878,14 +942,25 @@ export default function AdminTablerollsPage() {
 
                 {/* CSV */}
                 <div className="rounded-xl border border-[var(--totk-dark-ocher)]/70 bg-[var(--botw-black)]/35 p-4">
-                  <button
-                    type="button"
-                    onClick={() => setShowCsvImport((prev) => !prev)}
-                    className="flex w-full items-center justify-between gap-2 text-left text-sm font-medium text-[var(--totk-light-green)] hover:text-[var(--totk-ivory)]"
-                  >
-                    <span>Bulk import (CSV)</span>
-                    <i className={`fa-solid fa-chevron-${showCsvImport ? "up" : "down"} text-xs opacity-80`} aria-hidden="true" />
-                  </button>
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setShowCsvImport((prev) => !prev)}
+                      className="flex flex-1 min-w-0 items-center justify-between gap-2 text-left text-sm font-medium text-[var(--totk-light-green)] hover:text-[var(--totk-ivory)]"
+                    >
+                      <span>Bulk import (CSV)</span>
+                      <i className={`fa-solid fa-chevron-${showCsvImport ? "up" : "down"} text-xs opacity-80 shrink-0`} aria-hidden="true" />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={downloadFormEntriesCsv}
+                      className="shrink-0 rounded-lg border border-[var(--totk-dark-ocher)] px-3 py-2 text-xs font-medium text-[var(--totk-ivory)] transition-colors hover:bg-[var(--totk-dark-ocher)]/30"
+                      title="Download entries in the same format as import"
+                    >
+                      <i className="fa-solid fa-download mr-1.5 opacity-80" aria-hidden="true" />
+                      Download CSV
+                    </button>
+                  </div>
                   {showCsvImport && (
                     <div className="mt-4 space-y-3 border-t border-[var(--totk-dark-ocher)]/40 pt-4">
                       <p className="text-xs text-[var(--totk-grey-200)]">
@@ -1212,6 +1287,14 @@ export default function AdminTablerollsPage() {
                     </button>
                     <button
                       type="button"
+                      onClick={() => downloadRecordCsv(row)}
+                      className="rounded-md border border-[var(--totk-dark-ocher)] px-3 py-1.5 text-xs text-[var(--totk-grey-200)] hover:bg-[var(--totk-dark-ocher)]/30 transition-colors"
+                      title="Download this table’s entries as CSV"
+                    >
+                      CSV
+                    </button>
+                    <button
+                      type="button"
                       onClick={() => handleToggleActive(row)}
                       disabled={togglingId === row._id}
                       className="rounded-md border border-[var(--totk-dark-ocher)] px-3 py-1.5 text-xs text-[var(--totk-grey-200)] hover:bg-[var(--totk-dark-ocher)]/30 disabled:opacity-50"
@@ -1293,6 +1376,14 @@ export default function AdminTablerollsPage() {
                             className="rounded-md border border-[var(--totk-dark-ocher)] bg-[var(--totk-mid-ocher)]/30 px-2.5 py-1 text-xs font-medium text-[var(--totk-ivory)] transition-colors hover:bg-[var(--totk-mid-ocher)]/50"
                           >
                             Edit
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => downloadRecordCsv(row)}
+                            className="rounded-md border border-[var(--totk-dark-ocher)] px-2.5 py-1 text-xs text-[var(--totk-grey-200)] hover:bg-[var(--totk-dark-ocher)]/30 transition-colors"
+                            title="Download entries as CSV"
+                          >
+                            CSV
                           </button>
                           <button
                             type="button"

@@ -258,6 +258,7 @@ async function findQuestByThreadId(threadId, options = {}) {
             questType: { $in: QUEST_SEARCH_TYPES },
             $or: [
                 { rpThreadId: threadId },
+                { rpThreadIds: threadId },
                 { rpThreadParentChannel: threadId }
             ]
         });

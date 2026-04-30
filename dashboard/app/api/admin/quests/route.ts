@@ -16,6 +16,15 @@ const STATUSES = ["draft", "pending", "active", "completed"] as const;
 type QuestType = (typeof QUEST_TYPES)[number];
 type Status = (typeof STATUSES)[number];
 
+const MAX_QUEST_RP_THREADS_CREATE = 10;
+
+function normalizeRpThreadCountOnCreate(raw: unknown): number {
+  if (raw == null || raw === "") return 1;
+  const n = Number(raw);
+  if (!Number.isFinite(n)) return 1;
+  return Math.min(MAX_QUEST_RP_THREADS_CREATE, Math.max(1, Math.floor(n)));
+}
+
 // Parse "ItemName:qty" or "Item1:1; Item2:2" into itemReward/itemRewardQty or itemRewards
 function parseItemRewards(
   itemReward: string | null | undefined,
@@ -337,6 +346,8 @@ export async function POST(req: NextRequest) {
         typeof body.rpThreadParentChannel === "string"
           ? body.rpThreadParentChannel.trim() || null
           : null,
+      rpThreadCount: normalizeRpThreadCountOnCreate(body.rpThreadCount),
+      rpThreadIds: [],
       collabAllowed: Boolean(body.collabAllowed),
       collabRule: typeof body.collabRule === "string" ? body.collabRule.trim() || null : null,
       artWritingMode: body.artWritingMode === "either" ? "either" : "both",

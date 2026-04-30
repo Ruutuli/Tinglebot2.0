@@ -72,7 +72,10 @@ const integrationFields = {
     roleID: { type: String, default: null },
     guildId: { type: String, default: null },
     rpThreadParentChannel: { type: String, default: null },
-    rpThreadId: { type: String, default: null }
+    rpThreadId: { type: String, default: null },
+    /** How many Discord RP threads to create for this quest (1–10). Primary thread id is still `rpThreadId` (first of `rpThreadIds`). */
+    rpThreadCount: { type: Number, default: 1, min: 1, max: 10 },
+    rpThreadIds: { type: [String], default: [] }
 };
 
 // ------------------- Quest Status Fields ------------------
@@ -576,6 +579,30 @@ function finalizeParticipantRewardFromSubmission(participant, submissionData) {
 // ============================================================================
 // ------------------- Instance Methods -------------------
 // ============================================================================
+
+// ------------------- RP thread helpers ------------------
+questSchema.methods.getDesiredRpThreadCount = function() {
+    const n = Number(this.rpThreadCount);
+    if (!Number.isFinite(n) || n < 1) return 1;
+    return Math.min(10, Math.floor(n));
+};
+
+questSchema.methods.getAllRpThreadIds = function() {
+    const raw = Array.isArray(this.rpThreadIds) ? this.rpThreadIds : [];
+    const fromArr = raw
+        .map((id) => (id == null ? '' : String(id).trim()))
+        .filter(Boolean);
+    if (fromArr.length) return [...new Set(fromArr)];
+    if (this.rpThreadId != null && String(this.rpThreadId).trim()) {
+        return [String(this.rpThreadId).trim()];
+    }
+    return [];
+};
+
+questSchema.methods.syncRpThreadPrimaryId = function() {
+    const ids = this.getAllRpThreadIds();
+    this.rpThreadId = ids[0] ?? null;
+};
 
 // ------------------- Participant Management ------------------
 questSchema.methods.addParticipant = function(userId, characterName) {

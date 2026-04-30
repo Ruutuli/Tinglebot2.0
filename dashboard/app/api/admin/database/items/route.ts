@@ -884,7 +884,7 @@ export async function PUT(req: NextRequest) {
         "participantCap", "minRequirements", "tableroll", "itemReward", "itemRewardQty", "itemRewards",
         "signupDeadline", "postRequirement", "specialNote", "tokenReward",
         "targetChannel", "posted", "postedAt", "botNotes", "messageID", "roleID", "guildId",
-        "rpThreadParentChannel", "rpThreadId",
+        "rpThreadParentChannel", "rpThreadId", "rpThreadCount", "rpThreadIds",
         "completionReason", "completedAt", "completionProcessed", "lastCompletionCheck",
         "participants", "leftParticipants",
         "collabAllowed", "collabRule", "rules", "artWritingMode",
