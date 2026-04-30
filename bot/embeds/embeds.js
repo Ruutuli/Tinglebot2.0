@@ -1854,6 +1854,14 @@ const createWritingSubmissionEmbed = (submissionData) => {
 
   const submissionTitle = submissionData.title || 'Untitled Submission';
 
+  const pendingModReview =
+    submissionData.tokenCalculation !== 'No tokens - Display only';
+  const cancelBlurb =
+    pendingModReview
+      ? '❌ **Cancel:** React with ❌ on this message to withdraw (**submitter only**, before mods approve). The bot places a ❌ reaction below for convenience.\n\n'
+      : '';
+  const embedDescription = cancelBlurb + descriptionLines.join('\n\n');
+
   const embed = new EmbedBuilder()
     .setColor("#AA926A")
     .setTitle(`📚 ${submissionTitle}`)
@@ -1861,7 +1869,7 @@ const createWritingSubmissionEmbed = (submissionData) => {
       name: `Submitted by: ${submissionData.username}`,
       iconURL: submissionData.userAvatar || "https://via.placeholder.com/128",
     })
-    .setDescription(descriptionLines.join('\n\n'))
+    .setDescription(embedDescription)
     .addFields(fields)
     .setThumbnail(WRITING_SUBMISSION_THUMBNAIL_URL)
     .setImage(DEFAULT_IMAGE_URL)
@@ -2067,6 +2075,20 @@ const createArtSubmissionEmbed = (submissionData) => {
     ...field,
     value: ensureEmbedFieldValueIsString(field.value)
   }));
+
+  const pendingModReviewArt = tokenCalculation !== 'No tokens - Display only';
+  const cancelDescription =
+    pendingModReviewArt
+      ? '❌ **Cancel:** React with ❌ on this message to withdraw (**submitter only**, before mods approve). The bot places a ❌ reaction below for convenience.'
+      : null;
+
+  if (pendingModReviewArt && cancelDescription) {
+    validatedFields.unshift({
+      name: 'Withdraw submission',
+      value: ensureEmbedFieldValueIsString(cancelDescription),
+      inline: false,
+    });
+  }
 
   // Build the embed
   const embed = new EmbedBuilder()

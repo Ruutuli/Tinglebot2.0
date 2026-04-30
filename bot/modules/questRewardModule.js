@@ -2134,6 +2134,10 @@ async function processArtQuestCompletionFromSubmission(submissionData, userId) {
             } catch (pcErr) {
                 console.warn(`[questRewardModule.js] processQuestCompletion (inactive art path): ${pcErr.message}`);
             }
+            if (!participant) {
+                console.log(`[questRewardModule.js] ℹ️ Inactive quest ${questID}: submitter is not a participant — no main quest credit`);
+                return { success: false, reason: 'Submitter is not a participant on this quest' };
+            }
             return { success: true, questCompleted: false, synced: true };
         }
         
@@ -2230,6 +2234,10 @@ async function processWritingQuestCompletionFromSubmission(submissionData, userI
                 await processQuestCompletion(questID);
             } catch (pcErr) {
                 console.warn(`[questRewardModule.js] processQuestCompletion (inactive writing path): ${pcErr.message}`);
+            }
+            if (!participant) {
+                console.log(`[questRewardModule.js] ℹ️ Inactive quest ${questID}: submitter is not a participant — no main quest credit`);
+                return { success: false, reason: 'Submitter is not a participant on this quest' };
             }
             return { success: true, questCompleted: false, synced: true };
         }

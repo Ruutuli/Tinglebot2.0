@@ -1206,6 +1206,8 @@ module.exports = {
 
  parseSubmissionIdFromDiscordEmbed,
 
+ normalizeSubmissionStorageKey,
+
  saveToStorage,
  retrieveFromStorage,
  deleteFromStorage,

@@ -122,6 +122,17 @@ function statusDisplay(s: string | undefined): string {
 
 const PARTICIPANT_PROGRESS_VALUES = ["active", "completed", "failed", "rewarded", "disqualified"] as const;
 
+function normalizeParticipantProgressValue(
+  raw: string | undefined
+): (typeof PARTICIPANT_PROGRESS_VALUES)[number] {
+  const progressRaw = String(raw ?? "active");
+  return PARTICIPANT_PROGRESS_VALUES.includes(
+    progressRaw as (typeof PARTICIPANT_PROGRESS_VALUES)[number]
+  )
+    ? (progressRaw as (typeof PARTICIPANT_PROGRESS_VALUES)[number])
+    : "active";
+}
+
 /** Row background tint in the manage-participants table (scannable at a glance). */
 function participantProgressRowClass(progress: string): string {
   const base =
@@ -1116,7 +1127,10 @@ export default function AdminQuestsPage() {
   const [manageParticipantsError, setManageParticipantsError] = useState<string | null>(null);
   const [manageParticipantsSuccess, setManageParticipantsSuccess] = useState<string | null>(null);
   const [selectedParticipantIds, setSelectedParticipantIds] = useState<string[]>([]);
-  const [participantProgressSavingId, setParticipantProgressSavingId] = useState<string | null>(null);
+  const [participantProgressDraft, setParticipantProgressDraft] = useState<
+    Record<string, string>
+  >({});
+  const [participantProgressBulkSaving, setParticipantProgressBulkSaving] = useState(false);
   const [completingQuestId, setCompletingQuestId] = useState<string | null>(null);
   const [completeConfirmQuestId, setCompleteConfirmQuestId] = useState<string | null>(null);
   const [viewQuestId, setViewQuestId] = useState<string | null>(null);
@@ -1266,7 +1280,7 @@ export default function AdminQuestsPage() {
     setManageParticipantsError(null);
     setManageParticipantsSuccess(null);
     setSelectedParticipantIds([]);
-    setParticipantProgressSavingId(null);
+    setParticipantProgressDraft({});
     try {
       const res = await fetch(`/api/admin/quests/${id}`);
       if (!res.ok) throw new Error("Failed to load quest");
@@ -1284,7 +1298,7 @@ export default function AdminQuestsPage() {
     setManageParticipantsSuccess(null);
     setSelectedParticipantIds([]);
     setSyncRewardProgressLoading(false);
-    setParticipantProgressSavingId(null);
+    setParticipantProgressDraft({});
   }, []);
 
   const openViewModal = useCallback(async (id: string) => {
@@ -1414,6 +1428,7 @@ export default function AdminQuestsPage() {
         data.updated ? `Marked ${data.updated} participant(s) as completed and rewarded.` : "Saved."
       );
       setSelectedParticipantIds([]);
+      setParticipantProgressDraft({});
       const refetchRes = await fetch(`/api/admin/quests/${manageQuestId}`);
       if (refetchRes.ok) {
         const q = (await refetchRes.json()) as QuestRecord;
@@ -1427,37 +1442,44 @@ export default function AdminQuestsPage() {
     }
   }, [manageQuestId, selectedParticipantIds, fetchQuests]);
 
-  const updateParticipantProgress = useCallback(
-    async (userId: string, progress: string) => {
-      if (!manageQuestId) return;
-      setParticipantProgressSavingId(userId);
-      setManageParticipantsError(null);
-      setManageParticipantsSuccess(null);
-      try {
-        const res = await fetch(`/api/admin/quests/${manageQuestId}/participants`, {
-          method: "PUT",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ userId, progress }),
-        });
-        const data = (await res.json()) as { error?: string; message?: string };
-        if (!res.ok) {
-          throw new Error(data.message ?? data.error ?? "Failed to update status");
-        }
-        setManageParticipantsSuccess("Participant status saved.");
-        const refetchRes = await fetch(`/api/admin/quests/${manageQuestId}`);
-        if (refetchRes.ok) {
-          const q = (await refetchRes.json()) as QuestRecord;
-          setManageQuest(q);
-        }
-        await fetchQuests();
-      } catch (e) {
-        setManageParticipantsError(e instanceof Error ? e.message : String(e));
-      } finally {
-        setParticipantProgressSavingId(null);
+  const saveAllParticipantStatuses = useCallback(async () => {
+    if (!manageQuestId || Object.keys(participantProgressDraft).length === 0) return;
+    setParticipantProgressBulkSaving(true);
+    setManageParticipantsError(null);
+    setManageParticipantsSuccess(null);
+    try {
+      const res = await fetch(`/api/admin/quests/${manageQuestId}/participants`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ updates: participantProgressDraft }),
+      });
+      const data = (await res.json()) as {
+        updated?: number;
+        error?: string;
+        message?: string;
+      };
+      if (!res.ok) {
+        throw new Error(data.message ?? data.error ?? "Failed to update statuses");
       }
-    },
-    [manageQuestId, fetchQuests]
-  );
+      const n = data.updated ?? Object.keys(participantProgressDraft).length;
+      setManageParticipantsSuccess(
+        n > 0
+          ? `Saved ${n} participant status${n === 1 ? "" : "es"}.`
+          : "Statuses saved."
+      );
+      setParticipantProgressDraft({});
+      const refetchRes = await fetch(`/api/admin/quests/${manageQuestId}`);
+      if (refetchRes.ok) {
+        const q = (await refetchRes.json()) as QuestRecord;
+        setManageQuest(q);
+      }
+      await fetchQuests();
+    } catch (e) {
+      setManageParticipantsError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setParticipantProgressBulkSaving(false);
+    }
+  }, [manageQuestId, participantProgressDraft, fetchQuests]);
 
   const syncRewardProgressFromQuest = useCallback(async () => {
     if (!manageQuestId) return;
@@ -1487,6 +1509,7 @@ export default function AdminQuestsPage() {
         const q = (await refetchRes.json()) as QuestRecord;
         setManageQuest(q);
       }
+      setParticipantProgressDraft({});
       await fetchQuests();
     } catch (e) {
       setManageParticipantsError(e instanceof Error ? e.message : String(e));
@@ -2334,30 +2357,65 @@ export default function AdminQuestsPage() {
                     Participant status (from bot progress)
                   </summary>
                   <p className="mt-2 border-t border-[var(--totk-dark-ocher)]/30 pt-2 leading-relaxed">
-                    Values come from the bot&apos;s <code className="rounded bg-[var(--botw-black)] px-1 font-mono text-[10px] text-[var(--totk-ivory)]">progress</code>{" "}
-                    field. Token amounts mirror payouts when recorded.
+                    Each participant row stores a <code className="rounded bg-[var(--botw-black)] px-1 font-mono text-[10px] text-[var(--totk-ivory)]">progress</code>{" "}
+                    value the bot and dashboard both read. Changing it with <strong className="text-[var(--totk-ivory)]">Save all statuses</strong> only updates the
+                    quest document (timestamps below)—it does <strong className="text-[var(--totk-ivory)]">not</strong> credit tokens or run the full reward
+                    pipeline. The <strong className="text-[var(--totk-ivory)]">Tokens</strong> column reflects{" "}
+                    <code className="rounded bg-[var(--botw-black)] px-1 font-mono text-[10px]">tokensEarned</code> (and related flags) when they exist.
                   </p>
-                  <ul className="mt-2 list-inside list-disc space-y-1 pl-1 leading-relaxed">
+                  <ul className="mt-2 list-inside list-disc space-y-2 pl-1 leading-relaxed">
                     <li>
-                      <span className="text-[var(--totk-ivory)]">active</span> — Still in the quest; requirements not finished (or not synced yet).
+                      <span className="text-[var(--totk-ivory)]">active</span> — Still in the quest; requirements not finished (or not synced yet).{" "}
+                      <span className="text-[var(--totk-grey-200)]/95">
+                        <strong className="text-[var(--totk-grey-200)]">In the system:</strong> treated as in-progress; if you set this from the dashboard,
+                        completion / reward / disqualify timestamps on that row are cleared so the participant is not considered finished or paid-out here.
+                      </span>
                     </li>
                     <li>
                       <span className="text-[var(--totk-ivory)]">completed</span> — Requirements met. If <strong className="text-[var(--totk-ivory)]">Tokens</strong> is
                       empty, the bot may not have written <code className="rounded bg-[var(--botw-black)] px-1 font-mono text-[10px]">tokensEarned</code> yet, or
                       tokens were paid only in Sheikah. Use <strong className="text-[var(--totk-ivory)]">Sync reward status</strong> to align the row without paying
-                      again.
+                      again.{" "}
+                      <span className="text-[var(--totk-grey-200)]/95">
+                        <strong className="text-[var(--totk-grey-200)]">In the system:</strong> <code className="rounded bg-[var(--botw-black)] px-1 font-mono text-[10px]">completedAt</code> is
+                        set (when missing); the user is <strong className="text-[var(--totk-ivory)]">not</strong> automatically given quest tokens just from this
+                        status—payout is handled by <strong className="text-[var(--totk-ivory)]">Mark N completed</strong> (or the bot).
+                      </span>
                     </li>
                     <li>
                       <span className="text-[var(--totk-ivory)]">rewarded</span> — Stored as rewarded, or progress is completed and tokens are already set (paid /
-                      recorded).
+                      recorded).{" "}
+                      <span className="text-[var(--totk-grey-200)]/95">
+                        <strong className="text-[var(--totk-grey-200)]">In the system:</strong> <code className="rounded bg-[var(--botw-black)] px-1 font-mono text-[10px]">rewardedAt</code> is
+                        set; the row usually has <code className="rounded bg-[var(--botw-black)] px-1 font-mono text-[10px]">tokensEarned</code> matching the quest
+                        reward after a real payout; join/complete flow treats them as done and paid for this quest.
+                      </span>
                     </li>
                     <li>
-                      <span className="text-[var(--totk-ivory)]">failed</span> — Did not complete (e.g. time ran out or dropped).
+                      <span className="text-[var(--totk-ivory)]">failed</span> — Did not complete (e.g. time ran out or dropped).{" "}
+                      <span className="text-[var(--totk-grey-200)]/95">
+                        <strong className="text-[var(--totk-grey-200)]">In the system:</strong> no completion payout; completion / reward timestamps are cleared so
+                        the row is closed out without a reward path (unless you move them back to <span className="text-[var(--totk-ivory)]">active</span> and fix
+                        data manually).
+                      </span>
                     </li>
                     <li>
-                      <span className="text-[var(--totk-ivory)]">disqualified</span> — Removed for rules or location issues.
+                      <span className="text-[var(--totk-ivory)]">disqualified</span> — Removed for rules or location issues.{" "}
+                      <span className="text-[var(--totk-grey-200)]/95">
+                        <strong className="text-[var(--totk-grey-200)]">In the system:</strong> <code className="rounded bg-[var(--botw-black)] px-1 font-mono text-[10px]">disqualifiedAt</code> is
+                        set and a staff reason is recorded (defaults to <code className="rounded bg-[var(--botw-black)] px-1 font-mono text-[10px]">dashboard</code> if
+                        none was provided); they should not receive quest completion rewards while disqualified.
+                      </span>
                     </li>
                   </ul>
+                  <p className="mt-2 border-t border-[var(--totk-dark-ocher)]/30 pt-2 leading-relaxed">
+                    <strong className="text-[var(--totk-ivory)]">Mark completed</strong> (per-row checkbox) plus{" "}
+                    <strong className="text-[var(--totk-ivory)]">Mark N completed</strong> runs the <strong className="text-[var(--totk-ivory)]">full quest reward</strong>:
+                    those users are marked through completion in the database, credited the quest&apos;s configured token reward (if any), receive a token
+                    transaction and quest-completion entry on their profile, and the row ends as <span className="text-[var(--totk-ivory)]">rewarded</span> with
+                    <code className="rounded bg-[var(--botw-black)] px-1 font-mono text-[10px]"> tokensEarned</code> set. Rows that are already{" "}
+                    <span className="text-[var(--totk-ivory)]">rewarded</span> or already have tokens on the quest are skipped so nothing is double-paid.
+                  </p>
                 </details>
               </div>
               <div className="flex-1 overflow-y-auto p-3 sm:p-4">
@@ -2383,11 +2441,11 @@ export default function AdminQuestsPage() {
                         </div>
                       )}
                       <p className="mb-3 text-xs text-[var(--totk-grey-200)]">
-                        Use each row&apos;s <strong className="text-[var(--totk-ivory)]">Status</strong> menu to fix progress (e.g.{" "}
-                        <span className="text-[var(--totk-ivory)]">failed</span> → <span className="text-[var(--totk-ivory)]">active</span>) without paying tokens.
-                        Check &quot;Mark completed&quot; for participants who finished the quest, then use{" "}
-                        <strong className="text-[var(--totk-ivory)]">Mark N completed</strong> to grant tokens and log completion.
-                        If the bot already paid tokens but the row is wrong, use{" "}
+                        Choose each row&apos;s <strong className="text-[var(--totk-ivory)]">Status</strong>, then click{" "}
+                        <strong className="text-[var(--totk-ivory)]">Save all statuses</strong> to apply (no token payout). Check{" "}
+                        <strong className="text-[var(--totk-ivory)]">Mark completed</strong> for participants who finished the quest, then use{" "}
+                        <strong className="text-[var(--totk-ivory)]">Mark N completed</strong> to grant tokens and log completion. If the bot
+                        already paid tokens but the row is wrong, use{" "}
                         <span className="text-[var(--totk-ivory)]">Sync reward status</span> (updates the quest row only; does not send tokens again).
                       </p>
                       <p className="mb-3 text-[10px] leading-relaxed text-[var(--totk-grey-200)]">
@@ -2414,12 +2472,11 @@ export default function AdminQuestsPage() {
                           </thead>
                           <tbody>
                             {entries.map(([userId, p]) => {
-                              const progressRaw = (p?.progress ?? "active") as string;
-                              const progress = PARTICIPANT_PROGRESS_VALUES.includes(
-                                progressRaw as (typeof PARTICIPANT_PROGRESS_VALUES)[number]
-                              )
-                                ? progressRaw
-                                : "active";
+                              const serverProgress = normalizeParticipantProgressValue(p?.progress);
+                              const progress =
+                                participantProgressDraft[userId] !== undefined
+                                  ? normalizeParticipantProgressValue(participantProgressDraft[userId])
+                                  : serverProgress;
                               const tokensEarned = p?.tokensEarned;
                               const submissionTok =
                                 typeof p?.submissionRewardTokenAmount === "number" &&
@@ -2434,9 +2491,10 @@ export default function AdminQuestsPage() {
                                   ? tokensEarned
                                   : submissionTok;
                               const canMark =
-                                progress !== "rewarded" && !hasQuestTokens;
+                                serverProgress !== "rewarded" && !hasQuestTokens;
+                              const statusControlsBusy =
+                                participantProgressBulkSaving || manageParticipantsSaving;
                               const isSelected = selectedParticipantIds.includes(userId);
-                              const statusBusy = participantProgressSavingId !== null;
                               return (
                                 <tr
                                   key={userId}
@@ -2449,6 +2507,7 @@ export default function AdminQuestsPage() {
                                           type="checkbox"
                                           checked={isSelected}
                                           onChange={() => toggleParticipantSelected(userId)}
+                                          disabled={statusControlsBusy}
                                           className="rounded border-[var(--totk-dark-ocher)]"
                                         />
                                         <span className="text-xs text-[var(--totk-grey-200)]">Mark</span>
@@ -2480,12 +2539,17 @@ export default function AdminQuestsPage() {
                                     <div className="flex flex-col gap-1">
                                       <select
                                         value={progress}
-                                        disabled={statusBusy}
-                                        title="Updates bot participant progress only; does not send tokens."
+                                        disabled={statusControlsBusy}
+                                        title="Pick a status, then use Save all statuses. Does not send tokens."
                                         onChange={(e) => {
                                           const next = e.target.value;
-                                          if (next === progress) return;
-                                          void updateParticipantProgress(userId, next);
+                                          const nextNorm = normalizeParticipantProgressValue(next);
+                                          setParticipantProgressDraft((prev) => {
+                                            const nextDraft = { ...prev };
+                                            if (nextNorm === serverProgress) delete nextDraft[userId];
+                                            else nextDraft[userId] = nextNorm;
+                                            return nextDraft;
+                                          });
                                         }}
                                         className="w-full min-w-[9rem] max-w-[14rem] rounded border border-[var(--totk-dark-ocher)] bg-[var(--botw-warm-black)] px-2 py-1.5 text-xs font-medium text-[var(--totk-ivory)] disabled:opacity-50"
                                       >
@@ -2495,8 +2559,8 @@ export default function AdminQuestsPage() {
                                           </option>
                                         ))}
                                       </select>
-                                      {participantProgressSavingId === userId && (
-                                        <span className="text-[10px] text-[var(--totk-grey-200)]">Saving…</span>
+                                      {participantProgressDraft[userId] !== undefined && (
+                                        <span className="text-[10px] text-amber-300/90">Unsaved</span>
                                       )}
                                       {progress === "completed" && hasQuestTokens && (
                                         <span className="text-[10px] leading-snug text-[var(--totk-grey-200)]">
@@ -2534,7 +2598,12 @@ export default function AdminQuestsPage() {
                   <button
                     type="button"
                     onClick={() => void syncRewardProgressFromQuest()}
-                    disabled={syncRewardProgressLoading || !manageQuest}
+                    disabled={
+                      syncRewardProgressLoading ||
+                      !manageQuest ||
+                      participantProgressBulkSaving ||
+                      manageParticipantsSaving
+                    }
                     title="Sets progress to rewarded when tokensEarned is already set (e.g. bot payout); does not grant tokens."
                     className="rounded-md border border-[var(--totk-light-green)]/50 px-4 py-2 text-sm font-medium text-[var(--totk-light-green)] hover:bg-[var(--totk-light-green)]/10 disabled:opacity-50 disabled:cursor-not-allowed"
                   >
@@ -2544,8 +2613,27 @@ export default function AdminQuestsPage() {
                 {manageQuest && Object.keys(manageQuest.participants ?? {}).length > 0 && (
                   <button
                     type="button"
+                    onClick={() => void saveAllParticipantStatuses()}
+                    disabled={
+                      participantProgressBulkSaving ||
+                      manageParticipantsSaving ||
+                      Object.keys(participantProgressDraft).length === 0
+                    }
+                    title="Writes every row where you changed the Status dropdown (no token payout)."
+                    className="rounded-md border border-[var(--totk-mid-ocher)]/80 px-4 py-2 text-sm font-semibold text-[var(--totk-ivory)] hover:bg-[var(--totk-dark-ocher)]/30 disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {participantProgressBulkSaving ? "Saving..." : "Save all statuses"}
+                  </button>
+                )}
+                {manageQuest && Object.keys(manageQuest.participants ?? {}).length > 0 && (
+                  <button
+                    type="button"
                     onClick={saveManageParticipants}
-                    disabled={manageParticipantsSaving || selectedParticipantIds.length === 0}
+                    disabled={
+                      manageParticipantsSaving ||
+                      selectedParticipantIds.length === 0 ||
+                      participantProgressBulkSaving
+                    }
                     className="rounded-md bg-[var(--totk-mid-ocher)]/80 px-4 py-2 text-sm font-semibold text-[var(--totk-ivory)] hover:bg-[var(--totk-dark-ocher)] disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     {manageParticipantsSaving ? "Saving..." : `Mark ${selectedParticipantIds.length} completed`}

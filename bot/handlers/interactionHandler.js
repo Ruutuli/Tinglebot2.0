@@ -16,6 +16,8 @@ const { handleItemLookupInteraction } = require('../handlers/itemLookupHandler')
 const BOT_REPORTS_CHANNEL_ID = '1379974822506795030';
 const IMPLEMENTATION_TRACK_CHANNEL_ID = '1381442926667763773';
 
+const { handlePendingSubmissionCancelReaction } = require('./submissionHandler');
+
 
 // ============================================================================
 // ------------------- Function: handleInteraction -------------------
@@ -105,6 +107,9 @@ const initializeReactionHandler = (client) => {
           await reaction.message.edit({ embeds: [embed] });
         }
       }
+
+      const submissionWithdrawHandled = await handlePendingSubmissionCancelReaction(client, reaction, user);
+      if (submissionWithdrawHandled) return;
 
       // Bot-reports channel: specific implementation-tracking message reactions
       const isX = reaction.emoji.name === '❌' || reaction.emoji.name === '✖️';

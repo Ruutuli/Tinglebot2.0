@@ -2376,11 +2376,13 @@ async function runSubmissionApproval(client, { submissionId, action, reason, mod
                   }
                 } else {
                   // Log as warning for expected failures, error for unexpected ones
-                  const isExpectedFailure = questResult.reason && 
-                      (questResult.reason.includes('not an Art quest') || 
-                       questResult.reason.includes('not a Writing quest') ||
-                       questResult.reason.includes('not active') ||
-                       questResult.reason === 'No quest ID');
+                  const failMsg = `${questResult.reason || ''} ${questResult.error || ''}`;
+                  const isExpectedFailure =
+                      questResult.reason === 'No quest ID' ||
+                      failMsg.includes('not an Art quest') ||
+                      failMsg.includes('not a Writing quest') ||
+                      failMsg.includes('not active') ||
+                      failMsg.toLowerCase().includes('not a participant');
                   
                   if (isExpectedFailure) {
                       console.log(`[mod.js]: ℹ️ Quest completion skipped: ${questResult.reason || questResult.error}`);
@@ -2399,11 +2401,13 @@ async function runSubmissionApproval(client, { submissionId, action, reason, mod
                   }
                 } else {
                   // Log as warning for expected failures, error for unexpected ones
-                  const isExpectedFailure = questResult.reason && 
-                      (questResult.reason.includes('not an Art quest') || 
-                       questResult.reason.includes('not a Writing quest') ||
-                       questResult.reason.includes('not active') ||
-                       questResult.reason === 'No quest ID');
+                  const failMsg = `${questResult.reason || ''} ${questResult.error || ''}`;
+                  const isExpectedFailure =
+                      questResult.reason === 'No quest ID' ||
+                      failMsg.includes('not an Art quest') ||
+                      failMsg.includes('not a Writing quest') ||
+                      failMsg.includes('not active') ||
+                      failMsg.toLowerCase().includes('not a participant');
                   
                   if (isExpectedFailure) {
                       console.log(`[mod.js]: ℹ️ Quest completion skipped: ${questResult.reason || questResult.error}`);

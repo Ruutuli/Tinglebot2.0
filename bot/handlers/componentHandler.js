@@ -83,6 +83,8 @@ const {
   findLatestSubmissionIdForUser 
 } = require('@/utils/storage');
 
+const { attachSubmissionWithdrawReaction } = require('./submissionHandler');
+
 const {
   calculateTokens,
   generateTokenBreakdown
@@ -331,7 +333,9 @@ async function handleConfirmation(interaction, userId, submissionData) {
       }
       
       sentMessage = await submissionsChannel.send({ embeds: [embed] });
-      
+
+      await attachSubmissionWithdrawReaction(sentMessage);
+
       // Update with message URL
       messageUrl = `https://discord.com/channels/${interaction.guildId}/${submissionsChannel.id}/${sentMessage.id}`;
       await updateSubmissionData(submissionData.submissionId, {

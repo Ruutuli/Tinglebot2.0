@@ -37,15 +37,142 @@ const {
   retrieveSubmissionFromStorage, 
   deleteSubmissionFromStorage,
   findLatestSubmissionIdForUser,
-  parseSubmissionIdFromDiscordEmbed
+  parseSubmissionIdFromDiscordEmbed,
+  normalizeSubmissionStorageKey
 } = require('@/utils/storage');
+
 const { applyTeacherTokensBoost, applyScholarTokensBoost } = require('../modules/boostingModule');
-const { 
+const {
   retrieveBoostingRequestFromTempDataByCharacter,
   saveBoostingRequestToTempData,
   updateBoostAppliedMessage,
   getEffectiveJob
 } = require('../commands/jobs/boosting');
+
+const APPROVAL_CHANNEL_ID = '1381479893090566144';
+
+async function clearQuestSubmissionLinkForCancellation(userId, submissionData) {
+  const qe = submissionData.questEvent;
+  if (!qe || qe === 'N/A') return;
+
+  const Quest = require('@/models/QuestModel');
+  const quest = await Quest.findOne({ questID: String(qe).trim() });
+  if (!quest) return;
+
+  const participant = quest.getParticipant(userId);
+  const info = participant?.questSubmissionInfo;
+  if (!info?.submissionId) return;
+  const normLinked = normalizeSubmissionStorageKey(info.submissionId);
+  const normSubmission = normalizeSubmissionStorageKey(submissionData.submissionId);
+  if (normLinked !== normSubmission) return;
+
+  participant.questSubmissionInfo = null;
+  participant.updatedAt = new Date();
+  await quest.save();
+}
+
+async function updateApprovalQueueWithdrawnEmbed(client, submissionId, withdrawerTag) {
+  try {
+    const approvalChannel = client.channels.cache.get(APPROVAL_CHANNEL_ID);
+    if (!approvalChannel?.isTextBased()) return;
+    const messages = await approvalChannel.messages.fetch({ limit: 100 });
+    const normalizedTarget = normalizeSubmissionStorageKey(submissionId).toLowerCase();
+    const notificationMessage = messages.find((msg) => {
+      const em = msg.embeds[0];
+      if (!em?.fields?.length) return false;
+      return em.fields.some((f) => {
+        if (!String(f.name).includes('Submission ID')) return false;
+        const fromField = normalizeSubmissionStorageKey(String(f.value).replace(/`/g, '')).toLowerCase();
+        return fromField === normalizedTarget;
+      });
+    });
+    if (!notificationMessage) return;
+    const src = notificationMessage.embeds[0];
+    const next = EmbedBuilder.from(src)
+      .setTitle('⚪ Withdrawn by submitter')
+      .setColor(0x95a5a6)
+      .setDescription(
+        'The author withdrew this submission (reacted with ❌). It no longer awaits review.'
+      )
+      .setFooter({ text: `Withdrawn by ${withdrawerTag}`, iconURL: undefined });
+    await notificationMessage.edit({ embeds: [next] });
+  } catch (e) {
+    console.warn(`[submissionHandler.js]: Mod queue withdraw update failed: ${e.message}`);
+  }
+}
+
+/** Places ❌ under public submission posts so members can react to withdraw before mod review. */
+async function attachSubmissionWithdrawReaction(message) {
+  try {
+    await message.react('❌');
+  } catch (e) {
+    console.warn(`[submissionHandler.js]: Could not add ❌ reaction: ${e.message}`);
+  }
+}
+
+/**
+ * ❌ reaction on submission embed — only pending TempData submissions; submitter clears storage + quest link.
+ * @returns {Promise<boolean>} true if this reaction was handled (including wrong-user removals), false otherwise
+ */
+async function handlePendingSubmissionCancelReaction(client, reaction, user) {
+  const emojiName = reaction.emoji?.name;
+  const isX = emojiName === '❌' || emojiName === '✖️';
+  if (!isX) return false;
+
+  try {
+    if (reaction.partial) await reaction.fetch();
+    const msg = reaction.message;
+    if (msg.partial) await msg.fetch();
+
+    const embedRaw = msg.embeds?.[0];
+    if (!embedRaw || !msg.guildId) return false;
+
+    const submissionId = parseSubmissionIdFromDiscordEmbed(embedRaw);
+    if (!submissionId) return false;
+
+    const submissionData = await retrieveSubmissionFromStorage(submissionId);
+    if (!submissionData) return false;
+
+    if (submissionData.tokenCalculation === 'No tokens - Display only') {
+      await reaction.users.remove(user.id).catch(() => {});
+      return true;
+    }
+
+    if (submissionData.userId !== user.id) {
+      await reaction.users.remove(user.id).catch(() => {});
+      return true;
+    }
+
+    const ApprovedSubmission = require('@/models/ApprovedSubmissionModel');
+    const normalizedId = normalizeSubmissionStorageKey(submissionId);
+    const alreadyApproved = await ApprovedSubmission.findOne({ submissionId: normalizedId }).lean();
+    if (alreadyApproved) {
+      await reaction.users.remove(user.id).catch(() => {});
+      return true;
+    }
+
+    await clearQuestSubmissionLinkForCancellation(user.id, submissionData);
+    await deleteSubmissionFromStorage(submissionId);
+
+    try {
+      const upd = EmbedBuilder.from(embedRaw);
+      upd.setFooter({
+        text: '🚫 Withdrawn by submitter — no longer pending review.',
+        iconURL: undefined,
+      });
+      await msg.edit({ embeds: [upd] });
+    } catch (editErr) {
+      console.error(`[submissionHandler.js]: Failed to edit withdrawn post: ${editErr.message}`);
+    }
+
+    await updateApprovalQueueWithdrawnEmbed(client, submissionId, user.tag);
+
+    return true;
+  } catch (err) {
+    console.error('[submissionHandler.js]: handlePendingSubmissionCancelReaction', err);
+    return false;
+  }
+}
 
 async function resolveTaggedCharacter(characterName, userId = null) {
   if (!characterName || typeof characterName !== 'string') {
@@ -424,8 +551,9 @@ async function handleSubmissionCompletion(interaction) {
     const embed = submissionData.category === 'writing'
       ? createWritingSubmissionEmbed(submissionData)
       : createArtSubmissionEmbed(submissionData);
-    const sentMessage = await interaction.reply({ embeds: [embed] });
+    const sentMessage = await interaction.reply({ embeds: [embed], fetchReply: true });
     console.log(`[submissionHandler.js]: ✅ Submission embed sent`);
+    await attachSubmissionWithdrawReaction(sentMessage);
 
     // Update submission data with message URL
     submissionData.messageUrl = `https://discord.com/channels/${interaction.guildId}/${interaction.channelId}/${sentMessage.id}`;
@@ -827,4 +955,10 @@ async function fulfillTokenBoost(characterOrName, client) {
 
 // ------------------- Exported Functions -------------------
 // Exports the submission action handlers for use in other parts of the application.
-module.exports = { handleSubmitAction, handleSubmissionCompletion, handleCancelSubmission };
+module.exports = {
+  handleSubmitAction,
+  handleSubmissionCompletion,
+  handleCancelSubmission,
+  attachSubmissionWithdrawReaction,
+  handlePendingSubmissionCancelReaction,
+};

@@ -25,8 +25,62 @@ const {
 } = require('@/utils/storage.js');
 const { uploadSubmissionImage } = require('@/utils/uploadUtils.js');
 const { createWritingSubmissionEmbed, createArtSubmissionEmbed, updateBoostRequestEmbed, getPendingSubmissionApprovalDescription } = require('../../embeds/embeds.js');
-const User = require('@/models/UserModel.js'); 
+const User = require('@/models/UserModel.js');
+const QuestModel = require('@/models/QuestModel.js');
 const { generateUniqueId } = require('@/utils/uniqueIdUtils.js');
+
+const { attachSubmissionWithdrawReaction } = require('../../handlers/submissionHandler.js');
+
+const SHEIKAH_SLATE_QUEST_JOIN = '641858948802150400';
+
+/** Requires /quest join before linking a monthly Quest (Art / Writing) to a submission. */
+async function enforceQuestJoinBeforeSubmission(userId, questId, category, interaction) {
+  const raw = (questId && String(questId).trim()) || '';
+  if (!raw || raw === 'N/A') return true;
+
+  let quest;
+  try {
+    quest = await QuestModel.findOne({ questID: raw });
+  } catch (e) {
+    handleInteractionError(e, 'submit.js');
+    await interaction.editReply({
+      content: '❌ **Could not verify quest signup.** Please try again later.',
+      ephemeral: true,
+    });
+    return false;
+  }
+
+  if (!quest) return true;
+
+  const isWriting = category === 'writing';
+  const isArt = category === 'art';
+
+  const typeMatches =
+    (isWriting && (quest.questType === 'Writing' || quest.questType === 'Art / Writing')) ||
+    (isArt && (quest.questType === 'Art' || quest.questType === 'Art / Writing'));
+
+  if (!typeMatches) {
+    const typeLabel = quest.questType || 'unknown type';
+    await interaction.editReply({
+      content: isWriting
+        ? `❌ **Quest \`${raw}\`** is a **${typeLabel}** quest. This writing submission cannot use that quest ID — use a writing or art/writing quest, or leave quest ID empty.`
+        : `❌ **Quest \`${raw}\`** is a **${typeLabel}** quest. This art submission cannot use that quest ID — use an art or art/writing quest, or leave quest ID empty.`,
+      ephemeral: true,
+    });
+    return false;
+  }
+
+  const participant = quest.getParticipant(userId);
+  if (!participant || participant.progress !== 'active') {
+    await interaction.editReply({
+      content: `❌ **You are not signed up for quest \`${raw}\`** as an active participant (or you already finished / were removed).\nJoin with \`/quest join\` in <#${SHEIKAH_SLATE_QUEST_JOIN}> first, then submit again. If you do not want quest credit, omit the quest ID or use \`N/A\`.`,
+      ephemeral: true,
+    });
+    return false;
+  }
+
+  return true;
+}
 const { applyScholarTokensBoost } = require('../../modules/boostingModule');
 const {
   retrieveBoostingRequestFromTempDataByCharacter,
@@ -439,6 +493,10 @@ module.exports = {
           return;
         }
 
+        if (!(await enforceQuestJoinBeforeSubmission(user.id, questId, 'art', interaction))) {
+          return;
+        }
+
         const fileName = path.basename(attachedFile.name);
         const discordImageUrl = attachedFile.url;
 
@@ -580,6 +638,10 @@ module.exports = {
         const userData = await User.findOne({ discordId: user.id });
         if (!userData) {
           await interaction.editReply({ content: '❌ **User data not found. Please try again later.**' });
+          return;
+        }
+
+        if (!(await enforceQuestJoinBeforeSubmission(user.id, questId, 'writing', interaction))) {
           return;
         }
     
@@ -745,6 +807,7 @@ module.exports = {
         // Post the embed publicly in the submissions channel
         const submissionsChannel = interaction.client.channels.cache.get('940446392789389362');
         const sentMessage = await submissionsChannel.send({ embeds: [embed] });
+        await attachSubmissionWithdrawReaction(sentMessage);
         
         // Update with message URL
         await updateSubmissionData(submissionId, { 
