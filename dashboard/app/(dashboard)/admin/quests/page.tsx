@@ -274,6 +274,8 @@ type QuestRecord = {
   tableRollName?: string;
   tableRollNames?: string[];
   requiredRolls?: number;
+  /** Interactive: successful = criteria-based; any_roll = every roll on listed tables counts toward requiredRolls */
+  rollRequirementCounts?: "successful" | "any_roll";
   participants?: Record<
     string,
     {
@@ -404,6 +406,7 @@ type FormState = {
   minRequirements: string;
   tableroll: string;
   requiredRolls: string;
+  rollRequirementCounts: "successful" | "any_roll";
   tokenFlat: string;
   tokenPerUnit: string;
   tokenUnit: string;
@@ -446,6 +449,7 @@ const emptyForm: FormState = {
   minRequirements: "",
   tableroll: "",
   requiredRolls: "1",
+  rollRequirementCounts: "successful",
   tokenFlat: "",
   tokenPerUnit: "",
   tokenUnit: "",
@@ -649,6 +653,8 @@ function questToForm(q: QuestRecord): FormState {
         : "",
     tableroll: tablerollForm,
     requiredRolls: q.requiredRolls != null ? String(q.requiredRolls) : "1",
+    rollRequirementCounts:
+      q.rollRequirementCounts === "any_roll" ? "any_roll" : "successful",
     tokenFlat: parsed.tokenFlat,
     tokenPerUnit: parsed.tokenPerUnit,
     tokenUnit: parsed.tokenUnit,
@@ -740,6 +746,7 @@ function formToBody(f: FormState, isEdit: boolean): Record<string, unknown> {
     botNotes: f.botNotes.trim() || null,
     itemRewards: f.itemRewards.filter((r) => r.name.trim()).map((r) => ({ name: r.name.trim(), quantity: Math.max(0, r.quantity) || 1 })),
     requiredRolls: parseInt(f.requiredRolls, 10) || 1,
+    rollRequirementCounts: f.rollRequirementCounts,
     artWritingMode: f.artWritingMode === "either" ? "either" : "both",
   };
 
@@ -1943,7 +1950,8 @@ export default function AdminQuestsPage() {
                             <div className="sm:col-span-2">
                               <label className="mb-1 block text-sm font-medium text-[var(--totk-grey-200)]">Table rolls</label>
                               <p className="mb-1 text-xs text-[var(--totk-grey-200)]">
-                                Use the checklist above and/or enter names: one per line, or comma-separated. Rolls on any listed table count toward this quest (same success rules for all).
+                                Use the checklist above and/or enter names: one per line, or comma-separated. Progress updates only when someone runs{" "}
+                                <code className="text-[0.8125rem]">/tableroll roll</code> on a table whose name is listed here (Discord matches exactly).
                               </p>
                               <textarea
                                 rows={4}
@@ -1956,6 +1964,25 @@ export default function AdminQuestsPage() {
                             <div>
                               <label className="mb-1 block text-sm font-medium text-[var(--totk-grey-200)]">Required rolls</label>
                               <input type="number" min={1} value={form.requiredRolls} onChange={(e) => setField("requiredRolls", e.target.value)} className="w-full rounded border border-[var(--totk-dark-ocher)] bg-[var(--botw-warm-black)] px-3 py-2 text-[var(--totk-ivory)]" />
+                            </div>
+                            <div className="sm:col-span-2">
+                              <label className="mb-1 block text-sm font-medium text-[var(--totk-grey-200)]">What counts toward required rolls?</label>
+                              <select
+                                value={form.rollRequirementCounts}
+                                onChange={(e) =>
+                                  setField(
+                                    "rollRequirementCounts",
+                                    e.target.value === "any_roll" ? "any_roll" : "successful"
+                                  )
+                                }
+                                className="w-full max-w-md rounded border border-[var(--totk-dark-ocher)] bg-[var(--botw-warm-black)] pl-3 pr-8 py-2 text-[var(--totk-ivory)]"
+                              >
+                                <option value="successful">Only rolls that pass success criteria (if set via bot/API)</option>
+                                <option value="any_roll">Every roll on the listed table(s), regardless of outcome</option>
+                              </select>
+                              <p className="mt-1 text-xs text-[var(--totk-grey-200)]">
+                                Pick &quot;every roll&quot; for pure volume (&quot;roll this table 5 times&quot;). Criteria-based mode matches legacy behavior when mods attach roll success rules.
+                              </p>
                             </div>
                           </>
                         )}

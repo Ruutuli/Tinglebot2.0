@@ -83,6 +83,13 @@ async function getItemImage(itemName) {
   return null;
 }
 
+/** Discord embed: how we describe roll progress toward requiredRolls */
+function questRollProgressLabel(quest) {
+  return quest?.rollRequirementCounts === 'any_roll'
+    ? 'rolls on quest table(s)'
+    : 'successful rolls';
+}
+
 // ------------------- Helper function to find active interactive quests for user -------------------
 async function findActiveInteractiveQuests(userId) {
   try {
@@ -646,8 +653,9 @@ module.exports = {
            const participant = quest.participants.get(userId);
            
            if (result.success) {
+             const rollProgLabel = questRollProgressLabel(quest);
              const questProgressText = `**${quest.title}** (ID: \`${quest.questID}\`)\n` +
-               `> 🎯 Progress: ${result.totalSuccessfulRolls}/${result.requiredRolls} successful rolls\n` +
+               `> 🎯 Progress: ${result.totalSuccessfulRolls}/${result.requiredRolls} ${rollProgLabel}\n` +
                `> ${result.isSuccess ? '✅' : '❌'} This roll was ${result.isSuccess ? 'successful' : 'unsuccessful'}\n` +
                `> ${result.questCompleted ? '🏆 Quest completed!' : '⏳ Quest in progress...'}`;
              

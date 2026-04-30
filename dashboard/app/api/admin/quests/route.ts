@@ -25,6 +25,13 @@ function normalizeRpThreadCountOnCreate(raw: unknown): number {
   return Math.min(MAX_QUEST_RP_THREADS_CREATE, Math.max(1, Math.floor(n)));
 }
 
+/** Interactive quests: whether requiredRolls means criteria passes vs every roll on quest table(s). */
+function normalizeRollRequirementCounts(raw: unknown): "successful" | "any_roll" {
+  return typeof raw === "string" && raw.trim().toLowerCase() === "any_roll"
+    ? "any_roll"
+    : "successful";
+}
+
 // Parse "ItemName:qty" or "Item1:1; Item2:2" into itemReward/itemRewardQty or itemRewards
 function parseItemRewards(
   itemReward: string | null | undefined,
@@ -338,6 +345,7 @@ export async function POST(req: NextRequest) {
       tableRollName: tr.tableRollName,
       tableRollNames: tr.tableRollNames,
       requiredRolls: requiredRollsVal,
+      rollRequirementCounts: normalizeRollRequirementCounts(body.rollRequirementCounts),
       tokenReward: tokenRewardVal,
       itemReward: itemRewardsFinal?.length === 1 ? itemRewardsFinal[0].name : itemParsed.itemReward,
       itemRewardQty: itemRewardsFinal?.length === 1 ? itemRewardsFinal[0].quantity : itemParsed.itemRewardQty,

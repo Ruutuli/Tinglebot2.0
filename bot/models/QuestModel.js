@@ -179,7 +179,13 @@ const additionalFields = {
     tableRollNames: { type: [String], default: [] }, // One or more table names for Interactive quests
     tableRollConfig: { type: Schema.Types.Mixed, default: null }, // Configuration for table roll requirements
     requiredRolls: { type: Number, default: 1 }, // Number of successful rolls required
-    rollSuccessCriteria: { type: String, default: null } // What constitutes a successful roll
+    rollSuccessCriteria: { type: String, default: null }, // What constitutes a successful roll
+    /** successful = count only rolls that pass rollSuccessCriteria; any_roll = every roll on quest table(s) counts toward requiredRolls */
+    rollRequirementCounts: {
+        type: String,
+        enum: ['successful', 'any_roll'],
+        default: 'successful',
+    },
 };
 
 // ============================================================================
@@ -1081,7 +1087,12 @@ questSchema.methods.setTableRollConfig = function(tableRollNameOrNames, config =
     this.tableRollConfig = config;
     this.requiredRolls = config.requiredRolls || 1;
     this.rollSuccessCriteria = config.successCriteria || null;
-    
+    const rrc =
+        typeof config.rollRequirementCounts === 'string'
+            ? config.rollRequirementCounts.trim().toLowerCase()
+            : '';
+    this.rollRequirementCounts = rrc === 'any_roll' ? 'any_roll' : 'successful';
+
     return this;
 };
 
@@ -1244,8 +1255,10 @@ questSchema.methods.processTableRoll = async function(userId, rollResult) {
         };
         
         participant.tableRollResults.push(rollEntry);
-        
-        if (isSuccess) {
+
+        const countAnyRollOnQuestTable =
+            String(this.rollRequirementCounts || 'successful').toLowerCase() === 'any_roll';
+        if (countAnyRollOnQuestTable || isSuccess) {
             participant.successfulRolls += 1;
         }
         

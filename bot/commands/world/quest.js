@@ -1282,8 +1282,13 @@ formatQuestCount(count = 0) {
     return `${p.characterName}: ${successfulRolls}/${requiredRolls}`;
    }).join('\n');
 
+   const rollFieldTitle =
+    quest.rollRequirementCounts === 'any_roll'
+     ? `🎲 Table rolls (${requiredRolls} required, any outcome)`
+     : `🎲 Rolls Required (${requiredRolls})`;
+
    embed.data.fields[rollFieldIndex] = {
-    name: `🎲 Rolls Required (${requiredRolls})`,
+    name: rollFieldTitle,
     value: rollStatus.length > 1024 ? rollStatus.substring(0, 1021) + "..." : rollStatus,
     inline: false
    };
