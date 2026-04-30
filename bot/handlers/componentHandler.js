@@ -408,8 +408,11 @@ async function handleConfirmation(interaction, userId, submissionData) {
         if (hasCollaborators) {
           const collaborators = Array.isArray(submissionData.collab) ? submissionData.collab : [submissionData.collab];
           const totalParticipants = 1 + collaborators.length;
-          const splitTokens = Math.floor(totalTokens / totalParticipants);
-          tokenDisplay += ` (${splitTokens} each)`;
+          const perPerson =
+            breakdown && typeof breakdown === 'object' && Number.isFinite(breakdown.tokensPerPerson)
+              ? breakdown.tokensPerPerson
+              : Math.floor(totalTokens / totalParticipants);
+          tokenDisplay += ` (${perPerson} each)`;
         }
 
         // Build notification fields dynamically

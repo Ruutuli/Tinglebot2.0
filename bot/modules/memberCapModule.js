@@ -2,7 +2,7 @@
 // OC reservation intake + member cap tracker (Discord roster / slots)
 // ============================================================================
 
-const { EmbedBuilder } = require('discord.js');
+const { EmbedBuilder, PermissionFlagsBits } = require('discord.js');
 const Character = require('@/models/CharacterModel');
 const OcReservation = require('@/models/OcReservationModel');
 const MemberCapTracker = require('@/models/MemberCapTrackerModel');
@@ -19,7 +19,64 @@ const INACTIVE_ROLE_ID =
 const TRAVELER_ROLE_ID =
   process.env.TRAVELER_ROLE_ID || '788137818135330837';
 
+/** Discord resident roles only — matches scripts/reportVillageRoster.js (voice-style counts). */
+const RESIDENT_ROLE_IDS = {
+  rudania: '630837341124034580',
+  inariko: '631507660524486657',
+  vhintl: '631507736508629002',
+};
+
 const VILLAGES = ['rudania', 'inariko', 'vhintl'];
+
+/** Villages this member holds a resident role for (same IDs as roster report). */
+function villagesFromRoles(member) {
+  const found = [];
+  for (const v of VILLAGES) {
+    const rid = RESIDENT_ROLE_IDS[v];
+    if (rid && member.roles.cache.has(rid)) found.push(v);
+  }
+  return found;
+}
+
+/** Roots.Admin + optional env — same rule as scripts/reportVillageRoster.js. */
+const ROOTS_ADMIN_USER_ID = '668281042414600212';
+
+function excludedFromMemberCountsIds() {
+  const ids = new Set([ROOTS_ADMIN_USER_ID]);
+  String(process.env.VILLAGE_ROSTER_EXCLUDED_USER_IDS || '')
+    .split(',')
+    .map((s) => s.trim())
+    .filter(Boolean)
+    .forEach((id) => ids.add(id));
+  return ids;
+}
+
+/** Match embed title in buildTrackerEmbed — used to find an existing tracker post in-channel. */
+const TRACKER_EMBED_TITLE = 'Member cap tracker';
+
+/** Server custom emoji IDs for tracker + mod reactions (override via env). */
+const VILLAGE_CUSTOM_EMOJI_ID = {
+  rudania: process.env.MEMBER_CAP_EMOJI_RUDANIA_ID || '899492917452890142',
+  inariko: process.env.MEMBER_CAP_EMOJI_INARIKO_ID || '899493009073274920',
+  vhintl: process.env.MEMBER_CAP_EMOJI_VHINTL_ID || '899492879205007450',
+};
+
+function villageEmojiMarkup(key) {
+  const name =
+    key === 'rudania' ? 'rudania' : key === 'inariko' ? 'inariko' : 'vhintl';
+  const id = VILLAGE_CUSTOM_EMOJI_ID[key];
+  if (!id) return villageDisplay(key);
+  return `<:${name}:${id}>`;
+}
+
+function villageEmojiIdToKey() {
+  const map = {};
+  for (const v of VILLAGES) {
+    const id = VILLAGE_CUSTOM_EMOJI_ID[v];
+    if (id) map[String(id)] = v;
+  }
+  return map;
+}
 
 function villageCaps() {
   return {
@@ -126,17 +183,22 @@ async function snapshotOccupancy(guild, primaryByUser, reserveUserIds) {
   const villUserIds = { rudania: [], inariko: [], vhintl: [] };
   let activeWithChars = 0;
   let inactiveWithChars = 0;
+  const excludedIds = excludedFromMemberCountsIds();
 
-  for (const [uid, v] of primaryByUser) {
-    if (!guild.members.cache.has(uid)) continue;
-    const member = guild.members.cache.get(uid);
-    const inactive = member?.roles.cache.has(INACTIVE_ROLE_ID) ?? false;
-    villUserIds[v].push(uid);
-    if (inactive) {
-      inactiveWithChars++;
-      inactivePerVillage[v]++;
-    } else {
-      activeWithChars++;
+  // Voice-channel style: each village count = holders of that Discord resident role ID only.
+  for (const m of guild.members.cache.values()) {
+    if (m.user.bot) continue;
+    if (excludedIds.has(m.id)) continue;
+    const keys = villagesFromRoles(m);
+    if (!keys.length) continue;
+
+    const inactive = m.roles.cache.has(INACTIVE_ROLE_ID);
+    if (inactive) inactiveWithChars++;
+    else activeWithChars++;
+
+    for (const v of keys) {
+      villUserIds[v].push(m.id);
+      if (inactive) inactivePerVillage[v]++;
     }
   }
 
@@ -160,9 +222,12 @@ async function snapshotOccupancy(guild, primaryByUser, reserveUserIds) {
   let travelerOnly = 0;
   for (const m of guild.members.cache.values()) {
     if (m.user.bot) continue;
+    if (excludedIds.has(m.id)) continue;
     if (!m.roles.cache.has(TRAVELER_ROLE_ID)) continue;
     if (acceptedIds.has(m.id)) continue;
     if (reserveUserIds.has(m.id)) continue;
+    // Exclude anyone already counted under a village resident role (avoids double-count in totals).
+    if (villagesFromRoles(m).length > 0) continue;
     travelerOnly++;
   }
 
@@ -184,7 +249,7 @@ async function snapshotOccupancy(guild, primaryByUser, reserveUserIds) {
   };
 }
 
-function formatTrackerMessage(snapshot, dateLabel) {
+function buildTrackerEmbed(snapshot, dateLabel) {
   const r = snapshot.inactivePerVillage.rudania;
   const i = snapshot.inactivePerVillage.inariko;
   const v = snapshot.inactivePerVillage.vhintl;
@@ -195,25 +260,93 @@ function formatTrackerMessage(snapshot, dateLabel) {
   const ir = snapshot.reservedPerVillage.inariko;
   const vr = snapshot.reservedPerVillage.vhintl;
 
-  const lines = [
-    `**Member Cap Tracker Update:** ${dateLabel}`,
-    '',
-    `${snapshot.activeWithChars} Active Members`,
-    `${snapshot.inactiveWithChars} Inactive Members (${r} Rudania, ${i} Inariko, ${v} Vhintl)`,
-    `${snapshot.travelerOnly} Traveler`,
-    `${snapshot.reservationTotal} Reserve`,
-    '',
-    `**Total with Reserved OCs:** ${snapshot.grandTotal} Members`,
-    '',
-    '**Village Totals**',
-    '',
-    `:rudania: Rudania: ${rudUsers} in (${r} Inactive), ${rr} reserved — ${rudUsers + rr} Members (${snapshot.slotsRemaining.rudania} slots remaining)`,
-    `:inariko: Inariko: ${inaUsers} in (${i} Inactive), ${ir} reserved — ${inaUsers + ir} Members (${snapshot.slotsRemaining.inariko} slots remaining)`,
-    `:vhintl: Vhintl: ${vhiUsers} in (${v} Inactive), ${vr} reserved — ${vhiUsers + vr} Members (${snapshot.slotsRemaining.vhintl} slots remaining)`,
-    '',
-    `_Caps: Rudania ${snapshot.caps.rudania}, Inariko ${snapshot.caps.inariko}, Vhintl ${snapshot.caps.vhintl}. Tracker updates when reservations post or roles change (and periodically)._`,
-  ];
-  return lines.join('\n');
+  const overview =
+    `**${snapshot.activeWithChars}** Active (Discord resident role · unique)\n` +
+    `**${snapshot.inactiveWithChars}** Inactive (${r} Rudania · ${i} Inariko · ${v} Vhintl · dual-role counted per village)\n` +
+    `**${snapshot.travelerOnly}** Traveler\n` +
+    `**${snapshot.reservationTotal}** Reserve\n\n` +
+    `**Total with Reserved OCs:** **${snapshot.grandTotal}** members`;
+
+  const fmtVillageBlock = (key, residents, inactiveCt, reserved, slotsLeft) => {
+    const totalMembers = residents + reserved;
+    const em = villageEmojiMarkup(key);
+    return (
+      `${em} **${villageDisplay(key)}**\n` +
+      `\`${residents}\` with resident role (\`${inactiveCt}\` inactive) · \`${reserved}\` reserved\n` +
+      `→ **${totalMembers}** toward cap · **${slotsLeft}** slots left`
+    );
+  };
+
+  const rudBlock = fmtVillageBlock(
+    'rudania',
+    rudUsers,
+    r,
+    rr,
+    snapshot.slotsRemaining.rudania
+  );
+  const inaBlock = fmtVillageBlock(
+    'inariko',
+    inaUsers,
+    i,
+    ir,
+    snapshot.slotsRemaining.inariko
+  );
+  const vhiBlock = fmtVillageBlock(
+    'vhintl',
+    vhiUsers,
+    v,
+    vr,
+    snapshot.slotsRemaining.vhintl
+  );
+
+  const villagesCombined = `${rudBlock}\n\n${inaBlock}\n\n${vhiBlock}`;
+
+  return new EmbedBuilder()
+    .setColor(0xc9a227)
+    .setTitle(TRACKER_EMBED_TITLE)
+    .setDescription(`**Update ·** ${dateLabel}`)
+    .addFields(
+      { name: 'Server snapshot', value: overview, inline: false },
+      { name: 'Village totals', value: villagesCombined, inline: false },
+      {
+        name: 'Caps',
+        value:
+          `${villageEmojiMarkup('rudania')} ${snapshot.caps.rudania} · ` +
+          `${villageEmojiMarkup('inariko')} ${snapshot.caps.inariko} · ` +
+          `${villageEmojiMarkup('vhintl')} ${snapshot.caps.vhintl}\n` +
+          '_Per-village numbers = Discord resident role holders (same as roster report voice counts). Refreshes on reserves, mod roster reactions, role changes (~45s debounce), and every 15 min._',
+        inline: false,
+      }
+    )
+    .setTimestamp();
+}
+
+/**
+ * Reuse the live tracker message: DB id first, then scan channel for our embed title.
+ * Avoids duplicate posts when the DB row is missing or the message id is stale.
+ */
+async function resolveTrackerMessage(channel, client, storedMessageId) {
+  if (storedMessageId) {
+    try {
+      const m = await channel.messages.fetch(storedMessageId);
+      if (m?.author?.id === client.user.id) return m;
+    } catch {
+      /* deleted, lost access, or wrong channel */
+    }
+  }
+
+  try {
+    const recent = await channel.messages.fetch({ limit: 75 });
+    for (const m of recent.values()) {
+      if (m.author?.id !== client.user.id) continue;
+      const title = m.embeds?.[0]?.title;
+      if (title === TRACKER_EMBED_TITLE) return m;
+    }
+  } catch (err) {
+    logger.warn(FILE, `Tracker channel scan failed: ${err.message}`);
+  }
+
+  return null;
 }
 
 async function refreshMemberCapTracker(client) {
@@ -247,34 +380,28 @@ async function refreshMemberCapTracker(client) {
     year: 'numeric',
     timeZone: 'America/New_York',
   });
-  const body = formatTrackerMessage(snapshot, dateLabel);
+  const embed = buildTrackerEmbed(snapshot, dateLabel);
+  const payload = { embeds: [embed], content: null };
 
-  let doc = await MemberCapTracker.findOne({ guildId: guild.id });
-  let msg = null;
-  if (doc?.messageId) {
-    try {
-      msg = await channel.messages.fetch(doc.messageId);
-    } catch {
-      msg = null;
-    }
-  }
+  const doc = await MemberCapTracker.findOne({ guildId: guild.id });
+  let msg = await resolveTrackerMessage(channel, client, doc?.messageId);
 
   if (!msg) {
-    msg = await channel.send(body);
-    await MemberCapTracker.findOneAndUpdate(
-      { guildId: guild.id },
-      {
-        guildId: guild.id,
-        channelId: channel.id,
-        messageId: msg.id,
-      },
-      { upsert: true }
-    );
+    msg = await channel.send(payload);
     logger.info(FILE, `Posted new member cap tracker message ${msg.id}`);
-    return;
+  } else {
+    await msg.edit(payload);
   }
 
-  await msg.edit(body);
+  await MemberCapTracker.findOneAndUpdate(
+    { guildId: guild.id },
+    {
+      guildId: guild.id,
+      channelId: channel.id,
+      messageId: msg.id,
+    },
+    { upsert: true }
+  );
 }
 
 let trackerRefreshTimer = null;
@@ -293,7 +420,191 @@ function scheduleTrackerRefresh(client, ms = 45000) {
 const TIP_RESERVE_VS_APP =
   '**This channel is for reserves and full roster posts.**\n' +
   '• **Slot reserve (bot tracks it):** exactly **Character Name | Village** — only two fields, nothing else.\n' +
+  '• **Mods may also react** with a village emoji (<:rudania:…>, <:inariko:…>, <:vhintl:…>) on someone’s roster post to log that reserve.\n' +
   '• **Full application (roster line):** at minimum **character name** and **home village** (Rudania / Inariko / Vhintl), e.g. `Name | Race | Village | Virtue | Job | Image` per the pinned template.';
+
+const MOD_ROLE_ID_DEFAULT = process.env.MOD_ROLE_ID || '606128760655183882';
+
+async function memberCanModerateReserves(member) {
+  if (!member) return false;
+  if (member.permissions.has(PermissionFlagsBits.Administrator)) return true;
+  if (member.permissions.has(PermissionFlagsBits.ManageGuild)) return true;
+  if (MOD_ROLE_ID_DEFAULT && member.roles.cache.has(MOD_ROLE_ID_DEFAULT)) return true;
+  return false;
+}
+
+/**
+ * Persist reservation + announcement embed + tracker refresh (member posts & mod reactions).
+ */
+async function executeReservationFlow(message, client, options) {
+  const {
+    villageNorm,
+    characterName,
+    suppressReserveTips,
+    replyIntro,
+    moderatorMember,
+  } = options;
+
+  await message.guild.members.fetch().catch(() => null);
+
+  const existingReserve = await OcReservation.findOne({
+    userId: message.author.id,
+    guildId: message.guild.id,
+  }).lean();
+
+  const userCharCount = await countAcceptedCharacters(message.author.id);
+  const primaryByUser = await buildPrimaryVillageByUser();
+  const reserveUserIds = new Set(
+    await OcReservation.distinct('userId', { guildId: message.guild.id })
+  );
+  const snapshot = await snapshotOccupancy(message.guild, primaryByUser, reserveUserIds);
+
+  if (userCharCount === 0) {
+    const existingNorm = existingReserve
+      ? normalizeVillage(existingReserve.village)
+      : null;
+    const slotDeltaForTarget = existingNorm === villageNorm ? 0 : 1;
+    const pressure =
+      snapshot.villUserIds[villageNorm].length +
+      snapshot.reservedPerVillage[villageNorm] +
+      slotDeltaForTarget;
+    if (pressure > snapshot.caps[villageNorm]) {
+      await message.reply({
+        content: `❌ **${villageDisplay(villageNorm)} is full** for first-character reservations (${snapshot.caps[villageNorm]} slots). Applicant doesn’t have an accepted character yet.`,
+      }).catch(() => {});
+      return { ok: false, reason: 'full' };
+    }
+  }
+
+  await OcReservation.findOneAndUpdate(
+    { userId: message.author.id },
+    {
+      userId: message.author.id,
+      characterName,
+      village: villageNorm,
+      guildId: message.guild.id,
+      sourceChannelId: message.channel.id,
+      sourceMessageId: message.id,
+    },
+    { upsert: true, new: true }
+  );
+
+  const dupChar = await Character.findOne({
+    ...acceptedCharacterQuery(),
+    name: new RegExp(`^${characterName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'i'),
+  }).lean();
+
+  const reserveEmbed = new EmbedBuilder()
+    .setColor(0xd889a4)
+    .setTitle('OC RESERVATION')
+    .addFields(
+      { name: 'CHARACTER NAME', value: characterName },
+      {
+        name: 'VILLAGE',
+        value: `${villageEmojiMarkup(villageNorm)} ${villageDisplay(villageNorm)}`,
+      },
+      {
+        name: 'APPLICANT',
+        value: `${message.author} (${message.author.tag})`,
+      },
+      {
+        name: 'DATE OF RESERVE',
+        value: new Date().toLocaleDateString('en-US', { timeZone: 'America/New_York' }),
+      },
+      {
+        name: 'ORIGINAL MESSAGE',
+        value: `[Jump](${message.url})`,
+      }
+    );
+
+  if (moderatorMember) {
+    reserveEmbed.addFields({
+      name: 'LOGGED BY',
+      value: `${moderatorMember.user.tag} (${moderatorMember.id})`,
+    });
+  }
+
+  if (dupChar) {
+    reserveEmbed.addFields({
+      name: 'NOTE',
+      value:
+        'A character with this name already exists in the database — mods may still follow up if this is intentional.',
+    });
+  }
+
+  const tipSuffix = suppressReserveTips ? '' : `\n\n${TIP_RESERVE_VS_APP}`;
+  await message.reply({
+    content: `${replyIntro}${tipSuffix}`,
+    embeds: [reserveEmbed],
+    allowedMentions: { users: [message.author.id] },
+  }).catch(() => {});
+
+  await refreshMemberCapTracker(client).catch((err) =>
+    logger.error(FILE, `Tracker refresh after reserve: ${err.message}`)
+  );
+
+  logger.info(
+    FILE,
+    `Reserve logged: ${characterName} → ${villageNorm} for ${message.author.tag}${moderatorMember ? ` by mod ${moderatorMember.user.tag}` : ''}`
+  );
+
+  return { ok: true };
+}
+
+async function handleModReserveReaction(reaction, user, client) {
+  try {
+    if (user.bot) return;
+    if (reaction.partial) await reaction.fetch().catch(() => null);
+    if (reaction.message.partial) await reaction.message.fetch().catch(() => null);
+
+    const msg = reaction.message;
+    if (!msg.guild || msg.channelId !== OC_RESERVE_CHANNEL_ID) return;
+
+    const emojiId = reaction.emoji.id;
+    if (!emojiId) return;
+
+    const villageNorm = villageEmojiIdToKey()[String(emojiId)];
+    if (!villageNorm) return;
+
+    let moderator = msg.guild.members.cache.get(user.id);
+    if (!moderator) moderator = await msg.guild.members.fetch(user.id).catch(() => null);
+    if (!(await memberCanModerateReserves(moderator))) return;
+
+    if (msg.author.bot) return;
+
+    const rawLine = msg.content.split('\n').map((l) => l.trim()).find(Boolean);
+    if (!rawLine || !rawLine.includes('|')) {
+      await msg.reply({
+        content:
+          `❌ **Mod reserve:** React with ${villageEmojiMarkup(villageNorm)} only on posts that include **Character Name | …** (at least one pipe) so the OC name can be read.`,
+      }).catch(() => {});
+      return;
+    }
+
+    const parts = rawLine.split('|').map((p) => p.trim());
+    const characterName = parts[0];
+    if (!characterName || characterName.length > 80) {
+      await msg.reply({
+        content:
+          '❌ **Mod reserve:** The first field must be the **character name** (max 80 characters).',
+      }).catch(() => {});
+      return;
+    }
+
+    const intro =
+      `✅ **Reserve saved** (${villageEmojiMarkup(villageNorm)} **${villageDisplay(villageNorm)}**) via mod reaction by **${moderator.displayName}**.`;
+
+    await executeReservationFlow(msg, client, {
+      villageNorm,
+      characterName,
+      suppressReserveTips: true,
+      replyIntro: intro,
+      moderatorMember: moderator,
+    });
+  } catch (err) {
+    logger.error(FILE, `Mod reserve reaction: ${err.message}`);
+  }
+}
 
 async function handleOcReserveMessage(message, client) {
   if (!message.guild || message.channelId !== OC_RESERVE_CHANNEL_ID) return;
@@ -336,9 +647,10 @@ async function handleOcReserveMessage(message, client) {
     await message.reply({
       content:
         `✅ **Roster line looks OK** — I read **${appName}** and **${villageDisplay(villageNorm)}**.\n\n` +
-        `This is **not** saved as a slot reserve (that needs only two fields). ` +
+        `This is **not** saved as a slot reserve (that needs only two fields, or a mod ${villageEmojiMarkup(villageNorm)} reaction). ` +
         `Follow the pinned template for the rest, and submit through the dashboard when you’re ready.\n\n` +
-        `_If you only wanted a **reserve**, delete this and repost:_ \`${appName} | ${villageDisplay(villageNorm)}\``,
+        `_If you only wanted a **reserve**, delete this and repost:_ \`${appName} | ${villageDisplay(villageNorm)}\`\n` +
+        `_Mods:_ react with **${villageEmojiMarkup(villageNorm)}** on this message to log **${appName}** as a reserve for **${villageDisplay(villageNorm)}**.`,
       allowedMentions: { users: [] },
     });
     return;
@@ -373,102 +685,13 @@ async function handleOcReserveMessage(message, client) {
     return;
   }
 
-  await message.guild.members.fetch().catch(() => null);
-
-  const existingReserve = await OcReservation.findOne({
-    userId: message.author.id,
-    guildId: message.guild.id,
-  }).lean();
-
-  const userCharCount = await countAcceptedCharacters(message.author.id);
-  const primaryByUser = await buildPrimaryVillageByUser();
-  const reserveUserIds = new Set(
-    await OcReservation.distinct('userId', { guildId: message.guild.id })
-  );
-  const snapshot = await snapshotOccupancy(message.guild, primaryByUser, reserveUserIds);
-
-  if (userCharCount === 0) {
-    const existingNorm = existingReserve
-      ? normalizeVillage(existingReserve.village)
-      : null;
-    const slotDeltaForTarget =
-      existingNorm === villageNorm ? 0 : 1;
-    const pressure =
-      snapshot.villUserIds[villageNorm].length +
-      snapshot.reservedPerVillage[villageNorm] +
-      slotDeltaForTarget;
-    if (pressure > snapshot.caps[villageNorm]) {
-      await message.reply({
-        content: `❌ **${villageDisplay(villageNorm)} is full** for first-character reservations (${snapshot.caps[villageNorm]} slots). You don’t have an accepted character yet, so this village can’t hold another reserve.\n\nTry another village or wait for a slot to open.`,
-      });
-      return;
-    }
-  }
-
-  await OcReservation.findOneAndUpdate(
-    { userId: message.author.id },
-    {
-      userId: message.author.id,
-      characterName,
-      village: villageNorm,
-      guildId: message.guild.id,
-      sourceChannelId: message.channel.id,
-      sourceMessageId: message.id,
-    },
-    { upsert: true, new: true }
-  );
-
-  const dupChar = await Character.findOne({
-    ...acceptedCharacterQuery(),
-    name: new RegExp(`^${characterName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'i'),
-  }).lean();
-
-  const reserveEmbed = new EmbedBuilder()
-    .setColor(0xd889a4)
-    .setTitle('OC RESERVATION')
-    .addFields(
-      { name: 'CHARACTER NAME', value: characterName },
-      { name: 'VILLAGE', value: villageDisplay(villageNorm) },
-      {
-        name: 'APPLICANT',
-        value: `${message.author} (${message.author.tag})`,
-      },
-      {
-        name: 'DATE OF RESERVE',
-        value: new Date().toLocaleDateString('en-US', { timeZone: 'America/New_York' }),
-      },
-      {
-        name: 'ORIGINAL MESSAGE',
-        value: `[Jump](${message.url})`,
-      }
-    );
-
-  if (dupChar) {
-    reserveEmbed.addFields({
-      name: 'NOTE',
-      value:
-        'A character with this name already exists in the database — mods may still follow up if this is intentional.',
-    });
-  }
-
-  const reserveRecordedTip =
-    `✅ **Reserve recorded** — tracker updated.\n\n` +
-    `${TIP_RESERVE_VS_APP}`;
-
-  await message.reply({
-    content: reserveRecordedTip,
-    embeds: [reserveEmbed],
-    allowedMentions: { users: [message.author.id] },
+  await executeReservationFlow(message, client, {
+    villageNorm,
+    characterName,
+    suppressReserveTips: false,
+    replyIntro: '✅ **Reserve recorded** — tracker updated.',
+    moderatorMember: null,
   });
-
-  await refreshMemberCapTracker(client).catch((err) =>
-    logger.error(FILE, `Tracker refresh after reserve: ${err.message}`)
-  );
-
-  logger.info(
-    FILE,
-    `Reserve logged: ${characterName} → ${villageNorm} by ${message.author.tag}`
-  );
 }
 
 function registerMemberCapTracking(client) {
@@ -477,6 +700,14 @@ function registerMemberCapTracking(client) {
       await handleOcReserveMessage(message, client);
     } catch (err) {
       logger.error(FILE, `Reserve handler: ${err.message}`);
+    }
+  });
+
+  client.on('messageReactionAdd', async (reaction, user) => {
+    try {
+      await handleModReserveReaction(reaction, user, client);
+    } catch (err) {
+      logger.error(FILE, `Reserve reaction handler: ${err.message}`);
     }
   });
 

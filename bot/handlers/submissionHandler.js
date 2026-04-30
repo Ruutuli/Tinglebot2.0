@@ -481,8 +481,12 @@ async function handleSubmissionCompletion(interaction) {
         if (hasCollaborators) {
           const collaborators = Array.isArray(submissionData.collab) ? submissionData.collab : [submissionData.collab];
           const totalParticipants = 1 + collaborators.length;
-          const splitTokens = Math.floor(finalTokenAmount / totalParticipants);
-          tokenDisplay += ` (${splitTokens} each)`;
+          const tc = submissionData.tokenCalculation;
+          const perPerson =
+            tc && typeof tc === 'object' && Number.isFinite(tc.tokensPerPerson)
+              ? tc.tokensPerPerson
+              : Math.floor(finalTokenAmount / totalParticipants);
+          tokenDisplay += ` (${perPerson} each)`;
         }
 
         // Build notification fields dynamically

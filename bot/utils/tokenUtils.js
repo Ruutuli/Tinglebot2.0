@@ -199,6 +199,8 @@ function generateTokenBreakdown({
   collab = null, // Add collab parameter
   questBonus = 0, // Add quest bonus parameter
   groupMemeBonus = false,
+  /** When true, finalTokenAmount is the combined pool (legacy intermediate saves); otherwise per-person payout */
+  collabAmountIsPooledTotal = false,
 }) {
   const baseSection = baseSelections
     .map(base => {
@@ -332,19 +334,33 @@ function generateTokenBreakdown({
   }
   
   breakdown += `-----------------------------\n`;
-  breakdown += ` ${finalTokenAmount} Tokens`;
-  
-  // Calculate collaboration token split
+  let displayTokenTotal = finalTokenAmount;
+  let collabEachAmount = finalTokenAmount;
   if (collab) {
-    let splitTokens;
+    let collabParticipants;
     if (Array.isArray(collab) && collab.length > 0) {
-      const totalParticipants = 1 + collab.length; // 1 submitter + collaborators
-      splitTokens = Math.floor(finalTokenAmount / totalParticipants);
-      breakdown += `\n\nCollab Total Each (${totalParticipants} people): ${splitTokens} Tokens`;
+      collabParticipants = 1 + collab.length;
     } else if (typeof collab === 'string') {
-      // Legacy support for single collaborator
-      splitTokens = Math.floor(finalTokenAmount / 2);
-      breakdown += `\n\nCollab Total Each: ${splitTokens} Tokens`;
+      collabParticipants = 2;
+    }
+    if (collabParticipants) {
+      if (collabAmountIsPooledTotal) {
+        displayTokenTotal = finalTokenAmount;
+        collabEachAmount = Math.floor(finalTokenAmount / collabParticipants);
+      } else {
+        displayTokenTotal = finalTokenAmount * collabParticipants;
+        collabEachAmount = finalTokenAmount;
+      }
+    }
+  }
+  breakdown += ` ${displayTokenTotal} Tokens`;
+  
+  if (collab) {
+    if (Array.isArray(collab) && collab.length > 0) {
+      const totalParticipants = 1 + collab.length;
+      breakdown += `\n\nCollab Total Each (${totalParticipants} people): ${collabEachAmount} Tokens`;
+    } else if (typeof collab === 'string') {
+      breakdown += `\n\nCollab Total Each: ${collabEachAmount} Tokens`;
     }
   }
   

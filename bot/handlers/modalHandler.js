@@ -198,7 +198,8 @@ async function handleModalSubmission(interaction) {
         typeMultiplierCounts: updatedSubmissionData.typeMultiplierCounts,
         finalTokenAmount: totalTokens,
         collab: updatedSubmissionData.collab,
-        groupMemeBonus: updatedSubmissionData.isGroupMeme === true
+        groupMemeBonus: updatedSubmissionData.isGroupMeme === true,
+        collabAmountIsPooledTotal: true
       });
       
       // Update with final calculations

@@ -2046,8 +2046,13 @@ const createArtSubmissionEmbed = (submissionData) => {
   if (hasCollaborators) {
     const collaborators = Array.isArray(collab) ? collab : [collab];
     const totalParticipants = 1 + collaborators.length;
-    const splitTokens = Math.floor(finalTokenAmount / totalParticipants);
-    tokenDisplay = `${finalTokenAmount || 0} Tokens (${splitTokens} each)`;
+    const tc = tokenCalculation;
+    const perPerson =
+      tc && typeof tc === 'object' && Number.isFinite(tc.tokensPerPerson)
+        ? tc.tokensPerPerson
+        : Math.floor((finalTokenAmount || 0) / totalParticipants);
+    const poolTotal = perPerson * totalParticipants;
+    tokenDisplay = `${poolTotal} Tokens (${perPerson} each)`;
   }
   
   fields.push({ name: 'Token Total', value: tokenDisplay, inline: true });

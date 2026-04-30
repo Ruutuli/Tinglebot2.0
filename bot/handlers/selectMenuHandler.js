@@ -255,16 +255,27 @@ async function handleSelectMenuInteraction(interaction) {
         });
       }
 
-      // Calculate tokens with complete data
-      const { totalTokens, breakdown } = calculateTokens({
+      // Calculate tokens with complete data (per-person amount is the payout unit for collabs)
+      const { tokensPerPerson: baseTokensPerPerson, breakdown } = calculateTokens({
         ...updatedSubmissionData,
         questBonus,
         collabBonus,
         groupMemeBonus: isGroupMemeStep
       });
-      let finalTokenAmount = totalTokens;
+      let finalTokenAmount = baseTokensPerPerson;
+      const preBoostPerPerson = baseTokensPerPerson;
       const boostEffects = [];
       let boostTokenIncrease = 0;
+
+      const collabRaw = updatedSubmissionData.collab;
+      const hasCollabStored =
+        collabRaw &&
+        ((Array.isArray(collabRaw) && collabRaw.length > 0) || typeof collabRaw === 'string');
+      const participantCount = hasCollabStored
+        ? Array.isArray(collabRaw)
+          ? 1 + collabRaw.length
+          : 2
+        : 1;
 
       const taggedCharacters = Array.isArray(updatedSubmissionData.taggedCharacters)
         ? updatedSubmissionData.taggedCharacters
@@ -391,7 +402,7 @@ async function handleSelectMenuInteraction(interaction) {
         }
       }
 
-      boostTokenIncrease = Math.max(0, finalTokenAmount - totalTokens);
+      boostTokenIncrease = Math.max(0, finalTokenAmount - preBoostPerPerson);
       
       // Generate the breakdown string
       const breakdownString = generateTokenBreakdown({
@@ -408,10 +419,15 @@ async function handleSelectMenuInteraction(interaction) {
         groupMemeBonus: isGroupMemeStep
       });
 
-      // Update with final calculations
+      // Update with final calculations (tokenCalculation object is used for mod approval payouts)
       const submissionUpdatePayload = {
         finalTokenAmount,
-        tokenCalculation: breakdownString
+        tokenCalculation: {
+          ...breakdown,
+          tokensPerPerson: finalTokenAmount,
+          finalTotal: finalTokenAmount,
+          totalTokens: finalTokenAmount * participantCount
+        }
       };
 
       if (boostEffects.length > 0) {
@@ -431,7 +447,9 @@ async function handleSelectMenuInteraction(interaction) {
       if (boostEffects.length > 0) {
         confirmationMessage += `\n🎭 **Boost Effects**\n${boostEffects.join('\n')}`;
       }
-      confirmationMessage += `\n💰 **Final Total:** ${finalTokenAmount} tokens`;
+      confirmationMessage += hasCollabStored
+        ? `\n💰 **Final (each):** ${finalTokenAmount} tokens per person`
+        : `\n💰 **Final Total:** ${finalTokenAmount} tokens`;
 
       await interaction.update({
         content: `${confirmationMessage}\n\nClick "Confirm Submission" to finalize.`,

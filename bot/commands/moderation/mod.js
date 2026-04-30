@@ -2124,15 +2124,34 @@ async function runSubmissionApproval(client, { submissionId, action, reason, mod
     }
 
     const { userId, collab, finalTokenAmount, title, messageUrl } = submission;
-    
-    // finalTokenAmount is the canonical post-boost per-person total (Scholar Research Stipend, Teacher art, etc.).
-    // Prefer it over tokenCalculation for payout; fall back only if legacy submission lacks finalTokenAmount.
-    const tokensPerPerson =
-      finalTokenAmount != null
-        ? finalTokenAmount
-        : (submission.tokenCalculation?.tokensPerPerson ??
-            submission.tokenCalculation?.finalTotal ??
-            0);
+
+    const hasCollaborators =
+      collab &&
+      ((Array.isArray(collab) && collab.length > 0) ||
+        (typeof collab === 'string' && collab.trim() && collab !== 'N/A'));
+    const participantCount = hasCollaborators
+      ? Array.isArray(collab)
+        ? collab.length
+        : 1
+      : 0;
+    const totalParticipants = 1 + participantCount;
+
+    const tc = submission.tokenCalculation;
+    let tokensPerPerson;
+    if (hasCollaborators) {
+      if (tc && typeof tc === 'object' && Number.isFinite(tc.tokensPerPerson)) {
+        tokensPerPerson = tc.tokensPerPerson;
+      } else {
+        tokensPerPerson = Math.floor((finalTokenAmount ?? 0) / totalParticipants);
+      }
+    } else {
+      tokensPerPerson =
+        finalTokenAmount != null
+          ? finalTokenAmount
+          : (tc && typeof tc === 'object'
+              ? tc.tokensPerPerson ?? tc.finalTotal
+              : null) ?? 0;
+    }
   
     if (!messageUrl) {
       return {
@@ -2233,9 +2252,6 @@ async function runSubmissionApproval(client, { submissionId, action, reason, mod
         }
 
         let tokenErrors = [];
-        
-        // Check if collaboration exists (handle both array and legacy string format)
-        const hasCollaborators = collab && ((Array.isArray(collab) && collab.length > 0) || (typeof collab === 'string' && collab.trim() && collab !== 'N/A'));
         
         if (hasCollaborators) {
           // Handle both array and legacy string format

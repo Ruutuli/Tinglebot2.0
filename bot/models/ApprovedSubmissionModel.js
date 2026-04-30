@@ -196,7 +196,11 @@ approvedSubmissionSchema.virtual('isCollaboration').get(function() {
 
 approvedSubmissionSchema.virtual('splitTokens').get(function() {
   if (!this.isCollaboration) return this.finalTokenAmount;
-  const totalParticipants = 1 + this.collab.length; // 1 submitter + collaborators
+  const tc = this.tokenCalculation;
+  if (tc && typeof tc === 'object' && Number.isFinite(tc.tokensPerPerson)) {
+    return tc.tokensPerPerson;
+  }
+  const totalParticipants = 1 + this.collab.length;
   return Math.floor(this.finalTokenAmount / totalParticipants);
 });
 

@@ -2018,8 +2018,9 @@ function normalizeCollabMentionId(mention) {
 }
 
 /**
- * Credit all quest participants tied to this submission: collab mentions + tagged character names.
- * Each must be on the quest map; completes from submission when still active.
+ * Credit collaborators on this submission via Discord mentions only (each must be a quest participant).
+ * Tagged character names are for token boosts / display — they must not grant quest completion, or any
+ * roster character whose name is tagged (or name collisions) could incorrectly complete.
  */
 async function creditCollabAndTaggedParticipantsForArt(quest, submissionData, submitterUserId) {
     const questID = quest.questID;
@@ -2048,32 +2049,11 @@ async function creditCollabAndTaggedParticipantsForArt(quest, submissionData, su
             console.log(`[questRewardModule.js] ✅ Art quest collab credit: ${collabParticipant.characterName} in quest ${questID}`);
         }
     }
-
-    const tagged = Array.isArray(submissionData.taggedCharacters) ? submissionData.taggedCharacters : [];
-    for (const tag of tagged) {
-        const name = String(tag || '').trim();
-        if (!name) continue;
-        const taggedParticipant = Array.from(quest.participants.values()).find(
-            (p) => p.characterName && p.characterName.trim().toLowerCase() === name.toLowerCase()
-        );
-        if (!taggedParticipant) continue;
-        const pid = String(taggedParticipant.userId || '').trim();
-        if (!pid || creditedIds.has(pid)) continue;
-        creditedIds.add(pid);
-        await syncApprovedSubmissionsToParticipant(quest, taggedParticipant);
-        await quest.save();
-        if (taggedParticipant.progress === 'completed' || taggedParticipant.progress === 'rewarded') {
-            console.log(`[questRewardModule.js] ✅ Art quest tagged char already completed via sync: ${taggedParticipant.characterName} in quest ${questID}`);
-            continue;
-        }
-        if (taggedParticipant.progress !== 'active') continue;
-        const tagResult = await quest.completeFromArtSubmission(pid, submissionData);
-        if (tagResult.success) {
-            console.log(`[questRewardModule.js] ✅ Art quest tagged credit: ${taggedParticipant.characterName} in quest ${questID}`);
-        }
-    }
 }
 
+/**
+ * Same as art path: Discord collab mentions only — not tagged character names.
+ */
 async function creditCollabAndTaggedParticipantsForWriting(quest, submissionData, submitterUserId) {
     const questID = quest.questID;
     const collabList = submissionData.collab
@@ -2099,30 +2079,6 @@ async function creditCollabAndTaggedParticipantsForWriting(quest, submissionData
         const collabResult = await quest.completeFromWritingSubmission(collaboratorId, submissionData);
         if (collabResult.success) {
             console.log(`[questRewardModule.js] ✅ Writing quest collab credit: ${collabParticipant.characterName} in quest ${questID}`);
-        }
-    }
-
-    const tagged = Array.isArray(submissionData.taggedCharacters) ? submissionData.taggedCharacters : [];
-    for (const tag of tagged) {
-        const name = String(tag || '').trim();
-        if (!name) continue;
-        const taggedParticipant = Array.from(quest.participants.values()).find(
-            (p) => p.characterName && p.characterName.trim().toLowerCase() === name.toLowerCase()
-        );
-        if (!taggedParticipant) continue;
-        const pid = String(taggedParticipant.userId || '').trim();
-        if (!pid || creditedIds.has(pid)) continue;
-        creditedIds.add(pid);
-        await syncApprovedSubmissionsToParticipant(quest, taggedParticipant);
-        await quest.save();
-        if (taggedParticipant.progress === 'completed' || taggedParticipant.progress === 'rewarded') {
-            console.log(`[questRewardModule.js] ✅ Writing quest tagged char already completed via sync: ${taggedParticipant.characterName} in quest ${questID}`);
-            continue;
-        }
-        if (taggedParticipant.progress !== 'active') continue;
-        const tagResult = await quest.completeFromWritingSubmission(pid, submissionData);
-        if (tagResult.success) {
-            console.log(`[questRewardModule.js] ✅ Writing quest tagged credit: ${taggedParticipant.characterName} in quest ${questID}`);
         }
     }
 }
@@ -2165,9 +2121,9 @@ async function processArtQuestCompletionFromSubmission(submissionData, userId) {
             await quest.save();
         }
 
-        // Quest no longer active: still credit collab + tagged participants (was skipped before)
+        // Quest no longer active: still credit collab partners (Discord mentions) if any
         if (quest.status !== 'active') {
-            console.log(`[questRewardModule.js] ⚠️ Quest ${questID} is not active (status: ${quest.status}) — crediting collab/tagged participants if any`);
+            console.log(`[questRewardModule.js] ⚠️ Quest ${questID} is not active (status: ${quest.status}) — crediting collaborators if any`);
             await creditCollabAndTaggedParticipantsForArt(quest, submissionData, userId);
             await quest.save();
             if (participant && (participant.progress === 'completed' || participant.progress === 'rewarded')) {
@@ -2264,7 +2220,7 @@ async function processWritingQuestCompletionFromSubmission(submissionData, userI
         }
 
         if (quest.status !== 'active') {
-            console.log(`[questRewardModule.js] ⚠️ Quest ${questID} is not active (status: ${quest.status}) — crediting collab/tagged participants if any`);
+            console.log(`[questRewardModule.js] ⚠️ Quest ${questID} is not active (status: ${quest.status}) — crediting collaborators if any`);
             await creditCollabAndTaggedParticipantsForWriting(quest, submissionData, userId);
             await quest.save();
             if (participant && (participant.progress === 'completed' || participant.progress === 'rewarded')) {
