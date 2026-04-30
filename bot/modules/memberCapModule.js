@@ -10,6 +10,9 @@ const logger = require('@/utils/logger');
 
 const FILE = 'MEMBER_CAP';
 
+const BORDER_IMAGE =
+  'https://storage.googleapis.com/tinglebot/Graphics/border.png';
+
 const OC_RESERVE_CHANNEL_ID =
   process.env.OC_RESERVE_CHANNEL_ID || '814567241101475932';
 const MEMBER_CAP_TRACKER_CHANNEL_ID =
@@ -181,11 +184,22 @@ async function snapshotOccupancy(guild, primaryByUser, reserveUserIds) {
   const caps = villageCaps();
   const inactivePerVillage = { rudania: 0, inariko: 0, vhintl: 0 };
   const villUserIds = { rudania: [], inariko: [], vhintl: [] };
+  /** Members counted via Discord resident role only (pass 1). */
+  const residentRoleMembersCount = { rudania: 0, inariko: 0, vhintl: 0 };
+  /** Inactive members with no resident role, bucketed by first accepted OC home (pass 2). */
+  const ocInactiveSlotCount = { rudania: 0, inariko: 0, vhintl: 0 };
   let activeWithChars = 0;
   let inactiveWithChars = 0;
   const excludedIds = excludedFromMemberCountsIds();
 
-  // Voice-channel style: each village count = holders of that Discord resident role ID only.
+  let inactiveGuildWide = 0;
+  for (const m of guild.members.cache.values()) {
+    if (m.user.bot) continue;
+    if (excludedIds.has(m.id)) continue;
+    if (m.roles.cache.has(INACTIVE_ROLE_ID)) inactiveGuildWide++;
+  }
+
+  // Pass 1 — Discord resident roles (voice-style); inactive + role counts per village.
   for (const m of guild.members.cache.values()) {
     if (m.user.bot) continue;
     if (excludedIds.has(m.id)) continue;
@@ -198,8 +212,26 @@ async function snapshotOccupancy(guild, primaryByUser, reserveUserIds) {
 
     for (const v of keys) {
       villUserIds[v].push(m.id);
+      residentRoleMembersCount[v]++;
       if (inactive) inactivePerVillage[v]++;
     }
+  }
+
+  // Pass 2 — inactive, no resident role: village from first accepted OC (matches roster script).
+  // Still occupies a village slot toward cap.
+  for (const m of guild.members.cache.values()) {
+    if (m.user.bot) continue;
+    if (excludedIds.has(m.id)) continue;
+    if (!m.roles.cache.has(INACTIVE_ROLE_ID)) continue;
+    if (villagesFromRoles(m).length > 0) continue;
+
+    const pv = primaryByUser.get(m.id);
+    if (!pv || !VILLAGES.includes(pv)) continue;
+
+    villUserIds[pv].push(m.id);
+    inactivePerVillage[pv]++;
+    ocInactiveSlotCount[pv]++;
+    inactiveWithChars++;
   }
 
   const reservations = await OcReservation.find({ guildId: guild.id })
@@ -239,7 +271,10 @@ async function snapshotOccupancy(guild, primaryByUser, reserveUserIds) {
     caps,
     activeWithChars,
     inactiveWithChars,
+    inactiveGuildWide,
     inactivePerVillage,
+    residentRoleMembersCount,
+    ocInactiveSlotCount,
     villUserIds,
     reservedPerVillage,
     slotsRemaining,
@@ -260,20 +295,35 @@ function buildTrackerEmbed(snapshot, dateLabel) {
   const ir = snapshot.reservedPerVillage.inariko;
   const vr = snapshot.reservedPerVillage.vhintl;
 
+  const rrRole = snapshot.residentRoleMembersCount.rudania;
+  const irRole = snapshot.residentRoleMembersCount.inariko;
+  const vrRole = snapshot.residentRoleMembersCount.vhintl;
+  const rrOc = snapshot.ocInactiveSlotCount.rudania;
+  const irOc = snapshot.ocInactiveSlotCount.inariko;
+  const vrOc = snapshot.ocInactiveSlotCount.vhintl;
+
   const overview =
-    `**${snapshot.activeWithChars}** Active (Discord resident role · unique)\n` +
-    `**${snapshot.inactiveWithChars}** Inactive (${r} Rudania · ${i} Inariko · ${v} Vhintl · dual-role counted per village)\n` +
-    `**${snapshot.travelerOnly}** Traveler\n` +
-    `**${snapshot.reservationTotal}** Reserve\n\n` +
+    `**${snapshot.activeWithChars}** active · resident Discord role (unique)\n` +
+    `**${snapshot.inactiveGuildWide}** inactive · server-wide (inactive marker)\n` +
+    `**${snapshot.inactiveWithChars}** inactive · counted toward a village (${r} Rudania · ${i} Inariko · ${v} Vhintl) _(role **or** first OC if no resident role)_\n\n` +
+    `**${snapshot.travelerOnly}** traveler-only · **${snapshot.reservationTotal}** reserve\n\n` +
     `**Total with Reserved OCs:** **${snapshot.grandTotal}** members`;
 
-  const fmtVillageBlock = (key, residents, inactiveCt, reserved, slotsLeft) => {
-    const totalMembers = residents + reserved;
+  const fmtVillageBlock = (
+    key,
+    totalToward,
+    inactiveCt,
+    residentRoleCt,
+    ocInactiveCt,
+    reserved,
+    slotsLeft
+  ) => {
+    const vsCap = totalToward + reserved;
     const em = villageEmojiMarkup(key);
     return (
       `${em} **${villageDisplay(key)}**\n` +
-      `\`${residents}\` with resident role (\`${inactiveCt}\` inactive) · \`${reserved}\` reserved\n` +
-      `→ **${totalMembers}** toward cap · **${slotsLeft}** slots left`
+      `\`${totalToward}\` toward cap (\`${inactiveCt}\` inactive) — \`${residentRoleCt}\` resident role · \`${ocInactiveCt}\` inactive·first OC\n` +
+      `\`${reserved}\` reserved → **${vsCap}** vs cap · **${slotsLeft}** slots left`
     );
   };
 
@@ -281,6 +331,8 @@ function buildTrackerEmbed(snapshot, dateLabel) {
     'rudania',
     rudUsers,
     r,
+    rrRole,
+    rrOc,
     rr,
     snapshot.slotsRemaining.rudania
   );
@@ -288,6 +340,8 @@ function buildTrackerEmbed(snapshot, dateLabel) {
     'inariko',
     inaUsers,
     i,
+    irRole,
+    irOc,
     ir,
     snapshot.slotsRemaining.inariko
   );
@@ -295,16 +349,21 @@ function buildTrackerEmbed(snapshot, dateLabel) {
     'vhintl',
     vhiUsers,
     v,
+    vrRole,
+    vrOc,
     vr,
     snapshot.slotsRemaining.vhintl
   );
 
-  const villagesCombined = `${rudBlock}\n\n${inaBlock}\n\n${vhiBlock}`;
+  const villagesCombined =
+    `${rudBlock}\n\n${inaBlock}\n\n${vhiBlock}\n\n` +
+    `_Per village inactive (above): inactive marker **and** attributed via resident role **or** first accepted OC when they have no resident role._`;
 
   return new EmbedBuilder()
     .setColor(0xc9a227)
     .setTitle(TRACKER_EMBED_TITLE)
     .setDescription(`**Update ·** ${dateLabel}`)
+    .setImage(BORDER_IMAGE)
     .addFields(
       { name: 'Server snapshot', value: overview, inline: false },
       { name: 'Village totals', value: villagesCombined, inline: false },
@@ -313,8 +372,7 @@ function buildTrackerEmbed(snapshot, dateLabel) {
         value:
           `${villageEmojiMarkup('rudania')} ${snapshot.caps.rudania} · ` +
           `${villageEmojiMarkup('inariko')} ${snapshot.caps.inariko} · ` +
-          `${villageEmojiMarkup('vhintl')} ${snapshot.caps.vhintl}\n` +
-          '_Per-village numbers = Discord resident role holders (same as roster report voice counts). Refreshes on reserves, mod roster reactions, role changes (~45s debounce), and every 15 min._',
+          `${villageEmojiMarkup('vhintl')} ${snapshot.caps.vhintl}`,
         inline: false,
       }
     )
@@ -497,6 +555,7 @@ async function executeReservationFlow(message, client, options) {
   const reserveEmbed = new EmbedBuilder()
     .setColor(0xd889a4)
     .setTitle('OC RESERVATION')
+    .setImage(BORDER_IMAGE)
     .addFields(
       { name: 'CHARACTER NAME', value: characterName },
       {
@@ -573,22 +632,35 @@ async function handleModReserveReaction(reaction, user, client) {
     if (msg.author.bot) return;
 
     const rawLine = msg.content.split('\n').map((l) => l.trim()).find(Boolean);
-    if (!rawLine || !rawLine.includes('|')) {
+    if (!rawLine) {
       await msg.reply({
         content:
-          `❌ **Mod reserve:** React with ${villageEmojiMarkup(villageNorm)} only on posts that include **Character Name | …** (at least one pipe) so the OC name can be read.`,
+          `❌ **Mod reserve:** That message has no text to use as the OC name — members should post **Character Name | Village**, or mods can react on a **legacy** post with the OC name on the first line.`,
       }).catch(() => {});
       return;
     }
 
-    const parts = rawLine.split('|').map((p) => p.trim());
-    const characterName = parts[0];
-    if (!characterName || characterName.length > 80) {
-      await msg.reply({
-        content:
-          '❌ **Mod reserve:** The first field must be the **character name** (max 80 characters).',
-      }).catch(() => {});
-      return;
+    let characterName;
+    if (rawLine.includes('|')) {
+      const parts = rawLine.split('|').map((p) => p.trim());
+      characterName = parts[0];
+      if (!characterName || characterName.length > 80) {
+        await msg.reply({
+          content:
+            '❌ **Mod reserve:** The first field must be the **character name** (max 80 characters).',
+        }).catch(() => {});
+        return;
+      }
+    } else {
+      // Mod village emoji = override: village comes from the reaction (legacy reserves / old posts).
+      characterName = rawLine.slice(0, 80).trim();
+      if (!characterName) {
+        await msg.reply({
+          content:
+            `❌ **Mod reserve:** Couldn’t read a character name — use text on the first line, or **Name | Village**.`,
+        }).catch(() => {});
+        return;
+      }
     }
 
     const intro =
@@ -608,6 +680,7 @@ async function handleModReserveReaction(reaction, user, client) {
 
 async function handleOcReserveMessage(message, client) {
   if (!message.guild || message.channelId !== OC_RESERVE_CHANNEL_ID) return;
+  if (message.author.bot) return;
 
   const rawLine = message.content
     .split('\n')
