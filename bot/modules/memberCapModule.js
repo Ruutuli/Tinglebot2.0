@@ -576,7 +576,9 @@ async function executeReservationFlow(message, client, options) {
   );
   const snapshot = await snapshotOccupancy(message.guild, primaryByUser, reserveUserIds);
 
-  if (userCharCount === 0) {
+  // Member self-serve reserves only: enforce slot caps for applicants without an accepted OC yet.
+  // Mod emoji reaction is an override — no cap check (legacy / staff discretion).
+  if (userCharCount === 0 && !moderatorMember) {
     const existingNorm = existingReserve
       ? normalizeVillage(existingReserve.village)
       : null;
