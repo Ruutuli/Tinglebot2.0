@@ -240,6 +240,10 @@ function formatEndDateWithTime(d: Date): string {
   return `${month} ${day}${ord} 11:59 pm`;
 }
 
+/**
+ * RP thread parent picker options (forum / RP channels).
+ * Sync with bot: `QUEST_RP_PARENT_IDS_BY_VILLAGE` + `QUEST_RP_SHARED_PARENT_IDS` in `bot/utils/tableRollUtils.js`.
+ */
 const RP_THREAD_CHANNELS: { id: string; name: string }[] = [
   { id: "629027808274022410", name: "🔥》rudania" },
   { id: "717090447369043990", name: "🔥》akkala-parade-grounds" },
@@ -274,8 +278,6 @@ type QuestRecord = {
   tableRollName?: string;
   tableRollNames?: string[];
   requiredRolls?: number;
-  /** Interactive: successful = criteria-based; any_roll = every roll on listed tables counts toward requiredRolls */
-  rollRequirementCounts?: "successful" | "any_roll";
   participants?: Record<
     string,
     {
@@ -421,7 +423,6 @@ type FormState = {
   minRequirements: string;
   tableroll: string;
   requiredRolls: string;
-  rollRequirementCounts: "successful" | "any_roll";
   tokenFlat: string;
   tokenPerUnit: string;
   tokenUnit: string;
@@ -466,7 +467,6 @@ const emptyForm: FormState = {
   minRequirements: "",
   tableroll: "",
   requiredRolls: "1",
-  rollRequirementCounts: "successful",
   tokenFlat: "",
   tokenPerUnit: "",
   tokenUnit: "",
@@ -531,6 +531,15 @@ function parseTokenReward(tokenReward: string | number | undefined): ParsedToken
 
 function parseInteractiveTablerollTokens(raw: string): string[] {
   return [...new Set(raw.split(/[\n,]+/).map((s) => s.trim()).filter(Boolean))];
+}
+
+/** Discord thread snowflakes from manual override field (comma / newline / whitespace separated). */
+function parseManualRpThreadIds(raw: string): string[] {
+  const s = String(raw ?? "").trim();
+  if (!s) return [];
+  const tokens = s.split(/[\n,\s]+/).map((x) => x.trim()).filter(Boolean);
+  const uniq = [...new Set(tokens)];
+  return uniq.filter((id) => /^\d{17,25}$/.test(id));
 }
 
 /** Table row from GET /api/models/tablerolls when logged in as admin/mod (includes drafts). */
@@ -681,8 +690,6 @@ function questToForm(q: QuestRecord): FormState {
         : "",
     tableroll: tablerollForm,
     requiredRolls: q.requiredRolls != null ? String(q.requiredRolls) : "1",
-    rollRequirementCounts:
-      q.rollRequirementCounts === "any_roll" ? "any_roll" : "successful",
     tokenFlat: parsed.tokenFlat,
     tokenPerUnit: parsed.tokenPerUnit,
     tokenUnit: parsed.tokenUnit,
@@ -693,7 +700,14 @@ function questToForm(q: QuestRecord): FormState {
     rpThreadParentChannel: rpParentsForm[0]?.trim() || String(q.rpThreadParentChannel ?? ""),
     rpThreadParentChannels: rpParentsForm,
     rpThreadCount: String(rpCnt),
-    rpThreadId: String((q as { rpThreadId?: string }).rpThreadId ?? ""),
+    rpThreadId: (() => {
+      const rawIds = (q as { rpThreadIds?: unknown }).rpThreadIds;
+      const arr = Array.isArray(rawIds)
+        ? rawIds.map((x) => String(x ?? "").trim()).filter(Boolean)
+        : [];
+      if (arr.length) return arr.join(", ");
+      return String((q as { rpThreadId?: string }).rpThreadId ?? "").trim();
+    })(),
     collabAllowed: Boolean(q.collabAllowed),
     collabRule: String(q.collabRule ?? ""),
     questID: String(q.questID ?? ""),
@@ -762,7 +776,6 @@ function formToBody(f: FormState, isEdit: boolean): Record<string, unknown> {
       rpParentsBody[0]?.trim() || f.rpThreadParentChannel.trim() || null,
     rpThreadParentChannels: rpParentsBody,
     rpThreadCount: rpN,
-    rpThreadId: f.rpThreadId.trim() || null,
     collabAllowed: f.collabAllowed,
     collabRule: f.collabRule.trim() || null,
     posted: f.posted,
@@ -774,9 +787,14 @@ function formToBody(f: FormState, isEdit: boolean): Record<string, unknown> {
     botNotes: f.botNotes.trim() || null,
     itemRewards: f.itemRewards.filter((r) => r.name.trim()).map((r) => ({ name: r.name.trim(), quantity: Math.max(0, r.quantity) || 1 })),
     requiredRolls: parseInt(f.requiredRolls, 10) || 1,
-    rollRequirementCounts: f.rollRequirementCounts,
     artWritingMode: f.artWritingMode === "either" ? "either" : "both",
   };
+
+  const manualRpThreadIds = parseManualRpThreadIds(f.rpThreadId);
+  if (manualRpThreadIds.length > 0) {
+    body.rpThreadIds = manualRpThreadIds;
+    body.rpThreadId = manualRpThreadIds[0];
+  }
 
   if (isInteractiveStyleQuestType(f.questType)) {
     const tabs = parseInteractiveTablerollTokens(f.tableroll);
@@ -2011,9 +2029,21 @@ export default function AdminQuestsPage() {
                             </div>
                             {editingId && (
                               <div className="sm:col-span-2">
-                                <label className="mb-1 block text-sm font-medium text-[var(--totk-grey-200)]">RP Thread ID (manual override)</label>
-                                <input type="text" value={form.rpThreadId} onChange={(e) => setField("rpThreadId", e.target.value)} placeholder="e.g. 1234567890123456789" className="w-full rounded border border-[var(--totk-dark-ocher)] bg-[var(--botw-warm-black)] px-3 py-2 text-[var(--totk-ivory)]" />
-                                <p className="mt-1 text-xs text-[var(--totk-grey-200)]">Paste the Discord thread ID if you created the thread yourself (e.g. after a failed or wrong-type auto-create). Leave empty to use auto-created or existing.</p>
+                                <label className="mb-1 block text-sm font-medium text-[var(--totk-grey-200)]">
+                                  RP thread IDs (manual override)
+                                </label>
+                                <input
+                                  type="text"
+                                  value={form.rpThreadId}
+                                  onChange={(e) => setField("rpThreadId", e.target.value)}
+                                  placeholder="One ID, or several separated by commas or spaces (thread 1, thread 2, …)"
+                                  className="w-full rounded border border-[var(--totk-dark-ocher)] bg-[var(--botw-warm-black)] px-3 py-2 font-mono text-sm text-[var(--totk-ivory)]"
+                                />
+                                <p className="mt-1 text-xs text-[var(--totk-grey-200)]">
+                                  Paste Discord thread snowflakes if you created threads yourself (e.g. auto-create failed). Separate multiple IDs with{" "}
+                                  <span className="text-[var(--totk-ivory)]/90">commas</span>,{" "}
+                                  <span className="text-[var(--totk-ivory)]/90">spaces</span>, or new lines — first ID = Thread 1, second = Thread 2, matching the parent channel list above. Leave empty to keep existing or auto-created threads.
+                                </p>
                               </div>
                             )}
                             {form.questType === "RP" && (
@@ -2064,24 +2094,8 @@ export default function AdminQuestsPage() {
                             <div>
                               <label className="mb-1 block text-sm font-medium text-[var(--totk-grey-200)]">Required rolls</label>
                               <input type="number" min={1} value={form.requiredRolls} onChange={(e) => setField("requiredRolls", e.target.value)} className="w-full rounded border border-[var(--totk-dark-ocher)] bg-[var(--botw-warm-black)] px-3 py-2 text-[var(--totk-ivory)]" />
-                            </div>
-                            <div className="sm:col-span-2">
-                              <label className="mb-1 block text-sm font-medium text-[var(--totk-grey-200)]">What counts toward required rolls?</label>
-                              <select
-                                value={form.rollRequirementCounts}
-                                onChange={(e) =>
-                                  setField(
-                                    "rollRequirementCounts",
-                                    e.target.value === "any_roll" ? "any_roll" : "successful"
-                                  )
-                                }
-                                className="w-full max-w-md rounded border border-[var(--totk-dark-ocher)] bg-[var(--botw-warm-black)] pl-3 pr-8 py-2 text-[var(--totk-ivory)]"
-                              >
-                                <option value="successful">Only rolls that pass success criteria (if set via bot/API)</option>
-                                <option value="any_roll">Every roll on the listed table(s), regardless of outcome</option>
-                              </select>
                               <p className="mt-1 text-xs text-[var(--totk-grey-200)]">
-                                Pick &quot;every roll&quot; for pure volume (&quot;roll this table 5 times&quot;). Criteria-based mode matches legacy behavior when mods attach roll success rules.
+                                Each <code className="text-[0.8125rem]">/tableroll roll</code> on a listed table counts once toward this total.
                               </p>
                             </div>
                           </>

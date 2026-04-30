@@ -878,7 +878,7 @@ export default function AdminTablerollsPage() {
                 <div className="space-y-5">
                   <div className="border-b border-[var(--totk-dark-ocher)]/40 pb-3">
                     <h2 className="text-base font-semibold text-[var(--totk-ivory)]">Where &amp; how often</h2>
-                    <p className="mt-1 text-xs text-[var(--totk-grey-200)]">Optional locks; rolls always use Town Hall channel rules per village.</p>
+                    <p className="mt-1 text-xs text-[var(--totk-grey-200)]">Optional locks; Discord location rules match quest RP parents per village (see admin Quests channel list), plus *_TOWNHALL env.</p>
                   </div>
                   <div className="grid gap-5 sm:grid-cols-2">
                     <div>
@@ -1166,7 +1166,7 @@ export default function AdminTablerollsPage() {
               <div>
                 <h2 className="text-lg font-semibold text-[var(--totk-ivory)]">Table rolls</h2>
                 <p className="text-xs text-[var(--totk-grey-200)] mt-1">
-                  Daily limit applies to each table globally (Discord day). Village lock means only characters stationed there may roll—still uses Town Hall channel rules. Draft rolls do not appear in Discord or public selectors.
+                  Daily limit applies to each table globally (Discord day). Village lock means only characters stationed there may roll—rolls must be in that village’s Town Hall or village channel (Discord thread rules match the bot). Draft rolls do not appear in Discord or public selectors.
                 </p>
               </div>
             <div className="flex flex-wrap items-center gap-x-4 gap-y-2">

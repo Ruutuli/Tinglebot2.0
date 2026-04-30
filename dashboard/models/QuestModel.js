@@ -144,7 +144,7 @@ const participantSchema = {
         rolledAt: { type: Date, default: Date.now },
         success: { type: Boolean, default: false }
     }], // Track table roll results for interactive quests
-    successfulRolls: { type: Number, default: 0 }, // Count of successful rolls
+    successfulRolls: { type: Number, default: 0 }, // Rolls on quest-linked tables toward requiredRolls
     updatedAt: { type: Date, default: Date.now },
     // Completion tracking
     completionProcessed: { type: Boolean, default: false }, // Prevents duplicate reward processing
@@ -181,14 +181,8 @@ const additionalFields = {
     tableRollName: { type: String, default: null }, // Legacy; first of tableRollNames when set
     tableRollNames: { type: [String], default: [] },
     tableRollConfig: { type: Schema.Types.Mixed, default: null }, // Configuration for table roll requirements
-    requiredRolls: { type: Number, default: 1 }, // Number of successful rolls required
-    rollSuccessCriteria: { type: String, default: null }, // What constitutes a successful roll
-    /** successful = count only rolls that pass rollSuccessCriteria; any_roll = every roll on quest table(s) counts toward requiredRolls */
-    rollRequirementCounts: {
-        type: String,
-        enum: ['successful', 'any_roll'],
-        default: 'successful',
-    },
+    requiredRolls: { type: Number, default: 1 }, // Number of /tableroll rolls required on quest table(s)
+    rollSuccessCriteria: { type: String, default: null }, // Optional audit/tagging for roll history (does not gate progress)
 };
 
 // ============================================================================
@@ -395,14 +389,22 @@ function parseQuestDateStringToYearMonth0(dateStr) {
 
 // ------------------- Requirements Check ------------------
 // Logic intentionally mirrored in questRewardModule; keep in sync when changing completion rules.
+function resolveRequiredRolls(quest) {
+    const r = quest?.requiredRolls;
+    const n = typeof r === 'number' && Number.isFinite(r) ? r : Number(r);
+    if (Number.isFinite(n) && n >= 1) return Math.min(Math.floor(n), 100000);
+    return 1;
+}
+
 function meetsRequirements(participant, quest) {
-    const { questType, postRequirement, requiredRolls } = quest;
+    const { questType, postRequirement } = quest;
     const { rpPostCount, submissions, successfulRolls } = participant;
 
     if (questType === QUEST_TYPES.INTERACTIVE_RP) {
         const postsOk = rpPostCount >= (postRequirement || 15); // DEFAULT_POST_REQUIREMENT
-        const rollsOk =
-            successfulRolls >= (requiredRolls != null ? requiredRolls : 1); // DEFAULT_ROLL_REQUIREMENT
+        const reqRolls = resolveRequiredRolls(quest);
+        const rollCount = Number(successfulRolls) || 0;
+        const rollsOk = rollCount >= reqRolls;
         return postsOk && rollsOk;
     }
 
@@ -431,7 +433,9 @@ function meetsRequirements(participant, quest) {
     }
     
     if (questType === QUEST_TYPES.INTERACTIVE) {
-        return successfulRolls >= (requiredRolls || 1); // DEFAULT_ROLL_REQUIREMENT
+        const reqRolls = resolveRequiredRolls(quest);
+        const rollCount = Number(successfulRolls) || 0;
+        return rollCount >= reqRolls;
     }
     
     return false;
@@ -1007,6 +1011,13 @@ questSchema.methods.getEffectiveTableRollNames = function() {
     if (this.tableRollName && String(this.tableRollName).trim()) {
         return [String(this.tableRollName).trim()];
     }
+    const legacyTableroll = this.tableroll != null ? String(this.tableroll).trim() : '';
+    if (legacyTableroll) {
+        const tokens = [
+            ...new Set(legacyTableroll.split(/[\n,]+/).map((s) => s.trim()).filter(Boolean)),
+        ];
+        if (tokens.length) return tokens;
+    }
     return [];
 };
 
@@ -1088,11 +1099,6 @@ questSchema.methods.setTableRollConfig = function(tableRollNameOrNames, config =
     this.tableRollConfig = config;
     this.requiredRolls = config.requiredRolls || 1;
     this.rollSuccessCriteria = config.successCriteria || null;
-    const rrc =
-        typeof config.rollRequirementCounts === 'string'
-            ? config.rollRequirementCounts.trim().toLowerCase()
-            : '';
-    this.rollRequirementCounts = rrc === 'any_roll' ? 'any_roll' : 'successful';
 
     return this;
 };
@@ -1257,22 +1263,15 @@ questSchema.methods.processTableRoll = async function(userId, rollResult) {
         
         participant.tableRollResults.push(rollEntry);
 
-        const countAnyRollOnQuestTable =
-            String(this.rollRequirementCounts || 'successful').toLowerCase() === 'any_roll';
-        if (countAnyRollOnQuestTable || isSuccess) {
-            participant.successfulRolls += 1;
-        }
+        participant.successfulRolls += 1;
         
         participant.updatedAt = new Date();
         await this.save();
         
         console.log(`[QuestModel.js] ✅ Table roll processed for ${participant.characterName} in quest ${this.questID} - Success: ${isSuccess}`);
 
-        const reqRolls =
-            this.requiredRolls != null && Number.isFinite(Number(this.requiredRolls))
-                ? Number(this.requiredRolls)
-                : 1;
-        const rollsMet = participant.successfulRolls >= reqRolls;
+        const reqRolls = resolveRequiredRolls(this);
+        const rollsMet = (Number(participant.successfulRolls) || 0) >= reqRolls;
         const questCompleted =
             this.questType === QUEST_TYPES.INTERACTIVE_RP ? meetsRequirements(participant, this) : rollsMet;
 

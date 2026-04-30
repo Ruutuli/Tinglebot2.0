@@ -888,7 +888,7 @@ export async function PUT(req: NextRequest) {
         "completionReason", "completedAt", "completionProcessed", "lastCompletionCheck",
         "participants", "leftParticipants",
         "collabAllowed", "collabRule", "rules", "artWritingMode",
-        "tableRollName", "tableRollConfig", "requiredRolls", "rollRequirementCounts", "rollSuccessCriteria",
+        "tableRollName", "tableRollConfig", "requiredRolls", "rollSuccessCriteria",
         "createdByUserId", "createdByUsername", "isMemberQuest", "runByUserId", "runByUsername",
       ];
     } else if (model === "Relic") {

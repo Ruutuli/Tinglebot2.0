@@ -83,13 +83,6 @@ async function getItemImage(itemName) {
   return null;
 }
 
-/** Discord embed: how we describe roll progress toward requiredRolls */
-function questRollProgressLabel(quest) {
-  return quest?.rollRequirementCounts === 'any_roll'
-    ? 'rolls on quest table(s)'
-    : 'successful rolls';
-}
-
 // ------------------- Helper function to find active interactive quests for user -------------------
 async function findActiveInteractiveQuests(userId) {
   try {
@@ -392,7 +385,7 @@ module.exports = {
       const vLbl =
         villageParse.villages && villageParse.villages.length
           ? villageParse.villages.join(', ')
-          : 'Any village (Town Hall)';
+          : 'Any village (Town Hall or village channel)';
       embed.addFields({ name: '🏘️ Village restriction', value: vLbl, inline: false });
 
       // Add sample entries if available
@@ -491,18 +484,23 @@ module.exports = {
             console.log(`[tableroll.js] ✅ Quest integration successful for quest ${quest.questID}:`, questResult);
             
             // If quest was completed, check for auto-completion and rewards
-            if (questResult.questCompleted) {
+            if (
+              questResult &&
+              questResult.success === true &&
+              questResult.questCompleted === true
+            ) {
               try {
-                const autoCompletionResult = await quest.checkAutoCompletion();
-                if (autoCompletionResult.completed && autoCompletionResult.needsRewardProcessing) {
-                  console.log(`[tableroll.js] 🎉 Quest ${quest.questID} completed: ${autoCompletionResult.reason}`);
-                  
-                  // Import and use quest reward module
-                  const questRewardModule = require('../../modules/questRewardModule');
-                  await questRewardModule.processQuestCompletion(quest.questID);
-                  
-                  // Mark completion as processed
-                  await quest.markCompletionProcessed();
+                const questRewardModule = require('../../modules/questRewardModule');
+                await questRewardModule.processQuestCompletion(quest.questID);
+
+                const freshQuest = await Quest.findOne({ questID: quest.questID });
+                if (freshQuest) {
+                  const autoCompletionResult = await freshQuest.checkAutoCompletion();
+                  if (autoCompletionResult.completed && autoCompletionResult.needsRewardProcessing) {
+                    console.log(`[tableroll.js] 🎉 Quest ${quest.questID} wrapped up: ${autoCompletionResult.reason}`);
+                    await questRewardModule.processQuestCompletion(freshQuest.questID);
+                    await freshQuest.markCompletionProcessed();
+                  }
                 }
               } catch (rewardError) {
                 console.error(`[tableroll.js] ❌ Error processing quest rewards:`, rewardError);
@@ -653,10 +651,8 @@ module.exports = {
            const participant = quest.participants.get(userId);
            
            if (result.success) {
-             const rollProgLabel = questRollProgressLabel(quest);
              const questProgressText = `**${quest.title}** (ID: \`${quest.questID}\`)\n` +
-               `> 🎯 Progress: ${result.totalSuccessfulRolls}/${result.requiredRolls} ${rollProgLabel}\n` +
-               `> ${result.isSuccess ? '✅' : '❌'} This roll was ${result.isSuccess ? 'successful' : 'unsuccessful'}\n` +
+               `> 🎯 Progress: ${result.totalSuccessfulRolls}/${result.requiredRolls} rolls on quest table(s)\n` +
                `> ${result.questCompleted ? '🏆 Quest completed!' : '⏳ Quest in progress...'}`;
              
              questFields.push({
@@ -731,7 +727,7 @@ module.exports = {
         .setColor(0x0099FF)
         .setTitle('🎲 Available Tables')
         .setDescription(
-          `Tables must be rolled from your character's village **Town Hall** (or threads there). Restricted tables may require specific villages.`,
+          `Tables must be rolled from your character's village **Town Hall or village channel** (or threads there). Restricted tables may require specific villages.`,
         )
         .setImage(DEFAULT_IMAGE_URL)
         .setFooter({ text: `Found ${tables.length} active table${tables.length !== 1 ? 's' : ''}` })
@@ -816,7 +812,7 @@ module.exports = {
         value:
           Array.isArray(table.allowedVillages) && table.allowedVillages.length > 0
             ? table.allowedVillages.join(', ')
-            : 'Any village (rolls still must be done in Town Hall)',
+            : 'Any village (rolls still in that village\'s Town Hall or village channel)',
         inline: false
       });
 

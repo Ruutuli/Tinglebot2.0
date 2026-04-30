@@ -589,18 +589,11 @@ const QUEST_TYPE_HANDLERS = {
     },
     [QUEST_TYPES.INTERACTIVE_RP]: {
         checkRequirements: () => true,
-        getProgressField: (participant, quest) => {
-            const req = quest.requiredRolls || DEFAULT_ROLL_REQUIREMENT;
-            const rollsLine =
-                quest.rollRequirementCounts === 'any_roll'
-                    ? `🎲 Rolls (any outcome) ${participant.successfulRolls}/${req}`
-                    : `🎲 Successful rolls ${participant.successfulRolls}/${req}`;
-            return {
-                name: 'Progress',
-                value: `📝 Posts ${participant.rpPostCount}/${quest.postRequirement || DEFAULT_POST_REQUIREMENT}\n${rollsLine}`,
-                inline: false,
-            };
-        },
+        getProgressField: (participant, quest) => ({
+            name: 'Progress',
+            value: `📝 Posts ${participant.rpPostCount}/${quest.postRequirement || DEFAULT_POST_REQUIREMENT}\n🎲 Rolls ${participant.successfulRolls}/${quest.requiredRolls || DEFAULT_ROLL_REQUIREMENT}`,
+            inline: false,
+        }),
         getTitle: () => '🎭🎮 Interactive / RP Quest Completed!',
         getDescription: (characterName) =>
             `**${characterName}** has met the RP posts and table roll requirements for this quest!`,
@@ -608,10 +601,7 @@ const QUEST_TYPE_HANDLERS = {
     [QUEST_TYPES.INTERACTIVE]: {
         checkRequirements: () => true, // Interactive quests have different completion logic
         getProgressField: (participant, quest) => ({
-            name:
-                quest.rollRequirementCounts === 'any_roll'
-                    ? 'Rolls on quest table(s)'
-                    : 'Successful Rolls',
+            name: 'Rolls',
             value: `${participant.successfulRolls}/${quest.requiredRolls || DEFAULT_ROLL_REQUIREMENT}`,
             inline: true
         }),

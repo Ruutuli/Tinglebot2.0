@@ -357,12 +357,45 @@ function getCategoryEmoji(category) {
 // ------------------- Location & village rules (Discord + character) -------------------
 // ============================================================================
 
+/**
+ * Quest RP parent channels (forum / village RP) — same IDs as dashboard
+ * admin/quests `RP_THREAD_CHANNELS`. First id per village is the main hub; others are sub-areas.
+ */
+const QUEST_RP_PARENT_IDS_BY_VILLAGE = Object.freeze({
+  Rudania: ['629027808274022410', '717090447369043990'],
+  Inariko: ['629027788229443623', '717090521218285670'],
+  Vhintl: ['629027942437224498', '717090589690298419'],
+});
+
+/** Shared RP parents (e.g. ⭐ casual-rp): any character stationed in a known village may roll here or in threads under them. */
+const QUEST_RP_SHARED_PARENT_IDS = Object.freeze(['717091108295016448']);
+
 function getVillageTownHallChannelIds() {
   return {
     Rudania: process.env.RUDANIA_TOWNHALL,
     Inariko: process.env.INARIKO_TOWNHALL,
     Vhintl: process.env.VHINTL_TOWNHALL,
   };
+}
+
+/** Forum / village RP channels (🔥 rudania etc.) — optional; complements town halls for `/tableroll roll`. */
+function getVillageForumChannelIds() {
+  return {
+    Rudania: process.env.RUDANIA_VILLAGE,
+    Inariko: process.env.INARIKO_VILLAGE,
+    Vhintl: process.env.VHINTL_VILLAGE,
+  };
+}
+
+/** Parent channel IDs where a roll is allowed for this village (town hall + optional env + quest RP parents). */
+function getTablerollParentChannelIdsForVillage(villageKey) {
+  const hall = getVillageTownHallChannelIds()[villageKey];
+  const forum = getVillageForumChannelIds()[villageKey];
+  const questExtras = Array.isArray(QUEST_RP_PARENT_IDS_BY_VILLAGE[villageKey])
+    ? QUEST_RP_PARENT_IDS_BY_VILLAGE[villageKey]
+    : [];
+  const ids = [hall, forum, ...questExtras].map((id) => (id ? String(id).trim() : '')).filter(Boolean);
+  return [...new Set(ids)];
 }
 
 /** Same default as crafting/travel tooling; optional TABLEROOLL_TEST_CHANNEL_IDS (comma-separated) and TABLEROOLL_TEST_CHANNEL_ID. */
@@ -418,11 +451,21 @@ function parseAllowedVillagesInput(raw) {
   return { valid: true, villages: [...new Set(out)] };
 }
 
+function normalizeDiscordSnowflake(id) {
+  if (id == null || id === '') return '';
+  return String(id).trim();
+}
+
+/** True if slash is in this channel or in a thread/post whose parent is this channel (forum, text, announcements). */
 function isChannelOrThreadOf(interaction, channelId) {
-  if (!channelId) return false;
-  if (interaction.channelId === channelId) return true;
-  const parentId = interaction.channel?.parentId;
-  return Boolean(parentId && parentId === channelId);
+  const target = normalizeDiscordSnowflake(channelId);
+  if (!target) return false;
+  const ch = interaction.channel;
+  if (!ch) return false;
+  if (normalizeDiscordSnowflake(ch.id) === target) return true;
+  const parentIdRaw = ch.parentId != null ? ch.parentId : ch.parent?.id;
+  const parentId = normalizeDiscordSnowflake(parentIdRaw);
+  return Boolean(parentId && parentId === target);
 }
 
 function isOnBypassList(interaction, bypassIds) {
@@ -430,7 +473,7 @@ function isOnBypassList(interaction, bypassIds) {
 }
 
 /**
- * Enforces: roll in guild; character village town hall (or bypass test channel); optional table.allowedVillages.
+ * Enforces: roll in guild; character village Town Hall **or** village forum channel (or bypass); optional table.allowedVillages.
  * @returns {{ ok: true } | { ok: false, reply: object }}
  */
 function assertTablerollRollAllowed(interaction, character, tableDoc) {
@@ -439,14 +482,13 @@ function assertTablerollRollAllowed(interaction, character, tableDoc) {
       ok: false,
       reply: {
         content:
-          '❌ Use `/tableroll roll` in your village **Town Hall** channel (or a thread there), not in DMs.',
+          '❌ Use `/tableroll roll` in your village **Town Hall or village channel** (or a thread there), not in DMs.',
         flags: [MessageFlags.Ephemeral],
       },
     };
   }
 
   const villageKey = normalizeCharacterVillageName(character);
-  const villages = getVillageTownHallChannelIds();
   const bypass = getTablerollBypassChannelIds();
 
   const allowedOnTable = Array.isArray(tableDoc?.allowedVillages) ? tableDoc.allowedVillages : [];
@@ -464,8 +506,8 @@ function assertTablerollRollAllowed(interaction, character, tableDoc) {
             : `${boldV.slice(0, -1).join(', ')}, or ${boldV[boldV.length - 1]}`;
       const hallLine =
         boldV.length === 1
-          ? `You must roll in **${unique[0]} Town Hall** (or a thread there).`
-          : `When you roll, use **that village's Town Hall** (matching where you're stationed), or a thread there.`;
+          ? `You must roll in **${unique[0]} Town Hall**, that village channel, **or** a thread there.`
+          : `When you roll, use **that village's Town Hall or village channel** (matching where you're stationed), or a thread there.`;
 
       const embed = new EmbedBuilder()
         .setColor(0x008b8b)
@@ -494,24 +536,37 @@ function assertTablerollRollAllowed(interaction, character, tableDoc) {
     return { ok: true };
   }
 
-  const allowedChannelId = villages[villageKey];
+  if (
+    villageKey &&
+    KNOWN_VILLAGES.includes(villageKey) &&
+    QUEST_RP_SHARED_PARENT_IDS.length > 0 &&
+    QUEST_RP_SHARED_PARENT_IDS.some((id) => isChannelOrThreadOf(interaction, id))
+  ) {
+    return { ok: true };
+  }
 
-  if (!allowedChannelId) {
+  const rollParentIds = getTablerollParentChannelIdsForVillage(villageKey);
+
+  if (rollParentIds.length === 0) {
     const embed = new EmbedBuilder()
       .setColor(0x008b8b)
       .setDescription(
-        `⚠️ **Town hall channel is not configured** for **${villageKey || 'this village'}** (check server env: RUDANIA_TOWNHALL / INARIKO_TOWNHALL / VHINTL_TOWNHALL).\n📍 Character location: **${villageKey || 'unknown'}**`
+        `⚠️ **No roll channels configured** for **${villageKey || 'this village'}**.\nSet **town hall** env IDs (\`RUDANIA_TOWNHALL\`, etc.) if needed, or optional \`*_VILLAGE\` overrides. (Quest-style RP parent IDs are baked in for the three villages—if those change, update \`tableRollUtils.js\` next to dashboard \`RP_THREAD_CHANNELS\`.)\n📍 Character location: **${villageKey || 'unknown'}**`
       )
       .setFooter({ text: 'Channel configuration' })
       .setImage('https://storage.googleapis.com/tinglebot/Graphics/border.png');
     return { ok: false, reply: { embeds: [embed], flags: [MessageFlags.Ephemeral] } };
   }
 
-  if (!isChannelOrThreadOf(interaction, allowedChannelId)) {
+  if (!rollParentIds.some((id) => isChannelOrThreadOf(interaction, id))) {
+    const hereLine =
+      rollParentIds.length === 1
+        ? `<#${rollParentIds[0]}>`
+        : rollParentIds.map((id) => `<#${id}>`).join(' · ');
     const embed = new EmbedBuilder()
       .setColor(0x008b8b)
       .setDescription(
-        `*${character.name} looks around, confused by their surroundings...*\n\n**Channel restriction**\nYou can only roll in **${villageKey}** Town Hall.\n\n📍 **Current location:** ${villageKey}\n💬 **Roll here:** <#${allowedChannelId}>`
+        `*${character.name} looks around, confused by their surroundings...*\n\n**Channel restriction**\nYou can only roll in **${villageKey}** Town Hall **or** that village's channel—or a thread in either.\n\n📍 **Current location:** ${villageKey}\n💬 **Roll here:** ${hereLine}`
       )
       .setFooter({ text: 'Table roll' })
       .setImage('https://storage.googleapis.com/tinglebot/Graphics/border.png');

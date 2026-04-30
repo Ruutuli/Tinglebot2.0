@@ -80,12 +80,6 @@ function parseItemRewards(
 
 const MAX_QUEST_RP_THREADS = 10;
 
-function normalizeRollRequirementCounts(raw: unknown): "successful" | "any_roll" {
-  return typeof raw === "string" && raw.trim().toLowerCase() === "any_roll"
-    ? "any_roll"
-    : "successful";
-}
-
 function normalizeRpThreadCount(raw: unknown, existing: unknown): number {
   const fallback =
     typeof existing === "number" && Number.isFinite(existing)
@@ -453,13 +447,6 @@ export async function PUT(
         ? Math.max(1, Number(body.requiredRolls))
         : 1;
 
-    const rollRequirementCountsVal =
-      body.rollRequirementCounts !== undefined
-        ? normalizeRollRequirementCounts(body.rollRequirementCounts)
-        : normalizeRollRequirementCounts(
-            (existing as Record<string, unknown>).rollRequirementCounts
-          );
-
     const posted = Boolean(body.posted);
     const postedAt =
       posted && body.postedAt
@@ -684,7 +671,6 @@ export async function PUT(
       tableRollName: tr.tableRollName,
       tableRollNames: tr.tableRollNames,
       requiredRolls: requiredRollsVal,
-      rollRequirementCounts: rollRequirementCountsVal,
       tokenReward: tokenRewardVal,
       itemReward: itemRewardsFinal?.length === 1 ? itemRewardsFinal[0].name : itemParsed.itemReward,
       itemRewardQty: itemRewardsFinal?.length === 1 ? itemRewardsFinal[0].quantity : itemParsed.itemRewardQty,
