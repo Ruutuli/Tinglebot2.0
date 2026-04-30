@@ -102,6 +102,21 @@ function normalizeVillage(raw) {
   return null;
 }
 
+/**
+ * Mod reaction → village: env/custom emoji IDs first, then emoji **name**
+ * (`vhintl`, `rudania`, `inariko`) so reserves work even if emoji IDs changed on the server.
+ */
+function villageFromReactionEmoji(emoji) {
+  if (!emoji) return null;
+  if (emoji.id) {
+    const byId = villageEmojiIdToKey()[String(emoji.id)];
+    if (byId) return byId;
+  }
+  const byName = normalizeVillage(emoji.name);
+  if (byName && VILLAGES.includes(byName)) return byName;
+  return null;
+}
+
 /** Strip Discord mention-style custom emojis from a pipe-segment. */
 function stripDiscordEmojiTokens(segment) {
   return String(segment || '')
@@ -295,35 +310,30 @@ function buildTrackerEmbed(snapshot, dateLabel) {
   const ir = snapshot.reservedPerVillage.inariko;
   const vr = snapshot.reservedPerVillage.vhintl;
 
-  const rrRole = snapshot.residentRoleMembersCount.rudania;
-  const irRole = snapshot.residentRoleMembersCount.inariko;
-  const vrRole = snapshot.residentRoleMembersCount.vhintl;
-  const rrOc = snapshot.ocInactiveSlotCount.rudania;
-  const irOc = snapshot.ocInactiveSlotCount.inariko;
-  const vrOc = snapshot.ocInactiveSlotCount.vhintl;
+  const rosterHeadcountTotal =
+    snapshot.activeWithChars + snapshot.inactiveGuildWide;
 
   const overview =
-    `**${snapshot.activeWithChars}** active · resident Discord role (unique)\n` +
-    `**${snapshot.inactiveGuildWide}** inactive · server-wide (inactive marker)\n` +
-    `**${snapshot.inactiveWithChars}** inactive · counted toward a village (${r} Rudania · ${i} Inariko · ${v} Vhintl) _(role **or** first OC if no resident role)_\n\n` +
-    `**${snapshot.travelerOnly}** traveler-only · **${snapshot.reservationTotal}** reserve\n\n` +
-    `**Total with Reserved OCs:** **${snapshot.grandTotal}** members`;
+    `**${snapshot.activeWithChars}** active\n` +
+    `**${snapshot.inactiveGuildWide}** inactive\n` +
+    `**${rosterHeadcountTotal}** total`;
 
   const fmtVillageBlock = (
     key,
     totalToward,
     inactiveCt,
-    residentRoleCt,
-    ocInactiveCt,
     reserved,
     slotsLeft
   ) => {
-    const vsCap = totalToward + reserved;
     const em = villageEmojiMarkup(key);
+    const label = villageDisplay(key);
+    const activeCt = Math.max(0, totalToward - inactiveCt);
     return (
-      `${em} **${villageDisplay(key)}**\n` +
-      `\`${totalToward}\` toward cap (\`${inactiveCt}\` inactive) — \`${residentRoleCt}\` resident role · \`${ocInactiveCt}\` inactive·first OC\n` +
-      `\`${reserved}\` reserved → **${vsCap}** vs cap · **${slotsLeft}** slots left`
+      `${em} **${label}** - ${slotsLeft} slots free\n` +
+      `> ${activeCt} Active\n` +
+      `> ${inactiveCt} Inactive\n` +
+      `> ${totalToward} Total\n` +
+      `> ${reserved} reserved`
     );
   };
 
@@ -331,8 +341,6 @@ function buildTrackerEmbed(snapshot, dateLabel) {
     'rudania',
     rudUsers,
     r,
-    rrRole,
-    rrOc,
     rr,
     snapshot.slotsRemaining.rudania
   );
@@ -340,8 +348,6 @@ function buildTrackerEmbed(snapshot, dateLabel) {
     'inariko',
     inaUsers,
     i,
-    irRole,
-    irOc,
     ir,
     snapshot.slotsRemaining.inariko
   );
@@ -349,15 +355,11 @@ function buildTrackerEmbed(snapshot, dateLabel) {
     'vhintl',
     vhiUsers,
     v,
-    vrRole,
-    vrOc,
     vr,
     snapshot.slotsRemaining.vhintl
   );
 
-  const villagesCombined =
-    `${rudBlock}\n\n${inaBlock}\n\n${vhiBlock}\n\n` +
-    `_Per village inactive (above): inactive marker **and** attributed via resident role **or** first accepted OC when they have no resident role._`;
+  const villagesCombined = `${rudBlock}\n\n${inaBlock}\n\n${vhiBlock}`;
 
   return new EmbedBuilder()
     .setColor(0xc9a227)
@@ -619,10 +621,7 @@ async function handleModReserveReaction(reaction, user, client) {
     const msg = reaction.message;
     if (!msg.guild || msg.channelId !== OC_RESERVE_CHANNEL_ID) return;
 
-    const emojiId = reaction.emoji.id;
-    if (!emojiId) return;
-
-    const villageNorm = villageEmojiIdToKey()[String(emojiId)];
+    const villageNorm = villageFromReactionEmoji(reaction.emoji);
     if (!villageNorm) return;
 
     let moderator = msg.guild.members.cache.get(user.id);
@@ -632,45 +631,63 @@ async function handleModReserveReaction(reaction, user, client) {
     if (msg.author.bot) return;
 
     const rawLine = msg.content.split('\n').map((l) => l.trim()).find(Boolean);
-    if (!rawLine) {
-      await msg.reply({
-        content:
-          `❌ **Mod reserve:** That message has no text to use as the OC name — members should post **Character Name | Village**, or mods can react on a **legacy** post with the OC name on the first line.`,
-      }).catch(() => {});
-      return;
-    }
 
     let characterName;
-    if (rawLine.includes('|')) {
-      const parts = rawLine.split('|').map((p) => p.trim());
-      characterName = parts[0];
-      if (!characterName || characterName.length > 80) {
-        await msg.reply({
-          content:
-            '❌ **Mod reserve:** The first field must be the **character name** (max 80 characters).',
-        }).catch(() => {});
-        return;
+    if (rawLine) {
+      if (rawLine.includes('|')) {
+        const parts = rawLine.split('|').map((p) => p.trim());
+        characterName = parts[0];
+        if (!characterName || characterName.length > 80) {
+          await msg.reply({
+            content:
+              '❌ **Mod reserve:** The first field must be the **character name** (max 80 characters).',
+          }).catch(() => {});
+          return;
+        }
+      } else {
+        // Village from reaction; OC name from first line (legacy posts).
+        characterName = rawLine.slice(0, 80).trim();
+        if (!characterName) {
+          await msg.reply({
+            content:
+              `❌ **Mod reserve:** Couldn’t read a character name — use text on the first line, or **Name | Village**.`,
+          }).catch(() => {});
+          return;
+        }
       }
     } else {
-      // Mod village emoji = override: village comes from the reaction (legacy reserves / old posts).
-      characterName = rawLine.slice(0, 80).trim();
+      // No post body — village is taken only from the mod’s reaction; infer OC name from applicant’s guild identity.
+      let authorMember = msg.member;
+      if (!authorMember) {
+        authorMember = await msg.guild.members.fetch(msg.author.id).catch(() => null);
+      }
+      const fallback =
+        (authorMember?.displayName && authorMember.displayName.trim()) ||
+        msg.author.globalName?.trim() ||
+        msg.author.username ||
+        '';
+      characterName = fallback.slice(0, 80);
       if (!characterName) {
         await msg.reply({
           content:
-            `❌ **Mod reserve:** Couldn’t read a character name — use text on the first line, or **Name | Village**.`,
+            '❌ **Mod reserve:** Empty message — couldn’t infer an OC name from this member.',
         }).catch(() => {});
         return;
       }
     }
 
-    const intro =
+    let replyIntro =
       `✅ **Reserve saved** (${villageEmojiMarkup(villageNorm)} **${villageDisplay(villageNorm)}**) via mod reaction by **${moderator.displayName}**.`;
+    if (!rawLine) {
+      replyIntro +=
+        '\n_Village from your emoji reaction · OC name from **their server display name** (empty post)._';
+    }
 
     await executeReservationFlow(msg, client, {
       villageNorm,
       characterName,
       suppressReserveTips: true,
-      replyIntro: intro,
+      replyIntro,
       moderatorMember: moderator,
     });
   } catch (err) {
