@@ -431,11 +431,11 @@ export async function PUT(
     let nextRpThreadIds = collectPriorRpThreadIds(existing as Record<string, unknown>);
 
     if (Array.isArray(body.rpThreadIds)) {
-      const parsed = [
-        ...new Set(
-          body.rpThreadIds.map((x: unknown) => String(x ?? "").trim()).filter(Boolean)
-        ),
-      ];
+      const rawRpThreadIds = body.rpThreadIds as unknown[];
+      const normalized = rawRpThreadIds.map((x: unknown) =>
+        String(x ?? "").trim()
+      );
+      const parsed = [...new Set(normalized.filter((s: string): s is string => Boolean(s)))];
       if (parsed.length) nextRpThreadIds = parsed;
     } else if (typeof body.rpThreadId === "string" && body.rpThreadId.trim()) {
       nextRpThreadIds = [body.rpThreadId.trim()];
