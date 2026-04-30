@@ -534,6 +534,27 @@ function scheduleTrackerRefresh(client, ms = 45000) {
   }, ms);
 }
 
+/**
+ * Travelers hold a slot reserve in DB; once they receive a Rudania/Inariko/Vhintl **resident Discord role**,
+ * remove that reserve so the tracker counts them only as roster members (not reserved + member).
+ */
+async function removeOcReserveWhenPromotedToResident(oldMember, newMember) {
+  const hadResident = villagesFromRoles(oldMember).length > 0;
+  const hasResident = villagesFromRoles(newMember).length > 0;
+  if (hadResident || !hasResident) return;
+
+  const result = await OcReservation.deleteOne({
+    userId: newMember.id,
+    guildId: newMember.guild.id,
+  });
+  if (result.deletedCount > 0) {
+    logger.info(
+      FILE,
+      `Removed slot reserve for ${newMember.user.tag} (${newMember.id}) — resident village Discord role added`
+    );
+  }
+}
+
 const TIP_RESERVE_VS_APP =
   '**This channel is for reserves and full roster posts.**\n' +
   '• **Slot reserve (bot tracks it):** exactly **Character Name | Village** — only two fields, nothing else.\n' +
@@ -860,9 +881,16 @@ function registerMemberCapTracking(client) {
     }
   });
 
-  client.on('guildMemberUpdate', (oldM, newM) => {
+  client.on('guildMemberUpdate', async (oldM, newM) => {
     const gid = process.env.GUILD_ID;
     if (!gid || newM.guild.id !== gid) return;
+
+    try {
+      await removeOcReserveWhenPromotedToResident(oldM, newM);
+    } catch (err) {
+      logger.warn(FILE, `Reserve cleanup on resident role: ${err.message}`);
+    }
+
     const roleIdsOld = new Set(oldM.roles.cache.keys());
     const roleIdsNew = new Set(newM.roles.cache.keys());
     let changed = roleIdsOld.size !== roleIdsNew.size;
