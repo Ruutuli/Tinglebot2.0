@@ -17,6 +17,9 @@ const OC_RESERVE_CHANNEL_ID =
   process.env.OC_RESERVE_CHANNEL_ID || '814567241101475932';
 const MEMBER_CAP_TRACKER_CHANNEL_ID =
   process.env.MEMBER_CAP_TRACKER_CHANNEL_ID || '658148069212422194';
+/** Pin the live tracker message id (tried before Mongo + history scan). Override with MEMBER_CAP_TRACKER_MESSAGE_ID. */
+const MEMBER_CAP_TRACKER_MESSAGE_ID_PIN =
+  process.env.MEMBER_CAP_TRACKER_MESSAGE_ID || '1499474124291051530';
 const INACTIVE_ROLE_ID =
   process.env.INACTIVE_MEMBER_ROLE_ID || '788148064182730782';
 const TRAVELER_ROLE_ID =
@@ -381,26 +384,73 @@ function buildTrackerEmbed(snapshot, dateLabel) {
     .setTimestamp();
 }
 
+/** Match embed title on tracker posts (trimmed — Discord sometimes pads). */
+function trackerEmbedTitleMatches(message) {
+  const title = message.embeds?.[0]?.title?.trim();
+  return title === TRACKER_EMBED_TITLE;
+}
+
 /**
- * Reuse the live tracker message: DB id first, then scan channel for our embed title.
- * Avoids duplicate posts when the DB row is missing or the message id is stale.
+ * Reuse the live tracker message: try pinned + DB ids first, then paginate channel history.
  */
-async function resolveTrackerMessage(channel, client, storedMessageId) {
-  if (storedMessageId) {
+async function resolveTrackerMessage(channel, client, candidateIds) {
+  const botId = client.user.id;
+  const ids = [
+    ...new Set(
+      (Array.isArray(candidateIds) ? candidateIds : [candidateIds])
+        .filter(Boolean)
+        .map(String)
+    ),
+  ];
+
+  for (const storedMessageId of ids) {
     try {
       const m = await channel.messages.fetch(storedMessageId);
-      if (m?.author?.id === client.user.id) return m;
+      if (m?.author?.id !== botId) {
+        logger.warn(
+          FILE,
+          `Tracker candidate ${storedMessageId} is not from this bot — trying next`
+        );
+        continue;
+      }
+      if (!trackerEmbedTitleMatches(m)) {
+        logger.warn(
+          FILE,
+          `Tracker candidate ${storedMessageId} title mismatch (expected "${TRACKER_EMBED_TITLE}") — trying next`
+        );
+        continue;
+      }
+      return m;
     } catch {
-      /* deleted, lost access, or wrong channel */
+      logger.warn(
+        FILE,
+        `Could not fetch tracker candidate ${storedMessageId} — trying next`
+      );
     }
   }
 
   try {
-    const recent = await channel.messages.fetch({ limit: 75 });
-    for (const m of recent.values()) {
-      if (m.author?.id !== client.user.id) continue;
-      const title = m.embeds?.[0]?.title;
-      if (title === TRACKER_EMBED_TITLE) return m;
+    let before = undefined;
+    const limitPerPage = 100;
+    const maxPages = 25;
+
+    for (let page = 0; page < maxPages; page++) {
+      const batch = await channel.messages.fetch({
+        limit: limitPerPage,
+        ...(before ? { before } : {}),
+      });
+      if (!batch.size) break;
+
+      for (const m of batch.values()) {
+        if (m.author?.id !== botId) continue;
+        if (trackerEmbedTitleMatches(m)) return m;
+      }
+
+      const oldest = [...batch.values()].reduce((a, c) =>
+        BigInt(c.id) < BigInt(a.id) ? c : a
+      );
+      before = oldest.id;
+      if (batch.size < limitPerPage) break;
     }
   } catch (err) {
     logger.warn(FILE, `Tracker channel scan failed: ${err.message}`);
@@ -444,13 +494,20 @@ async function refreshMemberCapTracker(client) {
   const payload = { embeds: [embed], content: null };
 
   const doc = await MemberCapTracker.findOne({ guildId: guild.id });
-  let msg = await resolveTrackerMessage(channel, client, doc?.messageId);
+  const candidateIds = [MEMBER_CAP_TRACKER_MESSAGE_ID_PIN, doc?.messageId].filter(
+    Boolean
+  );
+  let msg = await resolveTrackerMessage(channel, client, candidateIds);
 
   if (!msg) {
     msg = await channel.send(payload);
-    logger.info(FILE, `Posted new member cap tracker message ${msg.id}`);
+    logger.warn(
+      FILE,
+      `No existing tracker found after scanning channel — posted NEW message ${msg.id}. Delete duplicates if needed.`
+    );
   } else {
     await msg.edit(payload);
+    logger.info(FILE, `Updated member cap tracker message ${msg.id}`);
   }
 
   await MemberCapTracker.findOneAndUpdate(
