@@ -43,6 +43,12 @@ const TableRollEntrySchema = new Schema({
       },
       message: 'Invalid URL format for thumbnail image'
     }
+  },
+
+  rollCount: {
+    type: Number,
+    default: 0,
+    min: 0
   }
 });
 
@@ -271,9 +277,21 @@ TableRollSchema.statics.rollOnTable = async function (tableName, options = {}) {
   }
 
   try {
-    await this.updateOne({ _id: table._id }, { $inc: { totalRollCount: 1 } });
+    const entryOid = selectedEntry._id;
+    if (entryOid) {
+      await this.updateOne(
+        { _id: table._id },
+        { $inc: { totalRollCount: 1, 'entries.$[e].rollCount': 1 } },
+        { arrayFilters: [{ 'e._id': entryOid }] }
+      );
+    } else {
+      await this.updateOne(
+        { _id: table._id },
+        { $inc: { totalRollCount: 1, [`entries.${entryIndex}.rollCount`]: 1 } }
+      );
+    }
   } catch (err) {
-    console.error('[TableRollModel] Error incrementing totalRollCount:', err);
+    console.error('[TableRollModel] Error incrementing roll counters:', err);
   }
 
   return {

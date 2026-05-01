@@ -44,6 +44,54 @@ function normalizeEntry(raw: unknown): { weight: number; flavor: string; item: s
   };
 }
 
+/** Keep roll counts for rows the client sends with a matching subdocument _id; new rows start at 0. */
+function mergeEntriesPreserveRollCount(
+  oldEntries: Array<{ _id?: mongoose.Types.ObjectId; rollCount?: number }>,
+  rawEntries: unknown[]
+): Array<{
+  weight: number;
+  flavor: string;
+  item: string;
+  thumbnailImage: string;
+  rollCount: number;
+  _id?: mongoose.Types.ObjectId;
+}> {
+  const rollByOldId = new Map<string, number>();
+  for (const e of oldEntries) {
+    if (e._id) {
+      rollByOldId.set(String(e._id), Math.max(0, Math.floor(Number(e.rollCount) || 0)));
+    }
+  }
+  return rawEntries.map((raw) => {
+    const n = normalizeEntry(raw);
+    let rollCount = 0;
+    let oid: mongoose.Types.ObjectId | undefined;
+    if (raw && typeof raw === "object") {
+      const idRaw = (raw as Record<string, unknown>)._id;
+      const idStr =
+        typeof idRaw === "string"
+          ? idRaw
+          : idRaw != null && typeof (idRaw as { toString?: () => string }).toString === "function"
+            ? String(idRaw)
+            : "";
+      if (idStr && mongoose.Types.ObjectId.isValid(idStr)) {
+        oid = new mongoose.Types.ObjectId(idStr);
+        rollCount = rollByOldId.get(idStr) ?? 0;
+      }
+    }
+    const row: {
+      weight: number;
+      flavor: string;
+      item: string;
+      thumbnailImage: string;
+      rollCount: number;
+      _id?: mongoose.Types.ObjectId;
+    } = { ...n, rollCount };
+    if (oid) row._id = oid;
+    return row;
+  });
+}
+
 async function requireAdmin() {
   const session = await getSession();
   const user = session.user ?? null;
@@ -135,7 +183,7 @@ export async function PUT(
           { status: 400 }
         );
       }
-      doc.entries = body.entries.map(normalizeEntry);
+      doc.entries = mergeEntriesPreserveRollCount(doc.entries, body.entries);
     }
     if (typeof body.isActive === "boolean") {
       doc.isActive = body.isActive;

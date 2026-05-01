@@ -181,6 +181,8 @@ type TableRollEntry = {
   flavor: string;
   item: string;
   thumbnailImage: string;
+  _id?: string;
+  rollCount?: number;
 };
 
 type TableRollRecord = {
@@ -198,7 +200,16 @@ type TableRollRecord = {
   updatedAt?: string;
 };
 
-type FormEntry = { weight: string; flavor: string; item: string; thumbnailImage: string };
+const ENTRY_OID_HEX = /^[a-f\d]{24}$/i;
+
+type FormEntry = {
+  entryId?: string;
+  rollCount?: number;
+  weight: string;
+  flavor: string;
+  item: string;
+  thumbnailImage: string;
+};
 
 type FormState = {
   name: string;
@@ -235,33 +246,54 @@ function recordToForm(r: TableRollRecord): FormState {
     restrictVhintl: vr.restrictVhintl,
     entries:
       r.entries?.length > 0
-        ? r.entries.map((e) => ({
-            weight: String(Math.max(1, Math.round(Number(e.weight ?? 1)))),
-            flavor: e.flavor ?? "",
-            item: e.item ?? "",
-            thumbnailImage: e.thumbnailImage ?? "",
-          }))
+        ? r.entries.map((e) => {
+            const idRaw = e._id;
+            const entryId =
+              typeof idRaw === "string"
+                ? idRaw
+                : idRaw != null && typeof (idRaw as { toString?: () => string }).toString === "function"
+                  ? String(idRaw)
+                  : undefined;
+            const rc = e.rollCount;
+            const rollCount =
+              typeof rc === "number" && !Number.isNaN(rc) ? Math.max(0, Math.floor(rc)) : undefined;
+            return {
+              ...(entryId && ENTRY_OID_HEX.test(entryId) ? { entryId } : {}),
+              ...(rollCount !== undefined ? { rollCount } : {}),
+              weight: String(Math.max(1, Math.round(Number(e.weight ?? 1)))),
+              flavor: e.flavor ?? "",
+              item: e.item ?? "",
+              thumbnailImage: e.thumbnailImage ?? "",
+            };
+          })
         : [{ ...emptyEntry }],
   };
 }
 
-function formToBody(form: FormState): {
+function formToBody(
+  form: FormState,
+  preserveEntryIds: boolean
+): {
   name: string;
   isActive: boolean;
   maxRollsPerDay: number;
-  entries: TableRollEntry[];
+  entries: Array<TableRollEntry & { _id?: string }>;
   allowedVillages: string[];
 } {
   const entries = form.entries
     .map((e) => {
       const w = parseInt(e.weight, 10);
       const whole = Number.isFinite(w) && w >= 1 ? w : 1;
-      return {
+      const row: TableRollEntry & { _id?: string } = {
         weight: whole,
         flavor: e.flavor.trim(),
         item: e.item.trim(),
         thumbnailImage: e.thumbnailImage.trim(),
       };
+      if (preserveEntryIds && e.entryId && ENTRY_OID_HEX.test(e.entryId)) {
+        row._id = e.entryId;
+      }
+      return row;
     })
     .filter((e) => e.weight > 0);
   return {
@@ -584,7 +616,7 @@ export default function AdminTablerollsPage() {
       setError(null);
       setSuccess(null);
       try {
-        const body = formToBody(form);
+        const body = formToBody(form, Boolean(editingId));
         const url = editingId ? `/api/admin/tablerolls/${editingId}` : "/api/admin/tablerolls";
         const method = editingId ? "PUT" : "POST";
         const res = await fetch(url, {
@@ -1043,6 +1075,12 @@ export default function AdminTablerollsPage() {
                           <tr className="text-left text-xs uppercase tracking-wide text-[var(--totk-grey-200)]">
                             <th className="w-10 py-3 pl-3 pr-1 font-semibold">#</th>
                             <th className="w-14 py-3 px-1 font-semibold">Wt</th>
+                            <th
+                              className="w-[4.5rem] py-3 px-1 font-semibold tabular-nums"
+                              title="Times this row has been rolled (all-time, since tracking)"
+                            >
+                              Rolls
+                            </th>
                             <th className="min-w-[220px] sm:min-w-[280px] py-3 px-1 font-semibold">Flavor</th>
                             <th className="min-w-[100px] py-3 px-1 font-semibold">Item</th>
                             <th className="min-w-[100px] py-3 px-1 font-semibold">Image URL</th>
@@ -1070,6 +1108,16 @@ export default function AdminTablerollsPage() {
                                     className="w-full min-w-[3rem] rounded-md border border-[var(--totk-dark-ocher)] bg-[var(--botw-warm-black)] px-2 py-1.5 text-[var(--totk-ivory)] tabular-nums focus:ring-2 focus:ring-[var(--totk-mid-ocher)]/50 focus:border-[var(--totk-mid-ocher)]"
                                     title="Weight"
                                   />
+                                </td>
+                                <td
+                                  className="py-2 px-1 align-middle text-xs text-[var(--totk-grey-200)] tabular-nums"
+                                  title={
+                                    editingId
+                                      ? "How often this exact row has been rolled (Discord /tableroll, Blupee, etc.)"
+                                      : undefined
+                                  }
+                                >
+                                  {editingId ? formatTotalRollsDisplay(entry.rollCount ?? 0) : "—"}
                                 </td>
                                 <td className="py-2 px-1 align-top min-w-0">
                                   <textarea
