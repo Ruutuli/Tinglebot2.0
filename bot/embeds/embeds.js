@@ -18,6 +18,7 @@ const { convertCmToFeetInches, isValidImageUrl } = require('../utils/validation'
 // Google Sheets functionality removed
 const { getCharacterBoostStatus } = require('../modules/boostIntegration');
 const { generateUniqueId } = require('../utils/uniqueIdUtils');
+const { generateTokenBreakdown } = require('../utils/tokenUtils');
 
 // ------------------- Database Model Imports ------------------
 const Character = require('../models/CharacterModel');
@@ -1918,6 +1919,51 @@ const ensureEmbedFieldValueIsString = (value) => {
   return String(value);
 };
 
+function parseQuestBonusForTokenBreakdown(questBonus) {
+  if (questBonus == null || questBonus === '' || questBonus === 'N/A') return 0;
+  const n = Number(questBonus);
+  return Number.isFinite(n) ? n : 0;
+}
+
+/** Full line-by-line token breakdown; null if submission lacks art selection fields (e.g. legacy rows). */
+function buildLegacyArtTokenBreakdownString(submissionData) {
+  const {
+    baseSelections,
+    baseCounts,
+    typeMultiplierSelections,
+    productMultiplierValue,
+    addOnsApplied,
+    specialWorksApplied,
+    typeMultiplierCounts,
+    collab,
+    finalTokenAmount,
+    questBonus,
+    isGroupMeme,
+  } = submissionData;
+
+  if (!Array.isArray(baseSelections) || baseSelections.length === 0 || !productMultiplierValue) {
+    return null;
+  }
+
+  try {
+    return generateTokenBreakdown({
+      baseSelections,
+      baseCounts: baseCounts || new Map(),
+      typeMultiplierSelections: typeMultiplierSelections || [],
+      productMultiplierValue,
+      addOnsApplied: addOnsApplied || [],
+      specialWorksApplied: specialWorksApplied || [],
+      typeMultiplierCounts: typeMultiplierCounts || {},
+      finalTokenAmount: finalTokenAmount ?? 0,
+      collab: collab ?? null,
+      questBonus: parseQuestBonusForTokenBreakdown(questBonus),
+      groupMemeBonus: isGroupMeme === true,
+    });
+  } catch {
+    return null;
+  }
+}
+
 // ------------------- Function: createArtSubmissionEmbed -------------------
 // Creates an embed for art submission approvals with detailed token breakdown
 const createArtSubmissionEmbed = (submissionData) => {
@@ -1956,15 +2002,19 @@ const createArtSubmissionEmbed = (submissionData) => {
   const questEventField = questEvent || 'N/A';
   const questBonusField = questBonus || 'N/A';
 
-  // Token calculation breakdown (no duplicate lines)
+  const legacyBreakdown = buildLegacyArtTokenBreakdownString(submissionData);
+  const tokenCalcIsString = typeof tokenCalculation === 'string';
+  const breakdownFromStoredCodeBlock =
+    tokenCalcIsString && String(tokenCalculation).trim().startsWith('```');
+
+  // Token calculation: full line-by-line breakdown when selections are on the submission (legacy UX)
   let breakdown = '';
-  if (tokenCalculation && typeof tokenCalculation === 'object') {
-    // Use the breakdown object structure from calculateTokens
-    const { baseTotal, typeMultiplierTotal, productMultiplier, addOnTotal, specialWorksTotal, regularTotal, finalTotal } = tokenCalculation;
-    
-    // Compose breakdown lines
+  if (legacyBreakdown) {
+    breakdown = legacyBreakdown;
+  } else if (tokenCalculation && typeof tokenCalculation === 'object') {
+    const { baseTotal, typeMultiplierTotal, productMultiplier, addOnTotal, specialWorksTotal, finalTotal } = tokenCalculation;
+
     if (baseSelections && baseSelections.length) {
-      // Show base total (baseTotal already includes multiplication by count)
       breakdown += `Base: ${baseTotal}\n`;
     }
     if (typeMultiplierTotal && typeMultiplierTotal !== 1) {
@@ -1981,11 +2031,14 @@ const createArtSubmissionEmbed = (submissionData) => {
     }
     breakdown += '\n-----------------------\n';
     breakdown += `= ${finalTotal || finalTokenAmount} Tokens`;
-  } else if (typeof tokenCalculation === 'string') {
+  } else if (tokenCalcIsString) {
     breakdown = tokenCalculation;
   } else {
     breakdown = 'N/A';
   }
+
+  const hideSeparateTokenTotalField =
+    Boolean(legacyBreakdown) || breakdownFromStoredCodeBlock;
 
   // Build fields array dynamically - only include non-N/A fields
   const fields = [];
@@ -2049,22 +2102,23 @@ const createArtSubmissionEmbed = (submissionData) => {
     });
   }
   
-  // Calculate token display based on collaboration
-  let tokenDisplay = `${finalTokenAmount || 0} Tokens`;
-  if (hasCollaborators) {
-    const collaborators = Array.isArray(collab) ? collab : [collab];
-    const totalParticipants = 1 + collaborators.length;
-    const tc = tokenCalculation;
-    const perPerson =
-      tc && typeof tc === 'object' && Number.isFinite(tc.tokensPerPerson)
-        ? tc.tokensPerPerson
-        : Math.floor((finalTokenAmount || 0) / totalParticipants);
-    const poolTotal = perPerson * totalParticipants;
-    tokenDisplay = `${poolTotal} Tokens (${perPerson} each)`;
+  // Separate "Token Total" only when the breakdown is the short summary (totals already in full breakdown / code block)
+  if (tokenCalculation !== 'No tokens - Display only' && !hideSeparateTokenTotalField) {
+    let tokenDisplay = `${finalTokenAmount || 0} Tokens`;
+    if (hasCollaborators) {
+      const collaborators = Array.isArray(collab) ? collab : [collab];
+      const totalParticipants = 1 + collaborators.length;
+      const tc = tokenCalculation;
+      const perPerson =
+        tc && typeof tc === 'object' && Number.isFinite(tc.tokensPerPerson)
+          ? tc.tokensPerPerson
+          : Math.floor((finalTokenAmount || 0) / totalParticipants);
+      const poolTotal = perPerson * totalParticipants;
+      tokenDisplay = `${poolTotal} Tokens (${perPerson} each)`;
+    }
+    fields.push({ name: 'Token Total', value: tokenDisplay, inline: true });
   }
-  
-  fields.push({ name: 'Token Total', value: tokenDisplay, inline: true });
-  
+
   // Only show token calculation if it's not a no-tokens submission
   if (tokenCalculation !== 'No tokens - Display only') {
     fields.push({ name: 'Token Calculation', value: `\n${breakdown}\n`, inline: false });
