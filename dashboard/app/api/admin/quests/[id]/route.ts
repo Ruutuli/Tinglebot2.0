@@ -311,15 +311,26 @@ export async function GET(
       return NextResponse.json({ error: "Quest not found" }, { status: 404 });
     }
 
-    const { markActiveParticipantsFailedAfterQuestPeriod } = await import(
-      "@/lib/questParticipantRewardSync.js"
-    );
+    const { markActiveParticipantsFailedAfterQuestPeriod, promoteRewardedParticipantsToFinalCompleted } =
+      await import("@/lib/questParticipantRewardSync.js");
     const failSync = await markActiveParticipantsFailedAfterQuestPeriod(quest);
     if (failSync.saved && failSync.markedFailed > 0) {
       logger.info(
         "api/admin/quests/[id] GET",
         `Marked ${failSync.markedFailed} active participant(s) as failed (quest period ended, requirements not met)`
       );
+    }
+
+    if (quest.status === "completed") {
+      const promoted = promoteRewardedParticipantsToFinalCompleted(quest);
+      if (promoted > 0) {
+        quest.markModified("participants");
+        await quest.save();
+        logger.info(
+          "api/admin/quests/[id] GET",
+          `Promoted ${promoted} participant(s) rewarded → completed (quest closed)`
+        );
+      }
     }
 
     const converted = convertParticipantsMapToObject(
@@ -737,7 +748,29 @@ export async function PUT(
       return NextResponse.json({ error: "Quest not found" }, { status: 404 });
     }
 
-    const updatedRecord = updated as Record<string, unknown>;
+    let updatedRecord = updated as Record<string, unknown>;
+
+    if (status === "completed") {
+      const questDoc = await Quest.findById(id).exec();
+      if (questDoc && questDoc.status === "completed") {
+        const { promoteRewardedParticipantsToFinalCompleted } = await import(
+          "@/lib/questParticipantRewardSync.js"
+        );
+        const promoted = promoteRewardedParticipantsToFinalCompleted(questDoc);
+        if (promoted > 0) {
+          questDoc.markModified("participants");
+          await questDoc.save();
+          logger.info(
+            "api/admin/quests/[id] PUT",
+            `Promoted ${promoted} participant row(s) rewarded → completed`
+          );
+          const refreshed = await Quest.findById(id).lean().exec();
+          if (refreshed) {
+            updatedRecord = refreshed as Record<string, unknown>;
+          }
+        }
+      }
+    }
 
     if (status === "completed" && previousStatus !== "completed") {
       const questRoleId = updatedRecord.roleID

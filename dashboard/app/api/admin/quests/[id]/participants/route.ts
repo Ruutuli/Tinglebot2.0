@@ -28,6 +28,18 @@ const PARTICIPANT_PROGRESS = [
   "completed",
 ] as const;
 
+/** When quest.status is `completed`, fold all `rewarded` rows to terminal `completed` (may need second save). */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+async function saveQuestWithTerminalProgressPromotion(quest: any) {
+  await quest.save();
+  if (quest.status !== "completed") return;
+  const promoted = promoteRewardedParticipantsToFinalCompleted(quest);
+  if (promoted > 0) {
+    quest.markModified("participants");
+    await quest.save();
+  }
+}
+
 function normalizeDiscordId(raw: unknown): string {
   const s = String(raw ?? "").trim();
   if (!s) return "";
@@ -380,20 +392,17 @@ export async function PUT(
         updated += 1;
       }
 
-      await quest.save();
-
-      if (rewardedIds.length > 0) {
-        const questTitle = quest.title || `Quest ${questIDTrim}`;
-        const posted = await postQuestModCompletionAnnouncement({
-          questTitle,
-          mentionUserIds: rewardedIds,
-        });
-        if (!posted) {
-          logger.warn(
-            "api/admin/quests/[id]/participants PUT",
-            "Participants updated but failed to post mod-completion announcement to Discord (check DISCORD_TOKEN and channel permissions)."
-          );
-        }
+      await saveQuestWithTerminalProgressPromotion(quest);
+      const questTitle = quest.title || `Quest ${questIDTrim}`;
+      const posted = await postQuestModCompletionAnnouncement({
+        questTitle,
+        mentionUserIds: rewardedIds,
+      });
+      if (!posted) {
+        logger.warn(
+          "api/admin/quests/[id]/participants PUT",
+          "Participants updated but failed to post mod-completion announcement to Discord (check DISCORD_TOKEN and channel permissions)."
+        );
       }
 
       return NextResponse.json({
@@ -464,7 +473,7 @@ export async function PUT(
         TokenTransactionModel,
         now
       );
-      await quest.save();
+      await saveQuestWithTerminalProgressPromotion(quest);
       if (mention) {
         const questTitle = quest.title || `Quest ${questIDTrim}`;
         const posted = await postQuestModCompletionAnnouncement({
@@ -494,7 +503,7 @@ export async function PUT(
       now
     );
 
-    await quest.save();
+    await saveQuestWithTerminalProgressPromotion(quest);
 
     return NextResponse.json({
       ok: true,
@@ -615,7 +624,7 @@ export async function PATCH(
       if (mention) rewarded.push(mention);
     }
 
-    await quest.save();
+    await saveQuestWithTerminalProgressPromotion(quest);
 
     if (rewarded.length > 0) {
       const posted = await postQuestModCompletionAnnouncement({
