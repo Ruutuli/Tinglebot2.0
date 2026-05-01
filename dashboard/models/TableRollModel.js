@@ -120,6 +120,13 @@ const TableRollSchema = new Schema({
   dailyRollReset: {
     type: Date,
     default: Date.now
+  },
+
+  /** Lifetime count of successful rolls (Discord /tableroll, Blupee table, etc.). */
+  totalRollCount: {
+    type: Number,
+    default: 0,
+    min: 0
   }
 }, { 
   collection: 'tablerolls',
@@ -261,6 +268,12 @@ TableRollSchema.statics.rollOnTable = async function (tableName, options = {}) {
       console.error('[TableRollModel] Error saving character table roll limit:', err);
       throw err;
     }
+  }
+
+  try {
+    await this.updateOne({ _id: table._id }, { $inc: { totalRollCount: 1 } });
+  } catch (err) {
+    console.error('[TableRollModel] Error incrementing totalRollCount:', err);
   }
 
   return {

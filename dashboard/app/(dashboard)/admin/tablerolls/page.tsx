@@ -189,6 +189,8 @@ type TableRollRecord = {
   isActive: boolean;
   entries: TableRollEntry[];
   totalWeight?: number;
+  /** Lifetime roll count (incremented by bot on each successful roll). */
+  totalRollCount?: number;
   maxRollsPerDay?: number;
   allowedVillages?: string[];
   createdBy?: string;
@@ -269,6 +271,11 @@ function formToBody(form: FormState): {
     entries: entries.length ? entries : [{ weight: 1, flavor: "", item: "", thumbnailImage: "" }],
     allowedVillages: villagesFromRestrictions(form.restrictRudania, form.restrictInariko, form.restrictVhintl),
   };
+}
+
+function formatTotalRollsDisplay(n: number | undefined | null): string {
+  const v = n == null || typeof n !== "number" || Number.isNaN(n) ? 0 : Math.max(0, Math.floor(n));
+  return v.toLocaleString();
 }
 
 function formatDate(s: string | undefined): string {
@@ -1263,6 +1270,15 @@ export default function AdminTablerollsPage() {
                       </dd>
                     </div>
                     <div className="flex justify-between gap-2">
+                      <dt className="text-[var(--totk-grey-200)] shrink-0">Total rolls</dt>
+                      <dd
+                        className="text-right text-[var(--totk-ivory)] tabular-nums font-medium"
+                        title="All-time successful rolls (Discord /tableroll, Blupee, etc.) since tracking was added"
+                      >
+                        {formatTotalRollsDisplay(row.totalRollCount)}
+                      </dd>
+                    </div>
+                    <div className="flex justify-between gap-2">
                       <dt className="text-[var(--totk-grey-200)] shrink-0">Daily limit</dt>
                       <dd className="text-right font-medium text-[var(--totk-ivory)]">{formatDailyLimitDisplay(row.maxRollsPerDay)}</dd>
                     </div>
@@ -1320,6 +1336,12 @@ export default function AdminTablerollsPage() {
                     <th className="pb-2 pt-2 pr-4 pl-4 font-semibold">Name</th>
                     <th className="pb-2 pt-2 pr-4 font-semibold">Visibility</th>
                     <th className="pb-2 pt-2 pr-4 font-semibold">Entries</th>
+                    <th
+                      className="pb-2 pt-2 pr-4 font-semibold tabular-nums"
+                      title="All-time successful rolls since tracking was added (Discord /tableroll, Blupee, etc.)"
+                    >
+                      Total rolls
+                    </th>
                     <th className="pb-2 pt-2 pr-4 font-semibold">Total weight</th>
                     <th
                       className="pb-2 pt-2 pr-4 font-semibold max-w-[7rem]"
@@ -1354,6 +1376,12 @@ export default function AdminTablerollsPage() {
                         </span>
                       </td>
                       <td className="py-2 pr-4 text-[var(--totk-ivory)]">{row.entries?.length ?? 0}</td>
+                      <td
+                        className="py-2 pr-4 text-[var(--totk-ivory)] tabular-nums"
+                        title="All-time successful rolls since tracking was added"
+                      >
+                        {formatTotalRollsDisplay(row.totalRollCount)}
+                      </td>
                       <td className="py-2 pr-4 text-[var(--totk-ivory)]">{row.totalWeight ?? "—"}</td>
                       <td
                         className="py-2 pr-4 text-[var(--totk-ivory)] tabular-nums"
