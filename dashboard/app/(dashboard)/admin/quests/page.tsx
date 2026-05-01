@@ -153,6 +153,8 @@ function describeParticipantRewardOnRecord(p: {
   /** Filled by GET /api/admin/quests/[id] from TokenTransaction (category quest_reward). */
   ledgerQuestRewardAmount?: number | null;
   ledgerQuestRewardAt?: string | Date | null;
+  /** "transaction" | "profile" — where ledgerQuestRewardAmount came from. */
+  ledgerQuestRewardSource?: string | null;
 }): { primary: string; primaryClass: string; secondary?: string } {
   const savedProgress = normalizeParticipantProgressValue(p?.progress);
   const teNum =
@@ -182,9 +184,11 @@ function describeParticipantRewardOnRecord(p: {
       });
     }
   }
+  const ledgerLabel =
+    p?.ledgerQuestRewardSource === "profile" ? "Profile record" : "Sheikah ledger";
   const ledgerLine =
     ledgerTe > 0
-      ? `${ledgerTe} tokens (Sheikah ledger${ledgerDateLabel ? ` · ${ledgerDateLabel}` : ""})`
+      ? `${ledgerTe} tokens (${ledgerLabel}${ledgerDateLabel ? ` · ${ledgerDateLabel}` : ""})`
       : null;
 
   const rewardedAtRaw = p?.rewardedAt;
@@ -450,6 +454,7 @@ type QuestRecord = {
       rpPostCount?: number;
       ledgerQuestRewardAmount?: number | null;
       ledgerQuestRewardAt?: string | null;
+      ledgerQuestRewardSource?: string | null;
     }
   >;
   participantCap?: number | null;
@@ -2553,6 +2558,9 @@ export default function AdminQuestsPage() {
                                     : null,
                                 rewardedAt: p?.rewardedAt,
                                 rewardProcessed: p?.rewardProcessed,
+                                ledgerQuestRewardAmount: p?.ledgerQuestRewardAmount,
+                                ledgerQuestRewardAt: p?.ledgerQuestRewardAt,
+                                ledgerQuestRewardSource: p?.ledgerQuestRewardSource,
                               });
                               return (
                                 <tr

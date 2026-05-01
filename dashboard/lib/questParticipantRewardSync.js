@@ -237,6 +237,28 @@ function escapeRegex(s) {
   return String(s || "").replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
+function normalizeLedgerText(s) {
+  return String(s || "")
+    .toLowerCase()
+    .normalize("NFKC")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+/**
+ * When strict regex match fails (title edits, punctuation, etc.), allow normalized
+ * substring match or questID in description.
+ */
+function looseDescriptionMatchesQuest(description, questTitle, questID) {
+  const d = normalizeLedgerText(description);
+  if (!d) return false;
+  const rawQid = String(questID || "").trim();
+  if (rawQid && d.includes(normalizeLedgerText(rawQid))) return true;
+  const title = normalizeLedgerText(questTitle);
+  if (title.length >= 5 && d.includes(title)) return true;
+  return false;
+}
+
 /** Match TokenTransaction.description to a quest (bot: Quest: Title, dashboard: title only, etc.). */
 function transactionDescriptionMatchesQuest(description, questTitle, questID) {
   const desc = String(description || "").trim();
@@ -299,26 +321,95 @@ async function attachLedgerQuestRewardHintsToParticipants(participantsObj, quest
     .lean()
     .exec();
 
-  const bestByUser = new Map();
+  /** @type {Map<string, Array<Record<string, unknown>>>} */
+  const txsByUser = new Map();
   for (const tx of txs) {
     const uid = normalizeDiscordId(tx.userId);
     if (!uid || !userIds.has(uid)) continue;
-    if (!transactionDescriptionMatchesQuest(tx.description, title, qid)) continue;
-    if (!bestByUser.has(uid)) {
-      bestByUser.set(uid, tx);
-    }
+    if (!txsByUser.has(uid)) txsByUser.set(uid, []);
+    txsByUser.get(uid).push(tx);
   }
 
   for (const [key, p] of Object.entries(participantsObj)) {
     if (!p || typeof p !== "object") continue;
     const uid = normalizeDiscordId(p.userId ?? key);
     if (!uid) continue;
-    const tx = bestByUser.get(uid);
-    if (tx && Number.isFinite(Number(tx.amount)) && Number(tx.amount) > 0) {
-      const amt = Math.max(0, Math.floor(Number(tx.amount)));
+    const list = txsByUser.get(uid);
+    if (!list || list.length === 0) continue;
+    let chosen = null;
+    for (const tx of list) {
+      if (!Number.isFinite(Number(tx.amount)) || Number(tx.amount) <= 0) continue;
+      const descOk =
+        transactionDescriptionMatchesQuest(tx.description, title, qid) ||
+        looseDescriptionMatchesQuest(tx.description, title, qid);
+      if (descOk) {
+        chosen = tx;
+        break;
+      }
+    }
+    if (chosen) {
+      const amt = Math.max(0, Math.floor(Number(chosen.amount)));
       p.ledgerQuestRewardAmount = amt;
       p.ledgerQuestRewardAt =
-        tx.timestamp != null ? new Date(tx.timestamp).toISOString() : null;
+        chosen.timestamp != null ? new Date(chosen.timestamp).toISOString() : null;
+      p.ledgerQuestRewardSource = "transaction";
+    }
+  }
+
+  const qidNorm = String(questID || "").trim();
+  if (!qidNorm) return;
+
+  const needProfile = [];
+  for (const [key, p] of Object.entries(participantsObj)) {
+    if (!p || typeof p !== "object") continue;
+    if (
+      typeof p.ledgerQuestRewardAmount === "number" &&
+      Number.isFinite(p.ledgerQuestRewardAmount) &&
+      p.ledgerQuestRewardAmount > 0
+    ) {
+      continue;
+    }
+    const uid = normalizeDiscordId(p.userId ?? key);
+    if (uid) needProfile.push(uid);
+  }
+  if (needProfile.length === 0) return;
+
+  const User = require("../models/UserModel.js");
+  const userDocs = await User.find({ discordId: { $in: [...new Set(needProfile)] } })
+    .select({ discordId: 1, quests: 1 })
+    .lean()
+    .exec();
+
+  for (const u of userDocs) {
+    const did = normalizeDiscordId(u.discordId);
+    if (!did) continue;
+    const completions = u.quests?.completions;
+    if (!Array.isArray(completions)) continue;
+    const hit = completions.find(
+      (c) =>
+        c &&
+        String(c.questId || "")
+          .trim()
+          .toUpperCase() === qidNorm.toUpperCase()
+    );
+    if (!hit) continue;
+    const te = Number(hit.tokensEarned);
+    if (!Number.isFinite(te) || te <= 0) continue;
+    for (const [pkey, p] of Object.entries(participantsObj)) {
+      if (!p || typeof p !== "object") continue;
+      if (
+        typeof p.ledgerQuestRewardAmount === "number" &&
+        Number.isFinite(p.ledgerQuestRewardAmount) &&
+        p.ledgerQuestRewardAmount > 0
+      ) {
+        continue;
+      }
+      const uid = normalizeDiscordId(p.userId ?? pkey);
+      if (uid !== did) continue;
+      p.ledgerQuestRewardAmount = Math.max(0, Math.floor(te));
+      const ra = hit.rewardedAt || hit.completedAt;
+      p.ledgerQuestRewardAt = ra != null ? new Date(ra).toISOString() : null;
+      p.ledgerQuestRewardSource = "profile";
     }
   }
 }

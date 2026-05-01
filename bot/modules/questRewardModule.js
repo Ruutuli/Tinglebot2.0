@@ -921,6 +921,14 @@ async function buildQuestRewardContext(quest, participants = []) {
         return context;
     }
 
+    if (process.env.SKIP_ENTERTAINER_QUEST_BONUS === '1') {
+        logger.info(
+            'QUEST',
+            '[Entertainer bonus] Skipped: SKIP_ENTERTAINER_QUEST_BONUS=1 (base/collab token math unchanged)'
+        );
+        return context;
+    }
+
     context.entertainerBonus = await detectEntertainerBonus(participants);
 
     if (context.entertainerBonus.enabled) {
@@ -1083,7 +1091,11 @@ async function processQuestCompletion(questId) {
         // Send completion summary after rewards are processed
         // Use the quest's completion reason or default to time_expired
         const completionReason = quest.completionReason || 'time_expired';
-        await sendQuestCompletionSummary(quest, completionReason);
+        if (process.env.SKIP_QUEST_COMPLETION_SUMMARY !== '1') {
+            await sendQuestCompletionSummary(quest, completionReason);
+        } else {
+            logger.info('QUEST', `processQuestCompletion: skipped completion summary (SKIP_QUEST_COMPLETION_SUMMARY=1)`);
+        }
 
     } catch (error) {
         handleError(error, 'questRewardModule.js');
