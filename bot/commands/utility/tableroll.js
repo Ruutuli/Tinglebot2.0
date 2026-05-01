@@ -24,7 +24,7 @@ const {
   formatAllowedVillagesShort,
 } = require('@/utils/tableRollUtils');
 
-// Roll frequency choices for slash options (value = maxRollsPerDay, 0 = unlimited)
+// Roll frequency choices for slash options (value = maxRollsPerDay per character, 0 = unlimited)
 const ROLL_LIMIT_CHOICES = [
   { name: 'As much as wanted', value: '0' },
   { name: '1x per day', value: '1' },
@@ -36,7 +36,7 @@ const ROLL_LIMIT_CHOICES = [
 
 function formatRollFrequency(maxRollsPerDay) {
   if (!maxRollsPerDay || maxRollsPerDay <= 0) return 'As much as wanted';
-  return `${maxRollsPerDay}x per day`;
+  return `${maxRollsPerDay}x per day per character`;
 }
 
 /** Names attached to this quest (multi-table Interactive support). */
@@ -124,7 +124,7 @@ module.exports = {
         )
         .addStringOption(option =>
           option.setName('rolllimit')
-            .setDescription('How often this table can be rolled (default: as much as wanted)')
+            .setDescription('Per character: max rolls on this table per day (default: unlimited)')
             .setRequired(false)
             .addChoices(...ROLL_LIMIT_CHOICES)
         )
@@ -189,7 +189,7 @@ module.exports = {
         )
         .addStringOption(option =>
           option.setName('rolllimit')
-            .setDescription('How often this table can be rolled (optional; leave blank to keep current)')
+            .setDescription('Per character: max rolls per day (optional; blank = keep current)')
             .setRequired(false)
             .addChoices(...ROLL_LIMIT_CHOICES)
         )
@@ -456,7 +456,7 @@ module.exports = {
 
       await interaction.deferReply();
 
-      const result = await TableRoll.rollOnTable(tableName);
+      const result = await TableRoll.rollOnTable(tableName, { character });
       const rolledItemName = result.result.item;
       const rolledFlavor = result.result.flavor;
       const rolledThumbnail = result.result.thumbnailImage;
@@ -684,10 +684,10 @@ module.exports = {
          });
        }
 
-       // Add daily roll limit info if applicable
+       // Add daily roll limit info if applicable (per this character)
        if (result.dailyRollsRemaining !== null) {
          embed.addFields({
-           name: '📅 Daily Rolls Remaining',
+           name: '📅 Rolls left today (this character)',
            value: result.dailyRollsRemaining.toString(),
            inline: true
          });
@@ -801,9 +801,9 @@ module.exports = {
 
       if (table.maxRollsPerDay > 0) {
         embed.addFields({
-          name: '📅 Used today',
-          value: `${table.dailyRollCount}/${table.maxRollsPerDay}`,
-          inline: true
+          name: '📅 Daily limit',
+          value: `Each character may roll up to **${table.maxRollsPerDay}** time(s) per day (server date).`,
+          inline: false
         });
       }
 
@@ -965,9 +965,9 @@ module.exports = {
 
       if (table.maxRollsPerDay > 0) {
         embed.addFields({
-          name: '📅 Daily limit today',
-          value: `${table.dailyRollCount}/${table.maxRollsPerDay}`,
-          inline: true
+          name: '📅 Daily limit',
+          value: `Each character may roll up to **${table.maxRollsPerDay}** time(s) per day (server date).`,
+          inline: false
         });
       }
 

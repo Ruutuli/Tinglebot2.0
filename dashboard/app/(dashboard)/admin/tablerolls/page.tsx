@@ -30,13 +30,13 @@ function villagesToRestrictions(arr: string[] | undefined | null) {
   };
 }
 
-/** How many rolls per Discord day (shared pool for the whole table doc). */
+/** Max rolls per calendar day per character (stored per character, not on the table). */
 function formatDailyLimitDisplay(maxPerDay?: number | null): string {
   const n =
     maxPerDay == null || typeof maxPerDay !== "number" || Number.isNaN(maxPerDay) ? 0 : Math.max(0, Math.floor(maxPerDay));
   if (n === 0) return "Unlimited";
-  if (n === 1) return "1/day";
-  return `${n}/day`;
+  if (n === 1) return "1/day · per character";
+  return `${n}/day · per character`;
 }
 
 function formatVillageLockDisplay(allowed?: string[] | null): string {
@@ -890,7 +890,7 @@ export default function AdminTablerollsPage() {
                         onChange={(e) => setField("maxRollsPerDay", e.target.value)}
                         className="w-full max-w-[12rem] rounded-lg border border-[var(--totk-dark-ocher)] bg-[var(--botw-warm-black)] px-3.5 py-2.5 text-[var(--totk-ivory)] tabular-nums focus:ring-2 focus:ring-[var(--totk-mid-ocher)]/50 focus:border-[var(--totk-mid-ocher)]"
                       />
-                      <p className="mt-1.5 text-xs text-[var(--totk-grey-200)]">Shared across everyone for this table · 0 = unlimited</p>
+                      <p className="mt-1.5 text-xs text-[var(--totk-grey-200)]">Per character (each character gets this many rolls per day) · 0 = unlimited</p>
                     </div>
                     <div className="sm:col-span-2">
                       <p className="mb-2 block text-sm font-medium text-[var(--totk-grey-200)]">Village restriction</p>

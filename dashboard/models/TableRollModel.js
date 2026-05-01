@@ -164,21 +164,42 @@ TableRollSchema.pre('validate', function(next) {
 // ------------------- Static methods -------------------
 
 // ------------------- Roll on a table with enhanced features -------------------
-function maybeApplyDailyRollReset(doc) {
-  if (!doc?.dailyRollReset) return;
-  const now = new Date();
-  const resetDate = new Date(doc.dailyRollReset);
-  if (
-    now.getDate() !== resetDate.getDate() ||
-    now.getMonth() !== resetDate.getMonth() ||
-    now.getFullYear() !== resetDate.getFullYear()
-  ) {
-    doc.dailyRollCount = 0;
-    doc.dailyRollReset = now;
+/** Calendar day key using the same local-date semantics as table dailyRollReset (server timezone). */
+function getTableRollCalendarDayKey(d = new Date()) {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+}
+
+function tableRollDailyMapKey(tableName) {
+  return `tr:${String(tableName).trim()}`;
+}
+
+function ensureCharacterDailyRollMap(character) {
+  if (!character.dailyRoll) {
+    character.dailyRoll = new Map();
+    return;
+  }
+  if (!(character.dailyRoll instanceof Map)) {
+    const plain = character.dailyRoll;
+    character.dailyRoll = new Map(
+      plain && typeof plain === 'object' ? Object.entries(plain) : []
+    );
   }
 }
 
-TableRollSchema.statics.rollOnTable = async function (tableName) {
+function parseTableRollDailyState(raw) {
+  if (raw == null) return { dayKey: '', count: 0 };
+  if (typeof raw === 'object' && raw !== null && 'd' in raw && 'c' in raw) {
+    return { dayKey: String(raw.d || ''), count: Math.max(0, Number(raw.c) || 0) };
+  }
+  return { dayKey: '', count: 0 };
+}
+
+TableRollSchema.statics.rollOnTable = async function (tableName, options = {}) {
+  const character = options.character || null;
+
   const table = await this.findOne({ name: tableName, isActive: true });
   if (!table) {
     throw new Error(`Table '${tableName}' not found or inactive`);
@@ -188,10 +209,27 @@ TableRollSchema.statics.rollOnTable = async function (tableName) {
     throw new Error(`Table '${tableName}' has no entries`);
   }
 
-  maybeApplyDailyRollReset(table);
+  const todayKey = getTableRollCalendarDayKey();
+  let rollsTodayAfter = 0;
 
-  if (table.maxRollsPerDay > 0 && table.dailyRollCount >= table.maxRollsPerDay) {
-    throw new Error(`Table '${tableName}' has reached its daily roll limit`);
+  if (table.maxRollsPerDay > 0) {
+    if (!character || typeof character.save !== 'function') {
+      throw new Error(
+        `Table '${tableName}' has a daily roll limit per character; a character record is required to roll.`
+      );
+    }
+    ensureCharacterDailyRollMap(character);
+    const mapKey = tableRollDailyMapKey(table.name);
+    const prev = parseTableRollDailyState(character.dailyRoll.get(mapKey));
+    const countSoFar = prev.dayKey === todayKey ? prev.count : 0;
+    if (countSoFar >= table.maxRollsPerDay) {
+      throw new Error(
+        `**${character.name}** has reached their daily roll limit for table '${tableName}' (${table.maxRollsPerDay}x per day).`
+      );
+    }
+    rollsTodayAfter = countSoFar + 1;
+    character.dailyRoll.set(mapKey, { d: todayKey, c: rollsTodayAfter });
+    character.markModified('dailyRoll');
   }
 
   const totalW = table.totalWeight > 0 ? table.totalWeight : table.entries.reduce((s, e) => s + (e.weight || 0), 0);
@@ -216,13 +254,13 @@ TableRollSchema.statics.rollOnTable = async function (tableName) {
     selectedEntry = table.entries[entryIndex];
   }
 
-  table.dailyRollCount += 1;
-
-  try {
-    await table.save();
-  } catch (err) {
-    console.error('[TableRollModel] Error updating roll statistics:', err);
-    throw err;
+  if (table.maxRollsPerDay > 0 && character) {
+    try {
+      await character.save();
+    } catch (err) {
+      console.error('[TableRollModel] Error saving character table roll limit:', err);
+      throw err;
+    }
   }
 
   return {
@@ -231,7 +269,7 @@ TableRollSchema.statics.rollOnTable = async function (tableName) {
     entryIndex,
     rollValue: randomValue,
     dailyRollsRemaining:
-      table.maxRollsPerDay > 0 ? Math.max(0, table.maxRollsPerDay - table.dailyRollCount) : null,
+      table.maxRollsPerDay > 0 ? Math.max(0, table.maxRollsPerDay - rollsTodayAfter) : null,
   };
 };
 

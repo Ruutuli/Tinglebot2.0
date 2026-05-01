@@ -563,6 +563,68 @@ const TIP_RESERVE_VS_APP =
 
 const MOD_ROLE_ID_DEFAULT = process.env.MOD_ROLE_ID || '606128760655183882';
 
+/** Where to ping mods for full roster lines (not the short reserve format). */
+function rosterReviewModChannelId() {
+  return (
+    process.env.ROSTER_REVIEW_MOD_CHANNEL_ID ||
+    process.env.MOD_QUEUE_CHANNEL_ID ||
+    process.env.MOD_LOG_CHANNEL_ID ||
+    ''
+  ).trim();
+}
+
+/** Optional role ping for roster review (defaults to MOD_ROLE_ID). Set ROSTER_REVIEW_MOD_ROLE_ID="" to disable. */
+function rosterReviewModRoleId() {
+  const raw = process.env.ROSTER_REVIEW_MOD_ROLE_ID;
+  if (raw === '') return '';
+  return (raw || MOD_ROLE_ID_DEFAULT || '').trim();
+}
+
+async function reactRosterPostWithVillageEmoji(message, villageNorm) {
+  const id = VILLAGE_CUSTOM_EMOJI_ID[villageNorm];
+  try {
+    if (id) {
+      const name =
+        villageNorm === 'rudania'
+          ? 'rudania'
+          : villageNorm === 'inariko'
+            ? 'inariko'
+            : 'vhintl';
+      await message.react({ id, name });
+    }
+  } catch (err) {
+    logger.warn(FILE, `Roster village react failed: ${err.message}`);
+  }
+}
+
+/**
+ * Notify mods that a full roster line was posted (no public thread reply).
+ */
+async function notifyModsRosterPost(client, message) {
+  const channelId = rosterReviewModChannelId();
+  if (!channelId) {
+    logger.warn(
+      FILE,
+      'No roster review mod channel — set ROSTER_REVIEW_MOD_CHANNEL_ID (or MOD_QUEUE_CHANNEL_ID / MOD_LOG_CHANNEL_ID)'
+    );
+    return;
+  }
+  const ch = await client.channels.fetch(channelId).catch(() => null);
+  if (!ch || !ch.isTextBased()) {
+    logger.warn(FILE, `Roster review channel missing or not text-based: ${channelId}`);
+    return;
+  }
+  const roleId = rosterReviewModRoleId();
+  const prefix = roleId ? `<@&${roleId}> ` : '';
+  const body = `New roster post! Please review! \`${message.id}\` in <#${message.channelId}>\n${message.url}`;
+  await ch
+    .send({
+      content: `${prefix}${body}`,
+      allowedMentions: roleId ? { roles: [roleId] } : {},
+    })
+    .catch((err) => logger.warn(FILE, `Roster mod notify send failed: ${err.message}`));
+}
+
 async function memberCanModerateReserves(member) {
   if (!member) return false;
   if (member.permissions.has(PermissionFlagsBits.Administrator)) return true;
@@ -814,15 +876,12 @@ async function handleOcReserveMessage(message, client) {
       return;
     }
 
-    await message.reply({
-      content:
-        `✅ **Roster line looks OK** — I read **${appName}** and **${villageDisplay(villageNorm)}**.\n\n` +
-        `This is **not** saved as a slot reserve (that needs only two fields, or a mod ${villageEmojiMarkup(villageNorm)} reaction). ` +
-        `Follow the pinned template for the rest, and submit through the dashboard when you’re ready.\n\n` +
-        `_If you only wanted a **reserve**, delete this and repost:_ \`${appName} | ${villageDisplay(villageNorm)}\`\n` +
-        `_Mods:_ react with **${villageEmojiMarkup(villageNorm)}** on this message to log **${appName}** as a reserve for **${villageDisplay(villageNorm)}**.`,
-      allowedMentions: { users: [] },
-    });
+    await reactRosterPostWithVillageEmoji(message, villageNorm);
+    await notifyModsRosterPost(client, message);
+    logger.info(
+      FILE,
+      `Roster line OK (silent): ${appName} → ${villageNorm} by ${message.author.tag} — mod channel ping + village react`
+    );
     return;
   }
 
