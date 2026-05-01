@@ -53,7 +53,9 @@ async function hydrateApprovedSubmissionsForParticipant(quest, participant) {
 
   const questTypeLc = String(quest.questType || "").toLowerCase();
 
-  if (!participant.submissions) participant.submissions = [];
+  if (!Array.isArray(participant.submissions)) {
+    participant.submissions = [];
+  }
 
   for (const submission of rows) {
     const submissionType = String(submission.category || "").toLowerCase();

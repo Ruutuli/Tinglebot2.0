@@ -1066,9 +1066,11 @@ async function processQuestCompletion(questId) {
         
         const results = await processAllParticipants(quest, participants);
 
-        if (results.rewardedCount > 0 && results.rewardedCount === participants.length) {
+        // Finalize quest doc from `active` when every row is done (paid, ineligible, or failed/disqualified).
+        // Old logic required rewardedCount === everyone, which missed already_rewarded rows and failed users.
+        if (results.allParticipantsResolved && quest.status === PROGRESS_STATUS.ACTIVE) {
             await markQuestAsCompleted(quest);
-            console.log(`[questRewardModule.js] ✅ Quest ${questId} marked as completed. All participants rewarded.`);
+            console.log(`[questRewardModule.js] ✅ Quest ${questId} marked as completed (all participant rows resolved).`);
         }
 
         if (quest.status === 'completed') {
@@ -1133,18 +1135,31 @@ async function processAllParticipants(quest, participants) {
     let completedCount = 0;
     let rewardedCount = 0;
     let errorCount = 0;
+    let resolvedCount = 0;
     const rewardNotificationEntries = [];
 
     const rewardContext = await buildQuestRewardContext(quest, participants);
 
     for (const participant of participants) {
         try {
+            if (
+                participant.progress === PROGRESS_STATUS.FAILED ||
+                participant.progress === PROGRESS_STATUS.DISQUALIFIED
+            ) {
+                resolvedCount++;
+                continue;
+            }
             const result = await processParticipantReward(quest, participant, rewardContext);
             if (result.status === 'completed') {
                 rewardedCount++;
+                resolvedCount++;
                 if (shouldIncludeInRewardNotification(quest, result.rewardResult)) {
                     rewardNotificationEntries.push({ participant, rewardResult: result.rewardResult });
                 }
+            } else if (result.status === 'already_rewarded') {
+                resolvedCount++;
+            } else if (result.status === 'requirements_not_met') {
+                resolvedCount++;
             } else if (result.status !== 'already_rewarded' && result.status !== 'requirements_not_met') {
                 errorCount++;
             }
@@ -1159,7 +1174,9 @@ async function processAllParticipants(quest, participants) {
     }
 
     completedCount = rewardedCount;
-    return { completedCount, rewardedCount, errorCount };
+    const allParticipantsResolved =
+        participants.length === 0 ? true : resolvedCount === participants.length;
+    return { completedCount, rewardedCount, errorCount, allParticipantsResolved };
 }
 
 // ------------------- Process Individual Participant Reward ------------------

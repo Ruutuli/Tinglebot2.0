@@ -86,6 +86,10 @@ async function rewardParticipantDashboardComplete(
     return null;
   }
 
+  const prevProgress = participant.progress;
+  const prevCompletedAt = participant.completedAt ?? null;
+  const prevUpdatedAt = participant.updatedAt;
+
   participant.progress = "completed";
   participant.completedAt = now;
   participant.updatedAt = now;
@@ -98,6 +102,9 @@ async function rewardParticipantDashboardComplete(
   const discordId = normalizeDiscordId(participant.userId ?? key);
   const userDoc = await User.findOne({ discordId }).exec();
   if (!userDoc) {
+    participant.progress = prevProgress;
+    participant.completedAt = prevCompletedAt;
+    participant.updatedAt = prevUpdatedAt;
     logger.error(
       "api/admin/quests/[id]/participants",
       `User not found: ${discordId || key}`

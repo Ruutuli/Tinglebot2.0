@@ -187,14 +187,17 @@ async function processValidRPPost(quest, participant, channelId, message = null)
 
     const completionResult = await quest.checkAutoCompletion();
     
+    // Time expiry and "all participants done" paths both set needsRewardProcessing. Always run payouts;
+    // previously only `all_participants_completed` did, leaving time-expired quests stuck as status
+    // `completed` with participants in `completed` but no tokens (sweep only handles `active` quests).
     if (completionResult.completed && completionResult.needsRewardProcessing) {
         logger.success('QUEST', `${quest.questID} completed: ${completionResult.reason}`);
-        
-        if (completionResult.reason === 'all_participants_completed' || completionResult.reason.includes('participants completed')) {
-            await questRewardModule.processQuestCompletion(quest.questID);
-            await quest.markCompletionProcessed();
+        await questRewardModule.processQuestCompletion(quest.questID);
+        const fresh = await Quest.findOne({ questID: quest.questID });
+        if (fresh && typeof fresh.markCompletionProcessed === 'function') {
+            await fresh.markCompletionProcessed();
         }
-    } else if (completionResult.reason.includes('participants completed')) {
+    } else if (completionResult.reason && String(completionResult.reason).includes('participants completed')) {
         logger.info('QUEST', `${completionResult.reason} in quest ${quest.questID}`);
     }
 

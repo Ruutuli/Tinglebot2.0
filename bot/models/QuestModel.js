@@ -505,7 +505,8 @@ async function fetchBlupeeSeasonTallyMap(userIds) {
 function meetsRequirements(participant, quest, options = {}) {
     const blupeeTallyMap = options.blupeeTallyMap;
     const { questType } = quest;
-    const { rpPostCount, submissions, successfulRolls } = participant;
+    const rpPostCount = Number(participant?.rpPostCount) || 0;
+    const submissions = Array.isArray(participant?.submissions) ? participant.submissions : [];
     const effPosts = resolvePostRequirement(quest);
 
     if (questType === QUEST_TYPES.INTERACTIVE_RP) {
