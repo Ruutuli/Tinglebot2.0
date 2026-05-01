@@ -33,7 +33,7 @@ const { attachSubmissionWithdrawReaction } = require('../../handlers/submissionH
 
 const SHEIKAH_SLATE_QUEST_JOIN = '641858948802150400';
 
-/** Requires /quest join before linking a monthly Quest (Art / Writing) to a submission. */
+/** Requires /quest join before linking a monthly board quest (Art / Writing) to a submission. */
 async function enforceQuestJoinBeforeSubmission(userId, questId, category, interaction) {
   const raw = (questId && String(questId).trim()) || '';
   if (!raw || raw === 'N/A') return true;

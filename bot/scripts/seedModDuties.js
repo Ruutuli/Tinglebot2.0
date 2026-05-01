@@ -57,7 +57,6 @@ const FREQUENCY_MAP = {
     'Weekly': 'weekly',
     'Monthly': 'monthly',
     'Monthly/As Submitted': 'monthly',
-    'Bimonthly': 'monthly', // Every 2 months, use monthly as closest
     'Trimonthly': 'quarterly', // Every 3 months
     'As Needed': null // Not repeating on schedule
 };
@@ -211,8 +210,8 @@ const MOD_DUTIES = [
     },
     {
         title: 'Quests',
-        description: `Create and post bi-monthly quests.`,
-        frequency: 'Bimonthly',
+        description: `Create and post the monthly quests from the dashboard—timing, length, and signup details are configured per quest on the quest admin page.`,
+        frequency: 'Monthly',
         responsible: 'Reaver',
         backup: 'Mata',
         priority: 'high'

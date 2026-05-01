@@ -860,7 +860,6 @@ function getEffectiveJob(character) {
  * that do not use processQuestCompletion never get it here either.
  */
 async function buildQuestRewardContext(quest, participants = []) {
-    const context = {};
     const entertainerBonusDisabled = {
         enabled: false,
         amountPerParticipant: 0,
@@ -868,12 +867,25 @@ async function buildQuestRewardContext(quest, participants = []) {
         inspectedParticipants: 0
     };
 
+    const context = { entertainerBonus: entertainerBonusDisabled };
+
+    try {
+        if (Quest.isBlupeeInteractiveQuest && Quest.isBlupeeInteractiveQuest(quest)) {
+            const ids = (participants || []).map((p) => p?.userId).filter(Boolean);
+            context.blupeeTallyMap = await Quest.fetchBlupeeSeasonTallyMap(ids);
+        }
+    } catch (e) {
+        logger.warn(
+            'QUEST',
+            `[Blupee tally] Could not load season map for ${quest?.questID || quest?.title}: ${e?.message || e}`
+        );
+    }
+
     if (quest?.questType !== QUEST_TYPES.RP && quest?.questType !== QUEST_TYPES.INTERACTIVE_RP) {
         logger.debug(
             'QUEST',
             `[Entertainer bonus] Skipped: Ballad of the Goddess is RP quests only (questType=${quest?.questType || 'unknown'})`
         );
-        context.entertainerBonus = entertainerBonusDisabled;
         return context;
     }
 
@@ -1027,6 +1039,10 @@ async function processQuestCompletion(questId) {
             console.log(`[questRewardModule.js] ✅ Quest ${questId} marked as completed. All participants rewarded.`);
         }
 
+        if (quest.status === 'completed') {
+            promoteRewardedParticipantsToFinalCompleted(quest);
+        }
+
         await quest.save();
         logger.info('QUEST', `processQuestCompletion: finished questId=${questId} completed=${results.completedCount} rewarded=${results.rewardedCount} errors=${results.errorCount}`);
 
@@ -1039,6 +1055,45 @@ async function processQuestCompletion(questId) {
         handleError(error, 'questRewardModule.js');
         console.error(`[questRewardModule.js] ❌ Error processing quest completion for ${questId}:`, error);
     }
+}
+
+/**
+ * Finalize one quest whose end window has passed but DB status is still active.
+ */
+async function finalizeExpiredQuestDocIfNeeded(quest) {
+    if (!quest?.questID || quest.status !== 'active') {
+        return { quest, finalized: false };
+    }
+    if (typeof quest.checkTimeExpiration !== 'function' || !quest.checkTimeExpiration()) {
+        return { quest, finalized: false };
+    }
+    const result = await quest.checkAutoCompletion(true);
+    if (!result.completed || !result.needsRewardProcessing) {
+        return { quest, finalized: false };
+    }
+    await processQuestCompletion(quest.questID);
+    const fresh = await Quest.findOne({ questID: quest.questID });
+    if (fresh && typeof fresh.markCompletionProcessed === 'function') {
+        await fresh.markCompletionProcessed();
+    }
+    return { quest: fresh || quest, finalized: true };
+}
+
+async function sweepExpiredActiveQuestsForCompletion() {
+    const activeQuests = await Quest.find({ status: 'active' });
+    let processed = 0;
+    for (const quest of activeQuests) {
+        try {
+            const { finalized } = await finalizeExpiredQuestDocIfNeeded(quest);
+            if (finalized) processed++;
+        } catch (questErr) {
+            console.error(
+                `[questRewardModule.js] ⚠️ Quest expiration sweep: ${quest?.questID || quest?._id}:`,
+                questErr?.message || questErr
+            );
+        }
+    }
+    return { checked: activeQuests.length, processed };
 }
 
 // ------------------- Process All Participants ------------------
@@ -1086,7 +1141,7 @@ async function processParticipantReward(quest, participant, rewardContext = {}) 
             return { status: 'already_rewarded' };
         }
 
-        if (!meetsRequirements(participant, quest)) {
+        if (!meetsRequirements(participant, quest, { blupeeTallyMap: rewardContext.blupeeTallyMap })) {
             console.log(`[questRewardModule.js] ⚠️ Participant ${participant.characterName} does not meet requirements for quest ${quest.questID}`);
             return { status: 'requirements_not_met' };
         }
@@ -1645,6 +1700,13 @@ async function markQuestAsCompleted(quest) {
     try {
         quest.status = 'completed';
         
+        const participantsArr = Array.from(quest.participants?.values?.() || []);
+        let blupeeTallyMap = null;
+        if (Quest.isBlupeeInteractiveQuest(quest) && participantsArr.length) {
+            blupeeTallyMap = await Quest.fetchBlupeeSeasonTallyMap(participantsArr.map((p) => p.userId));
+        }
+        const reqOpts = { blupeeTallyMap };
+
         // Mark all remaining active participants appropriately
         let failedCount = 0;
         let completedCount = 0;
@@ -1652,7 +1714,7 @@ async function markQuestAsCompleted(quest) {
         for (const [userId, participant] of quest.participants) {
             if (participant.progress === PROGRESS_STATUS.ACTIVE) {
                 // Check if they meet requirements
-                if (meetsRequirements(participant, quest)) {
+                if (meetsRequirements(participant, quest, reqOpts)) {
                     participant.progress = PROGRESS_STATUS.COMPLETED;
                     participant.completedAt = participant.completedAt || new Date();
                     completedCount++;
@@ -1793,24 +1855,7 @@ async function processMonthlyQuestRewards() {
     try {
         console.log('[questRewardModule.js] 🏆 Starting monthly quest reward distribution...');
 
-        // Backup: expire any still-active quests whose window ended (e.g. missed 6h quest-completion-check).
-        const activeOpen = await Quest.find({ status: 'active' });
-        for (const q of activeOpen) {
-            try {
-                if (!q.questID || !q.participants || q.participants.size === 0) continue;
-                if (typeof q.checkTimeExpiration !== 'function' || !q.checkTimeExpiration()) continue;
-                const result = await q.checkAutoCompletion(true);
-                if (result.completed && result.needsRewardProcessing && q.questID) {
-                    await processQuestCompletion(q.questID);
-                    const fresh = await Quest.findOne({ questID: q.questID });
-                    if (fresh && typeof fresh.markCompletionProcessed === 'function') {
-                        await fresh.markCompletionProcessed();
-                    }
-                }
-            } catch (expErr) {
-                console.error(`[questRewardModule.js] ⚠️ Monthly pre-pass: could not finalize quest ${q?.questID}:`, expErr);
-            }
-        }
+        await sweepExpiredActiveQuestsForCompletion();
 
         // Find all completed quests
         // NOTE: Can't use dotted notation to query Map fields like 'participants.progress'
@@ -1886,7 +1931,9 @@ async function processQuestMonthlyRewards(quest) {
                 // This ensures participants who submitted objectives are marked as completed
                 // even if they weren't explicitly marked before quest expiration
                 if (participant.progress === 'active') {
-                    const meetsReq = meetsRequirements(participant, quest);
+                    const meetsReq = meetsRequirements(participant, quest, {
+                        blupeeTallyMap: rewardContext.blupeeTallyMap,
+                    });
                     if (meetsReq) {
                         // Mark participant as completed
                         participant.progress = 'completed';
@@ -1943,6 +1990,11 @@ async function processQuestMonthlyRewards(quest) {
         
         // Save the quest with updated participant data
         await quest.save();
+
+        if (quest.status === 'completed') {
+            promoteRewardedParticipantsToFinalCompleted(quest);
+            await quest.save();
+        }
         
         console.log(`[questRewardModule.js] 📊 Quest ${quest.questID} monthly processing: ${processed} processed, ${rewarded} rewarded, ${alreadyRewarded} already rewarded, ${errors} errors`);
         
@@ -1954,9 +2006,24 @@ async function processQuestMonthlyRewards(quest) {
     }
 }
 
+function promoteRewardedParticipantsToFinalCompleted(quest) {
+    if (!quest || quest.status !== 'completed' || !quest.participants?.values) {
+        return 0;
+    }
+    const now = new Date();
+    let n = 0;
+    for (const p of quest.participants.values()) {
+        if (!p || typeof p !== 'object' || p.progress !== PROGRESS_STATUS.REWARDED) continue;
+        p.progress = PROGRESS_STATUS.COMPLETED;
+        p.updatedAt = now;
+        n += 1;
+    }
+    return n;
+}
+
 // ------------------- Get Participant Reward Status ------------------
 function getParticipantRewardStatus(participant) {
-    // Completed and rewarded are the same; "already rewarded" = reward processed or legacy 'rewarded' progress
+    // Paid: legacy rewarded, rewardProcessed (incl. terminal completed after quest closes), or payout fields on row
     if (participant.progress === 'rewarded' || participant.rewardProcessed === true) {
         return 'already_rewarded';
     }
@@ -2557,6 +2624,8 @@ module.exports = {
     
     // Core Functions
     processQuestCompletion,
+    finalizeExpiredQuestDocIfNeeded,
+    sweepExpiredActiveQuestsForCompletion,
     processParticipantReward,
     distributeRewards,
     distributeItems,
@@ -2568,6 +2637,7 @@ module.exports = {
     processRPQuestCompletion,
     processMonthlyQuestRewards,
     processQuestMonthlyRewards,
+    promoteRewardedParticipantsToFinalCompleted,
     distributeParticipantMonthlyRewards,
     getQuestRewardSummary,
     processArtQuestCompletionFromSubmission,
@@ -2579,7 +2649,8 @@ module.exports = {
     createCompletionNotificationEmbed,
     getQuestNotificationChannel,
     recordQuestCompletionSafeguard,
-    
+    syncApprovedSubmissionsToParticipant,
+
     // Village Validation Functions
     extractVillageFromLocation,
     validateRPQuestVillage,

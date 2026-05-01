@@ -21,7 +21,9 @@ const {
     extractVillageFromLocation,
     formatQuestRules,
     formatLocationText,
-    formatSignupDeadline
+    formatSignupDeadline,
+    finalizeExpiredQuestDocIfNeeded,
+    sweepExpiredActiveQuestsForCompletion
 } = require("../../modules/questRewardModule");
 
 // ============================================================================
@@ -39,8 +41,7 @@ const embedUpdateQueue = new Map(); // questID -> { isUpdating: boolean, pending
 const updateTimeouts = new Map(); // questID -> timeout
 
 function isBlupeeInteractiveQuest(quest) {
- const title = String(quest?.title || '');
- return quest?.questType === 'Interactive' && /\bblupee\b/i.test(title);
+  return Quest.isBlupeeInteractiveQuest(quest);
 }
 
 // ============================================================================
@@ -279,11 +280,12 @@ module.exports = {
  // ------------------- Quest List Handler -------------------
  // ============================================================================
  async handleListQuests(interaction) {
+  await sweepExpiredActiveQuestsForCompletion();
   const quests = await Quest.find({ status: "active" }).sort({ date: 1 });
 
   if (quests.length === 0) {
    return interaction.reply({
-    content: "No active quests available.\n\n**About Quests**: Quests are posted on the quest board and are smaller, optional, fun timed tasks that happen every other month! They can be Art, Writing, Interactive, or RP based.",
+    content: "No active quests available.\n\n**About Quests**: Community quests run **every month**. They’re posted on the quest board—smaller, optional, timed tasks (Art, Writing, Interactive, or RP). Timing and signup for each run are configured on the dashboard and shown on that quest’s post.",
     flags: MessageFlags.Ephemeral,
    });
   }
@@ -299,6 +301,7 @@ module.exports = {
   const userID = interaction.user.id;
 
   try {
+   await sweepExpiredActiveQuestsForCompletion();
    const userQuests = await this.getUserActiveQuests(userID);
    
    if (userQuests.length === 0) {
@@ -1626,7 +1629,7 @@ formatQuestCount(count = 0) {
  },
 
  async validateQuest(interaction, questID) {
-  const quest = await Quest.findOne({ questID });
+  let quest = await Quest.findOne({ questID });
   if (!quest) {
    await interaction.reply({
     content: `[quest.js]❌ Quest with ID \`${questID}\` does not exist.`,
@@ -1634,6 +1637,9 @@ formatQuestCount(count = 0) {
    });
    return null;
   }
+
+  const expiredFinalize = await finalizeExpiredQuestDocIfNeeded(quest);
+  quest = expiredFinalize.quest || quest;
 
   if (quest.status !== "active") {
    await interaction.reply({
@@ -2060,8 +2066,8 @@ formatQuestCount(count = 0) {
  // ============================================================================
  createQuestListEmbed(interaction, quests) {
   const embed = createBaseEmbed(
-   "Active Quests - Every Other Month Events!",
-   "Official bimonthly quests! Smaller, optional, fun timed tasks for community rewards!",
+   "Monthly Quests",
+   "Month-to-month quests on the board—with timers and rewards. Each quest’s signup window and length come from how it’s set up on the dashboard and its post.",
    0x4A90E2
   );
 

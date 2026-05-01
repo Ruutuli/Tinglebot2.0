@@ -306,12 +306,25 @@ export async function GET(
 
     await connect();
     const Quest = (await import("@/models/QuestModel.js")).default;
-    const quest = await Quest.findById(id).lean();
+    const quest = await Quest.findById(id);
     if (!quest) {
       return NextResponse.json({ error: "Quest not found" }, { status: 404 });
     }
 
-    const converted = convertParticipantsMapToObject(quest as Record<string, unknown>);
+    const { markActiveParticipantsFailedAfterQuestPeriod } = await import(
+      "@/lib/questParticipantRewardSync.js"
+    );
+    const failSync = await markActiveParticipantsFailedAfterQuestPeriod(quest);
+    if (failSync.saved && failSync.markedFailed > 0) {
+      logger.info(
+        "api/admin/quests/[id] GET",
+        `Marked ${failSync.markedFailed} active participant(s) as failed (quest period ended, requirements not met)`
+      );
+    }
+
+    const converted = convertParticipantsMapToObject(
+      quest.toObject() as Record<string, unknown>
+    );
     await enrichParticipantsWithUsernames(converted);
     return NextResponse.json(converted);
   } catch (e) {

@@ -32,7 +32,7 @@ const { releaseFromJail } = require('@/utils/jailCheck');
 const { recoverDailyStamina } = require('@/modules/characterStatsModule');
 const {
   processMonthlyQuestRewards,
-  processQuestCompletion,
+  sweepExpiredActiveQuestsForCompletion,
   cleanupStaleQuestParticipantRoles
 } = require('@/modules/questRewardModule');
 const { checkRaidExpiration, RAID_EXPIRATION_JOB_NAME, RAID_TURN_SKIP_JOB_NAME, scheduleRaidTurnSkip, applyPartySizeScalingToRaid } = require('@/modules/raidModule');
@@ -2470,27 +2470,11 @@ async function villageRaidQuotaCheck(client, _data = {}) {
   }
 }
 
-// ------------------- quest-completion-check (Every 6 hours) -------------------
+// ------------------- quest-completion-check (Every 15 minutes) -------------------
 async function questCompletionCheck(_client, _data = {}) {
   try {
     logger.info('SCHEDULED', 'quest-completion-check: starting');
-    const activeQuests = await Quest.find({ status: 'active' });
-    let checked = 0;
-    let processed = 0;
-    for (const quest of activeQuests) {
-      try {
-        checked++;
-        if (!quest.checkTimeExpiration()) continue;
-        const result = await quest.checkAutoCompletion(true);
-        if (result.completed && result.needsRewardProcessing) {
-          await processQuestCompletion(quest.questID);
-          await quest.markCompletionProcessed();
-          processed++;
-        }
-      } catch (questErr) {
-        logger.error('SCHEDULED', `quest-completion-check: quest ${quest.questID || quest._id}: ${questErr.message}`);
-      }
-    }
+    const { checked, processed } = await sweepExpiredActiveQuestsForCompletion();
     logger.info('SCHEDULED', `quest-completion-check: done (checked ${checked}, processed ${processed})`);
   } catch (err) {
     logger.error('SCHEDULED', `quest-completion-check: ${err.message}`);
@@ -3203,7 +3187,7 @@ const TASKS = [
   { name: RAID_TURN_SKIP_JOB_NAME, cron: null, handler: raidTurnSkip }, // One-time job (1 minute per turn)
   { name: 'raid-expiration-cleanup', cron: '*/5 * * * *', handler: raidExpirationCleanup }, // Every 5 minutes
   { name: 'village-raid-quota-check', cron: '0 * * * *', handler: villageRaidQuotaCheck }, // Every hour
-  { name: 'quest-completion-check', cron: '0 */6 * * *', handler: questCompletionCheck }, // Every 6 hours
+  { name: 'quest-completion-check', cron: '*/15 * * * *', handler: questCompletionCheck }, // Every 15 minutes
   { name: 'quest-participant-role-cleanup', cron: '25 */6 * * *', handler: questParticipantRoleCleanup }, // Every 6 h (offset) — backfill per-quest roles
   { name: 'village-tracking-check', cron: '0 */2 * * *', handler: villageTrackingCheck }, // Every 2 hours
   

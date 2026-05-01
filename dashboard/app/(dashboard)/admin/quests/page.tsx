@@ -120,7 +120,8 @@ function statusDisplay(s: string | undefined): string {
   return o ? o.label : s;
 }
 
-const PARTICIPANT_PROGRESS_VALUES = ["active", "completed", "failed", "rewarded", "disqualified"] as const;
+/** Order: terminal / manual alignment options before "completed" (save runs full reward → row becomes rewarded). */
+const PARTICIPANT_PROGRESS_VALUES = ["active", "failed", "disqualified", "rewarded", "completed"] as const;
 
 /** Matches bot `resolvePostRequirement`: unset → 15; 0 = no minimum. */
 function effectiveRpPostRequirement(raw: unknown): number {
@@ -148,6 +149,7 @@ function describeParticipantRewardOnRecord(p: {
   questTokensPaidViaSubmission?: boolean;
   submissionRewardTokenAmount?: number | null;
   rewardedAt?: string | Date | null;
+  rewardProcessed?: boolean;
 }): { primary: string; primaryClass: string; secondary?: string } {
   const savedProgress = normalizeParticipantProgressValue(p?.progress);
   const teNum =
@@ -209,7 +211,20 @@ function describeParticipantRewardOnRecord(p: {
     };
   }
 
-  // completed
+  if (savedProgress === "completed" && p.rewardProcessed === true) {
+    const secondaryParts = [
+      tokenAmountLine,
+      rewardedDateLabel ? `Paid ${rewardedDateLabel}` : null,
+      "Quest closed (final row)",
+    ].filter(Boolean) as string[];
+    return {
+      primary: "Complete",
+      primaryClass: "text-emerald-300/95 font-medium",
+      secondary: secondaryParts.length > 0 ? secondaryParts.join(" · ") : "Payout recorded · final",
+    };
+  }
+
+  // completed (pre-payout queue)
   if (tokenAmountLine) {
     return {
       primary: "Tokens on row",
@@ -226,13 +241,17 @@ function describeParticipantRewardOnRecord(p: {
 }
 
 /** Row background tint in the manage-participants table (scannable at a glance). */
-function participantProgressRowClass(progress: string): string {
+function participantProgressRowClass(
+  progress: string,
+  row?: { rewardProcessed?: boolean }
+): string {
   const base =
     "border-b border-[var(--totk-dark-ocher)]/30 last:border-b-0 transition-colors";
   switch (progress) {
     case "active":
       return `${base} bg-cyan-500/10`;
     case "completed":
+      if (row?.rewardProcessed === true) return `${base} bg-emerald-500/12`;
       return `${base} bg-amber-500/12`;
     case "failed":
       return `${base} bg-red-500/12`;
@@ -2337,14 +2356,38 @@ export default function AdminQuestsPage() {
                     Participant status (from bot progress)
                   </summary>
                   <p className="mt-2 border-t border-[var(--totk-dark-ocher)]/30 pt-2 leading-relaxed">
-                    Each row has a <code className="rounded bg-[var(--botw-black)] px-1 font-mono text-[10px] text-[var(--totk-ivory)]">progress</code> value the
-                    bot and dashboard share. Pick a <strong className="text-[var(--totk-ivory)]">Status</strong> and click{" "}
-                    <strong className="text-[var(--totk-ivory)]">Save all statuses</strong>.{" "}
-                    <strong className="text-[var(--totk-ivory)]">completed</strong> runs the same payout as the old &quot;mark completed&quot; (tokens + profile log;
-                    row ends as <span className="text-[var(--totk-ivory)]">rewarded</span>). All other statuses only update the quest row — no token balance
-                    changes. The <strong className="text-[var(--totk-ivory)]">Reward</strong> column uses saved participant data (not unsaved status changes):{" "}
+                    <strong className="text-[var(--totk-ivory)]">Progress order (database):</strong> a successful month typically goes{" "}
+                    <span className="text-[var(--totk-ivory)]">active</span> →{" "}
+                    <span className="text-[var(--totk-ivory)]">completed</span> (met requirements, queued for payout) →{" "}
+                    <span className="text-[var(--totk-ivory)]">rewarded</span> (payout on the row) →{" "}
+                    <span className="text-[var(--totk-ivory)]">completed</span> again once the quest document is closed (final tally / stats). Mid-month you often see{" "}
+                    <span className="text-[var(--totk-ivory)]">rewarded</span> only; the last step runs when processing treats the quest as finished.{" "}
+                    <strong className="text-[var(--totk-ivory)]">rewarded</strong> means the row records payout (
+                    <code className="rounded bg-[var(--botw-black)] px-1 font-mono text-[10px]">tokensEarned</code>,{" "}
+                    <code className="rounded bg-[var(--botw-black)] px-1 font-mono text-[10px]">rewardedAt</code>).{" "}
+                    The bot may call{" "}
+                    <code className="rounded bg-[var(--botw-black)] px-1 font-mono text-[10px]">recordQuestCompletion</code> while still in the pre-close{" "}
+                    <span className="text-[var(--totk-ivory)]">completed</span> or{" "}
+                    <span className="text-[var(--totk-ivory)]">rewarded</span> steps.
+                  </p>
+                  <p className="mt-2 leading-relaxed">
+                    <strong className="text-[var(--totk-ivory)]">Reward column:</strong>{" "}
                     <strong className="text-[var(--totk-ivory)]">Rewarded</strong> vs{" "}
-                    <strong className="text-[var(--totk-ivory)]">Pending payout</strong>, plus amounts when recorded.
+                    <strong className="text-[var(--totk-ivory)]">Pending payout</strong>, plus amounts when recorded. That column reflects{" "}
+                    <em>saved</em> participant data only—not the Status dropdown until you save.
+                  </p>
+                  <p className="mt-2 leading-relaxed">
+                    Each row has a <code className="rounded bg-[var(--botw-black)] px-1 font-mono text-[10px] text-[var(--totk-ivory)]">progress</code> value the
+                    bot and dashboard share. Pick <strong className="text-[var(--totk-ivory)]">Status</strong> (menu lists{" "}
+                    <strong className="text-[var(--totk-ivory)]">completed</strong> last—that option finalizes someone who met requirements) and click{" "}
+                    <strong className="text-[var(--totk-ivory)]">Save all statuses</strong>.{" "}
+                    <strong className="text-[var(--totk-ivory)]">completed</strong> is what you choose to finalize someone who met requirements: the server runs the
+                    same reward pipeline as the old mark-completed (eligibility, tokens when applicable, ledger) and calls{" "}
+                    <code className="rounded bg-[var(--botw-black)] px-1 font-mono text-[10px]">recordQuestCompletion</code>, so their{" "}
+                    <strong className="text-[var(--totk-ivory)]">quest completion count</strong> increases when payout succeeds. The row is then stored as{" "}
+                    <span className="text-[var(--totk-ivory)]">rewarded</span> (long-term done + recorded on this quest). Other statuses only update the row—no token
+                    balance change, no completion count bump. If payout is skipped (not eligible after submission sync, or tokens already on the row), the count is not
+                    increased—fix data or use <span className="text-[var(--totk-ivory)]">rewarded</span> to align a row already paid elsewhere.
                   </p>
                   <ul className="mt-2 list-inside list-disc space-y-2 pl-1 leading-relaxed">
                     <li>
@@ -2355,7 +2398,7 @@ export default function AdminQuestsPage() {
                       </span>
                     </li>
                     <li>
-                      <span className="text-[var(--totk-ivory)]">completed</span> — Requirements met. If <strong className="text-[var(--totk-ivory)]">Reward</strong> shows{" "}
+                      <span className="text-[var(--totk-ivory)]">completed</span> — <strong className="text-[var(--totk-ivory)]">Requirements met</strong> (technical: pre-payout queue). If <strong className="text-[var(--totk-ivory)]">Reward</strong> shows{" "}
                       <strong className="text-[var(--totk-ivory)]">Pending payout</strong>, the bot may not have written{" "}
                       <code className="rounded bg-[var(--botw-black)] px-1 font-mono text-[10px]">tokensEarned</code> yet, or
                       tokens were paid only in Sheikah. <strong className="text-[var(--totk-ivory)]">Saving</strong> with this status runs the full reward (same as the
@@ -2415,9 +2458,10 @@ export default function AdminQuestsPage() {
                       )}
                       <p className="mb-3 text-xs text-[var(--totk-grey-200)]">
                         Pick each person&apos;s <strong className="text-[var(--totk-ivory)]">Status</strong>, then{" "}
-                        <strong className="text-[var(--totk-ivory)]">Save all statuses</strong>.{" "}
-                        <strong className="text-[var(--totk-ivory)]">completed</strong> pays the quest reward (when eligible) and sets the row to{" "}
-                        <span className="text-[var(--totk-ivory)]">rewarded</span>; other statuses only update the row. To close the event, set quest{" "}
+                        <strong className="text-[var(--totk-ivory)]">Save all statuses</strong>. Choose{" "}
+                        <strong className="text-[var(--totk-ivory)]">completed</strong> only when they met requirements: that runs payout when eligible and updates their{" "}
+                        <strong className="text-[var(--totk-ivory)]">quest completion count</strong>, then stores the row as{" "}
+                        <span className="text-[var(--totk-ivory)]">rewarded</span>. Other statuses only update the row. To close the event, set quest{" "}
                         <strong className="text-[var(--totk-ivory)]">Complete</strong> in the Create tab.
                       </p>
                       <p className="mb-3 text-[10px] leading-relaxed text-[var(--totk-grey-200)]">
@@ -2471,11 +2515,14 @@ export default function AdminQuestsPage() {
                                     ? p.submissionRewardTokenAmount
                                     : null,
                                 rewardedAt: p?.rewardedAt,
+                                rewardProcessed: p?.rewardProcessed,
                               });
                               return (
                                 <tr
                                   key={userId}
-                                  className={participantProgressRowClass(progress)}
+                                  className={participantProgressRowClass(progress, {
+                                    rewardProcessed: p?.rewardProcessed,
+                                  })}
                                 >
                                   <td className="py-2 pl-3 pr-3 text-[var(--totk-grey-200)]">
                                     {p?.username?.trim() ? (
@@ -2501,7 +2548,7 @@ export default function AdminQuestsPage() {
                                       <select
                                         value={progress}
                                         disabled={participantProgressBulkSaving}
-                                        title="completed pays quest rewards when eligible; other statuses update the row only."
+                                        title="completed: run payout + profile quest completion when eligible, then row becomes rewarded. Other values: row only."
                                         onChange={(e) => {
                                           const next = e.target.value;
                                           const nextNorm = normalizeParticipantProgressValue(next);
@@ -2568,7 +2615,7 @@ export default function AdminQuestsPage() {
                       participantProgressBulkSaving ||
                       Object.keys(participantProgressDraft).length === 0
                     }
-                    title="Save every row where you changed Status."
+                    title="Save every row where you changed Status. completed runs full reward + quest completion count when eligible."
                     className="rounded-md bg-[var(--totk-mid-ocher)]/80 px-4 py-2 text-sm font-semibold text-[var(--totk-ivory)] hover:bg-[var(--totk-dark-ocher)] disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     {participantProgressBulkSaving ? "Saving..." : "Save all statuses"}

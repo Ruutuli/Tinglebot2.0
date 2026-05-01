@@ -4422,7 +4422,7 @@ async function handleGearAutocomplete(interaction, focusedOption) {
 }
 
 // ------------------- Quest ID Autocomplete -------------------
-// Aligns /quest join questid suggestions with quest.js validateQuest (signup window + current-or-future quest month).
+// Aligns /quest join questid suggestions with quest.js validateQuest (signup window + quest date/month labels).
 const QUEST_AUTOCOMPLETE_MONTH_NAMES = [
   'January', 'February', 'March', 'April', 'May', 'June',
   'July', 'August', 'September', 'October', 'November', 'December'

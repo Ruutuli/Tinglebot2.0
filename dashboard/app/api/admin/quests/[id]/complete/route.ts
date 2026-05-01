@@ -9,6 +9,7 @@ import { connect } from "@/lib/db";
 import { postQuestModCompletionAnnouncement, removeGuildMemberRole } from "@/lib/discord";
 import { getSession, isAdminUser } from "@/lib/session";
 import { logger } from "@/utils/logger";
+import { ensureParticipantEligibleForDashboardReward } from "@/lib/questParticipantRewardSync.js";
 
 function normalizeDiscordId(raw: unknown): string {
   const s = String(raw ?? "").trim();
@@ -54,6 +55,11 @@ export async function POST(
       return NextResponse.json({ error: "Quest not found" }, { status: 404 });
     }
 
+    const { markActiveParticipantsFailedAfterQuestPeriod } = await import(
+      "@/lib/questParticipantRewardSync.js"
+    );
+    await markActiveParticipantsFailedAfterQuestPeriod(quest);
+
     const questID = quest.questID?.trim?.();
     if (!questID) {
       logger.error("api/admin/quests/[id]/complete", "Quest has no questID; cannot record completions");
@@ -93,6 +99,19 @@ export async function POST(
         typeof participant.tokensEarned === "number" &&
         participant.tokensEarned > 0
       ) {
+        continue;
+      }
+
+      const pidForLog = normalizeDiscordId(participant.userId ?? userId);
+      const eligible = await ensureParticipantEligibleForDashboardReward(
+        quest,
+        participant as Record<string, unknown>
+      );
+      if (!eligible) {
+        logger.warn(
+          "api/admin/quests/[id]/complete",
+          `Skipping reward: participant does not meet quest requirements (${questID}) user=${pidForLog || userId}`
+        );
         continue;
       }
 

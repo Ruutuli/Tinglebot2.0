@@ -15,13 +15,17 @@ import { connect } from "@/lib/db";
 import { postQuestModCompletionAnnouncement } from "@/lib/discord";
 import { getSession, isAdminUser } from "@/lib/session";
 import { logger } from "@/utils/logger";
+import {
+  ensureParticipantEligibleForDashboardReward,
+  promoteRewardedParticipantsToFinalCompleted,
+} from "@/lib/questParticipantRewardSync.js";
 
 const PARTICIPANT_PROGRESS = [
   "active",
-  "completed",
   "failed",
-  "rewarded",
   "disqualified",
+  "rewarded",
+  "completed",
 ] as const;
 
 function normalizeDiscordId(raw: unknown): string {
@@ -42,16 +46,14 @@ type ParticipantProgressDoc = {
   userId?: string;
   tokensEarned?: number;
   itemsEarned?: unknown;
+  rewardProcessed?: boolean;
+  lastRewardCheck?: Date;
 };
 
 /** Same as legacy PATCH "mark completed" for one row (skips if already rewarded / tokens on row). Returns Discord id for announcement, or null. */
 async function rewardParticipantDashboardComplete(
-  quest: {
-    questID: string;
-    title?: string;
-    questType?: string;
-    getNormalizedTokenReward?: () => unknown;
-  },
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  questDoc: any,
   participant: ParticipantProgressDoc,
   key: string,
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -61,10 +63,26 @@ async function rewardParticipantDashboardComplete(
   now: Date
 ): Promise<string | null> {
   if (participant.progress === "rewarded") return null;
+  if (participant.progress === "completed" && participant.rewardProcessed === true) {
+    return null;
+  }
   if (
     typeof participant.tokensEarned === "number" &&
     participant.tokensEarned > 0
   ) {
+    return null;
+  }
+
+  const eligible = await ensureParticipantEligibleForDashboardReward(
+    questDoc,
+    participant as Record<string, unknown>
+  );
+  if (!eligible) {
+    const qid = questDoc.questID?.trim?.() ?? "";
+    logger.warn(
+      "api/admin/quests/[id]/participants",
+      `Skipping dashboard reward: participant does not meet quest requirements (${qid}) user=${normalizeDiscordId(participant.userId ?? key)}`
+    );
     return null;
   }
 
@@ -73,8 +91,8 @@ async function rewardParticipantDashboardComplete(
   participant.updatedAt = now;
 
   let tokensToAward = 0;
-  if (typeof quest.getNormalizedTokenReward === "function") {
-    tokensToAward = Math.max(0, Number(quest.getNormalizedTokenReward()) || 0);
+  if (typeof questDoc.getNormalizedTokenReward === "function") {
+    tokensToAward = Math.max(0, Number(questDoc.getNormalizedTokenReward()) || 0);
   }
 
   const discordId = normalizeDiscordId(participant.userId ?? key);
@@ -109,7 +127,7 @@ async function rewardParticipantDashboardComplete(
       amount: tokensToAward,
       type: "earned",
       category: "quest_reward",
-      description: quest.title || `Quest ${quest.questID}`,
+      description: questDoc.title || `Quest ${questDoc.questID}`,
       balanceBefore,
       balanceAfter,
     });
@@ -117,9 +135,9 @@ async function rewardParticipantDashboardComplete(
 
   if (typeof userDoc.recordQuestCompletion === "function") {
     await userDoc.recordQuestCompletion({
-      questId: quest.questID,
-      questType: quest.questType || "Other",
-      questTitle: quest.title || `Quest ${quest.questID}`,
+      questId: questDoc.questID,
+      questType: questDoc.questType || "Other",
+      questTitle: questDoc.title || `Quest ${questDoc.questID}`,
       completedAt: now,
       rewardedAt: now,
       tokensEarned: tokensToAward,
@@ -132,6 +150,11 @@ async function rewardParticipantDashboardComplete(
   participant.rewardedAt = now;
   participant.tokensEarned = tokensToAward;
   participant.itemsEarned = [];
+  participant.rewardProcessed = true;
+  participant.lastRewardCheck = now;
+  if (questDoc.status === "completed") {
+    promoteRewardedParticipantsToFinalCompleted(questDoc);
+  }
   return String(discordId || key);
 }
 
@@ -210,6 +233,11 @@ export async function PUT(
     if (!quest) {
       return NextResponse.json({ error: "Quest not found" }, { status: 404 });
     }
+
+    const { markActiveParticipantsFailedAfterQuestPeriod } = await import(
+      "@/lib/questParticipantRewardSync.js"
+    );
+    await markActiveParticipantsFailedAfterQuestPeriod(quest);
 
     const participants = quest.participants;
     if (!participants || typeof participants.get !== "function") {
@@ -327,15 +355,7 @@ export async function PUT(
             );
           }
           const mention = await rewardParticipantDashboardComplete(
-            {
-              questID: questIDTrim,
-              title: quest.title,
-              questType: quest.questType,
-              getNormalizedTokenReward:
-                typeof quest.getNormalizedTokenReward === "function"
-                  ? quest.getNormalizedTokenReward.bind(quest)
-                  : undefined,
-            },
+            quest,
             participant as ParticipantProgressDoc,
             key,
             UserModel,
@@ -430,15 +450,7 @@ export async function PUT(
       const TokenTransactionModel = (await import("@/models/TokenTransactionModel.js"))
         .default;
       const mention = await rewardParticipantDashboardComplete(
-        {
-          questID: questIDTrim,
-          title: quest.title,
-          questType: quest.questType,
-          getNormalizedTokenReward:
-            typeof quest.getNormalizedTokenReward === "function"
-              ? quest.getNormalizedTokenReward.bind(quest)
-              : undefined,
-        },
+        quest,
         participant as ParticipantProgressDoc,
         key,
         UserModel,
@@ -550,6 +562,11 @@ export async function PATCH(
       return NextResponse.json({ error: "Quest not found" }, { status: 404 });
     }
 
+    const { markActiveParticipantsFailedAfterQuestPeriod } = await import(
+      "@/lib/questParticipantRewardSync.js"
+    );
+    await markActiveParticipantsFailedAfterQuestPeriod(quest);
+
     const questID = quest.questID?.trim?.();
     if (!questID) {
       logger.error("api/admin/quests/[id]/participants", "Quest has no questID; cannot record completions");
@@ -581,15 +598,7 @@ export async function PATCH(
       if (!participant) continue;
 
       const mention = await rewardParticipantDashboardComplete(
-        {
-          questID,
-          title: quest.title,
-          questType: quest.questType,
-          getNormalizedTokenReward:
-            typeof quest.getNormalizedTokenReward === "function"
-              ? quest.getNormalizedTokenReward.bind(quest)
-              : undefined,
-        },
+        quest,
         participant as ParticipantProgressDoc,
         key,
         User,

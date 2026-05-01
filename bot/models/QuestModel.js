@@ -243,7 +243,12 @@ questSchema.pre('save', function(next) {
                     te = subAmt;
                 }
             }
-            if (p.progress === 'completed' && Number.isFinite(te) && te > 0) {
+            if (
+                p.progress === 'completed' &&
+                p.rewardProcessed !== true &&
+                Number.isFinite(te) &&
+                te > 0
+            ) {
                 p.progress = 'rewarded';
                 if (!p.rewardedAt) {
                     p.rewardedAt = p.completedAt ? new Date(p.completedAt) : new Date();
@@ -435,9 +440,70 @@ function resolveRequiredRolls(quest) {
     return DEFAULT_ROLL_REQUIREMENT;
 }
 
+/**
+ * Blupee event quests use /minigame blupee rupees tracked in TempData (see blupeeModule / quest board embed),
+ * not only participant.successfulRolls (which may miss catches if questCtx was absent).
+ */
+function isBlupeeInteractiveQuest(quest) {
+    const title = String(quest?.title || '');
+    const qt = quest?.questType;
+    const interactiveFamily = qt === QUEST_TYPES.INTERACTIVE || qt === QUEST_TYPES.INTERACTIVE_RP;
+    return interactiveFamily && /\bblupee\b/i.test(title);
+}
+
+function interactiveEffectiveRollCount(participant, quest, blupeeTallyMap) {
+    const successfulRolls = Number(participant.successfulRolls) || 0;
+    if (!isBlupeeInteractiveQuest(quest)) {
+        return successfulRolls;
+    }
+    const uid = String(participant.userId || '').trim();
+    if (!uid || !blupeeTallyMap || !(blupeeTallyMap instanceof Map)) {
+        return successfulRolls;
+    }
+    let tally = blupeeTallyMap.has(uid) ? Number(blupeeTallyMap.get(uid)) : NaN;
+    if (!Number.isFinite(tally)) {
+        const digits = uid.replace(/\D/g, '');
+        if (digits.length >= 15) {
+            for (const [k, v] of blupeeTallyMap.entries()) {
+                const kd = String(k || '').replace(/\D/g, '');
+                if (kd === digits) {
+                    tally = Number(v);
+                    break;
+                }
+            }
+        }
+    }
+    if (!Number.isFinite(tally)) tally = 0;
+    return Math.max(successfulRolls, tally);
+}
+
+/** @param {string[]} userIds */
+async function fetchBlupeeSeasonTallyMap(userIds) {
+    const TempData = require('./TempDataModel');
+    const seasonKey = `${new Date().getUTCFullYear()}`;
+    const ids = [...new Set((userIds || []).map((id) => String(id || '').trim()).filter(Boolean))];
+    if (ids.length === 0) return new Map();
+    const docs = await TempData.find({
+        type: 'blupeeRupeeTally',
+        'data.seasonKey': seasonKey,
+        'data.userId': { $in: ids },
+        expiresAt: { $gt: new Date() }
+    }).lean();
+    const m = new Map();
+    for (const d of docs) {
+        const uid = String(d?.data?.userId || '').trim();
+        if (!uid) continue;
+        const c = Number(d?.data?.count || 0);
+        m.set(uid, Math.max(m.get(uid) || 0, c));
+    }
+    return m;
+}
+
 // ------------------- Requirements Check ------------------
 // Single source of truth; questRewardModule requires this from QuestModel.
-function meetsRequirements(participant, quest) {
+// options.blupeeTallyMap: Map userId -> count from TempData (required for accurate Blupee interactive completion when successfulRolls is stale).
+function meetsRequirements(participant, quest, options = {}) {
+    const blupeeTallyMap = options.blupeeTallyMap;
     const { questType } = quest;
     const { rpPostCount, submissions, successfulRolls } = participant;
     const effPosts = resolvePostRequirement(quest);
@@ -445,7 +511,7 @@ function meetsRequirements(participant, quest) {
     if (questType === QUEST_TYPES.INTERACTIVE_RP) {
         const postsOk = effPosts === 0 || rpPostCount >= effPosts;
         const reqRolls = resolveRequiredRolls(quest);
-        const rollCount = Number(successfulRolls) || 0;
+        const rollCount = interactiveEffectiveRollCount(participant, quest, blupeeTallyMap);
         const rollsOk = rollCount >= reqRolls;
         return postsOk && rollsOk;
     }
@@ -456,27 +522,27 @@ function meetsRequirements(participant, quest) {
     
     if (questType === QUEST_TYPES.ART || questType === QUEST_TYPES.WRITING) {
         const submissionType = questType.toLowerCase();
-        return submissions.some(sub => 
-            sub.type === submissionType && sub.approved
+        return submissions.some(sub =>
+            String(sub.type || '').toLowerCase() === submissionType && sub.approved
         );
     }
     
     if (questType === QUEST_TYPES.ART_WRITING) {
         const artWritingMode = (quest.artWritingMode || 'both').toLowerCase();
         if (artWritingMode === 'either') {
-            const hasArt = submissions.some(sub => sub.type === 'art' && sub.approved);
-            const hasWriting = submissions.some(sub => sub.type === 'writing' && sub.approved);
+            const hasArt = submissions.some(sub => String(sub.type || '').toLowerCase() === 'art' && sub.approved);
+            const hasWriting = submissions.some(sub => String(sub.type || '').toLowerCase() === 'writing' && sub.approved);
             return hasArt || hasWriting;
         }
         // Default 'both': require BOTH art AND writing submissions
-        const hasArtSubmission = submissions.some(sub => sub.type === 'art' && sub.approved);
-        const hasWritingSubmission = submissions.some(sub => sub.type === 'writing' && sub.approved);
+        const hasArtSubmission = submissions.some(sub => String(sub.type || '').toLowerCase() === 'art' && sub.approved);
+        const hasWritingSubmission = submissions.some(sub => String(sub.type || '').toLowerCase() === 'writing' && sub.approved);
         return hasArtSubmission && hasWritingSubmission;
     }
     
     if (questType === QUEST_TYPES.INTERACTIVE) {
         const reqRolls = resolveRequiredRolls(quest);
-        const rollCount = Number(successfulRolls) || 0;
+        const rollCount = interactiveEffectiveRollCount(participant, quest, blupeeTallyMap);
         return rollCount >= reqRolls;
     }
     
@@ -726,8 +792,8 @@ questSchema.methods.hasCharacterLeft = function(characterName) {
 };
 
 // ------------------- Helper Method Delegates ------------------
-questSchema.methods.meetsRequirements = function(participant, quest) {
-    return meetsRequirements(participant, quest);
+questSchema.methods.meetsRequirements = function(participant, quest, options) {
+    return meetsRequirements(participant, quest, options);
 };
 
 questSchema.methods.addSubmission = function(participant, type, url = null) {
@@ -1308,18 +1374,33 @@ questSchema.methods.processTableRoll = async function(userId, rollResult) {
         
         participant.tableRollResults.push(rollEntry);
 
-        // Each /tableroll on a quest-linked table counts toward requiredRolls (rollSuccessCriteria is not used to gate progress).
-        participant.successfulRolls += 1;
-        
+        // Only rolls that satisfy rollSuccessCriteria (when set) count toward requiredRolls / meetsRequirements.
+        if (isSuccess) {
+            participant.successfulRolls += 1;
+        }
+
         participant.updatedAt = new Date();
         await this.save();
         
         console.log(`[QuestModel.js] ✅ Table roll processed for ${participant.characterName} in quest ${this.questID} - Success: ${isSuccess}`);
 
         const reqRolls = resolveRequiredRolls(this);
-        const rollsMet = (Number(participant.successfulRolls) || 0) >= reqRolls;
-        const questCompleted =
-            this.questType === QUEST_TYPES.INTERACTIVE_RP ? meetsRequirements(participant, this) : rollsMet;
+        let rollsMet;
+        if (isBlupeeInteractiveQuest(this)) {
+            const map = await fetchBlupeeSeasonTallyMap([userId]);
+            rollsMet = interactiveEffectiveRollCount(participant, this, map) >= reqRolls;
+        } else {
+            rollsMet = (Number(participant.successfulRolls) || 0) >= reqRolls;
+        }
+        let questCompleted;
+        if (this.questType === QUEST_TYPES.INTERACTIVE_RP) {
+            const map = isBlupeeInteractiveQuest(this)
+                ? await fetchBlupeeSeasonTallyMap([userId])
+                : null;
+            questCompleted = meetsRequirements(participant, this, { blupeeTallyMap: map });
+        } else {
+            questCompleted = rollsMet;
+        }
 
         return {
             success: true,
@@ -1561,7 +1642,10 @@ questSchema.methods.evaluateComplexCriteria = function(criteriaString, rollResul
 // ============================================================================
 
 // ------------------- Auto Completion Check ------------------
-questSchema.methods.checkAutoCompletion = async function(forceCheck = false) {
+questSchema.methods.checkAutoCompletion = async function(forceCheck = false, options = {}) {
+    const forceTimeExpired =
+        options && typeof options === 'object' && options.forceTimeExpired === true;
+
     // Prevent duplicate processing unless forced
     if (!forceCheck && this.completionProcessed) {
         return { completed: false, reason: 'Already processed' };
@@ -1573,8 +1657,15 @@ questSchema.methods.checkAutoCompletion = async function(forceCheck = false) {
     
     // Update last completion check time
     this.lastCompletionCheck = new Date();
+
+    let blupeeTallyMap = null;
+    if (isBlupeeInteractiveQuest(this) && this.participants?.size) {
+        const ids = Array.from(this.participants.values()).map((p) => p.userId).filter(Boolean);
+        blupeeTallyMap = await fetchBlupeeSeasonTallyMap(ids);
+    }
+    const reqOpts = { blupeeTallyMap };
     
-    const timeExpired = this.checkTimeExpiration();
+    const timeExpired = forceTimeExpired || this.checkTimeExpiration();
     if (timeExpired) {
         this.status = PROGRESS_STATUS.COMPLETED;
         this.completedAt = new Date();
@@ -1586,7 +1677,7 @@ questSchema.methods.checkAutoCompletion = async function(forceCheck = false) {
         let completedOnExpiry = 0;
         for (const [userId, participant] of this.participants) {
             if (participant.progress !== PROGRESS_STATUS.ACTIVE) continue;
-            if (meetsRequirements(participant, this)) {
+            if (meetsRequirements(participant, this, reqOpts)) {
                 markParticipantCompleted(participant);
                 completedOnExpiry++;
                 console.log(`[QuestModel.js] ✅ Quest expired — marked ${participant.characterName} completed (requirements met)`);
@@ -1627,7 +1718,7 @@ questSchema.methods.checkAutoCompletion = async function(forceCheck = false) {
     let newCompletions = 0;
     
     for (const [userId, participant] of this.participants) {
-        if (participant.progress === PROGRESS_STATUS.ACTIVE && meetsRequirements(participant, this)) {
+        if (participant.progress === PROGRESS_STATUS.ACTIVE && meetsRequirements(participant, this, reqOpts)) {
             markParticipantCompleted(participant);
             participantsCompleted++;
             newCompletions++;
@@ -1672,8 +1763,8 @@ questSchema.methods.checkAutoCompletion = async function(forceCheck = false) {
     // This prevents premature completion when submissions are approved before the quest period ends
     if (allCompleted && this.status === PROGRESS_STATUS.ACTIVE) {
         // Check if time has expired - quest should only complete when period ends
-        const timeExpired = this.checkTimeExpiration();
-        if (!timeExpired) {
+        const timeExpiredAll = forceTimeExpired || this.checkTimeExpiration();
+        if (!timeExpiredAll) {
             console.log(`[QuestModel.js] ⏳ All participants completed quest "${this.title}", but waiting for quest period to end before completing`);
             await this.save();
             return { completed: false, reason: 'All participants completed, but quest period has not ended yet' };
@@ -1765,10 +1856,13 @@ questSchema.methods.checkTimeExpiration = function() {
             const hours = parseInt(timeLimit.match(/(\d+)/)?.[1] || '1');
             durationMs = hours * TIME_MULTIPLIERS.HOUR;
         }
+        if (durationMs === 0) {
+            return false;
+        }
         expirationMs = startDateTime.getTime() + durationMs;
     }
     
-    return now.getTime() > expirationMs;
+    return now.getTime() >= expirationMs;
 };
 
 // ------------------- Token Reward Normalization ------------------
@@ -1817,3 +1911,6 @@ module.exports.meetsRequirements = meetsRequirements;
 module.exports.resolvePostRequirement = resolvePostRequirement;
 module.exports.DEFAULT_POST_REQUIREMENT = DEFAULT_POST_REQUIREMENT;
 module.exports.DEFAULT_ROLL_REQUIREMENT = DEFAULT_ROLL_REQUIREMENT;
+module.exports.isBlupeeInteractiveQuest = isBlupeeInteractiveQuest;
+module.exports.fetchBlupeeSeasonTallyMap = fetchBlupeeSeasonTallyMap;
+module.exports.interactiveEffectiveRollCount = interactiveEffectiveRollCount;
