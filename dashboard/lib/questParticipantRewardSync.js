@@ -233,10 +233,101 @@ function promoteRewardedParticipantsToFinalCompleted(quest) {
   return n;
 }
 
+function escapeRegex(s) {
+  return String(s || "").replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+/** Match TokenTransaction.description to a quest (bot: Quest: Title, dashboard: title only, etc.). */
+function transactionDescriptionMatchesQuest(description, questTitle, questID) {
+  const desc = String(description || "").trim();
+  if (!desc) return false;
+  const title = String(questTitle || "").trim();
+  const qid = String(questID || "").trim();
+
+  if (title) {
+    if (desc.toLowerCase() === title.toLowerCase()) return true;
+    const exactQuestColon = new RegExp(`^Quest:\\s*${escapeRegex(title)}\\s*$`, "i");
+    if (exactQuestColon.test(desc)) return true;
+    const stripped = title.replace(/[!?.]+$/g, "").trim();
+    if (stripped && stripped !== title) {
+      const stripQuestColon = new RegExp(`^Quest:\\s*${escapeRegex(stripped)}`, "i");
+      if (stripQuestColon.test(desc)) return true;
+    }
+    const needle = stripped || title;
+    if (needle && new RegExp(escapeRegex(needle), "i").test(desc)) return true;
+  }
+
+  if (qid) {
+    const idPlain = new RegExp(`^${escapeRegex(qid)}$`, "i");
+    if (idPlain.test(desc)) return true;
+    const questWordId = new RegExp(`^Quest\\s+${escapeRegex(qid)}\\b`, "i");
+    if (questWordId.test(desc)) return true;
+    if (new RegExp(escapeRegex(qid), "i").test(desc)) return true;
+  }
+  return false;
+}
+
+/**
+ * Admin UI only: set ledgerQuestRewardAmount / ledgerQuestRewardAt on each participant object
+ * when a matching quest_reward TokenTransaction exists (row may still be stale).
+ *
+ * @param {Record<string, object>|null|undefined} participantsObj
+ * @param {string} questTitle
+ * @param {string} questID
+ */
+async function attachLedgerQuestRewardHintsToParticipants(participantsObj, questTitle, questID) {
+  if (!participantsObj || typeof participantsObj !== "object") return;
+  const title = String(questTitle || "").trim();
+  const qid = String(questID || "").trim();
+  if (!title && !qid) return;
+
+  const userIds = new Set();
+  for (const [key, p] of Object.entries(participantsObj)) {
+    if (!p || typeof p !== "object") continue;
+    const uid = normalizeDiscordId(p.userId ?? key);
+    if (uid) userIds.add(uid);
+  }
+  if (userIds.size === 0) return;
+
+  const TokenTransaction = require("../models/TokenTransactionModel.js");
+  const txs = await TokenTransaction.find({
+    userId: { $in: Array.from(userIds) },
+    category: "quest_reward",
+    type: "earned",
+  })
+    .sort({ timestamp: -1 })
+    .lean()
+    .exec();
+
+  const bestByUser = new Map();
+  for (const tx of txs) {
+    const uid = normalizeDiscordId(tx.userId);
+    if (!uid || !userIds.has(uid)) continue;
+    if (!transactionDescriptionMatchesQuest(tx.description, title, qid)) continue;
+    if (!bestByUser.has(uid)) {
+      bestByUser.set(uid, tx);
+    }
+  }
+
+  for (const [key, p] of Object.entries(participantsObj)) {
+    if (!p || typeof p !== "object") continue;
+    const uid = normalizeDiscordId(p.userId ?? key);
+    if (!uid) continue;
+    const tx = bestByUser.get(uid);
+    if (tx && Number.isFinite(Number(tx.amount)) && Number(tx.amount) > 0) {
+      const amt = Math.max(0, Math.floor(Number(tx.amount)));
+      p.ledgerQuestRewardAmount = amt;
+      p.ledgerQuestRewardAt =
+        tx.timestamp != null ? new Date(tx.timestamp).toISOString() : null;
+    }
+  }
+}
+
 module.exports = {
   normalizeParticipantsRewardProgress,
   hydrateApprovedSubmissionsForParticipant,
   ensureParticipantEligibleForDashboardReward,
   markActiveParticipantsFailedAfterQuestPeriod,
   promoteRewardedParticipantsToFinalCompleted,
+  attachLedgerQuestRewardHintsToParticipants,
 };

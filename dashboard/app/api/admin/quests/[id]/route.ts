@@ -326,6 +326,17 @@ export async function GET(
       quest.toObject() as Record<string, unknown>
     );
     await enrichParticipantsWithUsernames(converted);
+    const participantsPlain = converted.participants;
+    if (participantsPlain && typeof participantsPlain === "object") {
+      const { attachLedgerQuestRewardHintsToParticipants } = await import(
+        "@/lib/questParticipantRewardSync.js"
+      );
+      await attachLedgerQuestRewardHintsToParticipants(
+        participantsPlain as Record<string, Record<string, unknown>>,
+        String(converted.title ?? ""),
+        String(converted.questID ?? "")
+      );
+    }
     return NextResponse.json(converted);
   } catch (e) {
     logger.error("api/admin/quests/[id] GET", e instanceof Error ? e.message : String(e));

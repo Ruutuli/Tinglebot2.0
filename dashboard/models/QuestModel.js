@@ -211,7 +211,9 @@ const questSchema = new Schema({
 // ------------------- Pre-save Hook -------------------
 // ============================================================================
 
-questSchema.pre('save', function(next) {
+// Async hook (no next()): callback-style + next is fragile with Mongoose 8 + minified
+// bundles (runtime error: "s is not a function" when next is omitted).
+questSchema.pre('save', async function() {
     this.updatedAt = new Date();
     
     // Fix participants field if it contains primitive values
@@ -233,8 +235,6 @@ questSchema.pre('save', function(next) {
         
         this.participants = fixedParticipants;
     }
-    
-    next();
 });
 
 // ============================================================================

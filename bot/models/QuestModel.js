@@ -209,7 +209,8 @@ const questSchema = new Schema({
 // ------------------- Pre-save Hook -------------------
 // ============================================================================
 
-questSchema.pre('save', function(next) {
+// Async hook (no next()): avoids "s is not a function" when middleware does not pass next (Mongoose 8 + minified bundles).
+questSchema.pre('save', async function() {
     this.updatedAt = new Date();
     
     // Fix participants field if it contains primitive values
@@ -258,8 +259,6 @@ questSchema.pre('save', function(next) {
         
         this.participants = fixedParticipants;
     }
-    
-    next();
 });
 
 // ============================================================================

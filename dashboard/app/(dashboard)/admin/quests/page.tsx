@@ -150,11 +150,18 @@ function describeParticipantRewardOnRecord(p: {
   submissionRewardTokenAmount?: number | null;
   rewardedAt?: string | Date | null;
   rewardProcessed?: boolean;
+  /** Filled by GET /api/admin/quests/[id] from TokenTransaction (category quest_reward). */
+  ledgerQuestRewardAmount?: number | null;
+  ledgerQuestRewardAt?: string | Date | null;
 }): { primary: string; primaryClass: string; secondary?: string } {
   const savedProgress = normalizeParticipantProgressValue(p?.progress);
   const teNum =
     typeof p.tokensEarned === "number" && Number.isFinite(p.tokensEarned)
       ? Math.max(0, p.tokensEarned)
+      : 0;
+  const ledgerTe =
+    typeof p.ledgerQuestRewardAmount === "number" && Number.isFinite(p.ledgerQuestRewardAmount)
+      ? Math.max(0, Math.floor(p.ledgerQuestRewardAmount))
       : 0;
   const submissionTok =
     typeof p?.submissionRewardTokenAmount === "number" && p.submissionRewardTokenAmount > 0
@@ -163,6 +170,22 @@ function describeParticipantRewardOnRecord(p: {
   const submissionPaid = p?.questTokensPaidViaSubmission === true && submissionTok != null;
   const tokenAmountLine =
     teNum > 0 ? `${teNum} tokens` : submissionPaid ? `${submissionTok} tokens (submission)` : null;
+  const ledgerAtRaw = p?.ledgerQuestRewardAt;
+  let ledgerDateLabel: string | null = null;
+  if (ledgerTe > 0 && ledgerAtRaw != null && String(ledgerAtRaw).trim() !== "") {
+    const d = new Date(ledgerAtRaw as string | Date);
+    if (!Number.isNaN(d.getTime())) {
+      ledgerDateLabel = d.toLocaleDateString("en-US", {
+        month: "short",
+        day: "numeric",
+        year: "numeric",
+      });
+    }
+  }
+  const ledgerLine =
+    ledgerTe > 0
+      ? `${ledgerTe} tokens (Sheikah ledger${ledgerDateLabel ? ` · ${ledgerDateLabel}` : ""})`
+      : null;
 
   const rewardedAtRaw = p?.rewardedAt;
   let rewardedDateLabel: string | null = null;
@@ -200,9 +223,11 @@ function describeParticipantRewardOnRecord(p: {
   }
 
   if (savedProgress === "rewarded") {
-    const secondaryParts = [tokenAmountLine, rewardedDateLabel ? `Paid ${rewardedDateLabel}` : null].filter(
-      Boolean
-    ) as string[];
+    const secondaryParts = [
+      tokenAmountLine,
+      !tokenAmountLine && ledgerLine ? ledgerLine : null,
+      rewardedDateLabel ? `Paid ${rewardedDateLabel}` : null,
+    ].filter(Boolean) as string[];
     return {
       primary: "Rewarded",
       primaryClass: "text-emerald-300/95 font-medium",
@@ -214,6 +239,7 @@ function describeParticipantRewardOnRecord(p: {
   if (savedProgress === "completed" && p.rewardProcessed === true) {
     const secondaryParts = [
       tokenAmountLine,
+      !tokenAmountLine && ledgerLine ? ledgerLine : null,
       rewardedDateLabel ? `Paid ${rewardedDateLabel}` : null,
       "Quest closed (final row)",
     ].filter(Boolean) as string[];
@@ -230,6 +256,14 @@ function describeParticipantRewardOnRecord(p: {
       primary: "Tokens on row",
       primaryClass: "text-amber-300/90 font-medium",
       secondary: `${tokenAmountLine} — set Rewarded if payout is final`,
+    };
+  }
+
+  if (ledgerLine) {
+    return {
+      primary: "Paid (ledger)",
+      primaryClass: "text-emerald-300/95 font-medium",
+      secondary: `${ledgerLine} — not on quest row; set Status to rewarded to align`,
     };
   }
 
@@ -414,6 +448,8 @@ type QuestRecord = {
       questTokensPaidViaSubmission?: boolean;
       submissionRewardTokenAmount?: number | null;
       rpPostCount?: number;
+      ledgerQuestRewardAmount?: number | null;
+      ledgerQuestRewardAt?: string | null;
     }
   >;
   participantCap?: number | null;
