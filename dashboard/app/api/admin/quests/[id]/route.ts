@@ -8,7 +8,7 @@ import { NextRequest, NextResponse } from "next/server";
 import mongoose from "mongoose";
 import { connect } from "@/lib/db";
 import { discordApiRequest, removeGuildMemberRole } from "@/lib/discord";
-import { buildQuestEmbed } from "@/lib/questDiscordPost";
+import { buildQuestEmbeds, QUEST_EMBED_MAX_PER_MESSAGE } from "@/lib/questDiscordPost";
 import { isModeratorUser } from "@/lib/moderator";
 import { getSession, isAdminUser } from "@/lib/session";
 import { logger } from "@/utils/logger";
@@ -504,15 +504,17 @@ export async function PUT(
       nextRpThreadIds.length < rpThreadCountVal
     ) {
       const questTitle = title ?? (existing as Record<string, unknown>).title ?? "Quest";
-      const questEmbed = buildQuestEmbed(existing as Parameters<typeof buildQuestEmbed>[0]);
+      const questEmbeds = buildQuestEmbeds(existing as Parameters<typeof buildQuestEmbeds>[0]);
       const rpFooter = "Use this thread for quest roleplay.";
-      const existingFooter = questEmbed.footer as { text?: string } | undefined;
-      const embedWithRpNote = {
-        ...questEmbed,
+      const firstRaw = questEmbeds[0] as Record<string, unknown>;
+      const existingFooter = firstRaw.footer as { text?: string } | undefined;
+      const firstWithRpNote = {
+        ...firstRaw,
         footer: existingFooter?.text
           ? { text: `${existingFooter.text} • ${rpFooter}` }
           : { text: rpFooter },
       };
+      const embedsWithRpNote = [firstWithRpNote, ...questEmbeds.slice(1)].slice(0, QUEST_EMBED_MAX_PER_MESSAGE);
 
       const channelCache = new Map<string, ParentMeta | null>();
 
@@ -583,7 +585,7 @@ export async function PUT(
             "POST",
             {
               name: threadName,
-              message: { embeds: [embedWithRpNote] },
+              message: { embeds: embedsWithRpNote },
               auto_archive_duration: 10080,
             }
           );
@@ -607,7 +609,7 @@ export async function PUT(
           const messageResult = await discordApiRequest<{ id: string }>(
             `channels/${parentSnowflakeRaw}/messages`,
             "POST",
-            { embeds: [embedWithRpNote] }
+            { embeds: embedsWithRpNote }
           );
           if (messageResult?.id) {
             const threadResult = await discordApiRequest<{ id: string }>(

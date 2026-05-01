@@ -1056,18 +1056,16 @@ formatQuestCount(count = 0) {
     return { success: false, reason: 'Message not found' };
    }
 
-   // Get current embed
-   const currentEmbed = questMessage.embeds[0];
+   const currentEmbeds = questMessage.embeds;
+   const currentEmbed = currentEmbeds[0];
    if (!currentEmbed) {
     logger.warn('QUEST', 'performEmbedUpdate: no embed found in quest message');
     return { success: false, reason: 'No embed found' };
    }
 
-   // Create updated embed based on quest type
    const updatedEmbed = await this.createUpdatedEmbed(quest, client, currentEmbed, updateSource);
-
-   // Update the message
-   await questMessage.edit({ embeds: [updatedEmbed] });
+   const rest = currentEmbeds.slice(1).map((e) => EmbedBuilder.from(e));
+   await questMessage.edit({ embeds: [updatedEmbed, ...rest].slice(0, 10) });
 
    logger.success('QUEST', `Successfully updated quest embed for ${quest.questID || quest.questId}`);
    return { success: true, reason: 'Updated successfully' };

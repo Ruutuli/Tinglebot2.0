@@ -1216,7 +1216,101 @@ function buildQuestRewardsText(quest) {
   return parts.length ? parts.join('\n') : '—';
 }
 
-function buildQuestPostEmbed(quest) {
+const QUEST_EMBED_DESC_MAX = 4096;
+const QUEST_EMBED_FIELD_VALUE_MAX = 1024;
+const QUEST_EMBED_MAX_FIELDS = 25;
+const QUEST_EMBED_MAX_PER_MESSAGE = 10;
+
+function linesToBlockquote(lines) {
+  return lines.map((line) => (line === '' ? '' : `> ${line}`)).join('\n');
+}
+
+/** Split raw description into blockquoted strings each ≤ maxLen (Discord embed description limit). */
+function splitRawIntoBlockquotedDescChunks(rawDesc, maxLen = QUEST_EMBED_DESC_MAX) {
+  const trimmed = (rawDesc ?? '').trimEnd();
+  if (!trimmed) return [];
+  const lines = trimmed.split('\n');
+  const chunks = [];
+  let buf = [];
+  const flush = () => {
+    if (buf.length) {
+      chunks.push(linesToBlockquote(buf));
+      buf = [];
+    }
+  };
+  for (const line of lines) {
+    const segment = line === '' ? '' : `> ${line}`;
+    const addLen = buf.length === 0 ? segment.length : segment.length + 1;
+    if (segment.length > maxLen) {
+      flush();
+      const prefix = '> ';
+      const maxRaw = maxLen - prefix.length;
+      let rest = line;
+      while (rest.length > 0) {
+        chunks.push(prefix + rest.slice(0, maxRaw));
+        rest = rest.slice(maxRaw);
+      }
+      continue;
+    }
+    if (buf.length > 0 && linesToBlockquote(buf).length + 1 + segment.length > maxLen) {
+      flush();
+    }
+    buf.push(line);
+  }
+  flush();
+  return chunks;
+}
+
+/** Split Discord field value into ≤ maxLen pieces (prefer newline breaks). */
+function splitEmbedFieldValue(text, maxLen = QUEST_EMBED_FIELD_VALUE_MAX) {
+  const t = String(text ?? '');
+  if (t.length <= maxLen) return [t];
+  const parts = [];
+  let rest = t;
+  while (rest.length > 0) {
+    if (rest.length <= maxLen) {
+      parts.push(rest);
+      break;
+    }
+    let cut = rest.lastIndexOf('\n', maxLen);
+    if (cut < 0 || cut < maxLen / 2) cut = maxLen;
+    parts.push(rest.slice(0, cut));
+    rest = rest.slice(cut).replace(/^\n+/, '');
+  }
+  return parts;
+}
+
+/** Pack rule field parts (each ≤1024) into blockquoted description chunks ≤ maxDesc. */
+function rulesPartsToDescChunks(ruleParts, maxDesc = QUEST_EMBED_DESC_MAX) {
+  const chunks = [];
+  let buf = '';
+  for (const part of ruleParts) {
+    const block = part.split('\n').map((l) => (l === '' ? '' : `> ${l}`)).join('\n');
+    const next = buf ? `${buf}\n\n${block}` : block;
+    if (next.length > maxDesc && buf) {
+      chunks.push(buf);
+      buf = block;
+    } else {
+      buf = next;
+    }
+  }
+  if (buf) chunks.push(buf);
+  return chunks;
+}
+
+function truncateDiscordEmbedTitle(title, suffix) {
+  const s = String(suffix ?? '');
+  const maxTitle = 256 - s.length;
+  const base = String(title ?? '').trim() || 'Quest';
+  if (base.length <= maxTitle) return base + s;
+  return `${base.slice(0, Math.max(1, maxTitle - 1))}…${s}`;
+}
+
+/**
+ * Build quest board embed(s). Overflow description and rules use extra embeds (same message, max 10).
+ * First embed holds live-updated fields (participants, activity); continuations are static.
+ */
+function buildQuestPostEmbeds(quest) {
   const title = quest.title?.trim() || 'Quest';
   const description = quest.description?.trim() || '';
   const questType = quest.questType || '—';
@@ -1224,7 +1318,7 @@ function buildQuestPostEmbed(quest) {
   const location = quest.location || '';
   const timeLimit = quest.timeLimit || '—';
   const dateStr = quest.date?.trim() || '—';
-  const rules = quest.rules?.trim() || '—';
+  const rulesRaw = quest.rules?.trim() || '—';
   const postReq = quest.postRequirement != null && !isNaN(Number(quest.postRequirement))
     ? Number(quest.postRequirement)
     : 15;
@@ -1264,26 +1358,93 @@ function buildQuestPostEmbed(quest) {
     `**Date:** ${dateStr.match(/^\d{4}-\d{2}$/) ? yyyyMmToDisplay(dateStr) : dateStr}`,
   ];
 
-  const desc = description.length > 4096 ? description.slice(0, 4093) + '...' : description;
-  const descriptionBlockquote = desc.trimEnd().split('\n').map(line => (line === '' ? '' : `> ${line}`)).join('\n');
+  const descChunks = splitRawIntoBlockquotedDescChunks(description);
+  const rewardsParts = splitEmbedFieldValue(rewardsText);
+  const rulesParts = splitEmbedFieldValue(rulesRaw);
 
-  const embed = new EmbedBuilder()
+  const tailFieldSlots = 4;
+  const midFieldBudget = Math.max(0, QUEST_EMBED_MAX_FIELDS - 1 - tailFieldSlots);
+  const rewardsOnMain = rewardsParts.slice(0, Math.min(rewardsParts.length, midFieldBudget));
+  const rulesSlots = midFieldBudget - rewardsOnMain.length;
+  const rulesOnMain = rulesParts.slice(0, Math.max(0, rulesSlots));
+  const rewardsRemainingParts = rewardsParts.slice(rewardsOnMain.length);
+  const rulesRemainingParts = rulesParts.slice(rulesOnMain.length);
+
+  const main = new EmbedBuilder()
     .setTitle(title)
-    .setDescription(descriptionBlockquote)
-    .setColor(QUEST_EMBED_COLOR)
-    .addFields(
-      { name: '**__📋 Details__**', value: detailsLines.join('\n'), inline: false },
-      { name: '**__🏆 Rewards__**', value: rewardsText, inline: false },
-      { name: '**__🗓️ Participation__**', value: participationValue, inline: false },
-      { name: '**__📋 Rules__**', value: rules.length > 1024 ? rules.slice(0, 1021) + '...' : rules, inline: false },
-      { name: '**__🎯 Join This Quest__**', value: `\`/quest join questid:${questID}\``, inline: false },
-      { name: '**__👥 Participants (0)__**', value: 'None', inline: false },
-      { name: '**__📊 Recent Activity__**', value: '—', inline: false }
-    )
-    .setImage(BORDER_IMAGE)
-    .setTimestamp();
+    .setColor(QUEST_EMBED_COLOR);
+  if (descChunks.length > 0) {
+    main.setDescription(descChunks[0]);
+  }
 
-  return embed;
+  main.addFields({ name: '**__📋 Details__**', value: detailsLines.join('\n'), inline: false });
+  rewardsOnMain.forEach((part, i) => {
+    main.addFields({
+      name: i === 0 ? '**__🏆 Rewards__**' : '**__🏆 Rewards (continued)__**',
+      value: part,
+      inline: false,
+    });
+  });
+  main.addFields({ name: '**__🗓️ Participation__**', value: participationValue, inline: false });
+  rulesOnMain.forEach((part, i) => {
+    main.addFields({
+      name: i === 0 ? '**__📋 Rules__**' : `**__📋 Rules (${i + 1})__**`,
+      value: part,
+      inline: false,
+    });
+  });
+  main.addFields(
+    { name: '**__🎯 Join This Quest__**', value: `\`/quest join questid:${questID}\``, inline: false },
+    { name: '**__👥 Participants (0)__**', value: 'None', inline: false },
+    { name: '**__📊 Recent Activity__**', value: '—', inline: false }
+  );
+  main.setImage(BORDER_IMAGE).setTimestamp();
+
+  const embeds = [main];
+
+  for (let i = 1; i < descChunks.length; i++) {
+    embeds.push(
+      new EmbedBuilder()
+        .setColor(QUEST_EMBED_COLOR)
+        .setTitle(truncateDiscordEmbedTitle(title, ' (continued)'))
+        .setDescription(descChunks[i])
+    );
+  }
+
+  const rewardsDescChunks = rulesPartsToDescChunks(rewardsRemainingParts);
+  for (let i = 0; i < rewardsDescChunks.length; i++) {
+    const suf = rewardsDescChunks.length > 1 ? ` (${i + 1}/${rewardsDescChunks.length})` : '';
+    embeds.push(
+      new EmbedBuilder()
+        .setColor(QUEST_EMBED_COLOR)
+        .setTitle(truncateDiscordEmbedTitle(title, ` — Rewards${suf}`))
+        .setDescription(rewardsDescChunks[i])
+    );
+  }
+
+  const rulesDescChunks = rulesPartsToDescChunks(rulesRemainingParts);
+  for (let i = 0; i < rulesDescChunks.length; i++) {
+    const suf = rulesDescChunks.length > 1 ? ` (${i + 1}/${rulesDescChunks.length})` : '';
+    embeds.push(
+      new EmbedBuilder()
+        .setColor(QUEST_EMBED_COLOR)
+        .setTitle(truncateDiscordEmbedTitle(title, ` — Rules${suf}`))
+        .setDescription(rulesDescChunks[i])
+    );
+  }
+
+  if (embeds.length > QUEST_EMBED_MAX_PER_MESSAGE) {
+    const kept = embeds.slice(0, QUEST_EMBED_MAX_PER_MESSAGE);
+    const last = kept[QUEST_EMBED_MAX_PER_MESSAGE - 1];
+    const prevDesc = last.data.description || '';
+    const note = '\n\n> _[Content truncated: Discord allows at most 10 embeds per message.]_';
+    if (prevDesc.length + note.length <= QUEST_EMBED_DESC_MAX) {
+      last.setDescription(prevDesc + note);
+    }
+    return kept;
+  }
+
+  return embeds;
 }
 
 async function postQuestToChannel(client, quest) {
@@ -1296,8 +1457,8 @@ async function postQuestToChannel(client, quest) {
       return null;
     }
 
-    const embed = buildQuestPostEmbed(quest);
-    const message = await channel.send({ embeds: [embed] });
+    const embeds = buildQuestPostEmbeds(quest);
+    const message = await channel.send({ embeds });
     
     return message;
   } catch (err) {

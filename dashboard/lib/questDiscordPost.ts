@@ -92,7 +92,7 @@ function formatSignupDeadline(signupDeadline: unknown): string | null {
   }
 }
 
-type QuestDoc = {
+export type QuestDoc = {
   title?: string | null;
   description?: string | null;
   rules?: string | null;
@@ -111,29 +111,140 @@ type QuestDoc = {
   participantCap?: number | null;
   signupDeadline?: string | null;
   tableroll?: string | null;
+  /** When timeLimit is "Custom", optional display text (e.g. dashboard preview). */
+  timeLimitCustom?: string | null;
   tableRollName?: string | null;
   tableRollNames?: string[] | null;
   specialNote?: string | null;
   isMemberQuest?: boolean;
   runByUsername?: string | null;
+  /** When set (e.g. dashboard preview with item emojis), used instead of token/specialNote reward formatting. */
+  rewardsDisplayText?: string | null;
 };
 
-export function buildQuestEmbed(quest: QuestDoc): Record<string, unknown> {
+const QUEST_EMBED_DESC_MAX = 4096;
+const QUEST_EMBED_FIELD_MAX = 1024;
+const QUEST_EMBED_MAX_FIELDS = 25;
+export const QUEST_EMBED_MAX_PER_MESSAGE = 10;
+
+function linesToBlockquote(lines: string[]): string {
+  return lines.map((line) => (line === "" ? "" : `> ${line}`)).join("\n");
+}
+
+function splitRawIntoBlockquotedDescChunks(rawDesc: string, maxLen = QUEST_EMBED_DESC_MAX): string[] {
+  const trimmed = (rawDesc ?? "").trimEnd();
+  if (!trimmed) return [];
+  const lines = trimmed.split("\n");
+  const chunks: string[] = [];
+  let buf: string[] = [];
+  const flush = () => {
+    if (buf.length) {
+      chunks.push(linesToBlockquote(buf));
+      buf = [];
+    }
+  };
+  for (const line of lines) {
+    const segment = line === "" ? "" : `> ${line}`;
+    const addLen = buf.length === 0 ? segment.length : segment.length + 1;
+    if (segment.length > maxLen) {
+      flush();
+      const prefix = "> ";
+      const maxRaw = maxLen - prefix.length;
+      let rest = line;
+      while (rest.length > 0) {
+        chunks.push(prefix + rest.slice(0, maxRaw));
+        rest = rest.slice(maxRaw);
+      }
+      continue;
+    }
+    if (buf.length > 0 && linesToBlockquote(buf).length + 1 + segment.length > maxLen) {
+      flush();
+    }
+    buf.push(line);
+  }
+  flush();
+  return chunks;
+}
+
+function splitEmbedFieldValue(text: string, maxLen = QUEST_EMBED_FIELD_MAX): string[] {
+  const t = String(text ?? "");
+  if (t.length <= maxLen) return [t];
+  const parts: string[] = [];
+  let rest = t;
+  while (rest.length > 0) {
+    if (rest.length <= maxLen) {
+      parts.push(rest);
+      break;
+    }
+    let cut = rest.lastIndexOf("\n", maxLen);
+    if (cut < 0 || cut < maxLen / 2) cut = maxLen;
+    parts.push(rest.slice(0, cut));
+    rest = rest.slice(cut).replace(/^\n+/, "");
+  }
+  return parts;
+}
+
+function fieldPartsToDescChunks(parts: string[], maxDesc = QUEST_EMBED_DESC_MAX): string[] {
+  const chunks: string[] = [];
+  let buf = "";
+  for (const part of parts) {
+    const block = part.split("\n").map((l) => (l === "" ? "" : `> ${l}`)).join("\n");
+    const next = buf ? `${buf}\n\n${block}` : block;
+    if (next.length > maxDesc && buf) {
+      chunks.push(buf);
+      buf = block;
+    } else {
+      buf = next;
+    }
+  }
+  if (buf) chunks.push(buf);
+  return chunks;
+}
+
+function mergePrefixIntoDescChunks(prefix: string, chunks: string[]): string[] {
+  if (!prefix) return chunks;
+  if (chunks.length === 0) {
+    if (!prefix.trim()) return [];
+    return prefix.length <= QUEST_EMBED_DESC_MAX ? [prefix] : [prefix.slice(0, QUEST_EMBED_DESC_MAX)];
+  }
+  const first = prefix + chunks[0];
+  if (first.length <= QUEST_EMBED_DESC_MAX) return [first, ...chunks.slice(1)];
+  const room = QUEST_EMBED_DESC_MAX - prefix.length;
+  if (room < 1) return [prefix.slice(0, QUEST_EMBED_DESC_MAX), ...chunks];
+  const head = prefix + chunks[0].slice(0, room);
+  const tail = chunks[0].slice(room);
+  const next = tail ? [tail, ...chunks.slice(1)] : chunks.slice(1);
+  return [head, ...next];
+}
+
+function truncateDiscordEmbedTitle(title: string, suffix: string): string {
+  const s = String(suffix ?? "");
+  const maxTitle = 256 - s.length;
+  const base = (title ?? "").trim() || "Quest";
+  if (base.length <= maxTitle) return base + s;
+  return `${base.slice(0, Math.max(1, maxTitle - 1))}…${s}`;
+}
+
+/** Multiple embeds when description, rewards, or rules exceed Discord limits (max 10 per message). */
+export function buildQuestEmbeds(quest: QuestDoc): Record<string, unknown>[] {
   const title = (quest.title ?? "").trim() || "Quest";
+  const displayTitle = quest.isMemberQuest ? `🏠 ${title}` : title;
   const description = (quest.description ?? "").trim() || "";
   const questType = quest.questType ?? "—";
   const questID = (quest.questID ?? "").trim() || "Q000000";
   const location = quest.location ?? "";
   const timeLimit = quest.timeLimit ?? "—";
   const dateStr = (quest.date ?? "").trim() || "—";
-  const rules = (quest.rules ?? "").trim() || "—";
+  const rulesRaw = (quest.rules ?? "").trim() || "—";
   const postReq = quest.postRequirement != null && !Number.isNaN(Number(quest.postRequirement)) ? Number(quest.postRequirement) : 15;
   const minRequirements = quest.minRequirements != null ? String(quest.minRequirements).trim() : "";
 
   const locationPreview = formatLocation(location);
 
   let rewardsText = "—";
-  if (quest.tokenReward && String(quest.tokenReward).trim() && String(quest.tokenReward) !== "N/A") {
+  if (quest.rewardsDisplayText != null && String(quest.rewardsDisplayText).trim() !== "") {
+    rewardsText = String(quest.rewardsDisplayText).trim();
+  } else if (quest.tokenReward && String(quest.tokenReward).trim() && String(quest.tokenReward) !== "N/A") {
     rewardsText = `💰 ${String(quest.tokenReward).trim()}`;
     if (quest.collabAllowed && quest.collabRule) rewardsText += `\n(${String(quest.collabRule).trim()})`;
   } else if (quest.isMemberQuest && quest.specialNote) {
@@ -144,7 +255,7 @@ export function buildQuestEmbed(quest: QuestDoc): Record<string, unknown> {
   }
 
   const dateYYYYMM = dateToYYYYMM(dateStr);
-  const durationStr = timeLimit === "Custom" ? "" : timeLimit;
+  const durationStr = timeLimit === "Custom" ? (quest.timeLimitCustom?.trim() || "") : timeLimit;
   const endDateExplicit = (() => {
     const raw = quest.timeLimitEndDate?.trim();
     if (!raw || !/^\d{4}-\d{2}-\d{2}$/.test(raw)) return null;
@@ -186,32 +297,99 @@ export function buildQuestEmbed(quest: QuestDoc): Record<string, unknown> {
   if (signupDeadlineDisplay) detailsLines.push(`**Signup deadline:** ${signupDeadlineDisplay}`);
   if (quest.isMemberQuest && quest.runByUsername) detailsLines.push(`**Run by:** ${quest.runByUsername}`);
 
-  const desc = description.length > 4096 ? description.slice(0, 4093) + "..." : description;
-  const descriptionBlockquote = desc.trimEnd().split("\n").map((line) => (line === "" ? "" : `> ${line}`)).join("\n");
-
-  // Make it very clear this is a member-run quest (not an official mod-run quest)
   const memberRunLabel = quest.isMemberQuest
     ? `**🏠 MEMBER-RUN QUEST** — Run by: **${(quest.runByUsername ?? "Member").trim()}**\n\n`
     : "";
-  const fullDescription = memberRunLabel + descriptionBlockquote;
+  let descChunks = splitRawIntoBlockquotedDescChunks(description);
+  descChunks = mergePrefixIntoDescChunks(memberRunLabel, descChunks);
 
-  return {
-    title: quest.isMemberQuest ? `🏠 ${title}` : title,
-    description: fullDescription,
+  const rewardsParts = splitEmbedFieldValue(rewardsText);
+  const rulesParts = splitEmbedFieldValue(rulesRaw);
+  const tailFieldSlots = 4;
+  const midFieldBudget = Math.max(0, QUEST_EMBED_MAX_FIELDS - 1 - tailFieldSlots);
+  const rewardsOnMain = rewardsParts.slice(0, Math.min(rewardsParts.length, midFieldBudget));
+  const rulesSlots = midFieldBudget - rewardsOnMain.length;
+  const rulesOnMain = rulesParts.slice(0, Math.max(0, rulesSlots));
+  const rewardsRemainingParts = rewardsParts.slice(rewardsOnMain.length);
+  const rulesRemainingParts = rulesParts.slice(rulesOnMain.length);
+
+  const memberFooter = quest.isMemberQuest ? { text: "Member-run quest — not an official mod-run quest" } : undefined;
+
+  const main: Record<string, unknown> = {
+    title: displayTitle,
     color: EMBED_COLOR,
     fields: [
       { name: "**__📋 Details__**", value: detailsLines.join("\n"), inline: false },
-      { name: "**__🏆 Rewards__**", value: rewardsText, inline: false },
+      ...rewardsOnMain.map((part, i) => ({
+        name: i === 0 ? "**__🏆 Rewards__**" : "**__🏆 Rewards (continued)__**",
+        value: part,
+        inline: false,
+      })),
       { name: "**__🗓️ Participation__**", value: participationValue, inline: false },
-      { name: "**__📋 Rules__**", value: rules.length > 1024 ? rules.slice(0, 1021) + "..." : rules, inline: false },
-      { name: "**__🎯 Join This Quest__**", value: `\`/quest join questid:${questID}\``, inline: false },
+      ...rulesOnMain.map((part, i) => ({
+        name: i === 0 ? "**__📋 Rules__**" : `**__📋 Rules (${i + 1})__**`,
+        value: part,
+        inline: false,
+      })),
+      {
+        name: "**__🎯 Join This Quest__**",
+        value: `\`/quest join questid:${questID}\``,
+        inline: false,
+      },
       { name: "**__👥 Participants (0)__**", value: "None", inline: false },
       { name: "**__📊 Recent Activity__**", value: "—", inline: false },
     ],
     image: { url: BORDER_IMAGE },
     timestamp: new Date().toISOString(),
-    footer: quest.isMemberQuest ? { text: "Member-run quest — not an official mod-run quest" } : undefined,
+    footer: memberFooter,
   };
+  if (descChunks.length > 0) main.description = descChunks[0];
+
+  const embeds: Record<string, unknown>[] = [main];
+
+  for (let i = 1; i < descChunks.length; i++) {
+    embeds.push({
+      title: truncateDiscordEmbedTitle(displayTitle, " (continued)"),
+      description: descChunks[i],
+      color: EMBED_COLOR,
+    });
+  }
+
+  const rewardsDescChunks = fieldPartsToDescChunks(rewardsRemainingParts);
+  for (let i = 0; i < rewardsDescChunks.length; i++) {
+    const suf = rewardsDescChunks.length > 1 ? ` (${i + 1}/${rewardsDescChunks.length})` : "";
+    embeds.push({
+      title: truncateDiscordEmbedTitle(displayTitle, ` — Rewards${suf}`),
+      description: rewardsDescChunks[i],
+      color: EMBED_COLOR,
+    });
+  }
+
+  const rulesDescChunks = fieldPartsToDescChunks(rulesRemainingParts);
+  for (let i = 0; i < rulesDescChunks.length; i++) {
+    const suf = rulesDescChunks.length > 1 ? ` (${i + 1}/${rulesDescChunks.length})` : "";
+    embeds.push({
+      title: truncateDiscordEmbedTitle(displayTitle, ` — Rules${suf}`),
+      description: rulesDescChunks[i],
+      color: EMBED_COLOR,
+    });
+  }
+
+  if (embeds.length > QUEST_EMBED_MAX_PER_MESSAGE) {
+    const kept = embeds.slice(0, QUEST_EMBED_MAX_PER_MESSAGE);
+    const last = kept[QUEST_EMBED_MAX_PER_MESSAGE - 1] as { description?: string };
+    const prevDesc = typeof last.description === "string" ? last.description : "";
+    const note = "\n\n> _[Content truncated: Discord allows at most 10 embeds per message.]_";
+    if (prevDesc.length + note.length <= QUEST_EMBED_DESC_MAX) last.description = prevDesc + note;
+    return kept;
+  }
+
+  return embeds;
+}
+
+/** @deprecated Prefer buildQuestEmbeds for long content; this returns only the first embed. */
+export function buildQuestEmbed(quest: QuestDoc): Record<string, unknown> {
+  return buildQuestEmbeds(quest)[0];
 }
 
 /**
@@ -223,11 +401,11 @@ export async function postQuestToQuestChannel(quest: QuestDoc): Promise<string |
     return null;
   }
   try {
-    const embed = buildQuestEmbed(quest);
+    const embeds = buildQuestEmbeds(quest);
     const result = await discordApiRequest<{ id: string }>(
       `channels/${QUEST_CHANNEL_ID}/messages`,
       "POST",
-      { embeds: [embed] }
+      { embeds: embeds.slice(0, QUEST_EMBED_MAX_PER_MESSAGE) }
     );
     return result?.id ?? null;
   } catch (err) {
