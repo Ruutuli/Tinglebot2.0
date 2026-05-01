@@ -133,6 +133,90 @@ function normalizeParticipantProgressValue(
     : "active";
 }
 
+/** Saved participant row only — unsaved Status dropdown does not change this column. */
+function describeParticipantRewardOnRecord(p: {
+  progress?: string;
+  tokensEarned?: number;
+  questTokensPaidViaSubmission?: boolean;
+  submissionRewardTokenAmount?: number | null;
+  rewardedAt?: string | Date | null;
+}): { primary: string; primaryClass: string; secondary?: string } {
+  const savedProgress = normalizeParticipantProgressValue(p?.progress);
+  const teNum =
+    typeof p.tokensEarned === "number" && Number.isFinite(p.tokensEarned)
+      ? Math.max(0, p.tokensEarned)
+      : 0;
+  const submissionTok =
+    typeof p?.submissionRewardTokenAmount === "number" && p.submissionRewardTokenAmount > 0
+      ? p.submissionRewardTokenAmount
+      : null;
+  const submissionPaid = p?.questTokensPaidViaSubmission === true && submissionTok != null;
+  const tokenAmountLine =
+    teNum > 0 ? `${teNum} tokens` : submissionPaid ? `${submissionTok} tokens (submission)` : null;
+
+  const rewardedAtRaw = p?.rewardedAt;
+  let rewardedDateLabel: string | null = null;
+  if (rewardedAtRaw != null && String(rewardedAtRaw).trim() !== "") {
+    const d = new Date(rewardedAtRaw as string | Date);
+    if (!Number.isNaN(d.getTime())) {
+      rewardedDateLabel = d.toLocaleDateString("en-US", {
+        month: "short",
+        day: "numeric",
+        year: "numeric",
+      });
+    }
+  }
+
+  if (savedProgress === "failed") {
+    return {
+      primary: "No payout",
+      primaryClass: "text-[var(--totk-grey-200)]",
+      secondary: "Failed",
+    };
+  }
+  if (savedProgress === "disqualified") {
+    return {
+      primary: "No payout",
+      primaryClass: "text-[var(--totk-grey-200)]",
+      secondary: "Disqualified",
+    };
+  }
+  if (savedProgress === "active") {
+    return {
+      primary: "Not finished",
+      primaryClass: "text-[var(--totk-grey-200)]",
+      secondary: undefined,
+    };
+  }
+
+  if (savedProgress === "rewarded") {
+    const secondaryParts = [tokenAmountLine, rewardedDateLabel ? `Paid ${rewardedDateLabel}` : null].filter(
+      Boolean
+    ) as string[];
+    return {
+      primary: "Rewarded",
+      primaryClass: "text-emerald-300/95 font-medium",
+      secondary:
+        secondaryParts.length > 0 ? secondaryParts.join(" · ") : "0 tokens on row · payout logged",
+    };
+  }
+
+  // completed
+  if (tokenAmountLine) {
+    return {
+      primary: "Tokens on row",
+      primaryClass: "text-amber-300/90 font-medium",
+      secondary: `${tokenAmountLine} — set Rewarded if payout is final`,
+    };
+  }
+
+  return {
+    primary: "Pending payout",
+    primaryClass: "text-amber-300/90 font-medium",
+    secondary: "No tokens on this row yet",
+  };
+}
+
 /** Row background tint in the manage-participants table (scannable at a glance). */
 function participantProgressRowClass(progress: string): string {
   const base =
@@ -2246,8 +2330,9 @@ export default function AdminQuestsPage() {
                     <strong className="text-[var(--totk-ivory)]">Save all statuses</strong>.{" "}
                     <strong className="text-[var(--totk-ivory)]">completed</strong> runs the same payout as the old &quot;mark completed&quot; (tokens + profile log;
                     row ends as <span className="text-[var(--totk-ivory)]">rewarded</span>). All other statuses only update the quest row — no token balance
-                    changes. The <strong className="text-[var(--totk-ivory)]">Tokens</strong> column reflects{" "}
-                    <code className="rounded bg-[var(--botw-black)] px-1 font-mono text-[10px]">tokensEarned</code> when recorded.
+                    changes. The <strong className="text-[var(--totk-ivory)]">Reward</strong> column uses saved participant data (not unsaved status changes):{" "}
+                    <strong className="text-[var(--totk-ivory)]">Rewarded</strong> vs{" "}
+                    <strong className="text-[var(--totk-ivory)]">Pending payout</strong>, plus amounts when recorded.
                   </p>
                   <ul className="mt-2 list-inside list-disc space-y-2 pl-1 leading-relaxed">
                     <li>
@@ -2258,8 +2343,9 @@ export default function AdminQuestsPage() {
                       </span>
                     </li>
                     <li>
-                      <span className="text-[var(--totk-ivory)]">completed</span> — Requirements met. If <strong className="text-[var(--totk-ivory)]">Tokens</strong> is
-                      empty, the bot may not have written <code className="rounded bg-[var(--botw-black)] px-1 font-mono text-[10px]">tokensEarned</code> yet, or
+                      <span className="text-[var(--totk-ivory)]">completed</span> — Requirements met. If <strong className="text-[var(--totk-ivory)]">Reward</strong> shows{" "}
+                      <strong className="text-[var(--totk-ivory)]">Pending payout</strong>, the bot may not have written{" "}
+                      <code className="rounded bg-[var(--botw-black)] px-1 font-mono text-[10px]">tokensEarned</code> yet, or
                       tokens were paid only in Sheikah. <strong className="text-[var(--totk-ivory)]">Saving</strong> with this status runs the full reward (same as the
                       old mark-completed): credits quest tokens when eligible, logs completion, sets the row to <span className="text-[var(--totk-ivory)]">rewarded</span>.
                       Skips payout if already <span className="text-[var(--totk-ivory)]">rewarded</span> or tokens are already on the row (no double pay). To align the
@@ -2340,7 +2426,12 @@ export default function AdminQuestsPage() {
                                 <th className="py-2 pr-3 text-[var(--totk-grey-200)] font-semibold">Posts (min)</th>
                               )}
                               <th className="py-2 pr-3 text-[var(--totk-grey-200)] font-semibold min-w-[10rem]">Status</th>
-                              <th className="py-2 pr-3 text-[var(--totk-grey-200)] font-semibold">Tokens</th>
+                              <th
+                                className="py-2 pr-3 text-[var(--totk-grey-200)] font-semibold min-w-[8.5rem]"
+                                title="Saved payout state: Rewarded vs pending (tokens on row or batch payout)."
+                              >
+                                Reward
+                              </th>
                             </tr>
                           </thead>
                           <tbody>
@@ -2359,10 +2450,16 @@ export default function AdminQuestsPage() {
                               const hasQuestTokens =
                                 (typeof tokensEarned === "number" && tokensEarned > 0) ||
                                 (p?.questTokensPaidViaSubmission === true && submissionTok != null);
-                              const displayTokens =
-                                typeof tokensEarned === "number" && tokensEarned > 0
-                                  ? tokensEarned
-                                  : submissionTok;
+                              const rewardDescription = describeParticipantRewardOnRecord({
+                                progress: p?.progress,
+                                tokensEarned: p?.tokensEarned,
+                                questTokensPaidViaSubmission: p?.questTokensPaidViaSubmission,
+                                submissionRewardTokenAmount:
+                                  p?.submissionRewardTokenAmount !== undefined
+                                    ? p.submissionRewardTokenAmount
+                                    : null,
+                                rewardedAt: p?.rewardedAt,
+                              });
                               return (
                                 <tr
                                   key={userId}
@@ -2421,12 +2518,17 @@ export default function AdminQuestsPage() {
                                       )}
                                     </div>
                                   </td>
-                                  <td className="py-2 pr-3 text-[var(--totk-grey-200)]">
-                                    {hasQuestTokens && displayTokens != null ? (
-                                      <span>{displayTokens} tokens</span>
-                                    ) : (
-                                      "—"
-                                    )}
+                                  <td className="py-2 pr-3 align-top">
+                                    <div className="flex min-w-[10rem] flex-col gap-0.5">
+                                      <span className={`text-sm ${rewardDescription.primaryClass}`}>
+                                        {rewardDescription.primary}
+                                      </span>
+                                      {rewardDescription.secondary ? (
+                                        <span className="text-[11px] leading-snug text-[var(--totk-grey-200)]">
+                                          {rewardDescription.secondary}
+                                        </span>
+                                      ) : null}
+                                    </div>
                                   </td>
                                 </tr>
                               );
