@@ -3121,17 +3121,6 @@ async function mazeImagesCleanup(_client, _data = {}) {
   }
 }
 
-// ------------------- blupee-auto-spawn (April Easter: 6 random UTC times per day, each town hall) -------------------
-async function blupeeAutoSpawn(client, _data = {}) {
-  try {
-    const { runBlupeeAutoSpawnTick, processExpiredBlupeeSpawns } = require('@/modules/blupeeModule');
-    await processExpiredBlupeeSpawns(client);
-    await runBlupeeAutoSpawnTick(client);
-  } catch (err) {
-    logger.error('SCHEDULED', `blupee-auto-spawn: ${err?.message || err}`);
-  }
-}
-
 // ============================================================================
 // ------------------- Task Registry -------------------
 // ============================================================================
@@ -3179,9 +3168,6 @@ const TASKS = [
   // Quest/Help Wanted Tasks
   { name: 'help-wanted-board-check', cron: '0 * * * *', handler: helpWantedBoardCheck }, // Every hour
 
-  // Blupee (April, UTC): 6 random spawn waves per day in each town hall
-  { name: 'blupee-auto-spawn', cron: '* * * * *', handler: blupeeAutoSpawn }, // Every minute (no-op outside April / when disabled)
-  
   // Raid/Village Tasks
   { name: RAID_EXPIRATION_JOB_NAME, cron: null, handler: raidExpiration }, // One-time job (scheduled per raid)
   { name: RAID_TURN_SKIP_JOB_NAME, cron: null, handler: raidTurnSkip }, // One-time job (1 minute per turn)

@@ -55,13 +55,26 @@ const PROGRESS_STATUS = {
 // ------------------- Notification Functions -------------------
 // ============================================================================
 
+function isArtWritingQuestType(questType) {
+    return (
+        questType === QUEST_TYPES.ART ||
+        questType === QUEST_TYPES.WRITING ||
+        questType === QUEST_TYPES.ART_WRITING
+    );
+}
+
 // ------------------- Reward notification helpers (batched per quest) -------------------
 function shouldIncludeInRewardNotification(quest, rewardResult) {
     const tokenBreakdownPre = rewardResult.tokenBreakdown || {};
     const hasQuestItems =
         (quest.itemRewards && quest.itemRewards.length > 0) ||
         (quest.itemReward && quest.itemRewardQty > 0);
+    const submissionCredited =
+        rewardResult.rewardSource === 'submission' || tokenBreakdownPre.skippedDuplicateQuestReward === true;
     if (tokenBreakdownPre.skippedDuplicateQuestReward && !hasQuestItems) {
+        if (isArtWritingQuestType(quest.questType) && submissionCredited) {
+            return true;
+        }
         return false;
     }
     return true;
@@ -70,13 +83,15 @@ function shouldIncludeInRewardNotification(quest, rewardResult) {
 function formatParticipantRewardLine(participant, rewardResult, quest) {
     const tb = rewardResult.tokenBreakdown || {};
     const parts = [];
+    const preCredited =
+        tb.skippedDuplicateQuestReward === true || rewardResult.rewardSource === 'submission';
 
-    if (!tb.skippedDuplicateQuestReward && rewardResult.tokensAdded > 0) {
+    if (!preCredited && rewardResult.tokensAdded > 0) {
         let t = `${rewardResult.tokensAdded} tokens`;
         if (tb.entertainerBonus) t += ` (+${tb.entertainerBonus} Entertainer)`;
         parts.push(t);
-    } else if (tb.skippedDuplicateQuestReward && rewardResult.tokensAdded > 0) {
-        parts.push(`${rewardResult.tokensAdded} tokens (already credited)`);
+    } else if (preCredited && rewardResult.tokensAdded > 0) {
+        parts.push(`${rewardResult.tokensAdded} tokens (already credited at submission)`);
     }
 
     const hasQuestItems =
@@ -122,6 +137,26 @@ function chunkDiscordContent(str, maxLen = 1990) {
     return parts;
 }
 
+function getBatchedRewardEmbedCopy(quest, entries) {
+    const allPreCredited =
+        entries.length > 0 &&
+        entries.every(
+            (e) =>
+                e.rewardResult?.rewardSource === 'submission' ||
+                e.rewardResult?.tokenBreakdown?.skippedDuplicateQuestReward === true
+        );
+    if (isArtWritingQuestType(quest.questType) && allPreCredited) {
+        return {
+            title: '🎉 Quest closed — Art/Writing',
+            intro: `**${quest.title}** — Tokens were credited when each submission was approved. This is the closing summary; **no duplicate payout** was made.`,
+        };
+    }
+    return {
+        title: '🎉 Quest Reward Received!',
+        intro: `Rewards for completing **${quest.title}** have been distributed.`,
+    };
+}
+
 // ------------------- Send batched reward notification (one embed per quest) -------------------
 async function sendBatchedQuestRewardNotification(quest, entries) {
     try {
@@ -149,13 +184,10 @@ async function sendBatchedQuestRewardNotification(quest, entries) {
         );
         const lineChunks = chunkLinesForEmbed(lines, 1000);
 
-        const rewardEmbed = createBaseEmbed(
-            '🎉 Quest Reward Received!',
-            `Rewards for completing **${quest.title}** have been distributed.`,
-            QUEST_COLORS.SUCCESS
-        );
+        const { title: embedTitle, intro } = getBatchedRewardEmbedCopy(quest, entries);
 
-        const intro = `Rewards for completing **${quest.title}** have been distributed.`;
+        const rewardEmbed = createBaseEmbed(embedTitle, intro, QUEST_COLORS.SUCCESS);
+
         const recipientsBody = lines.join('\n');
         if (recipientsBody.length + intro.length + 2 <= 4096) {
             rewardEmbed.setDescription(`${intro}\n\n${recipientsBody}`);

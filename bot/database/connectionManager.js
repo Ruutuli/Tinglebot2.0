@@ -213,6 +213,18 @@ class DatabaseConnectionManager {
   }
 
   /**
+   * Ensure default mongoose is connected without ping when already ready.
+   * For high-frequency paths (e.g. messageCreate); reconnects if disconnected.
+   * @returns {Promise<mongoose.Connection>}
+   */
+  static async ensureTinglebotConnected() {
+    if (mongoose.connection.readyState === 1) {
+      return mongoose.connection;
+    }
+    return await this.connectToTinglebot();
+  }
+
+  /**
    * Get Tinglebot Mongoose connection instance
    * @returns {mongoose.Connection}
    */

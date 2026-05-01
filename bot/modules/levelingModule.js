@@ -1,4 +1,5 @@
 // ------------------- Import necessary modules -------------------
+const DatabaseConnectionManager = require('@/database/connectionManager');
 const User = require('@/models/UserModel');
 const MessageTracking = require('@/models/MessageTrackingModel');
 const { EmbedBuilder } = require('discord.js');
@@ -33,7 +34,9 @@ async function handleXP(message) {
     
     // Skip messages that are just emojis or commands
     if (message.content.startsWith('!') || message.content.startsWith('/')) return;
-    
+
+    await DatabaseConnectionManager.ensureTinglebotConnected();
+
     const discordId = message.author.id;
     const user = await User.getOrCreateUser(discordId);
     

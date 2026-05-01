@@ -1,4 +1,5 @@
 // ------------------- Message Utils for User Activity Tracking -------------------
+const DatabaseConnectionManager = require('../database/connectionManager');
 const User = require("../models/UserModel");
 const { handleError } = require('../utils/globalErrorHandler');
 const logger = require('./logger');
@@ -11,6 +12,8 @@ async function trackLastMessage(message) {
   if (message.author.bot || !message.guild) return;
 
   try {
+    await DatabaseConnectionManager.ensureTinglebotConnected();
+
     const discordId = message.author.id;
 
     const update = {
