@@ -19,6 +19,9 @@
 // Usage:
 //   node bot/scripts/reconcileQuestParticipantsFromLedger.js Q915540
 //   node bot/scripts/reconcileQuestParticipantsFromLedger.js Q915540 --apply
+//   node bot/scripts/reconcileQuestParticipantsFromLedger.js --all
+//   node bot/scripts/reconcileQuestParticipantsFromLedger.js --all --apply
+//   node bot/scripts/reconcileQuestParticipantsFromLedger.js --all --verbose   # per-participant lines
 // ============================================================================
 const path = require("path");
 const fs = require("fs");
@@ -188,120 +191,202 @@ function needsReconcile(p) {
   return true;
 }
 
-async function main() {
-  loadEnv();
-  const questIdArg = process.argv.find((a) => /^Q\d+$/i.test(a));
-  const apply = process.argv.includes("--apply");
+/**
+ * @param {import("mongoose").Document} quest
+ * @param {boolean} apply
+ * @param {boolean} logDetail log every participant line (default for single-quest CLI)
+ * @returns {Promise<{ questID: string; title: string; wouldFix: number; notTargetRow: number; noTx: number; skippedNoParticipants?: boolean }>}
+ */
+async function reconcileQuestDocument(quest, apply, logDetail) {
+  const questID = String(quest.questID || "").trim().toUpperCase();
+  const title = quest.title || "";
 
-  if (!questIdArg) {
-    console.error(
-      "Usage: node bot/scripts/reconcileQuestParticipantsFromLedger.js Q915540 [--apply]"
-    );
-    process.exit(1);
+  if (!questID) {
+    return {
+      questID: "(no questID)",
+      title,
+      wouldFix: 0,
+      notTargetRow: 0,
+      noTx: 0,
+      skippedNoParticipants: true,
+    };
   }
 
-  const questID = questIdArg.toUpperCase();
-  await DatabaseConnectionManager.initialize();
+  if (!quest.participants || typeof quest.participants.entries !== "function") {
+    return {
+      questID,
+      title,
+      wouldFix: 0,
+      notTargetRow: 0,
+      noTx: 0,
+      skippedNoParticipants: true,
+    };
+  }
 
-  try {
-    const quest = await Quest.findOne({ questID }).exec();
-    if (!quest) {
-      console.error(`Quest not found: ${questID}`);
-      process.exit(1);
-    }
-
-    const title = quest.title || "";
+  if (logDetail) {
     console.log(`\n${questID} — "${title}" (${apply ? "APPLY" : "DRY RUN"})\n`);
+  }
 
-    let wouldFix = 0;
-    let notTargetRow = 0;
-    let noTx = 0;
+  let wouldFix = 0;
+  let notTargetRow = 0;
+  let noTx = 0;
+  const planned = [];
 
-    const planned = [];
-
-    for (const [mapKey, p] of quest.participants.entries()) {
-      if (!needsReconcile(p)) {
-        notTargetRow++;
-        continue;
+  for (const [mapKey, p] of quest.participants.entries()) {
+    if (!needsReconcile(p)) {
+      notTargetRow++;
+      continue;
+    }
+    const uid = normalizeUserId(p.userId);
+    let { tx } = await findLedgerQuestReward(uid, title);
+    let viaNote = "own_ledger";
+    if (!tx || !Number.isFinite(Number(tx.amount)) || Number(tx.amount) <= 0) {
+      const proxy = await findLedgerQuestRewardViaSubmitter(
+        uid,
+        p.characterName,
+        questID,
+        title
+      );
+      if (proxy.tx) {
+        tx = proxy.tx;
+        viaNote = `submitter_ledger (submitter=${proxy.submitterUserId})`;
       }
-      const uid = normalizeUserId(p.userId);
-      let { tx } = await findLedgerQuestReward(uid, title);
-      let viaNote = "own_ledger";
-      if (!tx || !Number.isFinite(Number(tx.amount)) || Number(tx.amount) <= 0) {
-        const proxy = await findLedgerQuestRewardViaSubmitter(
-          uid,
-          p.characterName,
-          questID,
-          title
-        );
-        if (proxy.tx) {
-          tx = proxy.tx;
-          viaNote = `submitter_ledger (submitter=${proxy.submitterUserId})`;
-        }
+    }
+    if (!tx || !Number.isFinite(Number(tx.amount)) || Number(tx.amount) <= 0) {
+      const anyP = await findLedgerQuestRewardViaAnyParticipantOnQuest(quest, title);
+      if (anyP.tx) {
+        tx = anyP.tx;
+        viaNote = `same_quest_ledger (copied from participant userId=${anyP.fromUserId})`;
       }
-      if (!tx || !Number.isFinite(Number(tx.amount)) || Number(tx.amount) <= 0) {
-        const anyP = await findLedgerQuestRewardViaAnyParticipantOnQuest(quest, title);
-        if (anyP.tx) {
-          tx = anyP.tx;
-          viaNote = `same_quest_ledger (copied from participant userId=${anyP.fromUserId})`;
-        }
+    }
+    if (!tx || !Number.isFinite(Number(tx.amount)) || Number(tx.amount) <= 0) {
+      const firstSub = await findLedgerQuestRewardViaFirstSubmissionSubmitter(questID, title);
+      if (firstSub.tx) {
+        tx = firstSub.tx;
+        viaNote = `first_submission_submitter (submitter=${firstSub.submitterUserId})`;
       }
-      if (!tx || !Number.isFinite(Number(tx.amount)) || Number(tx.amount) <= 0) {
-        const firstSub = await findLedgerQuestRewardViaFirstSubmissionSubmitter(
-          questID,
-          title
-        );
-        if (firstSub.tx) {
-          tx = firstSub.tx;
-          viaNote = `first_submission_submitter (submitter=${firstSub.submitterUserId})`;
-        }
-      }
-      if (!tx || !Number.isFinite(Number(tx.amount)) || Number(tx.amount) <= 0) {
-        noTx++;
+    }
+    if (!tx || !Number.isFinite(Number(tx.amount)) || Number(tx.amount) <= 0) {
+      noTx++;
+      if (logDetail) {
         console.log(
           `SKIP (no quest_reward for user, and no ledger match via submission / same quest / first submission): ${p.characterName || "?"} userId=${uid}`
         );
-        continue;
       }
-      wouldFix++;
-      planned.push({
-        mapKey,
-        characterName: p.characterName,
-        userId: uid,
-        amount: tx.amount,
-        rewardedAt: tx.timestamp,
-      });
+      continue;
+    }
+    wouldFix++;
+    planned.push({
+      mapKey,
+      characterName: p.characterName,
+      userId: uid,
+      amount: tx.amount,
+      rewardedAt: tx.timestamp,
+    });
+    if (logDetail) {
       console.log(
         `${apply ? "UPDATE" : "WOULD UPDATE"}: ${p.characterName} -> rewarded, tokensEarned=${tx.amount}, rewardedAt=${tx.timestamp?.toISOString?.() || tx.timestamp} [${viaNote}]`
       );
     }
+  }
 
+  if (logDetail) {
     console.log(
       `\nSummary: will reconcile ${wouldFix} | other participant rows (not completed+zero tokens) ${notTargetRow} | completed but no ledger match ${noTx}`
     );
+  }
 
-    if (wouldFix === 0) {
+  if (wouldFix === 0) {
+    if (logDetail) {
       logger.info("QUEST_RECONCILE", "Nothing to do.");
-    } else if (apply) {
-      for (const row of planned) {
-        const p = quest.participants.get(row.mapKey);
-        if (!p) continue;
-        p.progress = "rewarded";
-        p.tokensEarned = row.amount;
-        p.rewardedAt = row.rewardedAt ? new Date(row.rewardedAt) : new Date();
-        if (!p.completedAt) p.completedAt = p.rewardedAt;
+    }
+  } else if (apply) {
+    for (const row of planned) {
+      const part = quest.participants.get(row.mapKey);
+      if (!part) continue;
+      part.progress = "rewarded";
+      part.tokensEarned = row.amount;
+      part.rewardedAt = row.rewardedAt ? new Date(row.rewardedAt) : new Date();
+      if (!part.completedAt) part.completedAt = part.rewardedAt;
+    }
+    quest.markModified("participants");
+    await quest.save();
+    logger.success(
+      "QUEST_RECONCILE",
+      `Saved quest ${questID}: ${wouldFix} participant(s) aligned with ledger (no new tokens issued).`
+    );
+  } else if (logDetail) {
+    logger.info(
+      "QUEST_RECONCILE",
+      "Re-run with --apply to write these changes to the quest document."
+    );
+  }
+
+  return { questID, title, wouldFix, notTargetRow, noTx };
+}
+
+async function main() {
+  loadEnv();
+  const questIdArg = process.argv.find((a) => /^Q\d+$/i.test(a));
+  const apply = process.argv.includes("--apply");
+  const allMode = process.argv.includes("--all");
+  const verbose = process.argv.includes("--verbose");
+
+  if (allMode && questIdArg) {
+    console.error("Use either --all or one Q… id, not both.");
+    process.exit(1);
+  }
+
+  if (!allMode && !questIdArg) {
+    console.error(
+      "Usage:\n" +
+        "  node bot/scripts/reconcileQuestParticipantsFromLedger.js Q915540 [--apply]\n" +
+        "  node bot/scripts/reconcileQuestParticipantsFromLedger.js --all [--apply] [--verbose]"
+    );
+    process.exit(1);
+  }
+
+  await DatabaseConnectionManager.initialize();
+
+  try {
+    if (allMode) {
+      const quests = await Quest.find({}).sort({ questID: 1 }).exec();
+      let totalWouldFix = 0;
+      let questsWithWork = 0;
+
+      console.log(
+        `\n--all: ${quests.length} quest document(s) (${apply ? "APPLY" : "DRY RUN"})\n`
+      );
+
+      for (const q of quests) {
+        const r = await reconcileQuestDocument(q, apply, verbose);
+        if (r.skippedNoParticipants) continue;
+        totalWouldFix += r.wouldFix;
+        if (r.wouldFix > 0) questsWithWork++;
+
+        if (!verbose) {
+          if (r.wouldFix > 0) {
+            console.log(
+              `${r.questID} "${r.title.slice(0, 48)}${r.title.length > 48 ? "…" : ""}" → ${apply ? "saved" : "would fix"} ${r.wouldFix} row(s) (skip ${r.notTargetRow}, no ledger ${r.noTx})`
+            );
+          }
+        }
       }
-      quest.markModified("participants");
-      await quest.save();
-      logger.success(
-        "QUEST_RECONCILE",
-        `Saved quest ${questID}: ${wouldFix} participant(s) aligned with ledger (no new tokens issued).`
+
+      console.log(
+        `\nAll quests summary: ${apply ? "updated" : "would update"} ${totalWouldFix} participant row(s) across ${questsWithWork} quest(s).`
       );
+      if (!apply && totalWouldFix > 0) {
+        logger.info("QUEST_RECONCILE", "Re-run with --all --apply to write.");
+      }
     } else {
-      logger.info(
-        "QUEST_RECONCILE",
-        "Re-run with --apply to write these changes to the quest document."
-      );
+      const questID = questIdArg.toUpperCase();
+      const quest = await Quest.findOne({ questID }).exec();
+      if (!quest) {
+        console.error(`Quest not found: ${questID}`);
+        process.exit(1);
+      }
+      await reconcileQuestDocument(quest, apply, true);
     }
   } finally {
     await DatabaseConnectionManager.closeAll();
