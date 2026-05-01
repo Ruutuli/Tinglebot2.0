@@ -409,6 +409,7 @@ type QuestRecord = {
       progress?: string;
       completedAt?: string;
       rewardedAt?: string;
+      rewardProcessed?: boolean;
       tokensEarned?: number;
       questTokensPaidViaSubmission?: boolean;
       submissionRewardTokenAmount?: number | null;
