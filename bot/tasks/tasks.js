@@ -1319,9 +1319,7 @@ function buildQuestPostEmbeds(quest) {
   const timeLimit = quest.timeLimit || '—';
   const dateStr = quest.date?.trim() || '—';
   const rulesRaw = quest.rules?.trim() || '—';
-  const postReq = quest.postRequirement != null && !isNaN(Number(quest.postRequirement))
-    ? Number(quest.postRequirement)
-    : 15;
+  const effPosts = Quest.resolvePostRequirement(quest);
   const minRequirements = (quest.minRequirements != null ? String(quest.minRequirements) : '').trim() || '';
 
   const locationPreview = formatQuestLocation(location);
@@ -1346,7 +1344,9 @@ function buildQuestPostEmbeds(quest) {
   const participationLines = [];
   if (participantCap != null) participationLines.push(`👥 Participation cap: ${participantCap}`);
   if (minRequirements && minRequirements !== '0') participationLines.push(`📝 Participation Requirement: ${minRequirements}`);
-  if (questType === 'RP' || questType === 'Interactive / RP') participationLines.push(`📝 Post requirement: ${postReq}`);
+  if (questType === 'RP' || questType === 'Interactive / RP') {
+    if (effPosts > 0) participationLines.push(`📝 Post requirement: ${effPosts}`);
+  }
   if (tableroll) participationLines.push(`🎲 Table roll${tableroll.includes(',') ? 's' : ''}: **${tableroll}**`);
   const participationValue = participationLines.length ? participationLines.join('\n') : '—';
 
@@ -1722,15 +1722,11 @@ async function createRpQuestThreads(client, quest, { postedQuestMessage = null }
 }
 
 function getCurrentMonthFormats() {
-  const now = new Date();
-  const estOffset = -5 * 60;
-  const estTime = new Date(now.getTime() + (estOffset - now.getTimezoneOffset()) * 60000);
-  const year = estTime.getFullYear();
-  const month = estTime.getMonth();
-  
+  const m = moment.tz(SCHEDULE_TZ_EASTERN);
+  const year = m.year();
+  const month = m.month();
   const yyyyMm = `${year}-${String(month + 1).padStart(2, '0')}`;
   const monthName = `${MONTH_NAMES[month]} ${year}`;
-  
   return { yyyyMm, monthName };
 }
 
@@ -1751,13 +1747,14 @@ async function questPostingCheck(client, _data = {}) {
     const { yyyyMm, monthName } = getCurrentMonthFormats();
     logger.info('SCHEDULED', `quest-posting-check: Looking for pending quests for ${monthName} (${yyyyMm})`);
     
+    const monthWord = monthName.replace(/\s+\d{4}$/, '');
     const pendingQuests = await Quest.find({
       status: 'pending',
       $or: [
         { date: yyyyMm },
         { date: monthName },
-        { date: { $regex: new RegExp(`^${MONTH_NAMES[new Date().getMonth()]}\\s+\\d{4}$`, 'i') } }
-      ]
+        { date: { $regex: new RegExp(`^${monthWord}\\s+\\d{4}$`, 'i') } },
+      ],
     });
     
     if (!pendingQuests || pendingQuests.length === 0) {

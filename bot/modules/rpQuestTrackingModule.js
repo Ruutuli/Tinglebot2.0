@@ -6,7 +6,7 @@
 const { EmbedBuilder } = require('discord.js');
 const Quest = require('@/models/QuestModel');
 const { handleError } = require('@/utils/globalErrorHandler');
-const { QUEST_TYPES, BORDER_IMAGE, DEFAULT_POST_REQUIREMENT } = require('./questRewardModule');
+const { QUEST_TYPES, BORDER_IMAGE } = require('./questRewardModule');
 const questModule = require('../commands/world/quest');
 const questRewardModule = require('./questRewardModule');
 const logger = require('@/utils/logger');
@@ -144,7 +144,7 @@ async function processValidRPPost(quest, participant, channelId, message = null)
 
     const meetsRequirements = quest.meetsRequirements(participant, quest);
     const wasNotCompleted = participant.progress !== 'completed';
-    const postRequirement = quest.postRequirement || DEFAULT_POST_REQUIREMENT;
+    const postRequirement = Quest.resolvePostRequirement(quest);
     
     if (meetsRequirements && wasNotCompleted) {
         participant.progress = 'completed';
@@ -220,13 +220,17 @@ async function sendRequirementMetNotification(quest, participant, channelId) {
             return;
         }
 
-        const postRequirement = quest.postRequirement || DEFAULT_POST_REQUIREMENT;
+        const postRequirement = Quest.resolvePostRequirement(quest);
+        const postsValue =
+            postRequirement === 0
+                ? `${participant.rpPostCount} (no minimum)`
+                : `${participant.rpPostCount}/${postRequirement}`;
         const embed = new EmbedBuilder()
             .setColor(0x00FF00)
             .setTitle('🎉 Quest Requirements Met!')
             .setDescription(`**${participant.characterName}** has successfully met the quest requirements!`)
             .addFields(
-                { name: 'Posts Completed', value: `${participant.rpPostCount}/${postRequirement}`, inline: true },
+                { name: 'Posts Completed', value: postsValue, inline: true },
                 { name: 'Status', value: '✅ Completed', inline: true },
                 { name: 'Quest ID', value: `\`${quest.questID}\``, inline: true }
             )
@@ -495,7 +499,7 @@ async function getRPQuestStatus(questID) {
             questID,
             title: quest.title,
             status: quest.status,
-            postRequirement: quest.postRequirement || DEFAULT_POST_REQUIREMENT,
+            postRequirement: Quest.resolvePostRequirement(quest),
             participants: participants.map(p => ({
                 userId: p.userId,
                 characterName: p.characterName,

@@ -388,7 +388,21 @@ function parseQuestDateStringToYearMonth0(dateStr) {
 // ============================================================================
 
 // ------------------- Requirements Check ------------------
-// Logic intentionally mirrored in questRewardModule; keep in sync when changing completion rules.
+// Logic intentionally mirrored in bot QuestModel; keep in sync when changing completion rules.
+const DEFAULT_POST_REQUIREMENT_DASH = 15;
+
+function resolvePostRequirement(quest) {
+    const raw = quest?.postRequirement;
+    if (raw === null || raw === undefined || raw === '') {
+        return DEFAULT_POST_REQUIREMENT_DASH;
+    }
+    const n = typeof raw === 'number' && Number.isFinite(raw) ? raw : Number(raw);
+    if (!Number.isFinite(n)) {
+        return DEFAULT_POST_REQUIREMENT_DASH;
+    }
+    return Math.max(0, Math.floor(n));
+}
+
 function resolveRequiredRolls(quest) {
     const r = quest?.requiredRolls;
     const n = typeof r === 'number' && Number.isFinite(r) ? r : Number(r);
@@ -397,11 +411,12 @@ function resolveRequiredRolls(quest) {
 }
 
 function meetsRequirements(participant, quest) {
-    const { questType, postRequirement } = quest;
+    const { questType } = quest;
     const { rpPostCount, submissions, successfulRolls } = participant;
+    const effPosts = resolvePostRequirement(quest);
 
     if (questType === QUEST_TYPES.INTERACTIVE_RP) {
-        const postsOk = rpPostCount >= (postRequirement || 15); // DEFAULT_POST_REQUIREMENT
+        const postsOk = effPosts === 0 || rpPostCount >= effPosts;
         const reqRolls = resolveRequiredRolls(quest);
         const rollCount = Number(successfulRolls) || 0;
         const rollsOk = rollCount >= reqRolls;
@@ -409,7 +424,7 @@ function meetsRequirements(participant, quest) {
     }
 
     if (questType === QUEST_TYPES.RP) {
-        return rpPostCount >= (postRequirement || 15); // DEFAULT_POST_REQUIREMENT
+        return effPosts === 0 || rpPostCount >= effPosts;
     }
     
     if (questType === QUEST_TYPES.ART || questType === QUEST_TYPES.WRITING) {
@@ -1535,21 +1550,30 @@ questSchema.methods.checkAutoCompletion = async function(forceCheck = false) {
         this.completionReason = COMPLETION_REASONS.TIME_EXPIRED;
         this.completionProcessed = false; // Mark for reward processing
         
-        // Mark all remaining active participants as failed since quest expired
+        // On expiry: completers → completed; still active & not qualified → failed
         let failedCount = 0;
+        let completedOnExpiry = 0;
         for (const [userId, participant] of this.participants) {
-            if (participant.progress === PROGRESS_STATUS.ACTIVE) {
-                // If they don't meet requirements, mark as failed
-                if (!meetsRequirements(participant, this)) {
-                    participant.progress = PROGRESS_STATUS.FAILED;
-                    failedCount++;
-                    console.log(`[QuestModel.js] ❌ Marked participant ${participant.characterName} as failed (quest expired without meeting requirements)`);
+            if (participant.progress !== PROGRESS_STATUS.ACTIVE) continue;
+            if (meetsRequirements(participant, this)) {
+                markParticipantCompleted(participant);
+                completedOnExpiry++;
+                console.log(`[QuestModel.js] ✅ Quest expired — marked ${participant.characterName} completed (requirements met)`);
+                try {
+                    const questRewardModule = require('../modules/questRewardModule');
+                    await questRewardModule.recordQuestCompletionSafeguard(participant, this);
+                } catch (error) {
+                    console.error(`[QuestModel.js] ❌ Error recording quest completion safeguard:`, error);
                 }
+            } else {
+                participant.progress = PROGRESS_STATUS.FAILED;
+                failedCount++;
+                console.log(`[QuestModel.js] ❌ Marked participant ${participant.characterName} as failed (quest expired without meeting requirements)`);
             }
         }
-        
-        if (failedCount > 0) {
-            console.log(`[QuestModel.js] ⚠️ Marked ${failedCount} participants as failed due to quest expiration`);
+
+        if (failedCount > 0 || completedOnExpiry > 0) {
+            console.log(`[QuestModel.js] ⚠️ Quest expiration: ${completedOnExpiry} completed, ${failedCount} failed`);
         }
         
         await this.save();

@@ -4,7 +4,7 @@
 // ============================================================================
 
 const Quest = require('../models/QuestModel');
-const { meetsRequirements, DEFAULT_POST_REQUIREMENT, DEFAULT_ROLL_REQUIREMENT } = Quest;
+const { meetsRequirements, DEFAULT_POST_REQUIREMENT, DEFAULT_ROLL_REQUIREMENT, resolvePostRequirement } = Quest;
 const Character = require('../models/CharacterModel');
 const User = require('../models/UserModel');
 const ApprovedSubmission = require('../models/ApprovedSubmissionModel');
@@ -377,69 +377,72 @@ async function sendQuestCompletionSummary(quest, completionReason) {
         const participants = Array.from(quest.participants.values());
         const completedParticipants = participants.filter(p => p.progress === 'completed' || p.progress === 'rewarded');
 
-        let summaryTitle = '🏁 Quest Completed!';
-        let summaryDescription = `The quest **${quest.title}** has been completed!`;
-        
+        const reasonKey = String(completionReason || 'time_expired').replace(/_/g, ' ').toUpperCase();
+
+        let summaryTitle = '🏁 Quest completed';
+        let summaryDescription = `**${quest.title}** has finished.`;
+
         if (completionReason === 'time_expired') {
-            summaryTitle = '⏰ Quest Time Expired!';
-            summaryDescription = `The quest **${quest.title}** has ended due to time expiration.`;
+            summaryTitle = '⏰ Quest time ended';
+            summaryDescription = `**${quest.title}** has ended (time expired).`;
         }
 
-        const completedList = completedParticipants
-            .map(p => `• ${p.characterName} ✅`)
-            .join('\n') || 'None';
+        const maxNamesInDesc = 25;
+        const nameLines = completedParticipants.slice(0, maxNamesInDesc).map((p) => `• **${p.characterName || 'Unknown'}** ✅`);
+        const overflow =
+            completedParticipants.length > maxNamesInDesc
+                ? `\n_…and ${completedParticipants.length - maxNamesInDesc} more._`
+                : '';
+        const rosterText =
+            completedParticipants.length === 0
+                ? '_No participants met completion requirements._'
+                : `**These members completed the quest:**\n${nameLines.join('\n')}${overflow}`;
+
+        summaryDescription = `${summaryDescription}\n\n${rosterText}`;
+        const MAX_EMBED_DESC = 3900;
+        if (summaryDescription.length > MAX_EMBED_DESC) {
+            summaryDescription = `${summaryDescription.slice(0, MAX_EMBED_DESC - 20).trimEnd()}…\n_— message truncated —_`;
+        }
 
         const embed = createBaseEmbed(
-            summaryTitle, 
-            summaryDescription, 
+            summaryTitle,
+            summaryDescription,
             completionReason === 'time_expired' ? QUEST_COLORS.EXPIRED : QUEST_COLORS.SUCCESS
         );
-        
+
         const additionalFields = [
-            { name: 'Total Participants', value: participants.length.toString(), inline: true },
+            { name: 'Total signed up', value: participants.length.toString(), inline: true },
             { name: 'Completed', value: completedParticipants.length.toString(), inline: true },
-            { name: 'Completion Reason', value: completionReason.replace('_', ' ').toUpperCase(), inline: true }
+            { name: 'Closure', value: reasonKey, inline: true },
         ];
-        
-        // Add completed participants list if not too long
-        if (completedParticipants.length > 0 && completedParticipants.length <= 20) {
-            additionalFields.push({
-                name: 'Completed Participants',
-                value: completedList.length > 1024 ? completedList.substring(0, 1020) + '...' : completedList,
-                inline: false
-            });
-        }
-        
+
         addQuestInfoFields(embed, quest, additionalFields);
 
-        // Always send to Sheikah Slate channel only
         const SHEIKAH_SLATE_CHANNEL_ID = '641858948802150400';
 
-        const participantIds = [...new Set(participants.map((p) => p.userId).filter(Boolean))];
-        const mentionStr = participantIds.map((id) => `<@${id}>`).join(' ');
+        const completerIds = [...new Set(completedParticipants.map((p) => p.userId).filter(Boolean))];
+        const mentionStr = completerIds.map((id) => `<@${id}>`).join(' ');
         const mentionParts = chunkDiscordContent(mentionStr);
-        
+
         try {
             const sheikahSlateChannel = await client.channels.fetch(SHEIKAH_SLATE_CHANNEL_ID);
             if (sheikahSlateChannel) {
                 await sheikahSlateChannel.send({
                     content: mentionParts[0] || undefined,
-                    embeds: [embed]
+                    embeds: [embed],
                 });
                 for (let i = 1; i < mentionParts.length; i++) {
                     await sheikahSlateChannel.send({ content: mentionParts[i] });
                 }
                 console.log(`[questRewardModule] ✅ Sent quest completion summary to Sheikah Slate channel`);
                 return { success: true };
-            } else {
-                console.log(`[questRewardModule] ⚠️ Could not fetch Sheikah Slate channel`);
-                return { success: false, error: 'Sheikah Slate channel not found' };
             }
+            console.log(`[questRewardModule] ⚠️ Could not fetch Sheikah Slate channel`);
+            return { success: false, error: 'Sheikah Slate channel not found' };
         } catch (error) {
             console.error(`[questRewardModule] ❌ Error sending to Sheikah Slate channel:`, error);
             return { success: false, error: error.message };
         }
-
     } catch (error) {
         console.error(`[questRewardModule] ❌ Error sending quest completion summary:`, error);
         return { success: false, error: error.message };
@@ -535,13 +538,22 @@ function addQuestInfoFields(embed, quest, additionalFields = []) {
 // ------------------- Quest Type Specific Logic ------------------
 const QUEST_TYPE_HANDLERS = {
     [QUEST_TYPES.RP]: {
-        checkRequirements: (participant, quest) => 
-            participant.rpPostCount >= (quest.postRequirement || DEFAULT_POST_REQUIREMENT),
-        getProgressField: (participant, quest) => ({
-            name: 'Posts Completed',
-            value: `${participant.rpPostCount}/${quest.postRequirement || DEFAULT_POST_REQUIREMENT}`,
-            inline: true
-        }),
+        checkRequirements: (participant, quest) => {
+            const eff = resolvePostRequirement(quest);
+            return eff === 0 || participant.rpPostCount >= eff;
+        },
+        getProgressField: (participant, quest) => {
+            const eff = resolvePostRequirement(quest);
+            const value =
+                eff === 0
+                    ? `${participant.rpPostCount} (no minimum)`
+                    : `${participant.rpPostCount}/${eff}`;
+            return {
+                name: 'Posts Completed',
+                value,
+                inline: true
+            };
+        },
         getTitle: () => '🎭 RP Quest Completed!',
         getDescription: (characterName) => `**${characterName}** has successfully completed the RP quest!`
     },
@@ -589,11 +601,18 @@ const QUEST_TYPE_HANDLERS = {
     },
     [QUEST_TYPES.INTERACTIVE_RP]: {
         checkRequirements: () => true,
-        getProgressField: (participant, quest) => ({
-            name: 'Progress',
-            value: `📝 Posts ${participant.rpPostCount}/${quest.postRequirement || DEFAULT_POST_REQUIREMENT}\n🎲 Rolls ${participant.successfulRolls}/${quest.requiredRolls || DEFAULT_ROLL_REQUIREMENT}`,
-            inline: false,
-        }),
+        getProgressField: (participant, quest) => {
+            const eff = resolvePostRequirement(quest);
+            const postsPart =
+                eff === 0
+                    ? `📝 Posts ${participant.rpPostCount} (no minimum)`
+                    : `📝 Posts ${participant.rpPostCount}/${eff}`;
+            return {
+                name: 'Progress',
+                value: `${postsPart}\n🎲 Rolls ${participant.successfulRolls}/${quest.requiredRolls || DEFAULT_ROLL_REQUIREMENT}`,
+                inline: false,
+            };
+        },
         getTitle: () => '🎭🎮 Interactive / RP Quest Completed!',
         getDescription: (characterName) =>
             `**${characterName}** has met the RP posts and table roll requirements for this quest!`,
@@ -1723,10 +1742,14 @@ async function processRPQuestCompletion(quest, participant) {
         
         const meetsReq = meetsRequirements(participant, quest);
         if (!meetsReq) {
-            console.log(`[questRewardModule.js] ⚠️ Participant ${participant.characterName} does not meet RP requirements (${participant.rpPostCount}/${quest.postRequirement || DEFAULT_POST_REQUIREMENT} posts)`);
+            const eff = resolvePostRequirement(quest);
+            const needed = eff - participant.rpPostCount;
+            console.log(`[questRewardModule.js] ⚠️ Participant ${participant.characterName} does not meet RP requirements (${participant.rpPostCount}/${eff} posts)`);
             return {
                 success: false,
-                error: `Participant needs ${(quest.postRequirement || DEFAULT_POST_REQUIREMENT) - participant.rpPostCount} more posts to complete the quest`
+                error: eff === 0
+                    ? 'Participant does not meet RP quest requirements'
+                    : `Participant needs ${Math.max(0, needed)} more posts to complete the quest`
             };
         }
         
@@ -1769,7 +1792,26 @@ async function processRPQuestCompletion(quest, participant) {
 async function processMonthlyQuestRewards() {
     try {
         console.log('[questRewardModule.js] 🏆 Starting monthly quest reward distribution...');
-        
+
+        // Backup: expire any still-active quests whose window ended (e.g. missed 6h quest-completion-check).
+        const activeOpen = await Quest.find({ status: 'active' });
+        for (const q of activeOpen) {
+            try {
+                if (!q.questID || !q.participants || q.participants.size === 0) continue;
+                if (typeof q.checkTimeExpiration !== 'function' || !q.checkTimeExpiration()) continue;
+                const result = await q.checkAutoCompletion(true);
+                if (result.completed && result.needsRewardProcessing && q.questID) {
+                    await processQuestCompletion(q.questID);
+                    const fresh = await Quest.findOne({ questID: q.questID });
+                    if (fresh && typeof fresh.markCompletionProcessed === 'function') {
+                        await fresh.markCompletionProcessed();
+                    }
+                }
+            } catch (expErr) {
+                console.error(`[questRewardModule.js] ⚠️ Monthly pre-pass: could not finalize quest ${q?.questID}:`, expErr);
+            }
+        }
+
         // Find all completed quests
         // NOTE: Can't use dotted notation to query Map fields like 'participants.progress'
         // Instead, we fetch all completed quests and filter participants in memory

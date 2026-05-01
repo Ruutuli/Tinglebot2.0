@@ -127,6 +127,16 @@ const QUEST_EMBED_FIELD_MAX = 1024;
 const QUEST_EMBED_MAX_FIELDS = 25;
 export const QUEST_EMBED_MAX_PER_MESSAGE = 10;
 
+const DEFAULT_POST_REQUIREMENT = 15;
+
+function resolvePostRequirement(quest: QuestDoc): number {
+  const raw = quest.postRequirement;
+  if (raw === null || raw === undefined || raw === "") return DEFAULT_POST_REQUIREMENT;
+  const n = typeof raw === "number" && Number.isFinite(raw) ? raw : Number(raw);
+  if (!Number.isFinite(n)) return DEFAULT_POST_REQUIREMENT;
+  return Math.max(0, Math.floor(n));
+}
+
 function linesToBlockquote(lines: string[]): string {
   return lines.map((line) => (line === "" ? "" : `> ${line}`)).join("\n");
 }
@@ -236,7 +246,7 @@ export function buildQuestEmbeds(quest: QuestDoc): Record<string, unknown>[] {
   const timeLimit = quest.timeLimit ?? "—";
   const dateStr = (quest.date ?? "").trim() || "—";
   const rulesRaw = (quest.rules ?? "").trim() || "—";
-  const postReq = quest.postRequirement != null && !Number.isNaN(Number(quest.postRequirement)) ? Number(quest.postRequirement) : 15;
+  const effPosts = resolvePostRequirement(quest);
   const minRequirements = quest.minRequirements != null ? String(quest.minRequirements).trim() : "";
 
   const locationPreview = formatLocation(location);
@@ -280,7 +290,9 @@ export function buildQuestEmbeds(quest: QuestDoc): Record<string, unknown>[] {
   const participationLines: string[] = [];
   if (participantCap != null) participationLines.push(`👥 Participation cap: ${participantCap}`);
   if (minRequirements && minRequirements !== "0") participationLines.push(`📝 Participation Requirement: ${minRequirements}`);
-  if (questType === "RP" || questType === "Interactive / RP") participationLines.push(`📝 Post requirement: ${postReq}`);
+  if (questType === "RP" || questType === "Interactive / RP") {
+    if (effPosts > 0) participationLines.push(`📝 Post requirement: ${effPosts}`);
+  }
   if (tableroll)
     participationLines.push(
       `🎲 Table roll${tableroll.includes(",") ? "s" : ""}: **${tableroll}**`

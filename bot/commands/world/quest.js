@@ -1216,15 +1216,17 @@ formatQuestCount(count = 0) {
    );
 
    if (rpFieldIndex >= 0) {
-    const postRequirement = quest.postRequirement || 15;
+    const eff = Quest.resolvePostRequirement(quest);
     const participants = this.getParticipantsArray(quest);
-    
-    const rpStatus = participants.map(p => 
-     `${p.characterName}: ${p.rpPostCount || 0}/${postRequirement}`
+
+    const rpStatus = participants.map((p) =>
+      eff === 0
+        ? `${p.characterName}: ${p.rpPostCount || 0} posts (no minimum)`
+        : `${p.characterName}: ${p.rpPostCount || 0}/${eff}`
     ).join('\n');
 
     embed.data.fields[rpFieldIndex] = {
-     name: `📝 RP Posts Required (${postRequirement})`,
+     name: eff === 0 ? '📝 RP Posts (no minimum)' : `📝 RP Posts Required (${eff})`,
      value: rpStatus.length > 1024 ? rpStatus.substring(0, 1021) + "..." : rpStatus,
      inline: false
     };
@@ -2182,12 +2184,17 @@ formatQuestCount(count = 0) {
 
   // Add quest-specific progress info
   if (
-    (quest.questType.toLowerCase() === QUEST_TYPES.RP.toLowerCase() || quest.questType === QUEST_TYPES.INTERACTIVE_RP) &&
-    quest.postRequirement
+    quest.questType.toLowerCase() === QUEST_TYPES.RP.toLowerCase() ||
+    quest.questType === QUEST_TYPES.INTERACTIVE_RP
   ) {
+   const effPosts = Quest.resolvePostRequirement(quest);
    const rpPostCount = participant.rpPostCount || 0;
-   const progress = Math.min((rpPostCount / quest.postRequirement) * 100, 100);
-   questInfo += `\n📝 RP Progress: ${rpPostCount}/${quest.postRequirement} posts (${Math.round(progress)}%)`;
+   if (effPosts === 0) {
+    questInfo += `\n📝 RP posts counted: ${rpPostCount} (no minimum)`;
+   } else {
+    const progress = Math.min((rpPostCount / effPosts) * 100, 100);
+    questInfo += `\n📝 RP Progress: ${rpPostCount}/${effPosts} posts (${Math.round(progress)}%)`;
+   }
   }
 
   if (quest.questType === QUEST_TYPES.INTERACTIVE || quest.questType === QUEST_TYPES.INTERACTIVE_RP) {
@@ -2290,12 +2297,16 @@ formatQuestCount(count = 0) {
 
  getQuestRequirements(quest) {
   if (quest.questType === QUEST_TYPES.RP) {
-   return { requirementValue: quest.postRequirement || 15, requirementText: "posts" };
+   const eff = Quest.resolvePostRequirement(quest);
+   return { requirementValue: eff, requirementText: eff === 0 ? 'posts (no minimum)' : 'posts' };
   }
   if (quest.questType === QUEST_TYPES.INTERACTIVE_RP) {
+    const eff = Quest.resolvePostRequirement(quest);
+    const rolls = quest.requiredRolls || 1;
     return {
-      requirementValue: `${quest.postRequirement || 15} posts & ${quest.requiredRolls || 1} successful rolls`,
-      requirementText: "(both required)",
+      requirementValue:
+        eff === 0 ? `${rolls} successful rolls` : `${eff} posts & ${rolls} successful rolls`,
+      requirementText: eff === 0 ? '(rolls required)' : '(both required)',
     };
   }
   if (quest.questType === QUEST_TYPES.INTERACTIVE) {
@@ -2327,19 +2338,27 @@ formatQuestCount(count = 0) {
    status = "🚫";
    statusText = ` (DISQUALIFIED: ${participant.disqualificationReason || 'Left quest village'})`;
   } else if (quest.questType === QUEST_TYPES.INTERACTIVE_RP) {
-   const postsReq = quest.postRequirement || 15;
+   const postsReq = Quest.resolvePostRequirement(quest);
    const rollsReq = quest.requiredRolls || 1;
-   const postsOk = participant.rpPostCount >= postsReq;
+   const postsOk = postsReq === 0 || participant.rpPostCount >= postsReq;
    const rollsOk = participant.successfulRolls >= rollsReq;
    if (postsOk && rollsOk) {
     status = "✅";
    }
-   progressText = `📝 ${participant.rpPostCount}/${postsReq} posts · 🎲 ${participant.successfulRolls}/${rollsReq} rolls`;
+   const postsPart =
+    postsReq === 0
+     ? `${participant.rpPostCount} posts (no min)`
+     : `${participant.rpPostCount}/${postsReq} posts`;
+   progressText = `📝 ${postsPart} · 🎲 ${participant.successfulRolls}/${rollsReq} rolls`;
   } else if (quest.questType === QUEST_TYPES.RP) {
-   if (participant.rpPostCount >= requirementValue) {
+   const eff = Quest.resolvePostRequirement(quest);
+   if (eff === 0 || participant.rpPostCount >= eff) {
     status = "✅";
    }
-   progressText = `${participant.rpPostCount}/${requirementValue} ${requirementText}`;
+   progressText =
+    eff === 0
+     ? `${participant.rpPostCount} posts (no minimum)`
+     : `${participant.rpPostCount}/${eff} ${requirementText}`;
   } else if (quest.questType === QUEST_TYPES.INTERACTIVE) {
    if (participant.successfulRolls >= requirementValue) {
     status = "✅";

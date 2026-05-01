@@ -122,6 +122,14 @@ function statusDisplay(s: string | undefined): string {
 
 const PARTICIPANT_PROGRESS_VALUES = ["active", "completed", "failed", "rewarded", "disqualified"] as const;
 
+/** Matches bot `resolvePostRequirement`: unset → 15; 0 = no minimum. */
+function effectiveRpPostRequirement(raw: unknown): number {
+  if (raw === null || raw === undefined || raw === "") return 15;
+  const n = typeof raw === "number" && Number.isFinite(raw) ? raw : Number(raw);
+  if (!Number.isFinite(n)) return 15;
+  return Math.max(0, Math.floor(n));
+}
+
 function normalizeParticipantProgressValue(
   raw: string | undefined
 ): (typeof PARTICIPANT_PROGRESS_VALUES)[number] {
@@ -1137,7 +1145,7 @@ function QuestEmbedPreview({ form }: { form: FormState }) {
                 <span className="whitespace-pre-line">{form.minRequirements.trim()}</span>
               </div>
             ) : null}
-            {isRpStyleQuestType(form.questType) && (
+            {isRpStyleQuestType(form.questType) && postReqVal > 0 && (
               <div>📝 Post requirement: {postReqVal}</div>
             )}
             {form.tableroll.trim() && (
@@ -1146,7 +1154,10 @@ function QuestEmbedPreview({ form }: { form: FormState }) {
                 <span className="font-medium">{form.tableroll.trim()}</span>
               </div>
             )}
-            {!cap && (!form.minRequirements.trim() || form.minRequirements.trim() === "0") && !isRpStyleQuestType(form.questType) && !form.tableroll.trim() && <div>—</div>}
+            {!cap &&
+              (!form.minRequirements.trim() || form.minRequirements.trim() === "0") &&
+              !(isRpStyleQuestType(form.questType) && postReqVal > 0) &&
+              !form.tableroll.trim() && <div>—</div>}
           </div>
         </div>
 
@@ -1977,6 +1988,7 @@ export default function AdminQuestsPage() {
                             <div>
                               <label className="mb-1 block text-sm font-medium text-[var(--totk-grey-200)]">Post requirement</label>
                               <input type="number" min={0} value={form.postRequirement} onChange={(e) => setField("postRequirement", e.target.value)} className="w-full rounded border border-[var(--totk-dark-ocher)] bg-[var(--botw-warm-black)] px-3 py-2 text-[var(--totk-ivory)]" />
+                              <p className="mt-1 text-xs text-[var(--totk-grey-200)]">0 = no minimum; the board omits the post requirement line. Rules text is separate.</p>
                             </div>
                             <div className="sm:col-span-2 space-y-4">
                               <div>
@@ -2477,10 +2489,10 @@ export default function AdminQuestsPage() {
                                   </td>
                                   {isRpStyleQuestType(manageQuest.questType ?? "") && (() => {
                                     const current = p?.rpPostCount ?? 0;
-                                    const required = typeof manageQuest.postRequirement === "number" ? manageQuest.postRequirement : (manageQuest.postRequirement != null ? Number(manageQuest.postRequirement) : 15);
+                                    const eff = effectiveRpPostRequirement(manageQuest.postRequirement);
                                     return (
                                       <td className="py-2 pr-3 text-[var(--totk-grey-200)]">
-                                        {current}/{required}
+                                        {eff === 0 ? `${current} (no min)` : `${current}/${eff}`}
                                       </td>
                                     );
                                   })()}
