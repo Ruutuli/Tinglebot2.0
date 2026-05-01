@@ -131,7 +131,7 @@ const DEFAULT_POST_REQUIREMENT = 15;
 
 function resolvePostRequirement(quest: QuestDoc): number {
   const raw = quest.postRequirement;
-  if (raw === null || raw === undefined || raw === "") return DEFAULT_POST_REQUIREMENT;
+  if (raw === null || raw === undefined) return DEFAULT_POST_REQUIREMENT;
   const n = typeof raw === "number" && Number.isFinite(raw) ? raw : Number(raw);
   if (!Number.isFinite(n)) return DEFAULT_POST_REQUIREMENT;
   return Math.max(0, Math.floor(n));
