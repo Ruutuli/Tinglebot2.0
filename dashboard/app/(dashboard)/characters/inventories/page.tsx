@@ -11,6 +11,7 @@ import { useSession } from "@/hooks/use-session";
 import { Loading, Tabs, SearchFilterBar } from "@/components/ui";
 import type { TabItem, FilterGroup } from "@/components/ui";
 import { CraftersGuideTab } from "@/components/features/crafters-guide/CraftersGuideTab";
+import { CraftingIngredientSearchTab } from "@/components/features/crafters-guide/CraftingIngredientSearchTab";
 import { capitalize, createSlug } from "@/lib/string-utils";
 import { imageUrlForGcsUrl } from "@/lib/image-url";
 import { equipItem, getWeaponType, isShield, getArmorSlot, type EquippedGear } from "@/lib/gear-equip";
@@ -230,12 +231,19 @@ function InventoriesPageContent() {
   const { user, loading: sessionLoading } = useSession();
   const searchParams = useSearchParams();
   const tabParam = searchParams.get("tab");
-  const [activeTab, setActiveTab] = useState<"all-items" | "transfer" | "equip" | "stats" | "transactions" | "crafters-guide">(
-    tabParam === "crafters-guide" ? "crafters-guide" : "all-items"
+  const [activeTab, setActiveTab] = useState<
+    "all-items" | "transfer" | "equip" | "stats" | "transactions" | "crafters-guide" | "crafting-search"
+  >(
+    tabParam === "crafters-guide"
+      ? "crafters-guide"
+      : tabParam === "crafting-search"
+        ? "crafting-search"
+        : "all-items"
   );
 
   useEffect(() => {
     if (tabParam === "crafters-guide") setActiveTab("crafters-guide");
+    else if (tabParam === "crafting-search") setActiveTab("crafting-search");
   }, [tabParam]);
 
   const [summaries, setSummaries] = useState<InventorySummary[]>([]);
@@ -2195,6 +2203,7 @@ function InventoriesPageContent() {
             tabs={[
               { value: "all-items", label: "All Items", icon: "fa-boxes" },
               { value: "crafters-guide", label: "Crafters Guide", icon: "fa-hammer" },
+              { value: "crafting-search", label: "Recipe search", icon: "fa-magnifying-glass" },
               { value: "transactions", label: "All Transactions", icon: "fa-history" },
               { value: "transfer", label: "Transfer Items", icon: "fa-exchange-alt" },
               { value: "equip", label: "Equip Gear", icon: "fa-shield-alt" },
@@ -2800,6 +2809,10 @@ function InventoriesPageContent() {
 
           {activeTab === "crafters-guide" && (
             <CraftersGuideTab />
+          )}
+
+          {activeTab === "crafting-search" && (
+            <CraftingIngredientSearchTab />
           )}
 
           {activeTab === "stats" && (

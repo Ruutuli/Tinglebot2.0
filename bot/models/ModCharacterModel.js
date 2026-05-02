@@ -172,6 +172,8 @@ const modCharacterSchema = new Schema({
     default: null 
   },
 
+  wishlistItems: { type: [String], default: [] },
+
   // ------------------- Character Status -------------------
   // Status values:
   // - null/undefined = DRAFT (saved, not submitted)

@@ -40,6 +40,7 @@ export const navItems: NavItem[] = [
       { href: "/mod-application", label: "Mod Application", icon: "fa-shield-halved" },
       { href: "/member-lore", label: "Member Submitted Lore", icon: "fa-scroll" },
       { href: "/member-quests", label: "Member Quests", icon: "fa-scroll" },
+      { href: "/crafting-requests", label: "Crafting Requests", icon: "fa-hammer" },
     ],
   },
   {

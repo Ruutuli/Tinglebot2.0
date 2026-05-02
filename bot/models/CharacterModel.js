@@ -272,7 +272,8 @@ const characterSchema = new Schema({
   },
   personality: { type: String, default: '' }, // Suggestion: at least 5 sentences
   history: { type: String, default: '' }, // Suggestion: at least 5 sentences
-  extras: { type: String, default: '' } // Optional
+  extras: { type: String, default: '' }, // Optional
+  wishlistItems: { type: [String], default: [] }
 
 }, { collection: 'characters' });
 

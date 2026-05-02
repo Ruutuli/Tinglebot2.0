@@ -32,6 +32,12 @@ import {
 } from "@/lib/character-validation";
 import { logger } from "@/utils/logger";
 import { isFieldEditable, type CharacterStatus } from "@/lib/character-field-editability";
+import {
+  normalizeWishlistRaw,
+  resolveWishlistCanonicalNames,
+  wishlistNormalizedKey,
+  ensureWishlistItemsSchemaOnModels,
+} from "@/lib/wishlist-items";
 import { gcsUploadService } from "@/lib/services/gcsUploadService";
 import { revalidatePath } from "next/cache";
 
@@ -55,6 +61,7 @@ type CharDoc = {
   personality: string;
   history: string;
   extras?: string;
+  wishlistItems?: string[];
   appLink?: string;
   icon?: string;
   appArt?: string;
@@ -138,6 +145,27 @@ function gearItemMeaningfullyChanged(
   return true;
 }
 
+/** Mongoose may return wishlistItems as a CoreDocumentArray or plain array — normalize for compares and saves. */
+function wishlistToPlain(raw: unknown): string[] {
+  if (raw == null) return [];
+  if (Array.isArray(raw)) {
+    return raw.map((x) => String(x).trim()).filter(Boolean);
+  }
+  return [];
+}
+
+/** Safe one-line description for logs (no huge payloads). */
+function summarizeWishlistSource(raw: unknown): string {
+  if (raw === undefined) return "undefined";
+  if (raw === null) return "null";
+  if (typeof raw === "string") {
+    const t = raw.length > 160 ? `${raw.slice(0, 160)}…` : raw;
+    return `string(len=${raw.length}) ${JSON.stringify(t)}`;
+  }
+  if (Array.isArray(raw)) return `array(len=${raw.length})`;
+  return typeof raw;
+}
+
 // ------------------- Route Segment Config (Caching) -------------------
 // Do not cache: after "Update Character" we must show fresh data so users and mods see saved changes
 export const dynamic = "force-dynamic";
@@ -160,6 +188,10 @@ export async function GET(
     await connect();
     const { default: Character } = await import("@/models/CharacterModel.js");
     const { default: ModCharacter } = await import("@/models/ModCharacterModel.js");
+    ensureWishlistItemsSchemaOnModels(
+      Character as unknown as mongoose.Model<unknown>,
+      ModCharacter as unknown as mongoose.Model<unknown>
+    );
     // Import Pet and Mount models to register schemas for population
     await import("@/models/PetModel.js");
     await import("@/models/MountModel.js");
@@ -446,7 +478,11 @@ export async function PUT(
     await connect();
     const { default: Character } = await import("@/models/CharacterModel.js");
     const { default: ModCharacter } = await import("@/models/ModCharacterModel.js");
-    
+    ensureWishlistItemsSchemaOnModels(
+      Character as unknown as mongoose.Model<unknown>,
+      ModCharacter as unknown as mongoose.Model<unknown>
+    );
+
     // Helper function to create slug from name
     const createSlug = (name: string): string => {
       return name
@@ -557,11 +593,31 @@ export async function PUT(
     const appArtFile = form ? (form.get("appArt") as File | null) : null;
     const equippedGearRaw = get("equippedGear") as string | undefined;
 
+    const wishlistItemsInRequest =
+      jsonData !== null
+        ? Object.prototype.hasOwnProperty.call(jsonData, "wishlistItems")
+        : form !== null && form.get("wishlistItems") != null;
+
+    const wishlistItemsSource: unknown = wishlistItemsInRequest
+      ? jsonData !== null &&
+          Object.prototype.hasOwnProperty.call(jsonData, "wishlistItems")
+        ? jsonData.wishlistItems
+        : get("wishlistItems")
+      : undefined;
+
     // Check if this is a gear-only update (only equippedGear is provided)
     const isGearOnlyUpdate = equippedGearRaw && 
+      !wishlistItemsInRequest &&
       !name && !age && !height && !pronouns && !gender && !race && !village && 
       !job && !virtue && !personality && !history && !extras && !appLink && 
       !birthday && !iconFile && !appArtFile && !get("hearts") && !get("stamina");
+
+    logger.info(
+      "api/characters/[id] PUT wishlist",
+      `preParse charId=${slugOrId} name=${char.name} modOC=${isModCharacter} status=${String(characterStatus ?? "draft")} ` +
+        `contentType=${contentType.includes("application/json") ? "json" : "multipart"} ` +
+        `inRequest=${wishlistItemsInRequest} gearOnly=${isGearOnlyUpdate} source=${summarizeWishlistSource(wishlistItemsSource)}`
+    );
     
     // Only validate required fields if this is NOT a gear-only update
     if (!isGearOnlyUpdate) {
@@ -752,6 +808,64 @@ export async function PUT(
           logger.warn("api/characters/[id] PUT gear parse", e instanceof Error ? e.message : String(e));
         }
       }
+    }
+
+    let wishlistCanonical: string[] | undefined = undefined;
+    if (isGearOnlyUpdate) {
+      logger.info(
+        "api/characters/[id] PUT wishlist",
+        `skip charId=${slugOrId} reason=gearOnlyUpdate inRequest=${wishlistItemsInRequest}`
+      );
+    } else if (!wishlistItemsInRequest) {
+      logger.info(
+        "api/characters/[id] PUT wishlist",
+        `skip charId=${slugOrId} reason=noWishlistFieldInRequest (client omitted wishlistItems or body has no key)`
+      );
+    }
+    if (!isGearOnlyUpdate && wishlistItemsInRequest) {
+      const parsed = normalizeWishlistRaw(wishlistItemsSource) ?? [];
+      const currentWl = wishlistToPlain((char as CharDoc).wishlistItems);
+      const keyIncoming = wishlistNormalizedKey(parsed);
+      const keyCurrent = wishlistNormalizedKey(currentWl);
+      logger.info(
+        "api/characters/[id] PUT wishlist",
+        `parse charId=${slugOrId} parsed=${JSON.stringify(parsed)} dbPlain=${JSON.stringify(currentWl)} ` +
+          `keyIn=${JSON.stringify(keyIncoming)} keyDb=${JSON.stringify(keyCurrent)} changed=${keyIncoming !== keyCurrent}`
+      );
+      if (keyIncoming !== keyCurrent) {
+        if (!canBypassRestrictions && !isFieldEditable("wishlistItems", characterStatus as CharacterStatus)) {
+          logger.warn(
+            "api/characters/[id] PUT wishlist",
+            `blocked charId=${slugOrId} status=${String(characterStatus ?? "draft")} wishlist not editable`
+          );
+          return NextResponse.json(
+            {
+              error: `Field "wishlistItems" cannot be edited when character status is "${characterStatus ?? "draft"}"`,
+            },
+            { status: 403 }
+          );
+        }
+      }
+      const { default: ItemModel } = await import("@/models/ItemModel.js");
+      const resolved = await resolveWishlistCanonicalNames(
+        parsed,
+        ItemModel as unknown as import("mongoose").Model<unknown>
+      );
+      if (!resolved.ok) {
+        logger.warn(
+          "api/characters/[id] PUT wishlist",
+          `resolveFail charId=${slugOrId} invalid=${JSON.stringify(resolved.invalid)}`
+        );
+        return NextResponse.json(
+          { error: `Unknown wishlist item(s): ${resolved.invalid.join(", ")}` },
+          { status: 400 }
+        );
+      }
+      wishlistCanonical = resolved.canonical;
+      logger.info(
+        "api/characters/[id] PUT wishlist",
+        `resolved charId=${slugOrId} canonical=${JSON.stringify(wishlistCanonical)}`
+      );
     }
 
     // Update equipped gear only when the user is allowed to edit gear (admins/mods or status allows gear edits).
@@ -974,8 +1088,33 @@ export async function PUT(
       if (extras !== undefined) updateData.extras = typeof extras === "string" ? extras.trim() : "";
       if (appLink !== undefined) updateData.appLink = typeof appLink === "string" ? appLink.trim() : "";
       if (birthday !== undefined) updateData.birthday = typeof birthday === "string" ? birthday.trim() : "";
-      
+      if (wishlistCanonical !== undefined) updateData.wishlistItems = wishlistCanonical;
+
+      logger.info(
+        "api/characters/[id] PUT wishlist",
+        `updateData charId=${slugOrId} wishlistInPatch=${wishlistCanonical !== undefined} ` +
+          `value=${wishlistCanonical !== undefined ? JSON.stringify(wishlistCanonical) : "—"}`
+      );
+
       char.set(updateData);
+      if (wishlistCanonical !== undefined) {
+        (char as unknown as mongoose.Document).markModified("wishlistItems");
+      }
+
+      try {
+        const wlAfterSet = wishlistToPlain(
+          (char as unknown as { get: (k: string) => unknown }).get("wishlistItems")
+        );
+        logger.info(
+          "api/characters/[id] PUT wishlist",
+          `afterSet charId=${slugOrId} docGet=${JSON.stringify(wlAfterSet)}`
+        );
+      } catch (wlLogErr) {
+        logger.warn(
+          "api/characters/[id] PUT wishlist",
+          `afterSet read failed charId=${slugOrId} ${wlLogErr instanceof Error ? wlLogErr.message : String(wlLogErr)}`
+        );
+      }
 
       // Upload files to GCS if provided, otherwise keep existing URLs
       if (iconFile && iconFile instanceof File && iconFile.size > 0) {
@@ -1030,6 +1169,21 @@ export async function PUT(
     recalculateStats(char);
     
     await char.save();
+
+    try {
+      const wlPostSave = wishlistToPlain(
+        (char as unknown as { get: (k: string) => unknown }).get("wishlistItems")
+      );
+      logger.info(
+        "api/characters/[id] PUT wishlist",
+        `afterSave charId=${slugOrId} docGet=${JSON.stringify(wlPostSave)}`
+      );
+    } catch (wlLogErr) {
+      logger.warn(
+        "api/characters/[id] PUT wishlist",
+        `afterSave read failed charId=${slugOrId} ${wlLogErr instanceof Error ? wlLogErr.message : String(wlLogErr)}`
+      );
+    }
 
     // Invalidate cached character page so redirect and mod queue see fresh data
     try {

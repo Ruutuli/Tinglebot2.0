@@ -159,6 +159,32 @@ function findVillageInApplicationParts(parts) {
   return null;
 }
 
+/** Shown when a post in the OC reserve channel does not match the required template. */
+const OC_CHANNEL_FORMAT_REMINDER =
+  'Please make sure your format is:\n`Name | race | village | Job | Virtue`\n' +
+  '*(Village must be **Rudania**, **Inariko**, or **Vhintl**.)*\n' +
+  '• **Slot reserve (two fields only):** `Character Name | Village`';
+
+/**
+ * Valid: `Name | Village` (two fields), or at least five fields with home village in the **third** field.
+ * @param {string | undefined} rawLine First non-empty line of the message.
+ */
+function isValidOcReserveChannelPost(rawLine) {
+  if (!rawLine || !String(rawLine).trim()) return false;
+  if (!rawLine.includes('|')) return false;
+  const parts = rawLine.split('|').map((p) => p.trim());
+  if (parts.length < 2) return false;
+
+  if (parts.length === 2) {
+    if (!parts[0]) return false;
+    return !!extractVillageFromSegment(parts[1]);
+  }
+
+  if (parts.length < 5) return false;
+  if (!parts[0] || !parts[1] || !parts[3] || !parts[4]) return false;
+  return !!extractVillageFromSegment(parts[2]);
+}
+
 function villageDisplay(key) {
   if (key === 'rudania') return 'Rudania';
   if (key === 'inariko') return 'Inariko';
@@ -845,7 +871,16 @@ async function handleOcReserveMessage(message, client) {
     .split('\n')
     .map((l) => l.trim())
     .find(Boolean);
-  if (!rawLine || !rawLine.includes('|')) return;
+
+  if (!isValidOcReserveChannelPost(rawLine)) {
+    await message.channel
+      .send({
+        content: `<@${message.author.id}> ${OC_CHANNEL_FORMAT_REMINDER}`,
+        allowedMentions: { users: [message.author.id] },
+      })
+      .catch(() => {});
+    return;
+  }
 
   const parts = rawLine.split('|').map((p) => p.trim());
 

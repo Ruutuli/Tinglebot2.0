@@ -29,6 +29,7 @@ export const ACCEPTED_EDITABLE_FIELDS = [
   "appLink",
   "appArt",
   "birthday",
+  "wishlistItems",
 ] as const;
 
 // Fields locked when status is "needs_changes" (after revision).
@@ -122,6 +123,7 @@ export function getEditableFields(status: CharacterStatus): string[] {
       "personality",
       "history",
       "extras",
+      "wishlistItems",
       "icon",
       "appArt",
       "appLink",
@@ -149,6 +151,7 @@ export function getEditableFields(status: CharacterStatus): string[] {
       "personality",
       "history",
       "extras",
+      "wishlistItems",
       "icon",
       "appArt",
       "appLink",
@@ -189,6 +192,7 @@ export function getLockedFields(status: CharacterStatus): string[] {
     "personality",
     "history",
     "extras",
+    "wishlistItems",
     "icon",
     "appArt",
     "appLink",

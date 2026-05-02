@@ -79,6 +79,7 @@ type CharacterData = {
   personality?: string;
   history?: string;
   extras?: string;
+  wishlistItems?: string[];
   appLink?: string;
   icon?: string;
   appArt?: string;

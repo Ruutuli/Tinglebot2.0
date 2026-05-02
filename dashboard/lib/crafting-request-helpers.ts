@@ -1,0 +1,100 @@
+import mongoose from "mongoose";
+
+type ItemCraftFields = {
+  craftingJobs?: string[];
+  staminaToCraft?: unknown;
+};
+
+export function parseStaminaToCraft(value: unknown): number {
+  if (typeof value === "number" && Number.isFinite(value)) return Math.max(0, value);
+  if (value && typeof value === "object" && "base" in value) {
+    const n = Number((value as { base: unknown }).base);
+    if (Number.isFinite(n)) return Math.max(0, n);
+  }
+  const n = Number(value);
+  return Number.isFinite(n) ? Math.max(0, n) : 0;
+}
+
+export function jobCanCraftItem(item: ItemCraftFields, job: string): boolean {
+  const jobs = item.craftingJobs ?? [];
+  if (!jobs.length) return false;
+  return jobs.includes(job);
+}
+
+export function hasStaminaForCraft(
+  staminaCost: number,
+  currentStamina: number,
+  isModCharacter: boolean
+): boolean {
+  if (isModCharacter) return true;
+  return currentStamina >= staminaCost;
+}
+
+export type CharacterUnion = {
+  _id: mongoose.Types.ObjectId;
+  userId: string;
+  name: string;
+  job: string;
+  currentStamina: number;
+  isModCharacter: boolean;
+};
+
+export async function loadCharacterUnionById(id: string): Promise<CharacterUnion | null> {
+  if (!mongoose.Types.ObjectId.isValid(id)) return null;
+
+  const Character = (await import("@/models/CharacterModel.js")).default;
+  const ModCharacterModule = await import("@/models/ModCharacterModel.js");
+  const ModCharacter = ModCharacterModule.default || ModCharacterModule;
+
+  const c = await Character.findById(id)
+    .select("userId name job currentStamina")
+    .lean()
+    .exec();
+  if (c && typeof c.userId === "string") {
+    return {
+      _id: c._id as mongoose.Types.ObjectId,
+      userId: c.userId,
+      name: String(c.name ?? ""),
+      job: String(c.job ?? ""),
+      currentStamina: Math.max(0, Number(c.currentStamina) || 0),
+      isModCharacter: false,
+    };
+  }
+
+  const m = await ModCharacter.findById(id)
+    .select("userId name job currentStamina")
+    .lean()
+    .exec();
+  if (m && typeof m.userId === "string") {
+    return {
+      _id: m._id as mongoose.Types.ObjectId,
+      userId: m.userId,
+      name: String(m.name ?? ""),
+      job: String(m.job ?? ""),
+      currentStamina: Math.max(0, Number(m.currentStamina) || 999),
+      isModCharacter: true,
+    };
+  }
+
+  return null;
+}
+
+export async function userOwnsCharacterName(
+  discordId: string,
+  name: string
+): Promise<boolean> {
+  const trimmed = name.trim();
+  if (!trimmed) return false;
+  const esc = trimmed.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const re = new RegExp(`^${esc}$`, "i");
+
+  const Character = (await import("@/models/CharacterModel.js")).default;
+  const ModCharacterModule = await import("@/models/ModCharacterModel.js");
+  const ModCharacter = ModCharacterModule.default || ModCharacterModule;
+
+  const [a, b] = await Promise.all([
+    Character.findOne({ userId: discordId, name: re }).select("_id").lean(),
+    ModCharacter.findOne({ userId: discordId, name: re }).select("_id").lean(),
+  ]);
+  return Boolean(a || b);
+}

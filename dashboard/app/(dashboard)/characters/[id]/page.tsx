@@ -37,6 +37,7 @@ type CharacterDetail = Character & {
   personality?: string;
   history?: string;
   extras?: string;
+  wishlistItems?: string[];
   appArt?: string;
   virtue?: string;
   spiritOrbs?: number;
@@ -1306,15 +1307,18 @@ export default function OCDetailPage() {
 
   const fetchGearImages = useCallback(async (character: CharacterDetail, signal?: AbortSignal) => {
     const gearNames: string[] = [];
+    const addName = (n: string | null | undefined) => {
+      const t = n?.trim();
+      if (!t) return;
+      if (!gearNames.some((x) => x.toLowerCase() === t.toLowerCase())) gearNames.push(t);
+    };
 
-    if (character.gearWeapon?.name) gearNames.push(character.gearWeapon.name);
-    if (character.gearShield?.name) gearNames.push(character.gearShield.name);
-    if (character.gearArmor?.head?.name)
-      gearNames.push(character.gearArmor.head.name);
-    if (character.gearArmor?.chest?.name)
-      gearNames.push(character.gearArmor.chest.name);
-    if (character.gearArmor?.legs?.name)
-      gearNames.push(character.gearArmor.legs.name);
+    addName(character.gearWeapon?.name);
+    addName(character.gearShield?.name);
+    addName(character.gearArmor?.head?.name);
+    addName(character.gearArmor?.chest?.name);
+    addName(character.gearArmor?.legs?.name);
+    for (const w of character.wishlistItems ?? []) addName(w);
 
     if (gearNames.length === 0) return;
 
@@ -2231,6 +2235,45 @@ export default function OCDetailPage() {
                 })}
               </div>
             </CardSection>
+
+            {character.wishlistItems &&
+              character.wishlistItems.filter((n) => n && String(n).trim()).length > 0 && (
+                <CardSection
+                  icon="fa-gift"
+                  title="Wishlist"
+                  titleColor="text-[var(--totk-light-ocher)]"
+                >
+                  <ul className="space-y-2">
+                    {character.wishlistItems
+                      .filter((n) => n && String(n).trim())
+                      .map((name) => {
+                        const img = gearImages[name];
+                        return (
+                          <li
+                            key={name}
+                            className="flex items-center gap-2 sm:gap-3 rounded-lg border border-[var(--totk-green)] bg-[var(--totk-ocher)]/10 p-2 sm:p-3"
+                          >
+                            {img && (
+                              <div className="flex-shrink-0">
+                                <img
+                                  src={img}
+                                  alt={name}
+                                  className="h-6 w-6 sm:h-8 sm:w-8 rounded object-cover"
+                                  onError={(e) => {
+                                    (e.target as HTMLImageElement).style.display = "none";
+                                  }}
+                                />
+                              </div>
+                            )}
+                            <span className="min-w-0 text-xs sm:text-sm font-medium text-[var(--botw-pale)]">
+                              {name}
+                            </span>
+                          </li>
+                        );
+                      })}
+                  </ul>
+                </CardSection>
+              )}
 
             {/* Biography Section */}
             <BiographySection

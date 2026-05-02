@@ -945,6 +945,12 @@ export const MODEL_CONFIGS: Record<string, ModelConfig> = {
             helpText: "Additional information (optional)",
             placeholder: "Any additional information...",
           },
+          {
+            key: "wishlistItems",
+            label: "Wishlist",
+            type: "array",
+            helpText: "Up to 5 catalog item names shown on the public profile (gift ideas)",
+          },
         ],
       },
       {

@@ -5,7 +5,7 @@
 // ============================================================================
 
 import { NextRequest, NextResponse } from "next/server";
-import mongoose from "mongoose";
+import mongoose, { type Model } from "mongoose";
 import { connect, getInventoriesDb } from "@/lib/db";
 import { getSession, isAdminUser } from "@/lib/session";
 import { MOD_JOBS, ALL_JOBS } from "@/data/characterData";
@@ -33,6 +33,11 @@ import { submitCharacter } from "@/lib/character-submit";
 import { logger } from "@/utils/logger";
 import { gcsUploadService } from "@/lib/services/gcsUploadService";
 import { notifyCharacterCreation } from "@/lib/services/discordPostingService";
+import {
+  normalizeWishlistRaw,
+  resolveWishlistCanonicalNames,
+  ensureWishlistItemsSchemaOnModels,
+} from "@/lib/wishlist-items";
 
 // ------------------- Placeholder URLs (fallback if GCS not configured) -------------------
 const PLACEHOLDER_ICON = "/placeholder-icon.png";
@@ -126,6 +131,7 @@ export async function POST(req: NextRequest) {
     const personality = get("personality") as string | undefined;
     const history = get("history") as string | undefined;
     const extras = get("extras") as string | undefined;
+    const wishlistItemsRaw = get("wishlistItems") as string | undefined;
     const appLink = get("appLink") as string | undefined;
     const submitRaw = get("submit") as string | undefined;
     const starterGearRaw = get("starterGearSelected") as string | undefined;
@@ -180,6 +186,32 @@ export async function POST(req: NextRequest) {
     res = validateFileSizes([iconFile, appArtFile], MAX_FILE_BYTES);
     if (!res.ok) return NextResponse.json({ error: res.error }, { status: 400 });
 
+    const wishlistNorm = normalizeWishlistRaw(wishlistItemsRaw) ?? [];
+    let wishlistItemsSave: string[] = [];
+    logger.info(
+      "api/characters/create wishlist",
+      `rawField=${wishlistItemsRaw === undefined ? "missing" : typeof wishlistItemsRaw} normLen=${wishlistNorm.length} norm=${JSON.stringify(wishlistNorm)}`
+    );
+    if (wishlistNorm.length > 0) {
+      const { default: Item } = await import("@/models/ItemModel.js");
+      const resolved = await resolveWishlistCanonicalNames(wishlistNorm, Item as Model<unknown>);
+      if (!resolved.ok) {
+        logger.warn(
+          "api/characters/create wishlist",
+          `resolveFail invalid=${JSON.stringify(resolved.invalid)}`
+        );
+        return NextResponse.json(
+          { error: `Unknown wishlist item(s): ${resolved.invalid.join(", ")}` },
+          { status: 400 }
+        );
+      }
+      wishlistItemsSave = resolved.canonical;
+    }
+    logger.info(
+      "api/characters/create wishlist",
+      `persisting count=${wishlistItemsSave.length} items=${JSON.stringify(wishlistItemsSave)}`
+    );
+
     const [raceOpts] = await Promise.all([
       (Character as { distinct: (f: string) => Promise<string[]> }).distinct("race"),
     ]);
@@ -213,6 +245,10 @@ export async function POST(req: NextRequest) {
     // Check if character name already exists (case-insensitive)
     const trimmedName = (name as string).trim();
     const { default: ModCharacter } = await import("@/models/ModCharacterModel.js");
+    ensureWishlistItemsSchemaOnModels(
+      Character as unknown as mongoose.Model<unknown>,
+      ModCharacter as unknown as mongoose.Model<unknown>
+    );
     const escapedName = trimmedName.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
     const nameRegex = new RegExp(`^${escapedName}$`, "i");
     
@@ -416,6 +452,7 @@ export async function POST(req: NextRequest) {
       personality: typeof personality === "string" ? personality.trim() : "",
       history: typeof history === "string" ? history.trim() : "",
       extras: typeof extras === "string" ? extras.trim() : "",
+      wishlistItems: wishlistItemsSave,
       appLink: typeof appLink === "string" ? appLink.trim() : "",
       icon: iconUrl,
       appArt: appArtUrl,

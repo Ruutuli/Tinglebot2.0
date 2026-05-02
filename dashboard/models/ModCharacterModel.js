@@ -46,6 +46,7 @@ const modCharacterSchema = new Schema({
   personality: { type: String, default: '' }, // Suggestion: at least 5 sentences
   history: { type: String, default: '' }, // Suggestion: at least 5 sentences
   extras: { type: String, default: '' }, // Optional
+  wishlistItems: { type: [String], default: [] },
   appArt: { type: String, default: '' }, // URL to application art image
 
   // ------------------- Mod Character Special Properties -------------------

@@ -48,7 +48,7 @@ type CharacterSummary = {
   currentVillage: string | null;
 };
 
-function CraftableItemCard({
+export function CraftableItemCard({
   item,
   mode,
   isPublic,

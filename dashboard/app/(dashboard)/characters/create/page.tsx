@@ -36,6 +36,7 @@ import {
 import { isFieldEditable } from "@/lib/character-field-editability";
 import type { CharacterStatus } from "@/lib/character-field-editability";
 import { APPROVED_NEXT_STEPS } from "@/lib/services/discordEmbeds";
+import { WISHLIST_MAX_ITEMS, wishlistNormalizedKey } from "@/lib/wishlist-items";
 
 /* ============================================================================ */
 /* ------------------- Types ------------------- */
@@ -89,6 +90,7 @@ type CharacterData = {
   personality?: string;
   history?: string;
   extras?: string;
+  wishlistItems?: string[];
   appLink?: string;
   icon?: string;
   appArt?: string;
@@ -126,6 +128,28 @@ type CreateFormProps = {
 /* [create/page.tsx]✨ Default equipment names - */
 const DEFAULT_CHEST_ARMOR = "Old Shirt";
 const DEFAULT_LEGS_ARMOR = "Well-Worn Trousers";
+
+function padWishlistSlots(items: string[] | undefined): string[] {
+  const a = [...(items ?? [])].filter(Boolean).slice(0, WISHLIST_MAX_ITEMS);
+  const out = [...a];
+  while (out.length < WISHLIST_MAX_ITEMS) out.push("");
+  return out;
+}
+
+function wishlistFromSlots(slots: readonly string[]): string[] {
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const s of slots) {
+    const t = s.trim();
+    if (!t) continue;
+    const k = t.toLowerCase();
+    if (seen.has(k)) continue;
+    seen.add(k);
+    out.push(t);
+    if (out.length >= WISHLIST_MAX_ITEMS) break;
+  }
+  return out;
+}
 
 /* ============================================================================ */
 /* ------------------- Utils ------------------- */
@@ -440,6 +464,184 @@ function GearSelect({
   );
 }
 
+/* [create/page.tsx]🧩 Wishlist item typeahead (catalog search) - */
+function WishlistItemSlot({
+  value,
+  onChange,
+  disabled,
+  excludeLowercase,
+  inputClassName,
+  slotLabel,
+}: {
+  value: string;
+  onChange: (v: string) => void;
+  disabled: boolean;
+  excludeLowercase: Set<string>;
+  inputClassName: string;
+  slotLabel: string;
+}) {
+  const [suggestions, setSuggestions] = useState<string[]>([]);
+  const [open, setOpen] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const wrapperRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
+  /** Latest duplicate-exclusion set from other slots (not an effect dep — avoids re-search when sibling slots change). */
+  const excludeLowercaseRef = useRef(excludeLowercase);
+  excludeLowercaseRef.current = excludeLowercase;
+  /** Only this slot may open its list while its input is focused. */
+  const isFocusedRef = useRef(false);
+  /** After picking from the list, first fetch result stays closed; cleared on next keystroke. */
+  const suppressOpenAfterPickRef = useRef(false);
+  /** Bumps each effect run so stale debounced fetches cannot reopen the dropdown after a pick. */
+  const fetchGenRef = useRef(0);
+
+  useEffect(() => {
+    if (!value.trim()) {
+      setSuggestions([]);
+      setOpen(false);
+      return;
+    }
+    const g = ++fetchGenRef.current;
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    debounceRef.current = setTimeout(() => {
+      setLoading(true);
+      fetch(`/api/models/items?search=${encodeURIComponent(value.trim())}&limit=15`)
+        .then((r) => r.json())
+        .then((data: { data?: Array<{ itemName?: string }> }) => {
+          if (g !== fetchGenRef.current) return;
+          const self = value.trim().toLowerCase();
+          const ex = excludeLowercaseRef.current;
+          const names = (data.data ?? [])
+            .map((i) => i.itemName)
+            .filter((n): n is string => typeof n === "string" && n.length > 0)
+            .filter(
+              (n) =>
+                n.toLowerCase() === self ||
+                !ex.has(n.toLowerCase())
+            );
+          if (suppressOpenAfterPickRef.current) {
+            suppressOpenAfterPickRef.current = false;
+            setSuggestions([]);
+            setOpen(false);
+            return;
+          }
+          setSuggestions(names);
+          setOpen(names.length > 0 && isFocusedRef.current);
+        })
+        .catch(() => {
+          if (g !== fetchGenRef.current) return;
+          if (!suppressOpenAfterPickRef.current) setSuggestions([]);
+        })
+        .finally(() => {
+          if (g === fetchGenRef.current) setLoading(false);
+        });
+    }, 200);
+    return () => {
+      if (debounceRef.current) clearTimeout(debounceRef.current);
+    };
+  }, [value]);
+
+  useEffect(() => {
+    function handleClickOutside(e: MouseEvent) {
+      if (wrapperRef.current && !wrapperRef.current.contains(e.target as Node)) {
+        setOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
+  return (
+    <div ref={wrapperRef} className="relative flex flex-col gap-1 sm:flex-row sm:items-center sm:gap-2">
+      <span className="shrink-0 text-[10px] font-medium text-[var(--totk-grey-200)] sm:w-16">
+        {slotLabel}
+      </span>
+      <div className="relative min-w-0 flex-1">
+        <input
+          ref={inputRef}
+          type="text"
+          value={value}
+          onChange={(e) => {
+            suppressOpenAfterPickRef.current = false;
+            onChange(e.target.value);
+          }}
+          onFocus={() => {
+            isFocusedRef.current = true;
+            if (suppressOpenAfterPickRef.current) return;
+            if (value.trim() && suggestions.length > 0) setOpen(true);
+          }}
+          onBlur={() => {
+            window.setTimeout(() => {
+              const el = document.activeElement;
+              if (el && wrapperRef.current?.contains(el)) return;
+              isFocusedRef.current = false;
+              setOpen(false);
+            }, 0);
+          }}
+          onKeyDown={(e) => {
+            if (e.key === "Escape") {
+              setOpen(false);
+              setSuggestions([]);
+            }
+          }}
+          placeholder="Search items…"
+          className={inputClassName}
+          disabled={disabled}
+          autoComplete="off"
+          aria-label={`Wishlist ${slotLabel}`}
+          aria-expanded={open}
+          aria-autocomplete="list"
+          role="combobox"
+        />
+        {open && suggestions.length > 0 && (
+          <ul
+            className="absolute z-20 mt-1 max-h-48 w-full overflow-auto rounded border border-[var(--totk-dark-ocher)] bg-[var(--botw-warm-black)] py-1 shadow-lg"
+            role="listbox"
+          >
+            {suggestions.map((name) => (
+              <li
+                key={name}
+                role="option"
+                className="cursor-pointer px-3 py-2 text-sm text-[var(--totk-ivory)] hover:bg-[var(--totk-dark-ocher)]/40"
+                onMouseDown={(e) => {
+                  e.preventDefault();
+                  suppressOpenAfterPickRef.current = true;
+                  fetchGenRef.current++;
+                  onChange(name);
+                  setSuggestions([]);
+                  setOpen(false);
+                }}
+              >
+                {name}
+              </li>
+            ))}
+          </ul>
+        )}
+        {loading && value.trim() && (
+          <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-xs text-[var(--totk-grey-200)]">
+            …
+          </span>
+        )}
+      </div>
+      <button
+        type="button"
+        className="shrink-0 rounded border border-[var(--totk-green)] px-2 py-1.5 text-[10px] font-medium text-[var(--totk-light-green)] hover:bg-[var(--totk-ocher)]/20 disabled:opacity-50 sm:py-1"
+        disabled={disabled || !value.trim()}
+        onClick={() => {
+          suppressOpenAfterPickRef.current = false;
+          fetchGenRef.current++;
+          setSuggestions([]);
+          setOpen(false);
+          onChange("");
+        }}
+      >
+        Clear
+      </button>
+    </div>
+  );
+}
+
 /* [create/page.tsx]🧩 Stat card component - */
 type StatCardProps = {
   icon: string;
@@ -664,6 +866,9 @@ export function CreateForm({
   equippedWeaponRef.current = equippedWeapon;
   equippedShieldRef.current = equippedShield;
   const [extras, setExtras] = useState(initialCharacter?.extras || "");
+  const [wishlistSlots, setWishlistSlots] = useState<string[]>(() =>
+    padWishlistSlots(initialCharacter?.wishlistItems)
+  );
   const [gearConflictAlert, setGearConflictAlert] = useState<string | null>(
     null
   );
@@ -725,6 +930,11 @@ export function CreateForm({
     if (trim(personality) !== trim(init?.personality ?? "")) return true;
     if (trim(history) !== trim(init?.history ?? "")) return true;
     if (trim(extras) !== trim(init?.extras ?? "")) return true;
+    if (
+      wishlistNormalizedKey(wishlistFromSlots(wishlistSlots)) !==
+      wishlistNormalizedKey(init?.wishlistItems ?? [])
+    )
+      return true;
     if (trim(appLink) !== trim(init?.appLink ?? "")) return true;
     const initB = init?.birthday ? parseBirthday(init.birthday) : { month: "", day: "" };
     if (birthdayMonth !== initB.month || birthdayDay !== initB.day) return true;
@@ -737,7 +947,7 @@ export function CreateForm({
     if (appArtFile != null && appArtFile instanceof File && appArtFile.size > 0) return true;
     return false;
   }, [
-    name, age, height, pronouns, gender, race, village, job, virtue, personality, history, extras, appLink,
+    name, age, height, pronouns, gender, race, village, job, virtue, personality, history, extras, wishlistSlots, appLink,
     birthdayMonth, birthdayDay,
     equippedWeapon?.name, equippedShield?.name, equippedHead?.name, equippedChest?.name, equippedLegs?.name,
     iconFile, appArtFile,
@@ -1054,6 +1264,33 @@ export function CreateForm({
     }
   }, [isEditMode, initialCharacter?.birthday]);
 
+  useEffect(() => {
+    if (!isEditMode || !initialCharacter) return;
+    setWishlistSlots(padWishlistSlots(initialCharacter.wishlistItems));
+  }, [isEditMode, initialCharacter?._id]);
+
+  const wishlistExcludeSets = useMemo(
+    () =>
+      wishlistSlots.map((_, i) => {
+        const s = new Set<string>();
+        wishlistSlots.forEach((slot, j) => {
+          if (i === j) return;
+          const t = slot.trim().toLowerCase();
+          if (t) s.add(t);
+        });
+        return s;
+      }),
+    [wishlistSlots]
+  );
+
+  const setWishlistSlot = useCallback((index: number, v: string) => {
+    setWishlistSlots((prev) => {
+      const next = [...prev];
+      next[index] = v;
+      return next;
+    });
+  }, []);
+
   /* [create/page.tsx]🧠 Unsaved changes: warn before leaving (edit mode) so users don't lose edits by accident. */
   const isDirty = useMemo(() => {
     if (!isEditMode || !initialCharacter) return false;
@@ -1076,6 +1313,11 @@ export function CreateForm({
     if (trim(personality) !== trim(init.personality ?? "")) return true;
     if (trim(history) !== trim(init.history ?? "")) return true;
     if (trim(extras) !== trim(init.extras ?? "")) return true;
+    if (
+      wishlistNormalizedKey(wishlistFromSlots(wishlistSlots)) !==
+      wishlistNormalizedKey(init.wishlistItems ?? [])
+    )
+      return true;
     if (trim(appLink) !== trim(init.appLink ?? "")) return true;
     if (currentBday !== initBdayStr) return true;
     if (iconFile && iconFile instanceof File && iconFile.size > 0) return true;
@@ -1096,6 +1338,7 @@ export function CreateForm({
     personality,
     history,
     extras,
+    wishlistSlots,
     appLink,
     birthdayMonth,
     birthdayDay,
@@ -1408,6 +1651,9 @@ export function CreateForm({
         );
         form.set("appLink", submitLockedString("appLink", appLink, initialCharacter?.appLink));
         form.set("extras", submitLockedString("extras", extras, initialCharacter?.extras));
+        if (!(isEditMode && initialCharacter && !isEditable("wishlistItems"))) {
+          form.set("wishlistItems", JSON.stringify(wishlistFromSlots(wishlistSlots)));
+        }
         form.set("gender", submitLockedString("gender", gender, initialCharacter?.gender));
         form.set("hearts", String(isEditMode && initialCharacter?.maxHearts ? initialCharacter.maxHearts : DEFAULT_HEARTS));
         form.set(
@@ -1705,6 +1951,7 @@ export function CreateForm({
       equippedShield,
       equippedWeapon,
       extras,
+      wishlistSlots,
       gender,
       height,
       history,
@@ -1761,7 +2008,7 @@ export function CreateForm({
         title: "Character Approved - Limited Editing",
         titleColor: "text-[var(--totk-light-green)]",
         description:
-          "This character has been approved. Only profile fields (age, height, pronouns, icon, personality, history, extras, gender, virtue, appLink, appArt, birthday) can be edited.\n\n" +
+          "This character has been approved. Only profile fields (age, height, pronouns, icon, personality, history, extras, wishlist, gender, virtue, appLink, appArt, birthday) can be edited.\n\n" +
           APPROVED_NEXT_STEPS,
       };
     }
@@ -2549,6 +2796,31 @@ export function CreateForm({
                 </a>
               </span>
             </p>
+          </div>
+          <div>
+            <div className={styles.label}>
+              <i
+                aria-hidden
+                className="fa-solid fa-gift mr-1.5 sm:mr-2 text-[var(--totk-light-green)]"
+              />
+              Wishlist (optional)
+            </div>
+            <p className={styles.labelMuted + " mb-2"}>
+              Up to {WISHLIST_MAX_ITEMS} items to show on your profile so others know what your character wants/needs!
+            </p>
+            <div className="space-y-2 rounded-lg border border-[var(--totk-green)]/40 bg-[var(--botw-warm-black)]/50 p-3">
+              {wishlistSlots.map((slot, idx) => (
+                <WishlistItemSlot
+                  key={idx}
+                  value={slot}
+                  onChange={(v) => setWishlistSlot(idx, v)}
+                  disabled={!isEditable("wishlistItems")}
+                  excludeLowercase={wishlistExcludeSets[idx] ?? new Set()}
+                  inputClassName={styles.input}
+                  slotLabel={`#${idx + 1}`}
+                />
+              ))}
+            </div>
           </div>
         </div>
       </section>

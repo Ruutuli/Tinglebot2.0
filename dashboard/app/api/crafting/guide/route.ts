@@ -13,6 +13,7 @@ import { connect, getInventoriesDb } from "@/lib/db";
 import { getSession } from "@/lib/session";
 import { logger } from "@/utils/logger";
 import { generalCategories } from "@/lib/general-item-categories";
+import { getCraftingJobs } from "@/lib/crafting-jobs";
 
 // ============================================================================
 // ------------------- Types -------------------
@@ -105,44 +106,6 @@ function checkMaterialAvailability(
     owned: ownedQty,
     hasEnough: ownedQty >= requiredQty,
   };
-}
-
-// Get job fields that can craft an item
-function getCraftingJobs(item: {
-  allJobs?: string[];
-  cook?: boolean;
-  blacksmith?: boolean;
-  craftsman?: boolean;
-  maskMaker?: boolean;
-  researcher?: boolean;
-  weaver?: boolean;
-  artist?: boolean;
-  witch?: boolean;
-}): string[] {
-  const jobs: string[] = [];
-
-  if (item.allJobs && Array.isArray(item.allJobs)) {
-    jobs.push(...item.allJobs);
-  }
-
-  const jobFieldMap: Record<string, string> = {
-    cook: "Cook",
-    blacksmith: "Blacksmith",
-    craftsman: "Craftsman",
-    maskMaker: "Mask Maker",
-    researcher: "Researcher",
-    weaver: "Weaver",
-    artist: "Artist",
-    witch: "Witch",
-  };
-
-  for (const [field, jobName] of Object.entries(jobFieldMap)) {
-    if (item[field as keyof typeof item] === true) {
-      jobs.push(jobName);
-    }
-  }
-
-  return [...new Set(jobs)]; // Remove duplicates
 }
 
 // Check if character can craft item (single character mode)

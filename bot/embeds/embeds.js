@@ -495,6 +495,17 @@ const createCharacterEmbed = (character, options = {}) => {
    { name: "🗺️ __Explores__", value: `> ${exploreShown.toLocaleString()}`, inline: true },
    { name: "💥 __KO Status__", value: `> ${character.ko ? "True" : "False"}`, inline: true },
    { name: "📦 __Inventory__", value: `> [Inventory Link](${character.inventory})`, inline: false },
+   {
+    name: '🎁 __Wishlist__',
+    value: (() => {
+     const wl = character.wishlistItems;
+     if (!Array.isArray(wl) || wl.length === 0) return '> —';
+     const lines = wl.filter(Boolean).map((n) => `> • ${n}`).join('\n');
+     const s = lines || '> —';
+     return s.length > 1020 ? `${s.slice(0, 1017)}…` : s;
+    })(),
+    inline: false
+   },
    { name: "🔗 __Application Link__", value: `> [Link](${character.appLink})`, inline: false }
   )
   .setDescription("📋 Character profile created successfully.")

@@ -18,17 +18,38 @@ export async function GET() {
   try {
     await connect();
     const Character = (await import("@/models/CharacterModel.js")).default;
-    const characters = await Character.find({ userId: user.id })
-      .select("_id name")
-      .sort({ name: 1 })
-      .lean();
+    const ModCharacterModule = await import("@/models/ModCharacterModel.js");
+    const ModCharacter = ModCharacterModule.default || ModCharacterModule;
 
-    return NextResponse.json({
-      characters: characters.map((c) => ({
+    const [regularChars, modChars] = await Promise.all([
+      Character.find({ userId: user.id })
+        .select("_id name job currentStamina")
+        .sort({ name: 1 })
+        .lean(),
+      ModCharacter.find({ userId: user.id })
+        .select("_id name job currentStamina")
+        .sort({ name: 1 })
+        .lean(),
+    ]);
+
+    const characters = [
+      ...regularChars.map((c) => ({
         _id: String(c._id),
         name: c.name,
+        job: c.job,
+        currentStamina: c.currentStamina,
+        isModCharacter: false,
       })),
-    });
+      ...modChars.map((c) => ({
+        _id: String(c._id),
+        name: c.name,
+        job: c.job,
+        currentStamina: c.currentStamina,
+        isModCharacter: true,
+      })),
+    ].sort((a, b) => a.name.localeCompare(b.name));
+
+    return NextResponse.json({ characters });
   } catch (error) {
     console.error("[api/characters/list] GET error:", error);
     return NextResponse.json(
