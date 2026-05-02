@@ -38,7 +38,12 @@ type ListChar = {
   isModCharacter: boolean;
 };
 
-type SearchChar = ListChar & { userId: string; homeVillage?: string };
+type SearchChar = ListChar & {
+  userId: string;
+  homeVillage?: string;
+  /** From character search API; used to warn when max stamina < recipe base. */
+  maxStamina?: number;
+};
 
 type OcMaterialLine = { itemName: string; quantity: number; ownedQty: number; sufficient: boolean };
 type OcMaterialCheckResult = { hasRecipe: boolean; allMaterialsMet: boolean; lines: OcMaterialLine[] };
@@ -67,12 +72,34 @@ const craftingModalSelectBg = {
   backgroundSize: "1rem 1rem",
 };
 
+/** Item craftingJobs vs character.job (DB casing may differ). */
+function characterJobMatchesCraftingJobs(craftingJobs: string[] | undefined, characterJob: string): boolean {
+  const jobs = craftingJobs ?? [];
+  if (!jobs.length) return true;
+  const jl = characterJob.trim().toLowerCase();
+  return jobs.some((g) => String(g).trim().toLowerCase() === jl);
+}
+
+/** Effective max stamina for UI (named-crafter validation uses max on the server). */
+function effectiveMaxStamina(c: SearchChar): number {
+  if (typeof c.maxStamina === "number" && Number.isFinite(c.maxStamina)) {
+    return Math.max(0, c.maxStamina);
+  }
+  return Math.max(0, c.currentStamina);
+}
+
+/** True when a non-mod character cannot meet the recipe base cost at full stamina. */
+function isBelowRecipeMaxStamina(c: SearchChar, recipeBaseCost: number): boolean {
+  if (c.isModCharacter || recipeBaseCost <= 0) return false;
+  return effectiveMaxStamina(c) < recipeBaseCost;
+}
+
 function canAcceptWithCharacter(row: CraftingRequestRow, c: ListChar): boolean {
   if (row.targetMode === "specific" && row.targetCharacterId) {
     if (String(c._id) !== String(row.targetCharacterId)) return false;
   }
   const jobs = row.craftingJobsSnapshot ?? [];
-  if (!jobs.includes(c.job)) return false;
+  if (!characterJobMatchesCraftingJobs(jobs, c.job)) return false;
   const cost = row.staminaToCraftSnapshot ?? 0;
   if (c.isModCharacter) return true;
   return c.currentStamina >= cost;
@@ -156,6 +183,11 @@ export default function CraftingRequestsPage() {
   const [targetResults, setTargetResults] = useState<SearchChar[]>([]);
   const [targetPick, setTargetPick] = useState<SearchChar | null>(null);
   const [targetLoading, setTargetLoading] = useState(false);
+
+  const recipeBaseStaminaCost = useMemo(
+    () => (selectedItemMeta ? parseStamina(selectedItemMeta.staminaToCraft) : 0),
+    [selectedItemMeta]
+  );
 
   const [providingAllMaterials, setProvidingAllMaterials] = useState(true);
   const [materialsDescription, setMaterialsDescription] = useState("");
@@ -348,7 +380,7 @@ export default function CraftingRequestsPage() {
   useEffect(() => {
     if (!targetPick || !selectedItemMeta) return;
     const jobs = selectedItemMeta.craftingJobs ?? [];
-    if (jobs.length > 0 && !jobs.includes(targetPick.job)) {
+    if (jobs.length > 0 && !characterJobMatchesCraftingJobs(jobs, targetPick.job)) {
       setTargetPick(null);
       setTargetSearch("");
     }
@@ -435,9 +467,13 @@ export default function CraftingRequestsPage() {
             `/api/characters/${row.targetCharacterId}?skipHelpWanted=true`,
             { credentials: "include" }
           );
-          const data = (await res.json()) as Record<string, unknown>;
-          if (res.ok && data && !("error" in data)) {
-            setTargetPick({
+          const payload = (await res.json()) as Record<string, unknown>;
+          const data =
+            payload.character && typeof payload.character === "object"
+              ? (payload.character as Record<string, unknown>)
+              : payload;
+          if (res.ok && payload && !("error" in payload)) {
+            const pick: SearchChar = {
               _id: String(data._id ?? row.targetCharacterId),
               name: String(data.name ?? row.targetCharacterName ?? ""),
               job: String(data.job ?? ""),
@@ -445,7 +481,12 @@ export default function CraftingRequestsPage() {
               homeVillage: String(data.homeVillage ?? row.targetCharacterHomeVillage ?? ""),
               currentStamina: Math.max(0, Number(data.currentStamina) || 0),
               isModCharacter: Boolean(data.isModCharacter),
-            });
+            };
+            if (data.maxStamina != null && String(data.maxStamina) !== "") {
+              const m = Number(data.maxStamina);
+              if (Number.isFinite(m)) pick.maxStamina = Math.max(0, m);
+            }
+            setTargetPick(pick);
           } else {
             setTargetPick(null);
           }
@@ -494,7 +535,7 @@ export default function CraftingRequestsPage() {
       targetMode === "specific" &&
       targetPick &&
       selectedItemMeta?.craftingJobs?.length &&
-      !selectedItemMeta.craftingJobs.includes(targetPick.job)
+      !characterJobMatchesCraftingJobs(selectedItemMeta.craftingJobs, targetPick.job)
     ) {
       setFormError("That character's job can't craft this item — pick someone else or use Open.");
       return;
@@ -1382,7 +1423,7 @@ export default function CraftingRequestsPage() {
                                       {targetPick.job}
                                       {targetPick.isModCharacter
                                         ? " · mod character"
-                                        : ` · ${targetPick.currentStamina} stam`}
+                                        : ` · ${targetPick.currentStamina} stam (max ${effectiveMaxStamina(targetPick)})`}
                                     </p>
                                     <p className="mt-1 text-xs text-[var(--totk-light-ocher)]">
                                       <i className="fa-solid fa-house-chimney mr-1 text-[10px] opacity-80" aria-hidden />
@@ -1390,6 +1431,23 @@ export default function CraftingRequestsPage() {
                                         ? targetPick.homeVillage.trim()
                                         : "Village not set"}
                                     </p>
+                                    {isBelowRecipeMaxStamina(targetPick, recipeBaseStaminaCost) ? (
+                                      <p className="mt-2 flex items-start gap-2 rounded-md border border-amber-500/35 bg-amber-950/25 px-2 py-1.5 text-[11px] leading-snug text-amber-100">
+                                        <i
+                                          className="fa-solid fa-triangle-exclamation mt-0.5 shrink-0 text-amber-400"
+                                          aria-hidden
+                                        />
+                                        <span>
+                                          <span className="font-semibold text-amber-50">
+                                            Doesn&apos;t have enough stamina to craft this!
+                                          </span>
+                                          <span className="mt-0.5 block text-amber-100/90">
+                                            This recipe needs {recipeBaseStaminaCost} stamina (base); their max
+                                            is {effectiveMaxStamina(targetPick)}.
+                                          </span>
+                                        </span>
+                                      </p>
+                                    ) : null}
                                   </div>
                                   <button
                                     type="button"
@@ -1443,28 +1501,53 @@ export default function CraftingRequestsPage() {
                                   ) : null}
                                   {targetResults.length > 0 ? (
                                     <ul className="mt-2 max-h-44 overflow-auto rounded-lg border border-[var(--totk-dark-ocher)]/45 bg-[var(--botw-warm-black)]/95 shadow-lg">
-                                      {targetResults.map((c) => (
-                                        <li key={c._id} className="border-b border-[var(--totk-dark-ocher)]/25 last:border-b-0">
-                                          <button
-                                            type="button"
-                                            className="flex w-full flex-col items-start gap-0.5 px-3 py-2.5 text-left text-sm text-[var(--botw-pale)] transition hover:bg-[var(--totk-brown)]/90"
-                                            onClick={() => {
-                                              setTargetPick(c);
-                                              setTargetResults([]);
-                                              setTargetSearch("");
-                                            }}
+                                      {targetResults.map((c) => {
+                                        const stamShort = c.isModCharacter
+                                          ? "mod"
+                                          : `${c.currentStamina} stam (max ${effectiveMaxStamina(c)})`;
+                                        const stamWarn = isBelowRecipeMaxStamina(c, recipeBaseStaminaCost);
+                                        return (
+                                          <li
+                                            key={c._id}
+                                            className="border-b border-[var(--totk-dark-ocher)]/25 last:border-b-0"
                                           >
-                                            <span className="font-medium text-[var(--totk-ivory)]">
-                                              {c.name}
-                                            </span>
-                                            <span className="text-xs text-[var(--totk-mid-ocher)]">
-                                              {c.job}
-                                              {c.homeVillage ? ` · ${c.homeVillage}` : ""}
-                                              {c.isModCharacter ? " · mod" : ` · ${c.currentStamina} stam`}
-                                            </span>
-                                          </button>
-                                        </li>
-                                      ))}
+                                            <button
+                                              type="button"
+                                              className={`flex w-full flex-col items-start gap-0.5 px-3 py-2.5 text-left text-sm text-[var(--botw-pale)] transition hover:bg-[var(--totk-brown)]/90 ${
+                                                stamWarn
+                                                  ? "border-l-2 border-amber-400/90 bg-amber-950/15"
+                                                  : ""
+                                              }`}
+                                              onClick={() => {
+                                                setTargetPick(c);
+                                                setTargetResults([]);
+                                                setTargetSearch("");
+                                              }}
+                                            >
+                                              <span className="font-medium text-[var(--totk-ivory)]">
+                                                {c.name}
+                                              </span>
+                                              <span className="text-xs text-[var(--totk-mid-ocher)]">
+                                                {c.job}
+                                                {c.homeVillage ? ` · ${c.homeVillage}` : ""}
+                                                {c.isModCharacter ? " · mod" : ` · ${stamShort}`}
+                                              </span>
+                                              {stamWarn ? (
+                                                <span className="mt-1 flex items-start gap-1.5 text-[11px] font-medium leading-snug text-amber-200">
+                                                  <i
+                                                    className="fa-solid fa-triangle-exclamation mt-0.5 shrink-0 text-amber-400"
+                                                    aria-hidden
+                                                  />
+                                                  <span>
+                                                    Doesn&apos;t have enough stamina to craft this! (needs{" "}
+                                                    {recipeBaseStaminaCost} base; max {effectiveMaxStamina(c)})
+                                                  </span>
+                                                </span>
+                                              ) : null}
+                                            </button>
+                                          </li>
+                                        );
+                                      })}
                                     </ul>
                                   ) : null}
                                 </>

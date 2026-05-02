@@ -101,11 +101,14 @@ export async function validateCraftingRequestBody(
         ),
       };
     }
-    if (!hasStaminaForCraft(staminaSnap, target.currentStamina, target.isModCharacter)) {
+    if (!hasStaminaForCraft(staminaSnap, target.maxStamina, target.isModCharacter)) {
       return {
         ok: false,
         res: NextResponse.json(
-          { error: "Target character does not have enough stamina for this recipe (base cost)" },
+          {
+            error:
+              "Target character's max stamina is below this recipe's base cost (named crafter must be able to afford it at full stamina)",
+          },
           { status: 400 }
         ),
       };

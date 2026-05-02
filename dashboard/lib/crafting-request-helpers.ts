@@ -18,16 +18,18 @@ export function parseStaminaToCraft(value: unknown): number {
 export function jobCanCraftItem(item: ItemCraftFields, job: string): boolean {
   const jobs = item.craftingJobs ?? [];
   if (!jobs.length) return false;
-  return jobs.includes(job);
+  const j = job.trim().toLowerCase();
+  return jobs.some((g) => String(g).trim().toLowerCase() === j);
 }
 
+/** @param staminaPool Current stamina when claiming; max stamina when validating a named crafter on post. */
 export function hasStaminaForCraft(
   staminaCost: number,
-  currentStamina: number,
+  staminaPool: number,
   isModCharacter: boolean
 ): boolean {
   if (isModCharacter) return true;
-  return currentStamina >= staminaCost;
+  return staminaPool >= staminaCost;
 }
 
 /**
@@ -55,6 +57,7 @@ export type CharacterUnion = {
   job: string;
   homeVillage: string;
   currentStamina: number;
+  maxStamina: number;
   isModCharacter: boolean;
 };
 
@@ -66,10 +69,11 @@ export async function loadCharacterUnionById(id: string): Promise<CharacterUnion
   const ModCharacter = ModCharacterModule.default || ModCharacterModule;
 
   const c = await Character.findById(id)
-    .select("userId name job homeVillage currentStamina")
+    .select("userId name job homeVillage currentStamina maxStamina")
     .lean()
     .exec();
   if (c && typeof c.userId === "string") {
+    const maxS = Math.max(0, Number((c as { maxStamina?: number }).maxStamina) || 0);
     return {
       _id: c._id as mongoose.Types.ObjectId,
       userId: c.userId,
@@ -77,15 +81,17 @@ export async function loadCharacterUnionById(id: string): Promise<CharacterUnion
       job: String(c.job ?? ""),
       homeVillage: String((c as { homeVillage?: string }).homeVillage ?? ""),
       currentStamina: Math.max(0, Number(c.currentStamina) || 0),
+      maxStamina: maxS,
       isModCharacter: false,
     };
   }
 
   const m = await ModCharacter.findById(id)
-    .select("userId name job homeVillage currentStamina")
+    .select("userId name job homeVillage currentStamina maxStamina")
     .lean()
     .exec();
   if (m && typeof m.userId === "string") {
+    const maxS = Math.max(0, Number((m as { maxStamina?: number }).maxStamina) || 999);
     return {
       _id: m._id as mongoose.Types.ObjectId,
       userId: m.userId,
@@ -93,6 +99,7 @@ export async function loadCharacterUnionById(id: string): Promise<CharacterUnion
       job: String(m.job ?? ""),
       homeVillage: String((m as { homeVillage?: string }).homeVillage ?? ""),
       currentStamina: Math.max(0, Number(m.currentStamina) || 999),
+      maxStamina: maxS,
       isModCharacter: true,
     };
   }
