@@ -1,28 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
-import path from "path";
-import { createRequire } from "module";
 import { connect } from "@/lib/db";
+import { getOldMapByNumber } from "@/lib/oldMapCatalog";
 import { getSession, isAdminUser } from "@/lib/session";
 import { isModeratorUser } from "@/lib/moderator";
 
-const require = createRequire(import.meta.url);
-
 function getOldMapMeta(mapNumber: number): { leadsTo?: string; coordinates?: string } | null {
-  const candidates = [
-    path.join(process.cwd(), "bot", "data", "oldMaps.js"),
-    path.join(process.cwd(), "..", "bot", "data", "oldMaps.js"),
-  ];
-  for (const p of candidates) {
-    try {
-      const mod = require(p) as { getOldMapByNumber?: (n: number) => { leadsTo?: string; coordinates?: string } | null };
-      if (typeof mod.getOldMapByNumber === "function") {
-        return mod.getOldMapByNumber(mapNumber) ?? null;
-      }
-    } catch {
-      /* try next path */
-    }
-  }
-  return null;
+  const m = getOldMapByNumber(mapNumber);
+  if (!m) return null;
+  return { leadsTo: m.leadsTo, coordinates: m.coordinates };
 }
 
 export const dynamic = "force-dynamic";
