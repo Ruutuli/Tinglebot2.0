@@ -1,5 +1,4 @@
 const mongoose = require('mongoose');
-const { normalizeParticipantsRewardProgress } = require('../lib/questParticipantRewardSync');
 const { Schema } = mongoose;
 
 // ============================================================================
@@ -213,11 +212,14 @@ const questSchema = new Schema({
 
 // Async hook (no next()): callback-style + next is fragile with Mongoose 8 + minified
 // bundles (runtime error: "s is not a function" when next is omitted).
+// Require reward-sync inside the hook (not at module top) so circular QuestModel ↔
+// questParticipantRewardSync loads never leave normalizeParticipantsRewardProgress undefined.
 questSchema.pre('save', async function() {
     this.updatedAt = new Date();
     
     // Fix participants field if it contains primitive values
     if (this.participants && typeof this.participants === 'object') {
+        const { normalizeParticipantsRewardProgress } = require('../lib/questParticipantRewardSync');
         const fixedParticipants = new Map();
         
         for (const [key, value] of this.participants.entries()) {
