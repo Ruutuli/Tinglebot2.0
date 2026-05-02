@@ -35,7 +35,7 @@ const { removeNegativeQuantityEntries } = require('@/utils/inventoryUtils.js');
 
 // ------------------- Database Models -------------------
 const ItemModel = require('@/models/ItemModel.js');
-const { isElixirItemName, normalizeElixirLevel, ELIXIR_EFFECTS, getElixirItemUseBlurb } = require('../../modules/elixirModule.js');
+const { isElixirItemName, normalizeElixirLevel, getActiveElixirBuffDisplay } = require('../../modules/elixirModule.js');
 
 // ------------------- Project Embeds -------------------
 const { formatItemDetails } = require('../../embeds/embeds.js');
@@ -56,27 +56,6 @@ function formatElixirInventoryStackLabel(itemName, elixirLevel, modifierHearts) 
   const tierWord = ['Basic', 'Mid', 'High'][lv - 1] || 'Basic';
   const mh = Math.max(0, Math.floor(Number(modifierHearts) || 0));
   return `${itemName} [${tierWord}|m${mh}]`;
-}
-
-function getActiveElixirDisplay(character) {
-  if (!character?.buff?.active) return null;
-  const rawType = character.buff.type;
-  const type = rawType === 'fireproof' ? 'chilly' : rawType;
-  const elixirName =
-    Object.keys(ELIXIR_EFFECTS || {}).find((k) => ELIXIR_EFFECTS[k]?.type === type) ||
-    null;
-  if (!elixirName) return null;
-  const lv = normalizeElixirLevel(character.buff.elixirLevel);
-  const tierWord = ['Basic', 'Mid', 'High'][lv - 1] || 'Basic';
-  const effect =
-    getElixirItemUseBlurb(elixirName, lv, {
-      maxHeartsForFairyTonic: character.maxHearts,
-      maxHeartsForHearty: character.maxHearts,
-      maxStaminaForEnduring: character.maxStamina,
-    }) || '';
-  const line1 = `**Active Elixir:** ${elixirName} (${tierWord}, level ${lv})`;
-  const line2 = effect ? `**Effect**\n${effect}` : null;
-  return [line1, line2].filter(Boolean).join('\n');
 }
 
 // ============================================================================
@@ -395,7 +374,7 @@ module.exports = {
       .map(item => formatItemDetails(item.itemName, item.quantity, item.emoji))
       .join('\n');
 
-    const activeElixir = getActiveElixirDisplay(character);
+    const activeElixir = getActiveElixirBuffDisplay(character, true);
     if (activeElixir) {
       description = `${activeElixir}\n\n${description}`;
     }

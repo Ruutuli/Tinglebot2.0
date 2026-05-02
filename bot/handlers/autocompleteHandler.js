@@ -5090,16 +5090,31 @@ async function handleModGiveItemAutocomplete(interaction, focusedOption) {
     .select('itemName')
     .lean();
 
-  // Map items to autocomplete choices
-  const choices = items.map((item) => ({
-   name: capitalizeWords(item.itemName),
-   value: item.itemName
-  }));
+  /** @type {{ name: string, value: string }[]} */
+  const choices = [];
+  for (const item of items) {
+   const rawName = item.itemName;
+   if (isElixirItemName(rawName)) {
+    for (let lv = 1; lv <= 3; lv++) {
+     const tierWord = ELIXIR_LEVEL_NAMES[normalizeElixirLevel(lv)] || 'Basic';
+     choices.push({
+      name: `${capitalizeWords(rawName)} — ${tierWord}`,
+      value: formatElixirItemOptionValue(String(rawName).toLowerCase(), lv, 0),
+     });
+    }
+   } else {
+    choices.push({
+     name: capitalizeWords(rawName),
+     value: rawName,
+    });
+   }
+  }
 
   // Filter based on user input
   const searchQuery = focusedOption.value?.toLowerCase() || "";
-  const filteredChoices = choices.filter(choice => 
-   choice.name.toLowerCase().includes(searchQuery)
+  const filteredChoices = choices.filter(choice =>
+   choice.name.toLowerCase().includes(searchQuery) ||
+   choice.value.toLowerCase().includes(searchQuery)
   );
 
   // Respond with filtered choices (limit to 25)

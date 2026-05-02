@@ -17,6 +17,7 @@ const { getNoEncounterMessage, generateCraftingFlavorText, generateGatherFlavorT
 const { convertCmToFeetInches, isValidImageUrl } = require('../utils/validation');
 // Google Sheets functionality removed
 const { getCharacterBoostStatus } = require('../modules/boostIntegration');
+const { getActiveElixirBuffDisplay } = require('../modules/elixirModule');
 const { generateUniqueId } = require('../utils/uniqueIdUtils');
 const { generateTokenBreakdown } = require('../utils/tokenUtils');
 
@@ -481,6 +482,14 @@ const createCharacterEmbed = (character, options = {}) => {
    { name: `🔹 __Current Village__`, value: `> ${currentVillageEmoji} ${capitalizeFirstLetter(character.currentVillage)}`, inline: true },
    { name: "🔹 __Job__", value: `> ${capitalizeFirstLetter(character.job)}`, inline: true },
    { name: "🎫 __Active Job Voucher__", value: character.jobVoucher && character.jobVoucherJob ? `> ${capitalizeWords(character.jobVoucherJob)}` : `> N/A`, inline: true },
+   {
+    name: '🧪 __Active Elixir__',
+    value: (() => {
+     const line = getActiveElixirBuffDisplay(character, false);
+     return line ? `> ${line}` : '> None';
+    })(),
+    inline: true
+   },
    { name: "🔹 __Blighted__", value: `> ${character.blighted ? `Yes (Stage ${character.blightStage})` : "No"}`, inline: true },
    { name: "🔹 __Spirit Orbs__", value: `> ${character.spiritOrbs}`, inline: true },
    { name: "🗺️ __Explores__", value: `> ${exploreShown.toLocaleString()}`, inline: true },

@@ -2196,7 +2196,11 @@ formatQuestCount(count = 0) {
    const effPosts = Quest.resolvePostRequirement(quest);
    const rpPostCount = participant.rpPostCount || 0;
    if (effPosts === 0) {
-    questInfo += `\n📝 RP posts counted: ${rpPostCount} (no minimum)`;
+    const postNote =
+     quest.questType === QUEST_TYPES.INTERACTIVE_RP
+      ? ' (not required for completion on this quest)'
+      : ' (no minimum)';
+    questInfo += `\n📝 RP posts counted: ${rpPostCount}${postNote}`;
    } else {
     const progress = Math.min((rpPostCount / effPosts) * 100, 100);
     questInfo += `\n📝 RP Progress: ${rpPostCount}/${effPosts} posts (${Math.round(progress)}%)`;
@@ -2244,7 +2248,7 @@ formatQuestCount(count = 0) {
   );
   
   embed.addFields(
-   { name: quest.questType === QUEST_TYPES.INTERACTIVE_RP ? "Requirements" : (quest.questType === 'RP' ? 'Post Requirement' : 'Roll Requirement'), value: `${requirementValue} ${requirementText}`, inline: true },
+   { name: quest.questType === QUEST_TYPES.INTERACTIVE_RP ? "Requirements" : (quest.questType === QUEST_TYPES.RP ? 'Post Requirement' : 'Roll Requirement'), value: `${requirementValue} ${requirementText}`, inline: true },
    { name: 'Participants', value: participants.length.toString(), inline: true }
   );
   
@@ -2256,7 +2260,7 @@ formatQuestCount(count = 0) {
   
   embed.addFields({
   name:
-   quest.questType === 'RP'
+   quest.questType === QUEST_TYPES.RP
     ? '__❌ Posts That DON\'T Count__'
     : quest.questType === QUEST_TYPES.INTERACTIVE_RP
       ? '__📋 Post & roll rules__'
@@ -2268,13 +2272,17 @@ formatQuestCount(count = 0) {
   });
   
   embed.addFields({
-   name: quest.questType === 'RP' ? '__💬 Meta Comments__' : quest.questType === QUEST_TYPES.INTERACTIVE_RP ? '__📊 Quest progress__' : '__📊 Quest Progress__',
+   name: quest.questType === QUEST_TYPES.RP ? '__💬 Meta Comments__' : quest.questType === QUEST_TYPES.INTERACTIVE_RP ? '__📊 Quest progress__' : '__📊 Quest Progress__',
    value: this.getQuestMetaInfo(quest),
    inline: false
   });
 
-  // Optional flavor/reward rolls — only for pure RP. Interactive / RP requires rolls for completion; see rules/meta fields above.
-  if (quest.questType === 'RP') {
+  // Flavor-only table rolls: pure RP quests only. Interactive & Interactive/RP always use rolls for completion.
+  if (
+    quest.questType !== QUEST_TYPES.INTERACTIVE &&
+    quest.questType !== QUEST_TYPES.INTERACTIVE_RP &&
+    (quest.questType === QUEST_TYPES.RP || quest.questType === 'RP')
+  ) {
     const fromArr = Array.isArray(quest.tableRollNames)
       ? quest.tableRollNames.map((n) => String(n).trim()).filter(Boolean)
       : [];
@@ -2353,9 +2361,12 @@ formatQuestCount(count = 0) {
    }
    const postsPart =
     postsReq === 0
-     ? `${participant.rpPostCount} posts (no min)`
+     ? `${participant.rpPostCount} posts tracked (no minimum for completion)`
      : `${participant.rpPostCount}/${postsReq} posts`;
-   progressText = `📝 ${postsPart} · 🎲 ${participant.successfulRolls}/${rollsReq} rolls`;
+   progressText =
+    postsReq === 0
+     ? `🎲 ${participant.successfulRolls}/${rollsReq} rolls · 📝 ${postsPart}`
+     : `📝 ${postsPart} · 🎲 ${participant.successfulRolls}/${rollsReq} rolls`;
   } else if (quest.questType === QUEST_TYPES.RP) {
    const eff = Quest.resolvePostRequirement(quest);
    if (eff === 0 || participant.rpPostCount >= eff) {
@@ -2381,6 +2392,15 @@ formatQuestCount(count = 0) {
 
  getQuestInstructions(quest, requirementValue) {
   if (quest.questType === QUEST_TYPES.INTERACTIVE_RP) {
+   const effPosts = Quest.resolvePostRequirement(quest);
+   const rollsNeed = quest.requiredRolls || 1;
+   if (effPosts === 0) {
+    return (
+     `**Quest completion:** reach **${rollsNeed} successful** \`/tableroll roll\` results on this quest’s table(s) (see requirements). **No RP post count is required** to complete.\n\n` +
+     `**RP posts (optional / tracked):** quality RP in the quest thread still follows server rules; short/reaction-only posts don’t count toward the “posts tracked” stat.\n\n` +
+     `**Posts that don’t count toward tracking:**\n• Messages under 20 characters\n• Just emojis or reactions\n• GIFs/stickers without text\n• Messages with "))" (reaction posts)\n• Just numbers, symbols, or punctuation\n• Single words repeated multiple times\n• URLs, mentions, or pings only\n• Keyboard mashing or spam\n• Messages with less than 30% letters`
+    );
+   }
    return (
     `**RP posts (valid):** quality RP in the quest thread; short/reaction-only posts don't count (see server RP rules).\n\n` +
     `**Posts that don't count:**\n• Messages under 20 characters\n• Just emojis or reactions\n• GIFs/stickers without text\n• Messages with "))" (reaction posts)\n• Just numbers, symbols, or punctuation\n• Single words repeated multiple times\n• URLs, mentions, or pings only\n• Keyboard mashing or spam\n• Messages with less than 30% letters\n\n` +
@@ -2402,6 +2422,13 @@ formatQuestCount(count = 0) {
 
  getQuestMetaInfo(quest) {
   if (quest.questType === QUEST_TYPES.INTERACTIVE_RP) {
+   const effPosts = Quest.resolvePostRequirement(quest);
+   if (effPosts === 0) {
+    return (
+     `**Rolls:** Use \`/tableroll roll\` on the quest’s linked table(s). You complete the quest when you hit the **successful roll** requirement — **post count does not gate completion** on this quest.\n` +
+     `**RP:** For meta discussion, use gossip/mossy stone or format thread comments "like this ))" — those don't count as tracked RP posts.`
+    );
+   }
    return (
     `**RP:** For meta discussion, use gossip/mossy stone or format thread comments "like this ))" — those don't count as RP posts.\n` +
     `**Rolls:** Use \`/tableroll roll\` on the quest's table(s). Progress completes when **both** post and roll requirements are met.`

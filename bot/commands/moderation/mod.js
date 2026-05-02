@@ -67,7 +67,8 @@ const { addItemInventoryDatabase, escapeRegExp } = require('@/utils/inventoryUti
 const {
   ELIXIR_LEVEL_NAMES,
   isElixirItemName,
-  normalizeElixirLevel
+  normalizeElixirLevel,
+  parseElixirTierFromItemOption
 } = require('../../modules/elixirModule');
 const { safeInteractionResponse, safeFollowUp, safeSendLongMessage, splitMessage } = require('@/utils/interactionUtils');
 const { generateUniqueId } = require('@/utils/uniqueIdUtils');
@@ -1734,20 +1735,30 @@ async function handleStealReset(interaction) {
 // Gives an item to a character by name, validating quantity and existence.
 async function handleGive(interaction) {
     const charName = interaction.options.getString('character');
-    const itemName = interaction.options.getString('item');
+    const rawItemOption = interaction.options.getString('item');
     const quantity = interaction.options.getInteger('quantity');
     const elixirTierChoice = interaction.options.getString('elixirtier');
     const requestedElixirLevel = interaction.options.getInteger('elixirlevel');
     const requestedModifierHearts = interaction.options.getInteger('modifierhearts');
+    const parsedElixirFromAutocomplete = parseElixirTierFromItemOption(rawItemOption);
+    const itemNameForLookup = parsedElixirFromAutocomplete
+      ? parsedElixirFromAutocomplete.baseName
+      : rawItemOption;
 
-    const resolveModGiveElixirLevel = (tierStr, levelInt) => {
+    const resolveModGiveElixirLevel = (tierStr, levelInt, parsedTier) => {
       if (tierStr) {
         const t = String(tierStr).toLowerCase();
         if (t === 'mid') return 2;
         if (t === 'high') return 3;
         return 1;
       }
-      return normalizeElixirLevel(levelInt ?? 1);
+      if (levelInt != null) {
+        return normalizeElixirLevel(levelInt);
+      }
+      if (parsedTier != null) {
+        return normalizeElixirLevel(parsedTier);
+      }
+      return 1;
     };
   
     if (quantity < 1) {
@@ -1764,20 +1775,24 @@ async function handleGive(interaction) {
       return interaction.editReply(`❌ Character **${charName}** not found.`);
     }
   
-    const item = await fetchItemByName(itemName, {
+    const item = await fetchItemByName(itemNameForLookup, {
       commandName: interaction.commandName,
       userTag: interaction.user?.tag,
       userId: interaction.user?.id,
       operation: 'mod_give_item'
     });
     if (!item) {
-      return interaction.editReply(`❌ Item **${itemName}** does not exist.`);
+      return interaction.editReply(`❌ Item **${rawItemOption}** does not exist.`);
     }
   
     // ------------------- Apply Inventory Update -------------------
     const isElixir = isElixirItemName(item.itemName);
     const resolvedElixirLevel = isElixir
-      ? resolveModGiveElixirLevel(elixirTierChoice, requestedElixirLevel)
+      ? resolveModGiveElixirLevel(
+          elixirTierChoice,
+          requestedElixirLevel,
+          parsedElixirFromAutocomplete?.elixirLevel
+        )
       : 1;
     const modifierHearts = Math.max(0, Math.floor(Number(requestedModifierHearts) || 0));
     const modGiveOptions = isElixir
@@ -1788,7 +1803,7 @@ async function handleGive(interaction) {
       : {};
     await addItemInventoryDatabase(
       character._id,
-      itemName,
+      item.itemName,
       quantity,
       interaction,
       'Admin Give',
@@ -1803,7 +1818,7 @@ async function handleGive(interaction) {
     const itemFields = [
       { 
         name: '🎁 Item Received', 
-        value: `**${itemName}** × **${quantity}**`, 
+        value: `**${item.itemName}** × **${quantity}**`, 
         inline: false 
       },
       { 

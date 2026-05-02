@@ -484,6 +484,35 @@ function parseElixirTierFromItemOption(raw) {
   return null;
 }
 
+/**
+ * Human-readable active elixir buff (character.buff from /item). Omit effect lines when verbose is false (e.g. /character profile field).
+ * @param {boolean} [verbose=true]
+ * @returns {string | null}
+ */
+function getActiveElixirBuffDisplay(character, verbose = true) {
+  if (!character?.buff?.active) return null;
+  const rawType = character.buff.type;
+  const type = rawType === 'fireproof' ? 'chilly' : rawType;
+  const elixirName =
+    Object.keys(ELIXIR_EFFECTS || {}).find((k) => ELIXIR_EFFECTS[k]?.type === type) || null;
+  if (!elixirName) return null;
+  const lv = normalizeElixirLevel(character.buff.elixirLevel);
+  const tierWord = ELIXIR_LEVEL_NAMES[lv] || 'Basic';
+  const summary = `${elixirName} (${tierWord}, level ${lv})`;
+  if (!verbose) {
+    return summary;
+  }
+  const effect =
+    getElixirItemUseBlurb(elixirName, lv, {
+      maxHeartsForFairyTonic: character.maxHearts,
+      maxHeartsForHearty: character.maxHearts,
+      maxStaminaForEnduring: character.maxStamina,
+    }) || '';
+  const line1 = `**Active Elixir:** ${summary}`;
+  const line2 = effect ? `**Effect**\n${effect}` : null;
+  return [line1, line2].filter(Boolean).join('\n');
+}
+
 // ============================================================================
 // ------------------- Core Functions -------------------
 // ============================================================================
@@ -1058,6 +1087,7 @@ module.exports = {
   getElixirItemUseBlurb,
   formatElixirItemOptionValue,
   parseElixirTierFromItemOption,
+  getActiveElixirBuffDisplay,
   isElixirItemName,
   applyElixirBuff,
   applyImmediateEffects,
