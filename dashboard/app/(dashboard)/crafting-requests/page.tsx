@@ -750,7 +750,8 @@ export default function CraftingRequestsPage() {
                     <strong className="font-semibold text-[var(--botw-cream)]">
                       Claim here with one of your OCs
                     </strong>{" "}
-                    when the job and base stamina match—or coordinate in-game if boosts apply.
+                    when the job and base stamina match—or work it out with the requester in RP if boosts
+                    change the numbers.
                   </p>
                 </div>
               </div>
@@ -1768,7 +1769,7 @@ export default function CraftingRequestsPage() {
               <p className="mt-4 rounded-lg border border-amber-500/30 bg-amber-950/20 p-3 text-sm text-amber-100">
                 None of your characters qualify here (job + base stamina
                 {acceptFor.targetMode === "specific" ? ", or this post names someone else" : ""}). You can
-                still coordinate in-game if boosts apply.
+                still sort it out with the requester in RP if boosts change the numbers.
               </p>
             ) : (
               <ul className="mt-4 max-h-48 space-y-2 overflow-auto rounded-lg border border-[var(--botw-border)]/60 p-2">

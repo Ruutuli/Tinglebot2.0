@@ -85,7 +85,7 @@ export async function POST(request: Request, context: RouteContext) {
     if (!hasStaminaForCraft(staminaCost, acceptor.currentStamina, acceptor.isModCharacter)) {
       return NextResponse.json(
         {
-          error: `Not enough stamina (base cost ${staminaCost}; in-game cost may differ with boosts)`,
+          error: `Not enough stamina (base cost ${staminaCost}; boosts may change what you need—coordinate with the requester in RP)`,
         },
         { status: 400 }
       );
