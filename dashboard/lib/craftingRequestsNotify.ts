@@ -28,7 +28,7 @@ function hashPick<T>(seed: string, choices: T[]): T {
 /**
  * Discord must fetch embed URLs from the public internet — use full GCS URLs, not /api/images.
  */
-function itemThumbnailUrlForDiscord(raw?: string | null): string | undefined {
+function discordEmbedImageUrl(raw?: string | null): string | undefined {
   if (!raw || raw === "No Image") return undefined;
   if (raw.startsWith(`${GCS_PUBLIC_BASE}/`)) return raw;
   if (raw.startsWith("https://") || raw.startsWith("http://")) return raw;
@@ -73,6 +73,10 @@ export type CraftingRequestNotifyPayload = {
   materialsDescription: string;
   paymentOffer: string;
   elixirDescription: string;
+  /** Character `icon` field (commissioner OC) — resolved to a public URL in the embed */
+  requesterCharacterIcon?: string;
+  /** Character `icon` field (named artisan), when `targetMode === "specific"` */
+  targetCharacterIcon?: string;
 };
 
 /**
@@ -176,7 +180,38 @@ export function buildCraftingRequestBoardMessage(payload: CraftingRequestNotifyP
     .join("\n");
 
   const bannerUrl = hashPick(payload.requestId, CRAFT_BOARD_IMAGES);
-  const thumbUrl = itemThumbnailUrlForDiscord(payload.craftItemImage);
+  const thumbUrl = discordEmbedImageUrl(payload.craftItemImage);
+  const authorIcon = discordEmbedImageUrl(payload.requesterCharacterIcon);
+  const artisanIcon = discordEmbedImageUrl(payload.targetCharacterIcon);
+
+  const authorName = payload.requesterCharacterName.trim().slice(0, 256);
+  const author: Record<string, unknown> = { name: authorName || "Commissioner" };
+  if (authorIcon) author.icon_url = authorIcon;
+
+  const jobsShort =
+    payload.craftingJobsSnapshot.length > 0 ? payload.craftingJobsSnapshot.join(", ") : "crafters";
+
+  let footerText: string;
+  let footerIcon: string | undefined;
+  if (payload.targetMode === "specific" && payload.targetCharacterName?.trim()) {
+    const nv = [
+      payload.targetCharacterName.trim(),
+      payload.targetCharacterHomeVillage?.trim() || "",
+    ].filter(Boolean);
+    footerText = `Named artisan · ${nv.join(" · ")}`.slice(0, 2048);
+    footerIcon = artisanIcon;
+  } else {
+    const who = payload.requesterCharacterName.trim();
+    footerText = (
+      who
+        ? `Open commission · ${who} · seeking ${jobsShort}`
+        : `Open commission · seeking ${jobsShort}`
+    ).slice(0, 2048);
+    footerIcon = authorIcon;
+  }
+
+  const footer: Record<string, unknown> = { text: footerText };
+  if (footerIcon) footer.icon_url = footerIcon;
 
   const embed: Record<string, unknown> = {
     title: "A new commission on the board",
@@ -184,7 +219,8 @@ export function buildCraftingRequestBoardMessage(payload: CraftingRequestNotifyP
     color: EMBED_COLOR,
     timestamp: new Date().toISOString(),
     image: { url: bannerUrl },
-    footer: { text: "Crafting board · Tinglebot" },
+    author,
+    footer,
   };
 
   if (thumbUrl) {

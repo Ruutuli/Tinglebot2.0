@@ -4,6 +4,7 @@ import { connect } from "@/lib/db";
 import {
   hasStaminaForCraft,
   jobCanCraftItem,
+  loadCharacterIconForOwner,
   loadCharacterUnionById,
   parseStaminaToCraft,
   userOwnsCharacterName,
@@ -161,5 +162,25 @@ export function craftingRequestNotifyPayload(
     materialsDescription: v.materialsDescription,
     paymentOffer: v.paymentOffer,
     elixirDescription: v.elixirDescription,
+  };
+}
+
+/** Loads OC portrait URLs for Discord embed author/footer (public URLs only). */
+export async function craftingRequestNotifyPayloadForDiscord(
+  requestId: string,
+  user: SessionUser,
+  v: ValidatedCraftingRequestBody
+): Promise<CraftingRequestNotifyPayload> {
+  const base = craftingRequestNotifyPayload(requestId, user, v);
+  const [requesterCharacterIcon, targetUnion] = await Promise.all([
+    loadCharacterIconForOwner(user.id, v.requesterCharacterName),
+    v.targetCharacterId
+      ? loadCharacterUnionById(v.targetCharacterId.toString())
+      : Promise.resolve(null),
+  ]);
+  return {
+    ...base,
+    requesterCharacterIcon,
+    targetCharacterIcon: targetUnion?.icon,
   };
 }

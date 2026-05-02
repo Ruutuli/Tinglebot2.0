@@ -3,7 +3,10 @@ import { connect } from "@/lib/db";
 import { getSession } from "@/lib/session";
 import mongoose from "mongoose";
 import { parseStaminaToCraft } from "@/lib/crafting-request-helpers";
-import { craftingRequestNotifyPayload, validateCraftingRequestBody } from "@/lib/crafting-request-mutation";
+import {
+  craftingRequestNotifyPayloadForDiscord,
+  validateCraftingRequestBody,
+} from "@/lib/crafting-request-mutation";
 import { deleteCraftingRequestBoardMessage, syncCraftingRequestBoardMessage } from "@/lib/craftingRequestsNotify";
 
 export const dynamic = "force-dynamic";
@@ -68,7 +71,7 @@ export async function PATCH(request: Request, context: RouteContext) {
       try {
         await syncCraftingRequestBoardMessage(
           discordMessageId,
-          craftingRequestNotifyPayload(requestId, user, v)
+          await craftingRequestNotifyPayloadForDiscord(requestId, user, v)
         );
       } catch (e) {
         console.error("[api/crafting-requests PATCH] Discord sync failed:", e);

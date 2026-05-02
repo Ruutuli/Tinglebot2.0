@@ -3,7 +3,10 @@ import { connect } from "@/lib/db";
 import { getSession } from "@/lib/session";
 import mongoose from "mongoose";
 import { parseStaminaToCraft } from "@/lib/crafting-request-helpers";
-import { craftingRequestNotifyPayload, validateCraftingRequestBody } from "@/lib/crafting-request-mutation";
+import {
+  craftingRequestNotifyPayloadForDiscord,
+  validateCraftingRequestBody,
+} from "@/lib/crafting-request-mutation";
 import { notifyCraftingRequestCreated } from "@/lib/craftingRequestsNotify";
 
 export const dynamic = "force-dynamic";
@@ -129,7 +132,7 @@ export async function POST(request: Request) {
 
     try {
       const discordMessageId = await notifyCraftingRequestCreated(
-        craftingRequestNotifyPayload(requestId, user, v)
+        await craftingRequestNotifyPayloadForDiscord(requestId, user, v)
       );
       if (discordMessageId) {
         await CraftingRequest.findByIdAndUpdate(requestId, { discordMessageId });

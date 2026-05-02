@@ -59,6 +59,8 @@ export type CharacterUnion = {
   currentStamina: number;
   maxStamina: number;
   isModCharacter: boolean;
+  /** Raw `icon` field from the character document */
+  icon?: string;
 };
 
 export async function loadCharacterUnionById(id: string): Promise<CharacterUnion | null> {
@@ -69,11 +71,12 @@ export async function loadCharacterUnionById(id: string): Promise<CharacterUnion
   const ModCharacter = ModCharacterModule.default || ModCharacterModule;
 
   const c = await Character.findById(id)
-    .select("userId name job homeVillage currentStamina maxStamina")
+    .select("userId name job homeVillage currentStamina maxStamina icon")
     .lean()
     .exec();
   if (c && typeof c.userId === "string") {
     const maxS = Math.max(0, Number((c as { maxStamina?: number }).maxStamina) || 0);
+    const iconRaw = (c as { icon?: string }).icon;
     return {
       _id: c._id as mongoose.Types.ObjectId,
       userId: c.userId,
@@ -83,15 +86,17 @@ export async function loadCharacterUnionById(id: string): Promise<CharacterUnion
       currentStamina: Math.max(0, Number(c.currentStamina) || 0),
       maxStamina: maxS,
       isModCharacter: false,
+      icon: typeof iconRaw === "string" && iconRaw.trim() ? iconRaw.trim() : undefined,
     };
   }
 
   const m = await ModCharacter.findById(id)
-    .select("userId name job homeVillage currentStamina maxStamina")
+    .select("userId name job homeVillage currentStamina maxStamina icon")
     .lean()
     .exec();
   if (m && typeof m.userId === "string") {
     const maxS = Math.max(0, Number((m as { maxStamina?: number }).maxStamina) || 999);
+    const iconRaw = (m as { icon?: string }).icon;
     return {
       _id: m._id as mongoose.Types.ObjectId,
       userId: m.userId,
@@ -101,6 +106,7 @@ export async function loadCharacterUnionById(id: string): Promise<CharacterUnion
       currentStamina: Math.max(0, Number(m.currentStamina) || 999),
       maxStamina: maxS,
       isModCharacter: true,
+      icon: typeof iconRaw === "string" && iconRaw.trim() ? iconRaw.trim() : undefined,
     };
   }
 
@@ -125,4 +131,29 @@ export async function userOwnsCharacterName(
     ModCharacter.findOne({ userId: discordId, name: re }).select("_id").lean(),
   ]);
   return Boolean(a || b);
+}
+
+/** Portrait used on Discord embeds; same resolution order as ownership check (regular OC, then mod). */
+export async function loadCharacterIconForOwner(
+  discordId: string,
+  name: string
+): Promise<string | undefined> {
+  const trimmed = name.trim();
+  if (!trimmed) return undefined;
+  const esc = trimmed.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const re = new RegExp(`^${esc}$`, "i");
+
+  const Character = (await import("@/models/CharacterModel.js")).default;
+  const ModCharacterModule = await import("@/models/ModCharacterModel.js");
+  const ModCharacter = ModCharacterModule.default || ModCharacterModule;
+
+  const a = await Character.findOne({ userId: discordId, name: re }).select("icon").lean();
+  const iconA = (a as { icon?: string } | null)?.icon;
+  if (typeof iconA === "string" && iconA.trim()) return iconA.trim();
+
+  const b = await ModCharacter.findOne({ userId: discordId, name: re }).select("icon").lean();
+  const iconB = (b as { icon?: string } | null)?.icon;
+  if (typeof iconB === "string" && iconB.trim()) return iconB.trim();
+
+  return undefined;
 }

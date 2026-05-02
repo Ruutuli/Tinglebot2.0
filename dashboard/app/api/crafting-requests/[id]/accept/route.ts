@@ -7,6 +7,7 @@ import {
   jobCanCraftItem,
   loadCharacterUnionById,
   parseStaminaToCraft,
+  type ItemCraftFields,
 } from "@/lib/crafting-request-helpers";
 import { notifyCraftingRequestAccepted } from "@/lib/craftingRequestsNotify";
 
@@ -66,14 +67,16 @@ export async function POST(request: Request, context: RouteContext) {
       }
     }
 
-    const item = await Item.findOne({ itemName: reqDoc.craftItemName, crafting: true })
+    const itemLean = await Item.findOne({ itemName: reqDoc.craftItemName, crafting: true })
       .select("craftingJobs staminaToCraft")
       .lean()
       .exec();
 
-    if (!item) {
+    if (!itemLean) {
       return NextResponse.json({ error: "Craft item no longer exists or is not craftable" }, { status: 400 });
     }
+
+    const item = itemLean as ItemCraftFields;
 
     const staminaCost =
       reqDoc.staminaToCraftSnapshot > 0
