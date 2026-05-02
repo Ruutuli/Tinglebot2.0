@@ -702,6 +702,101 @@ const transferCharacterInventoryToVillageShops = async (characterName) => {
  }
 };
 
+// ------------------- incrementVillageShopStockFromCatalog -------------------
+// Adds stock for one item name using the same villageShops + catalog path as transferCharacterInventoryToVillageShops
+// (find existing row → $inc; else fetchItemByName from items DB → new VillageShopItem).
+const incrementVillageShopStockFromCatalog = async (itemName, quantity) => {
+  if (!itemName || typeof quantity !== "number" || quantity <= 0) {
+    return { ok: false, reason: "invalid_args" };
+  }
+  try {
+    const name = String(itemName).trim();
+    let itemFilter;
+    if (name.includes("+")) {
+      itemFilter = { itemName: name };
+    } else {
+      itemFilter = { itemName: { $regex: new RegExp(`^${escapeRegExp(name)}$`, "i") } };
+    }
+    const shopItem = await VillageShopItem.findOne(itemFilter);
+    if (shopItem) {
+      const res = await VillageShopItem.updateOne(
+        { _id: shopItem._id },
+        { $inc: { stock: quantity } }
+      );
+      if (res.matchedCount === 0) {
+        logger.warn(
+          "VILLAGE_SHOP",
+          `[db.js] incrementVillageShopStockFromCatalog: update matched 0 for ${name}`
+        );
+        return { ok: false, reason: "update_miss" };
+      }
+      return { ok: true, action: "increment", modifiedCount: res.modifiedCount };
+    }
+    const item = await fetchItemByName(name);
+    if (!item) {
+      logger.warn(
+        "VILLAGE_SHOP",
+        `[db.js] incrementVillageShopStockFromCatalog: no catalog item for ${name}`
+      );
+      return { ok: false, reason: "not_in_catalog" };
+    }
+    const finalBuyPrice = item.buyPrice || 0;
+    const finalSellPrice = item.sellPrice || 0;
+    const newShopItem = new VillageShopItem({
+      itemId: item._id,
+      itemName: item.itemName,
+      image: item.image || "No Image",
+      imageType: item.imageType || "No Image Type",
+      itemRarity: item.itemRarity || 1,
+      category: item.category || ["Misc"],
+      categoryGear: item.categoryGear || "None",
+      type: item.type || ["Unknown"],
+      subtype: item.subtype || ["None"],
+      recipeTag: item.recipeTag || ["#Not Craftable"],
+      craftingMaterial: item.craftingMaterial || [],
+      buyPrice: finalBuyPrice,
+      sellPrice: finalSellPrice,
+      staminaToCraft: item.staminaToCraft ?? null,
+      modifierHearts: item.modifierHearts || 0,
+      staminaRecovered: item.staminaRecovered || 0,
+      obtain: item.obtain || [],
+      crafting: item.crafting || false,
+      gathering: item.gathering || false,
+      looting: item.looting || false,
+      vending: item.vending || false,
+      traveling: item.traveling || false,
+      specialWeather:
+        typeof item.specialWeather === "object"
+          ? Object.values(item.specialWeather).some((v) => v === true)
+          : Boolean(item.specialWeather),
+      petPerk: item.petPerk || false,
+      exploring: item.exploring || false,
+      craftingJobs: item.craftingJobs || [],
+      artist: item.artist || false,
+      blacksmith: item.blacksmith || false,
+      cook: item.cook || false,
+      craftsman: item.craftsman || false,
+      maskMaker: item.maskMaker || false,
+      researcher: item.researcher || false,
+      weaver: item.weaver || false,
+      witch: item.witch || false,
+      locations: item.locations || [],
+      emoji: item.emoji || "",
+      allJobs: item.allJobs || ["None"],
+      stock: quantity,
+    });
+    await newShopItem.save();
+    return { ok: true, action: "create" };
+  } catch (error) {
+    handleError(error, "db.js");
+    logger.error(
+      "VILLAGE_SHOP",
+      `[db.js] incrementVillageShopStockFromCatalog failed for ${itemName}: ${error.message}`
+    );
+    return { ok: false, reason: "error", error: error.message };
+  }
+};
+
 // ------------------- deleteCharacterInventoryCollection -------------------
 const deleteCharacterInventoryCollection = async (characterName) => {
  try {
@@ -2557,6 +2652,7 @@ module.exports = {
  getCharacterInventoryCollectionWithModSupport,
  createCharacterInventory,
  transferCharacterInventoryToVillageShops,
+ incrementVillageShopStockFromCatalog,
  deleteCharacterInventoryCollection,
  getModSharedInventoryCollection,
  // Mod Character Functions

@@ -1071,6 +1071,290 @@ const calculateElementalCombatBonus = (character, monster) => {
   };
 };
 
+/**
+ * Embed suffix for monster encounter flows (loot / gather / etc.).
+ * @param {{ displayLabel: string|null, consumed: boolean, encounterMatched: boolean, damageReduced?: number, monsterName?: string|null }} meta
+ * @returns {string}
+ */
+function formatElixirRollOutcomeEmbedSuffix(meta) {
+  if (!meta) return '';
+  const display =
+    meta.displayLabel ||
+    (meta.elixirBuffInfo && meta.elixirBuffInfo.elixirName) ||
+    null;
+  const consumed = !!meta.consumed;
+  const encounterMatched = !!meta.encounterMatched;
+  const damageReduced = Math.max(0, Number(meta.damageReduced) || 0);
+  const monsterLabel = meta.monsterName ? `**${meta.monsterName}**` : 'this foe';
+
+  if (!display && !consumed) return '';
+
+  const labelText = display || 'Your elixir';
+
+  if (consumed) {
+    let s = `\n\n🧪 **Elixir consumed.** ${labelText} is **no longer active**.`;
+    if (encounterMatched && damageReduced <= 0) {
+      s +=
+        '\n> You had the right brew for this encounter; it still **burned off** on this roll, even though your **hearts lost** did not go down.';
+    }
+    return s;
+  }
+
+  if (display) {
+    if (!encounterMatched) {
+      return `\n\n🧪 **Active elixir:** ${labelText}. That brew **did not apply** to ${monsterLabel}, so **nothing was consumed** — your buff is **still active**.`;
+    }
+    return `\n\n🧪 **Active elixir:** ${labelText} — **not consumed** on this roll (your buff is still active).`;
+  }
+
+  return '';
+}
+
+/**
+ * @param {{ displayLabelBefore: string|null, elixirConsumed: boolean, elixirBuffInfo: object|null, monsterName?: string|null }} p
+ */
+function buildElixirRollMetaForEmbed(p) {
+  const { displayLabelBefore, elixirConsumed, elixirBuffInfo, monsterName } = p || {};
+  if (!displayLabelBefore && !elixirConsumed && !(elixirBuffInfo && elixirBuffInfo.helped)) {
+    return null;
+  }
+  return {
+    displayLabel: displayLabelBefore || (elixirBuffInfo && elixirBuffInfo.elixirName) || null,
+    consumed: !!elixirConsumed,
+    encounterMatched: !!(elixirBuffInfo && elixirBuffInfo.helped),
+    damageReduced: elixirBuffInfo && elixirBuffInfo.damageReduced != null ? elixirBuffInfo.damageReduced : 0,
+    monsterName: monsterName || null,
+    elixirBuffInfo: elixirBuffInfo || null,
+  };
+}
+
+/**
+ * Shared loot / blood-moon-gather monster elixir: set elixirBuffInfo, consume buff, apply roll boosts.
+ * Matches legacy loot order (consume before recalculating outcome with boosted roll).
+ * @param {{ character: object, encounteredMonster: object, outcome: object, damageValue: number, attackSuccess: boolean, defenseSuccess: boolean, activity: 'loot'|'gather', getEncounterOutcome: Function, persistBuff?: (c: object) => Promise<void>, log?: { info: Function, warn: Function } }} opts
+ */
+async function applyMonsterEncounterElixirForLootOrGather(opts) {
+  const {
+    character,
+    encounteredMonster,
+    outcome,
+    damageValue,
+    attackSuccess,
+    defenseSuccess,
+    activity,
+    getEncounterOutcome,
+    persistBuff,
+    log,
+  } = opts;
+
+  const displayLabelBefore = character.buff?.active
+    ? getActiveElixirBuffDisplay(character, false)
+    : null;
+  let elixirBuffInfo = null;
+  let elixirConsumed = false;
+
+  const L = log && typeof log.info === 'function' ? log : { info: () => {}, warn: console.warn };
+
+  try {
+    const activeBuff = getActiveBuffEffects(character);
+    if (activeBuff) {
+      L.info('ELIXIR', `${character.name} has active elixir buff: ${character.buff.type}`);
+
+      if (activeBuff.fireResistance > 0 && encounteredMonster.name.includes('Fire')) {
+        elixirBuffInfo = {
+          helped: true,
+          elixirName: 'Chilly Elixir',
+          elixirType: 'chilly',
+          encounterType: 'fire',
+          damageReduced: 0,
+        };
+      }
+      if (
+        activeBuff.coldResistance > 0 &&
+        (encounteredMonster.name.includes('Ice') ||
+          encounteredMonster.name.includes('Frost') ||
+          encounteredMonster.name.includes('Blizzard'))
+      ) {
+        elixirBuffInfo = {
+          helped: true,
+          elixirName: 'Spicy Elixir',
+          elixirType: 'spicy',
+          encounterType: 'ice',
+          damageReduced: 0,
+        };
+      }
+      if (activeBuff.electricResistance > 0 && encounteredMonster.name.includes('Electric')) {
+        elixirBuffInfo = {
+          helped: true,
+          elixirName: 'Electro Elixir',
+          elixirType: 'electro',
+          encounterType: 'electric',
+          damageReduced: 0,
+        };
+      }
+      if (activeBuff.waterResistance > 0 && encounteredMonster.name.includes('Water')) {
+        elixirBuffInfo = {
+          helped: true,
+          elixirName: 'Sticky Elixir',
+          elixirType: 'sticky',
+          encounterType: 'water',
+          damageReduced: 0,
+        };
+      }
+      if (activeBuff.blightResistance > 0) {
+        elixirBuffInfo = {
+          helped: true,
+          elixirName: 'Bright Elixir',
+          elixirType: 'bright',
+          encounterType: 'blight',
+          damageReduced: 0,
+        };
+      }
+      if (activeBuff.stealthBoost > 0) {
+        elixirBuffInfo = {
+          helped: true,
+          elixirName: 'Sneaky Elixir',
+          elixirType: 'sneaky',
+          encounterType: 'general',
+          damageReduced: 0,
+        };
+      }
+      if (activeBuff.defenseBoost > 0) {
+        elixirBuffInfo = {
+          helped: true,
+          elixirName: 'Tough Elixir',
+          elixirType: 'tough',
+          encounterType: 'general',
+          damageReduced: 0,
+        };
+      }
+      if (activeBuff.attackBoost > 0) {
+        elixirBuffInfo = {
+          helped: true,
+          elixirName: 'Mighty Elixir',
+          elixirType: 'mighty',
+          encounterType: 'general',
+          damageReduced: 0,
+        };
+      }
+    }
+
+    if (shouldConsumeElixir(character, activity, { monster: encounteredMonster })) {
+      consumeElixirBuff(character);
+      elixirConsumed = true;
+      L.info('ELIXIR', `Elixir consumed for ${character.name} during ${activity} vs ${encounteredMonster.name}`);
+      if (typeof persistBuff === 'function') {
+        await persistBuff(character);
+      }
+    } else if (character.buff?.active) {
+      L.info(
+        'ELIXIR',
+        `Elixir not used for ${character.name} - conditions not met. Active buff: ${character.buff.type}`
+      );
+    }
+  } catch (e) {
+    L.warn('ELIXIR', `Elixir consumption failed: ${e.message}`);
+  }
+
+  if (elixirBuffInfo && elixirBuffInfo.helped && outcome.adjustedRandomValue && getEncounterOutcome) {
+    const originalRoll = outcome.adjustedRandomValue;
+
+    if (elixirBuffInfo.encounterType === 'fire' && elixirBuffInfo.elixirType === 'chilly') {
+      outcome.adjustedRandomValue = Math.min(100, Math.ceil(originalRoll * 1.5));
+      const originalDamage = outcome.hearts;
+      const boostedOutcome = await getEncounterOutcome(
+        character,
+        encounteredMonster,
+        damageValue,
+        outcome.adjustedRandomValue,
+        attackSuccess,
+        defenseSuccess
+      );
+      if (boostedOutcome.hearts < originalDamage) {
+        elixirBuffInfo.damageReduced = originalDamage - boostedOutcome.hearts;
+        outcome.hearts = boostedOutcome.hearts;
+      }
+    } else if (elixirBuffInfo.encounterType === 'electric' && elixirBuffInfo.elixirType === 'electro') {
+      outcome.adjustedRandomValue = Math.min(100, Math.ceil(originalRoll * 1.5));
+      const originalDamage = outcome.hearts;
+      const boostedOutcome = await getEncounterOutcome(
+        character,
+        encounteredMonster,
+        damageValue,
+        outcome.adjustedRandomValue,
+        attackSuccess,
+        defenseSuccess
+      );
+      if (boostedOutcome.hearts < originalDamage) {
+        elixirBuffInfo.damageReduced = originalDamage - boostedOutcome.hearts;
+        outcome.hearts = boostedOutcome.hearts;
+      }
+    } else if (elixirBuffInfo.encounterType === 'ice' && elixirBuffInfo.elixirType === 'spicy') {
+      outcome.adjustedRandomValue = Math.min(100, Math.ceil(originalRoll * 1.5));
+      const originalDamage = outcome.hearts;
+      const boostedOutcome = await getEncounterOutcome(
+        character,
+        encounteredMonster,
+        damageValue,
+        outcome.adjustedRandomValue,
+        attackSuccess,
+        defenseSuccess
+      );
+      if (boostedOutcome.hearts < originalDamage) {
+        elixirBuffInfo.damageReduced = originalDamage - boostedOutcome.hearts;
+        outcome.hearts = boostedOutcome.hearts;
+      }
+    } else if (elixirBuffInfo.encounterType === 'water' && elixirBuffInfo.elixirType === 'sticky') {
+      outcome.adjustedRandomValue = Math.min(100, Math.ceil(originalRoll * 1.5));
+      const originalDamage = outcome.hearts;
+      const boostedOutcome = await getEncounterOutcome(
+        character,
+        encounteredMonster,
+        damageValue,
+        outcome.adjustedRandomValue,
+        attackSuccess,
+        defenseSuccess
+      );
+      if (boostedOutcome.hearts < originalDamage) {
+        elixirBuffInfo.damageReduced = originalDamage - boostedOutcome.hearts;
+        outcome.hearts = boostedOutcome.hearts;
+      }
+    } else if (elixirBuffInfo.elixirType === 'mighty' && elixirBuffInfo.encounterType === 'general') {
+      outcome.adjustedRandomValue = Math.min(100, Math.ceil(originalRoll * 1.25));
+      const originalDamage = outcome.hearts;
+      const boostedOutcome = await getEncounterOutcome(
+        character,
+        encounteredMonster,
+        damageValue,
+        outcome.adjustedRandomValue,
+        attackSuccess,
+        defenseSuccess
+      );
+      if (boostedOutcome.hearts < originalDamage) {
+        elixirBuffInfo.damageReduced = originalDamage - boostedOutcome.hearts;
+        outcome.hearts = boostedOutcome.hearts;
+      }
+    } else if (elixirBuffInfo.elixirType === 'tough' && elixirBuffInfo.encounterType === 'general') {
+      outcome.adjustedRandomValue = Math.min(100, Math.ceil(originalRoll * 1.25));
+      const originalDamage = outcome.hearts;
+      const boostedOutcome = await getEncounterOutcome(
+        character,
+        encounteredMonster,
+        damageValue,
+        outcome.adjustedRandomValue,
+        attackSuccess,
+        defenseSuccess
+      );
+      if (boostedOutcome.hearts < originalDamage) {
+        elixirBuffInfo.damageReduced = originalDamage - boostedOutcome.hearts;
+        outcome.hearts = boostedOutcome.hearts;
+      }
+    }
+  }
+
+  return { elixirBuffInfo, elixirConsumed, displayLabelBefore };
+}
+
 // ============================================================================
 // ------------------- Export Functions -------------------
 // ============================================================================
@@ -1088,6 +1372,9 @@ module.exports = {
   formatElixirItemOptionValue,
   parseElixirTierFromItemOption,
   getActiveElixirBuffDisplay,
+  formatElixirRollOutcomeEmbedSuffix,
+  buildElixirRollMetaForEmbed,
+  applyMonsterEncounterElixirForLootOrGather,
   isElixirItemName,
   applyElixirBuff,
   applyImmediateEffects,

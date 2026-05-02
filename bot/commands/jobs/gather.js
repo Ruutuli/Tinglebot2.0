@@ -16,7 +16,7 @@ const { v4: uuidv4 } = require('uuid');
 // ============================================================================
 // ------------------- Database Services -------------------
 // ============================================================================
-const { fetchCharacterByNameAndUserId, fetchAllItems, fetchItemsByMonster, fetchAllMonsters, fetchItemByName } = require('@/database/db.js');
+const { fetchCharacterByNameAndUserId, fetchAllItems, fetchItemsByMonster, fetchAllMonsters, fetchItemByName, updateCharacterById, updateModCharacterById } = require('@/database/db.js');
 const Character = require('@/models/CharacterModel');
 const { Village } = require('@/models/VillageModel');
 
@@ -831,6 +831,40 @@ module.exports = {
             attackSuccess,
             defenseSuccess
           );
+
+          let gatherElixirBuffInfo = null;
+          let gatherElixirRollMeta = null;
+          try {
+            const {
+              applyMonsterEncounterElixirForLootOrGather,
+              buildElixirRollMetaForEmbed,
+            } = require('../../modules/elixirModule');
+            const r = await applyMonsterEncounterElixirForLootOrGather({
+              character,
+              encounteredMonster,
+              outcome,
+              damageValue,
+              attackSuccess,
+              defenseSuccess,
+              activity: 'gather',
+              getEncounterOutcome,
+              persistBuff: async (c) => {
+                const fn = c.isModCharacter ? updateModCharacterById : updateCharacterById;
+                await fn(c._id, { buff: c.buff });
+              },
+              log: logger,
+            });
+            gatherElixirBuffInfo = r.elixirBuffInfo;
+            gatherElixirRollMeta = buildElixirRollMetaForEmbed({
+              displayLabelBefore: r.displayLabelBefore,
+              elixirConsumed: r.elixirConsumed,
+              elixirBuffInfo: r.elixirBuffInfo,
+              monsterName: encounteredMonster.name,
+            });
+          } catch (e) {
+            logger.warn('ELIXIR', `Gather encounter elixir: ${e.message}`);
+          }
+
           // Hearts are already applied inside getEncounterOutcome; fetch fresh value
           const refreshedCharacter = await fetchCharacterByNameAndUserId(character.name, interaction.user.id);
           const heartsRemaining = Math.max(
@@ -961,7 +995,17 @@ module.exports = {
                 null, // totalMonsters
                 entertainerBonusForEmbed || null, // entertainerBonusItem
                 'Gathering', // boostCategoryOverride
-                null // elixirBuffInfo - not implemented for gather yet
+                gatherElixirBuffInfo,
+                null,
+                null,
+                false,
+                0,
+                null,
+                false,
+                null,
+                null,
+                null,
+                gatherElixirRollMeta
               );
               await safeReply({ embeds: [embed] });
               return;
@@ -978,7 +1022,18 @@ module.exports = {
             null,
             null,
             null,
-            'Gathering'
+            'Gathering',
+            gatherElixirBuffInfo,
+            null,
+            null,
+            false,
+            0,
+            null,
+            false,
+            null,
+            null,
+            null,
+            gatherElixirRollMeta
           );
           await safeReply({ embeds: [embed] });
           return;

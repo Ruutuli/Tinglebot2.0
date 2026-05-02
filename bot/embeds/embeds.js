@@ -17,7 +17,7 @@ const { getNoEncounterMessage, generateCraftingFlavorText, generateGatherFlavorT
 const { convertCmToFeetInches, isValidImageUrl } = require('../utils/validation');
 // Google Sheets functionality removed
 const { getCharacterBoostStatus } = require('../modules/boostIntegration');
-const { getActiveElixirBuffDisplay } = require('../modules/elixirModule');
+const { getActiveElixirBuffDisplay, formatElixirRollOutcomeEmbedSuffix } = require('../modules/elixirModule');
 const { generateUniqueId } = require('../utils/uniqueIdUtils');
 const { generateTokenBreakdown } = require('../utils/tokenUtils');
 
@@ -2533,7 +2533,8 @@ const createMonsterEncounterEmbed = async (
   boostUnused = false,
   fortuneRerollInfo = null,
   teacherCombatInsightInfo = null,
-  elementalCombatInfo = null
+  elementalCombatInfo = null,
+  elixirRollMeta = null
 ) => {
  const settings = getCommonEmbedSettings(character) || {};
  const nameMapping = monster.nameMapping || monster.name;
@@ -2678,6 +2679,10 @@ if (boostInfo && boostInfo.boosterJob?.toLowerCase() === 'teacher' && boostInfo.
      elixirHelpText += `\n\n🧪 **${elixirBuffInfo.elixirName} helped!** Elixir buff improved encounter performance!`;
    }
    outcomeWithBoost += elixirHelpText;
+ }
+
+ if (elixirRollMeta) {
+   outcomeWithBoost += formatElixirRollOutcomeEmbedSuffix(elixirRollMeta);
  }
 
  // Add elemental combat information if available

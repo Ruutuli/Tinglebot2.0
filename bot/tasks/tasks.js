@@ -23,6 +23,7 @@ const User = require('@/models/UserModel');
 const Pet = require('@/models/PetModel');
 const Quest = require('@/models/QuestModel');
 const Village = require('@/models/VillageModel');
+const Item = require('@/models/ItemModel');
 const Raid = require('@/models/RaidModel');
 const Party = require('@/models/PartyModel');
 const HelpWantedQuest = require('@/models/HelpWantedQuestModel');
@@ -53,12 +54,19 @@ const {
 const { generateDailyQuests: runHelpWantedGeneration } = require('@/modules/helpWantedModule');
 const { updateSubmissionData } = require('@/utils/storage');
 const { addItemInventoryDatabase } = require('@/utils/inventoryUtils');
-const { fetchAllCharacters, getCharacterInventoryCollection, connectToInventoriesNative, markRelicDeteriorated } = require('@/database/db');
+const {
+  fetchAllCharacters,
+  getCharacterInventoryCollection,
+  connectToInventoriesNative,
+  markRelicDeteriorated,
+  incrementVillageShopStockFromCatalog,
+} = require('@/database/db');
 const RelicModel = require('@/models/RelicModel');
 const { EmbedBuilder, ChannelType } = require('discord.js');
 
 const APPROVAL_CHANNEL_ID = '1381479893090566144';
 const COMMUNITY_BOARD_CHANNEL_ID = process.env.COMMUNITY_BOARD_CHANNEL_ID || '651614266046152705';
+const PEDDLER_RESTOCK_CHANNEL_ID = process.env.PEDDLER_RESTOCK_CHANNEL_ID || COMMUNITY_BOARD_CHANNEL_ID;
 const MOD_ROLE_ID = process.env.MOD_ROLE_ID || '606128760655183882';
 const VILLAGES = ['Rudania', 'Inariko', 'Vhintl'];
 const VILLAGE_CHANNELS = {
@@ -930,6 +938,165 @@ async function weeklyInventorySnapshot(_client, _data = {}) {
     logger.success('SCHEDULED', `weekly-inventory-snapshot: done (saved=${saved}, skipped=${skipped}, failed=${failed})`);
   } catch (err) {
     logger.error('SCHEDULED', `weekly-inventory-snapshot: ${err.message}`);
+  }
+}
+
+const PEDDLER_RESTOCK_BORDER = 'https://storage.googleapis.com/tinglebot/Graphics/border.png';
+const PEDDLER_NPC_ICON_URL = 'https://storage.googleapis.com/tinglebot/NPCs/NPC%20Peddler.png';
+
+function peddlerMaxRarityForMinLevel(minLevel) {
+  if (minLevel >= 3) return 10;
+  if (minLevel === 2) return 6;
+  return 3;
+}
+
+function peddlerRandomInt(min, max) {
+  return min + Math.floor(Math.random() * (max - min + 1));
+}
+
+function peddlerShuffle(arr) {
+  const a = arr.slice();
+  for (let i = a.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [a[i], a[j]] = [a[j], a[i]];
+  }
+  return a;
+}
+
+// ------------------- peddler-weekly-village-restock (Sunday midnight Eastern) -------------------
+async function peddlerWeeklyVillageRestock(client, _data = {}) {
+  try {
+    logger.info('SCHEDULED', 'peddler-weekly-village-restock: starting');
+    const levelByName = new Map();
+    try {
+      const villages = await Village.find({ name: { $in: VILLAGES } }).lean();
+      for (const v of villages) {
+        levelByName.set(v.name, v.level || 1);
+      }
+    } catch (e) {
+      logger.error('SCHEDULED', `peddler-weekly-village-restock: village fetch failed: ${e.message}`);
+    }
+
+    let minLevel = 3;
+    for (const name of VILLAGES) {
+      const lv = levelByName.has(name) ? levelByName.get(name) : 1;
+      minLevel = Math.min(minLevel, lv);
+    }
+
+    const maxRarity = peddlerMaxRarityForMinLevel(minLevel);
+    const poolRaw = await Item.find({
+      itemRarity: { $lte: maxRarity },
+      category: { $nin: ['Custom Weapon'] },
+    }).lean();
+    const pool = peddlerShuffle(poolRaw);
+
+    const wantCount = peddlerRandomInt(4, 8);
+    const pickCount = Math.min(wantCount, pool.length);
+    if (pickCount === 0) {
+      logger.warn('SCHEDULED', 'peddler-weekly-village-restock: no eligible items in pool, skipping');
+      return;
+    }
+    if (pool.length < wantCount) {
+      logger.warn(
+        'SCHEDULED',
+        `peddler-weekly-village-restock: pool size ${pool.length} < desired ${wantCount}, using ${pickCount} item(s)`
+      );
+    }
+
+    const selected = pool.slice(0, pickCount);
+    /** @type {{ item: object, qty: number, em: string }[]} */
+    const deliveries = [];
+    for (const item of selected) {
+      const qty = peddlerRandomInt(1, 10);
+      const stockResult = await incrementVillageShopStockFromCatalog(item.itemName, qty);
+      if (!stockResult.ok) {
+        logger.warn(
+          'SCHEDULED',
+          `peddler-weekly-village-restock: could not add stock for ${item.itemName} — ${stockResult.reason}${stockResult.error ? ` (${stockResult.error})` : ''}`
+        );
+        continue;
+      }
+      const em = (item.emoji && String(item.emoji).trim()) || '📦';
+      deliveries.push({ item, qty, em });
+    }
+
+    if (deliveries.length === 0) {
+      logger.warn(
+        'SCHEDULED',
+        'peddler-weekly-village-restock: no stock changes applied (all writes failed), skipping Discord post'
+      );
+      return;
+    }
+
+    if (!client?.channels) {
+      logger.error('SCHEDULED', 'peddler-weekly-village-restock: Discord client not available');
+      return;
+    }
+    const channel = await client.channels.fetch(PEDDLER_RESTOCK_CHANNEL_ID).catch(() => null);
+    if (!channel || typeof channel.send !== 'function') {
+      logger.error(
+        'SCHEDULED',
+        `peddler-weekly-village-restock: could not fetch channel ${PEDDLER_RESTOCK_CHANNEL_ID}`
+      );
+      return;
+    }
+
+    const wareLines = deliveries.map(
+      ({ em, item, qty }) => `${em} **${item.itemName}** · \`${qty}x\` stocked`
+    );
+    const DISCORD_FIELD_VALUE_MAX = 1024;
+    const wareFields = [];
+    let chunk = '';
+    for (const line of wareLines) {
+      const next = chunk ? `${chunk}\n${line}` : line;
+      if (next.length > DISCORD_FIELD_VALUE_MAX) {
+        if (chunk) wareFields.push(chunk);
+        chunk = line.length > DISCORD_FIELD_VALUE_MAX ? `${line.slice(0, DISCORD_FIELD_VALUE_MAX - 1)}…` : line;
+      } else {
+        chunk = next;
+      }
+    }
+    if (chunk) wareFields.push(chunk);
+
+    const embed = new EmbedBuilder()
+      .setColor(0xd4a017)
+      .setAuthor({
+        name: 'The Peddler · Traveling auctioneer',
+        iconURL: PEDDLER_NPC_ICON_URL,
+      })
+      .setTitle('✨ Fresh wares at the village shops')
+      .setThumbnail(PEDDLER_NPC_ICON_URL)
+      .setDescription(
+        [
+          '*The caravan creaks to a halt—bundles and sealed crates find their way to Rudania, Inariko, and Vhintl.*',
+          '',
+          '> *“Fine goods for fine villages! See what I’ve left on the counters this week.”*',
+        ].join('\n')
+      );
+
+    wareFields.forEach((value, idx) => {
+      embed.addFields({
+        name: idx === 0 ? '━━━━━ This week’s haul ━━━━━' : '━━━━━ (continued) ━━━━━',
+        value,
+        inline: false,
+      });
+    });
+
+    embed
+      .setImage(PEDDLER_RESTOCK_BORDER)
+      .setFooter({
+        text: 'Roots of the Wild · Weekly market restock',
+        iconURL: PEDDLER_NPC_ICON_URL,
+      })
+      .setTimestamp();
+
+    await channel.send({ embeds: [embed] });
+    logger.success(
+      'SCHEDULED',
+      `peddler-weekly-village-restock: done (${deliveries.length} item type(s) stocked${deliveries.length < pickCount ? `, ${pickCount - deliveries.length} write(s) failed` : ''})`
+    );
+  } catch (err) {
+    logger.error('SCHEDULED', `peddler-weekly-village-restock: ${err.message}`);
   }
 }
 
@@ -3165,6 +3332,7 @@ const TASKS = [
   // Weekly Tasks (Sunday midnight Eastern)
   { name: 'weekly-pet-rolls-reset', cron: '0 0 * * 0', handler: weeklyPetRollsReset, timezone: SCHEDULE_TZ_EASTERN },
   { name: 'weekly-inventory-snapshot', cron: '0 0 * * 0', handler: weeklyInventorySnapshot, timezone: SCHEDULE_TZ_EASTERN },
+  { name: 'peddler-weekly-village-restock', cron: '0 0 * * 0', handler: peddlerWeeklyVillageRestock, timezone: SCHEDULE_TZ_EASTERN },
 
   // Monthly Tasks
   { name: 'monthly-vending-stock', cron: '0 0 1 * *', handler: monthlyVendingStock, timezone: SCHEDULE_TZ_EASTERN },
