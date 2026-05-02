@@ -3,6 +3,8 @@
  * When a player finds an old map (e.g. in ruins), we pick one at random, give "Map #N",
  * and DM expedition members with the map's location.
  * More info: https://www.rootsofthewild.com/oldmaps
+ *
+ * Dashboard (Railway) duplicates this table in lib/oldMapCatalog.ts — update both when editing.
  */
 const OLD_MAPS = [
   { number: 1, leadsTo: "grotto", coordinates: "G9-Q1" },

@@ -451,10 +451,6 @@ async function handleAutocompleteInternal(interaction, commandName, focusedOptio
                 if (focusedOption.name === "questid") {
                   await handleQuestIdAutocomplete(interaction, focusedOption);
                 }
-              } else if (modSubcommand === "questresearch") {
-                if (focusedOption.name === "questid") {
-                  await handleQuestIdAutocomplete(interaction, focusedOption, { rpOnly: true });
-                }
               } else if (modSubcommand === "villageresources") {
                 if (focusedOption.name === "material") {
                   await handleVillageResourcesMaterialAutocomplete(interaction, focusedOption);
@@ -887,10 +883,6 @@ async function handleAutocompleteInternal(interaction, commandName, focusedOptio
                   await handleQuestIdAutocomplete(interaction, focusedOption);
                 }
               } else if (questSubcommand === "setrpposts") {
-                if (focusedOption.name === "questid") {
-                  await handleQuestIdAutocomplete(interaction, focusedOption, { rpOnly: true });
-                }
-              } else if (questSubcommand === "setresearchvillage") {
                 if (focusedOption.name === "questid") {
                   await handleQuestIdAutocomplete(interaction, focusedOption, { rpOnly: true });
                 }

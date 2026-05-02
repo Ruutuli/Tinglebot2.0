@@ -1415,35 +1415,6 @@ const modCommand = new SlashCommandBuilder()
     )
     .addSubcommand(sub =>
       sub
-        .setName('questresearch')
-        .setDescription('🏘️ Fix a quest participant’s locked research village (RP / Interactive RP)')
-        .addStringOption(option =>
-          option
-            .setName('questid')
-            .setDescription('ID of the quest')
-            .setRequired(true)
-            .setAutocomplete(true)
-        )
-        .addUserOption(option =>
-          option
-            .setName('user')
-            .setDescription('Participant’s Discord user')
-            .setRequired(true)
-        )
-        .addStringOption(option =>
-          option
-            .setName('village')
-            .setDescription('Village they are committing to (must match character sheet)')
-            .setRequired(true)
-            .addChoices(
-              { name: 'Inariko', value: 'inariko' },
-              { name: 'Rudania', value: 'rudania' },
-              { name: 'Vhintl', value: 'vhintl' }
-            )
-        )
-    )
-    .addSubcommand(sub =>
-      sub
         .setName('minigame')
         .setDescription('🎮 Manage minigames')
         .addStringOption(option =>
@@ -1643,8 +1614,6 @@ async function execute(interaction) {
     } else if (subcommandGroup === 'system') {
       if (subcommand === 'rpposts') {
         return await handleRPPosts(interaction);
-      } else if (subcommand === 'questresearch') {
-        return await handleQuestResearchVillage(interaction);
       } else if (subcommand === 'minigame') {
         return await handleMinigame(interaction);
       }
@@ -4869,69 +4838,6 @@ async function handleBlight(interaction) {
 // ------------------- Function: handleRPPosts -------------------
 // Updates RP post count for a quest participant
 // ============================================================================
-
-async function handleQuestResearchVillage(interaction) {
-  try {
-    const questID = interaction.options.getString('questid');
-    const user = interaction.options.getUser('user');
-    const village = interaction.options.getString('village');
-
-    const { setParticipantResearchVillage } = require('../../modules/rpQuestTrackingModule');
-    const result = await setParticipantResearchVillage(questID, user.id, village, {
-      restoreFromDisqualification: true
-    });
-
-    if (result.success) {
-      const prettyV = result.newRequired.charAt(0).toUpperCase() + result.newRequired.slice(1);
-      const prev =
-        result.previousRequired != null && String(result.previousRequired).trim() !== ''
-          ? result.previousRequired.charAt(0).toUpperCase() +
-            result.previousRequired.slice(1).toLowerCase()
-          : '(none)';
-
-      const embed = new EmbedBuilder()
-        .setColor('#00FF00')
-        .setTitle('✅ Research village updated')
-        .setDescription(
-          `Updated the locked research village for **${result.characterName}** (<@${user.id}>) on quest **${questID}**.`
-        )
-        .addFields(
-          { name: 'Quest ID', value: questID, inline: true },
-          { name: 'Previous lock', value: prev, inline: true },
-          { name: 'New lock', value: prettyV, inline: true },
-          {
-            name: 'Disqualification',
-            value: result.restored
-              ? 'Cleared — participant set back to **active**.'
-              : 'Was not disqualified (no change to progress).',
-            inline: false
-          }
-        )
-        .setImage('https://storage.googleapis.com/tinglebot/Graphics/border.png')
-        .setFooter({ text: `Updated by ${interaction.user.tag}` })
-        .setTimestamp();
-
-      return interaction.editReply({ embeds: [embed], ephemeral: true });
-    }
-
-    return interaction.editReply({
-      content: `❌ ${result.error}`,
-      ephemeral: true
-    });
-  } catch (error) {
-    handleInteractionError(error, 'mod.js', {
-      commandName: '/mod system questresearch',
-      userTag: interaction.user.tag,
-      userId: interaction.user.id,
-      questID: interaction.options.getString('questid')
-    });
-
-    return interaction.editReply({
-      content: '❌ An error occurred while updating the research village.',
-      ephemeral: true
-    });
-  }
-}
 
 async function handleRPPosts(interaction) {
   try {
