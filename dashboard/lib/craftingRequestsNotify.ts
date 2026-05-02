@@ -16,6 +16,7 @@ export type CraftingRequestNotifyPayload = {
   staminaToCraftSnapshot: number;
   targetMode: "open" | "specific";
   targetCharacterName?: string;
+  targetCharacterHomeVillage?: string;
   targetOwnerDiscordId?: string;
   providingAllMaterials: boolean;
   materialsDescription: string;
@@ -42,6 +43,10 @@ export async function notifyCraftingRequestCreated(
   const targetLine =
     payload.targetMode === "specific" && payload.targetCharacterName
       ? `**Crafter requested:** ${payload.targetCharacterName}${
+          payload.targetCharacterHomeVillage
+            ? ` · ${payload.targetCharacterHomeVillage}`
+            : ""
+        }${
           payload.targetOwnerDiscordId
             ? ` (<@${payload.targetOwnerDiscordId}>)`
             : ""

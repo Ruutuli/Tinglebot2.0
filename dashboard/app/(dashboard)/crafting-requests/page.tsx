@@ -14,6 +14,7 @@ type CraftingRequestRow = {
   targetMode: "open" | "specific";
   targetCharacterId?: string | null;
   targetCharacterName?: string;
+  targetCharacterHomeVillage?: string;
   providingAllMaterials: boolean;
   materialsDescription?: string;
   paymentOffer?: string;
@@ -730,9 +731,22 @@ export default function CraftingRequestsPage() {
                         Target
                       </dt>
                       <dd>
-                        {row.targetMode === "specific" && row.targetCharacterName
-                          ? `${row.targetCharacterName} (specific)`
-                          : "Any qualified crafter"}
+                        {row.targetMode === "specific" && row.targetCharacterName ? (
+                          <span>
+                            <span className="font-medium text-[var(--botw-cream)]">
+                              {row.targetCharacterName}
+                            </span>
+                            <span className="text-[var(--botw-pale)]"> (specific)</span>
+                            {row.targetCharacterHomeVillage ? (
+                              <span className="mt-0.5 block text-xs text-[var(--totk-mid-ocher)]">
+                                <i className="fa-solid fa-house-chimney mr-1 text-[10px]" aria-hidden />
+                                {row.targetCharacterHomeVillage}
+                              </span>
+                            ) : null}
+                          </span>
+                        ) : (
+                          "Any qualified crafter"
+                        )}
                       </dd>
                     </div>
                     <div className="flex gap-2">
@@ -1035,12 +1049,15 @@ export default function CraftingRequestsPage() {
                                     <p className="font-medium text-[var(--totk-ivory)]">{targetPick.name}</p>
                                     <p className="text-xs text-[var(--totk-mid-ocher)]">
                                       {targetPick.job}
-                                      {targetPick.homeVillage
-                                        ? ` · ${targetPick.homeVillage}`
-                                        : ""}
                                       {targetPick.isModCharacter
                                         ? " · mod character"
                                         : ` · ${targetPick.currentStamina} stam`}
+                                    </p>
+                                    <p className="mt-1 text-xs text-[var(--totk-light-ocher)]">
+                                      <i className="fa-solid fa-house-chimney mr-1 text-[10px] opacity-80" aria-hidden />
+                                      {targetPick.homeVillage?.trim()
+                                        ? targetPick.homeVillage.trim()
+                                        : "Village not set"}
                                     </p>
                                   </div>
                                   <button

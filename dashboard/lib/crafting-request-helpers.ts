@@ -35,6 +35,7 @@ export type CharacterUnion = {
   userId: string;
   name: string;
   job: string;
+  homeVillage: string;
   currentStamina: number;
   isModCharacter: boolean;
 };
@@ -47,7 +48,7 @@ export async function loadCharacterUnionById(id: string): Promise<CharacterUnion
   const ModCharacter = ModCharacterModule.default || ModCharacterModule;
 
   const c = await Character.findById(id)
-    .select("userId name job currentStamina")
+    .select("userId name job homeVillage currentStamina")
     .lean()
     .exec();
   if (c && typeof c.userId === "string") {
@@ -56,13 +57,14 @@ export async function loadCharacterUnionById(id: string): Promise<CharacterUnion
       userId: c.userId,
       name: String(c.name ?? ""),
       job: String(c.job ?? ""),
+      homeVillage: String((c as { homeVillage?: string }).homeVillage ?? ""),
       currentStamina: Math.max(0, Number(c.currentStamina) || 0),
       isModCharacter: false,
     };
   }
 
   const m = await ModCharacter.findById(id)
-    .select("userId name job currentStamina")
+    .select("userId name job homeVillage currentStamina")
     .lean()
     .exec();
   if (m && typeof m.userId === "string") {
@@ -71,6 +73,7 @@ export async function loadCharacterUnionById(id: string): Promise<CharacterUnion
       userId: m.userId,
       name: String(m.name ?? ""),
       job: String(m.job ?? ""),
+      homeVillage: String((m as { homeVillage?: string }).homeVillage ?? ""),
       currentStamina: Math.max(0, Number(m.currentStamina) || 999),
       isModCharacter: true,
     };

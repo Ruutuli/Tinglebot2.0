@@ -25,6 +25,7 @@ const CraftingRequestSchema = new Schema(
     },
     targetCharacterId: { type: Schema.Types.ObjectId, default: null, index: true },
     targetCharacterName: { type: String, default: "" },
+    targetCharacterHomeVillage: { type: String, default: "" },
 
     providingAllMaterials: { type: Boolean, default: false },
     materialsDescription: { type: String, default: "" },

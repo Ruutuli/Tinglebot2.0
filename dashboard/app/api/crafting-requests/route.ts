@@ -123,6 +123,7 @@ export async function POST(request: Request) {
 
     let targetCharacterId: mongoose.Types.ObjectId | null = null;
     let targetCharacterName = "";
+    let targetCharacterHomeVillage = "";
     let targetOwnerDiscordId: string | undefined;
 
     if (targetMode === "specific") {
@@ -150,6 +151,7 @@ export async function POST(request: Request) {
       }
       targetCharacterId = target._id;
       targetCharacterName = target.name;
+      targetCharacterHomeVillage = target.homeVillage.trim();
       targetOwnerDiscordId = target.userId;
     }
 
@@ -166,6 +168,7 @@ export async function POST(request: Request) {
       targetMode,
       targetCharacterId,
       targetCharacterName,
+      targetCharacterHomeVillage,
       providingAllMaterials,
       materialsDescription,
       paymentOffer,
@@ -187,6 +190,7 @@ export async function POST(request: Request) {
         staminaToCraftSnapshot: staminaSnap,
         targetMode,
         targetCharacterName: targetCharacterName || undefined,
+        targetCharacterHomeVillage: targetCharacterHomeVillage || undefined,
         targetOwnerDiscordId,
         providingAllMaterials,
         materialsDescription,
