@@ -79,7 +79,7 @@ export async function GET(request: Request) {
     const rawMaterials = (item as { craftingMaterial?: CraftingMaterial[] }).craftingMaterial ?? [];
     if (!Array.isArray(rawMaterials) || rawMaterials.length === 0) {
       return NextResponse.json({
-        craftItemName: (item as { itemName: string }).itemName,
+        craftItemName: (item as unknown as { itemName: string }).itemName,
         hasRecipe: false,
         allMaterialsMet: false,
         lines: [] as Array<{
@@ -148,7 +148,7 @@ export async function GET(request: Request) {
 
     if (lines.length === 0) {
       return NextResponse.json({
-        craftItemName: (item as { itemName: string }).itemName,
+        craftItemName: (item as unknown as { itemName: string }).itemName,
         hasRecipe: false,
         allMaterialsMet: false,
         lines: [],
@@ -158,7 +158,7 @@ export async function GET(request: Request) {
     const allMaterialsMet = lines.every((l) => l.sufficient);
 
     return NextResponse.json({
-      craftItemName: (item as { itemName: string }).itemName,
+      craftItemName: (item as unknown as { itemName: string }).itemName,
       hasRecipe: true,
       allMaterialsMet,
       lines,

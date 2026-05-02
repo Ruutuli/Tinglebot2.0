@@ -1,6 +1,6 @@
 import mongoose from "mongoose";
 
-type ItemCraftFields = {
+export type ItemCraftFields = {
   craftingJobs?: string[];
   staminaToCraft?: unknown;
 };
@@ -63,6 +63,17 @@ export type CharacterUnion = {
   icon?: string;
 };
 
+type LeanCharacterRow = {
+  _id: unknown;
+  userId?: string;
+  name?: unknown;
+  job?: unknown;
+  homeVillage?: string;
+  currentStamina?: unknown;
+  maxStamina?: number;
+  icon?: string;
+} | null;
+
 export async function loadCharacterUnionById(id: string): Promise<CharacterUnion | null> {
   if (!mongoose.Types.ObjectId.isValid(id)) return null;
 
@@ -70,10 +81,10 @@ export async function loadCharacterUnionById(id: string): Promise<CharacterUnion
   const ModCharacterModule = await import("@/models/ModCharacterModel.js");
   const ModCharacter = ModCharacterModule.default || ModCharacterModule;
 
-  const c = await Character.findById(id)
+  const c = (await Character.findById(id)
     .select("userId name job homeVillage currentStamina maxStamina icon")
     .lean()
-    .exec();
+    .exec()) as unknown as LeanCharacterRow;
   if (c && typeof c.userId === "string") {
     const maxS = Math.max(0, Number((c as { maxStamina?: number }).maxStamina) || 0);
     const iconRaw = (c as { icon?: string }).icon;
@@ -90,10 +101,10 @@ export async function loadCharacterUnionById(id: string): Promise<CharacterUnion
     };
   }
 
-  const m = await ModCharacter.findById(id)
+  const m = (await ModCharacter.findById(id)
     .select("userId name job homeVillage currentStamina maxStamina icon")
     .lean()
-    .exec();
+    .exec()) as unknown as LeanCharacterRow;
   if (m && typeof m.userId === "string") {
     const maxS = Math.max(0, Number((m as { maxStamina?: number }).maxStamina) || 999);
     const iconRaw = (m as { icon?: string }).icon;

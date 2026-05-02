@@ -7,26 +7,36 @@ import {
   loadCharacterIconForOwner,
   loadCharacterUnionById,
   parseStaminaToCraft,
+  type ItemCraftFields,
   userOwnsCharacterName,
 } from "@/lib/crafting-request-helpers";
 import type { CraftingRequestNotifyPayload } from "@/lib/craftingRequestsNotify";
 
-export async function getCraftItemByName(itemName: string) {
+export type CraftItemLean = ItemCraftFields & {
+  itemName: string;
+  image?: string;
+  crafting?: boolean;
+  _id: mongoose.Types.ObjectId;
+};
+
+export async function getCraftItemByName(itemName: string): Promise<CraftItemLean | null> {
   const Item = (await import("@/models/ItemModel.js")).default;
-  return Item.findOne({
+  const doc = await Item.findOne({
     itemName: itemName.trim(),
     crafting: true,
   })
     .select("itemName image craftingJobs staminaToCraft crafting")
     .lean()
     .exec();
+  if (doc == null) return null;
+  return doc as unknown as CraftItemLean;
 }
 
 type SessionUser = { id: string; global_name?: string | null; username?: string | null };
 
 export type ValidatedCraftingRequestBody = {
   requesterCharacterName: string;
-  item: NonNullable<Awaited<ReturnType<typeof getCraftItemByName>>>;
+  item: CraftItemLean;
   targetMode: "open" | "specific";
   targetCharacterId: mongoose.Types.ObjectId | null;
   targetCharacterName: string;
