@@ -104,7 +104,7 @@ const { getGrottoMazeOutcome, getGrottoMazeTrapOutcome, getGazepScryingOutcome, 
 const { getRandomMazeEntryFlavor } = require('@/data/grottoMazeEntryFlavors.js');
 // Test of Power uses normal monsters from MonsterModel (tier 5+) and their images
 const { getRandomBlessingFlavor } = require('@/data/grottoBlessingOutcomes.js');
-const { getRandomOldMap, OLD_MAPS_LINK, OLD_MAP_ICON_URL, MAP_EMBED_BORDER_URL } = require("../../data/oldMaps.js");
+const { getRandomOldMap, OLD_MAPS_LINK, OLD_MAP_ICON_URL, MAP_EMBED_BORDER_URL, formatOldMapLeadsToLabel } = require("../../data/oldMaps.js");
 const { getRandomCampFlavor, getRandomSafeSpaceFlavor } = require("../../data/explorationMessages.js");
 const { getEffectiveQuadrantStatus, isPreestablishedSecured, isPreestablishedNoCamp } = require("../../data/preestablishedSecuredQuadrants.js");
 const { START_POINTS_BY_REGION } = require("../../data/explorationStartPoints.js");
@@ -1705,6 +1705,17 @@ async function pullGrottoDiscoveriesFromQuadrant(squareId, quadrantId) {
   ).catch(() => {});
 }
 
+// Remove legacy map-led discoveries stored as type "shrine" (mechanically a grotto) without touching real grotto rows.
+async function pullStaleShrineDiscoveriesFromQuadrant(squareId, quadrantId) {
+  if (!squareId || !quadrantId) return;
+  const qd = String(quadrantId).trim().toUpperCase();
+  await Square.updateOne(
+    { squareId: new RegExp(`^${String(squareId).trim().replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}$`, "i") },
+    { $pull: { "quadrants.$[q].discoveries": { type: "shrine" } } },
+    { arrayFilters: [{ "q.quadrantId": qd }] }
+  ).catch(() => {});
+}
+
 // ------------------- pushDiscoveryToMap ------------------
 // Add discovery to Square.quadrants[].discoveries for map display.
 // Resolves square/quadrant via findExactMapSquareAndQuadrant so updates always match the DB; stores canonical discoveryKey (uppercase square|quadrant).
@@ -1732,7 +1743,9 @@ async function pushDiscoveryToMap(party, outcomeType, at, userId, options = {}) 
  if (outcomeType === "grotto") {
   discovery.grottoStatus = options.grottoStatus ?? (options.name ? "cleansed" : "found");
   // Ensure only one grotto discovery per quadrant (avoid duplicates from dashboard pin fallback or double-push).
-  await pullGrottoDiscoveriesFromQuadrant(exactSquareId, exactQuadrantId);
+  if (!options.skipGrottoPull) {
+   await pullGrottoDiscoveriesFromQuadrant(exactSquareId, exactQuadrantId);
+  }
  }
  const updateResult = await Square.updateOne(
   { squareId: exactSquareId },
@@ -4510,7 +4523,7 @@ module.exports = {
     if (!discovery) {
       const revisitable = (discoveries || []).filter((d) => {
         const t = String(d.type || "").toLowerCase();
-        return t === "monster_camp" || t === "grotto";
+        return t === "monster_camp" || t === "grotto" || t === "shrine";
       });
       const locationStr = `${party.square} ${party.quadrant}`;
       const discoveryNotFoundEmbed = new EmbedBuilder()
@@ -4527,7 +4540,10 @@ module.exports = {
       if (revisitable.length > 0) {
         const listLines = revisitable.map((d) => {
           const t = String(d.type || "").toLowerCase();
-          const label = t === "grotto" ? (d.name && String(d.name).trim() ? d.name : "Grotto") : "Monster camp";
+          const label =
+           t === "grotto" || t === "shrine"
+            ? (d.name && String(d.name).trim() ? d.name : "Grotto")
+            : "Monster camp";
           return `• **${label}**`;
         });
         discoveryNotFoundEmbed.addFields({
@@ -4555,12 +4571,13 @@ module.exports = {
       return interaction.editReply({ embeds: [discoveryNotFoundEmbed] });
     }
     const discoveryType = String(discovery.type || "").toLowerCase();
-    if (discoveryType !== "monster_camp" && discoveryType !== "grotto") {
+    const discoveryTypeEffective = discoveryType === "shrine" ? "grotto" : discoveryType;
+    if (discoveryType !== "monster_camp" && discoveryType !== "grotto" && discoveryType !== "shrine") {
      return interaction.editReply({ embeds: [createExplorationErrorEmbed("❌ **Invalid discovery type**", "You can only revisit monster camps and grottos. That discovery is not one of those.", { party, expeditionId, location: `${party.square} ${party.quadrant}`, nextCharacter: party?.characters?.[party?.currentTurn] ?? null, showNextAndCommands: true })] });
     }
 
     const atActiveGrottoDisc = await hasActiveGrottoAtLocation(party, expeditionId);
-    if (atActiveGrottoDisc && discoveryType === "monster_camp") {
+    if (atActiveGrottoDisc && discoveryTypeEffective === "monster_camp") {
      const grotto = await Grotto.findOne({
       squareId,
       quadrantId,
@@ -4592,7 +4609,7 @@ module.exports = {
     const location = `${party.square} ${party.quadrant}`;
     const nextCharacter = party.characters[party.currentTurn] ?? null;
 
-    if (discoveryType === "monster_camp") {
+    if (discoveryTypeEffective === "monster_camp") {
      // In testing mode waves still run; damage/hearts use party totals only (no persist to Character DB)
      const regionKey = (party.region && String(party.region).trim()) || "Eldin";
      const regionCapitalized = regionKey.charAt(0).toUpperCase() + regionKey.slice(1).toLowerCase();
@@ -4695,7 +4712,7 @@ module.exports = {
      return interaction.editReply({ embeds: [embed] });
     }
 
-    if (discoveryType === "grotto") {
+    if (discoveryTypeEffective === "grotto") {
      // Find any unsealed grotto at this location (one grotto per square/quadrant; may have been cleansed by this or a previous expedition)
      const grotto = await Grotto.findOne({
       squareId: exactIRegex(squareId),
@@ -6177,16 +6194,29 @@ module.exports = {
            }
           }
          } else if (ruinsOutcome === "star_fragment") {
+          let ruinsStarFragmentAdded = false;
           if (!false) {
            try {
             await addItemInventoryDatabase(ruinsCharacter._id, "Star Fragment", 1, i, "Exploration - Ruins");
+            ruinsStarFragmentAdded = true;
            } catch (err) {
             handleInteractionError(err, i, { source: "explore.js ruins star_fragment" });
            }
           }
+          if (ruinsStarFragmentAdded) {
+           if (!freshParty.gatheredItems) freshParty.gatheredItems = [];
+           freshParty.gatheredItems.push({
+            characterId: ruinsCharacter._id,
+            characterName: ruinsCharacter.name,
+            itemName: "Star Fragment",
+            quantity: 1,
+            emoji: "⭐",
+           });
+           freshParty.markModified("gatheredItems");
+          }
           resultDescription = summaryLine + `**${ruinsCharacter.name}** collected a **Star Fragment** in the ruins!\n\n↳ **Continue** ➾ </explore roll:${getExploreCommandId()}> — id: \`${expeditionId}\` charactername: **${nextCharacter?.name ?? "—"}**`;
           progressMsg += "Found a Star Fragment.";
-          lootForLog = { itemName: "Star Fragment", emoji: "" };
+          lootForLog = { itemName: "Star Fragment", emoji: "⭐" };
           pushProgressLog(freshParty, ruinsCharacter.name, "ruins_explored", progressMsg, lootForLog, ruinsCostsForLog);
          } else if (ruinsOutcome === "blight") {
           const partyHadBlightCandle = await partyHasRelic(freshParty.characters || [], 'Blight Candle');
@@ -6219,16 +6249,29 @@ module.exports = {
           pushProgressLog(freshParty, ruinsCharacter.name, "ruins_explored", progressMsg, undefined, ruinsCostsForLog);
          } else {
           // goddess_plume
+          let ruinsGoddessPlumeAdded = false;
           if (!false) {
            try {
             await addItemInventoryDatabase(ruinsCharacter._id, "Goddess Plume", 1, i, "Exploration - Ruins");
+            ruinsGoddessPlumeAdded = true;
            } catch (err) {
             handleInteractionError(err, i, { source: "explore.js ruins goddess_plume" });
            }
           }
+          if (ruinsGoddessPlumeAdded) {
+           if (!freshParty.gatheredItems) freshParty.gatheredItems = [];
+           freshParty.gatheredItems.push({
+            characterId: ruinsCharacter._id,
+            characterName: ruinsCharacter.name,
+            itemName: "Goddess Plume",
+            quantity: 1,
+            emoji: "🪶",
+           });
+           freshParty.markModified("gatheredItems");
+          }
           resultDescription = summaryLine + `**${ruinsCharacter.name}** excavated a **Goddess Plume** from the ruins!\n\n↳ **Continue** ➾ </explore roll:${getExploreCommandId()}> — id: \`${expeditionId}\` charactername: **${nextCharacter?.name ?? "—"}**`;
           progressMsg += "Excavated a Goddess Plume.";
-          lootForLog = { itemName: "Goddess Plume", emoji: "" };
+          lootForLog = { itemName: "Goddess Plume", emoji: "🪶" };
           pushProgressLog(freshParty, ruinsCharacter.name, "ruins_explored", progressMsg, lootForLog, ruinsCostsForLog);
          }
          // Persist progress log (incl. "ruins" entry for Report to town hall) before showing embed/buttons
@@ -8293,7 +8336,9 @@ module.exports = {
     if (quadWithMap && quadWithMap.oldMapNumber != null) {
       const mapItemName = `Map #${quadWithMap.oldMapNumber}`;
       const leadsTo = (quadWithMap.oldMapLeadsTo || "chest").toLowerCase();
-      const leadsToLabel = (quadWithMap.oldMapLeadsTo || "treasure").charAt(0).toUpperCase() + (quadWithMap.oldMapLeadsTo || "").slice(1).toLowerCase();
+      const leadsToLabel =
+       formatOldMapLeadsToLabel(quadWithMap.oldMapLeadsTo) ||
+       (quadWithMap.oldMapLeadsTo || "treasure").charAt(0).toUpperCase() + (quadWithMap.oldMapLeadsTo || "").slice(1).toLowerCase();
       const whoHasUnexpiredMap = [];
       try {
         for (const pc of party.characters) {
@@ -8364,11 +8409,35 @@ module.exports = {
               } else {
                 moveDescription += `\n\n🗺️ **Your map led you here!** **${mapOwnerName}**'s map revealed a **Relic**!`;
               }
-            } else if (leadsTo === "shrine") {
-              await pushDiscoveryToMap(party, "shrine", new Date(), interaction.user?.id);
-              pushProgressLog(party, mapOwnerName, "map_shrine", `Map #${quadWithMap.oldMapNumber} led to a shrine at **${locationMove}**.`, undefined, undefined);
+            } else if (leadsTo === "grotto" || leadsTo === "shrine") {
+              // Quadrant oldMapLeadsTo is "grotto" (legacy DB may still say "shrine"). Map row is always type "grotto" for /explore discovery.
+              const sqMove = String(party.square || "").trim();
+              const qMove = String(party.quadrant || "").trim();
+              const resolvedMapSq = await findExactMapSquareAndQuadrant(sqMove, qMove);
+              if (resolvedMapSq) {
+               await pullStaleShrineDiscoveriesFromQuadrant(resolvedMapSq.exactSquareId, resolvedMapSq.exactQuadrantId);
+               const sqLean = await Square.findOne({ squareId: resolvedMapSq.exactSquareId }).select("quadrants").lean();
+               const qLean = sqLean?.quadrants?.find(
+                (qq) => String(qq.quadrantId).toUpperCase() === resolvedMapSq.exactQuadrantId
+               );
+               const hasGrottoDiscovery = (qLean?.discoveries || []).some(
+                (d) => String(d.type || "").toLowerCase() === "grotto"
+               );
+               if (!hasGrottoDiscovery) {
+                await pushDiscoveryToMap(party, "grotto", new Date(), interaction.user?.id, {
+                 grottoStatus: "found",
+                 skipGrottoPull: true,
+                });
+               }
+              } else {
+               await pushDiscoveryToMap(party, "grotto", new Date(), interaction.user?.id, {
+                grottoStatus: "found",
+                skipGrottoPull: true,
+               });
+              }
+              pushProgressLog(party, mapOwnerName, "map_grotto", `Map #${quadWithMap.oldMapNumber} led to a grotto at **${locationMove}**.`, undefined, undefined);
               await party.save();
-              moveDescription += `\n\n🗺️ **Your map led you here!** **${mapOwnerName}**'s map revealed a **Shrine** — discovery added to the map.`;
+              moveDescription += `\n\n🗺️ **Your map led you here!** **${mapOwnerName}**'s map revealed a **Grotto** — discovery added to the map.`;
             } else if (leadsTo === "ruins") {
               await pushDiscoveryToMap(party, "ruins", new Date(), interaction.user?.id);
               pushProgressLog(party, mapOwnerName, "map_ruins", `Map #${quadWithMap.oldMapNumber} led to ruins at **${locationMove}**.`, undefined, undefined);
@@ -9679,13 +9748,19 @@ module.exports = {
     let totalHeartsRecovered = 0;
     let sumMaxHearts = 0;
     let sumMaxStamina = 0;
+    let sumHeartyTempHearts = 0;
     for (let i = 0; i < party.characters.length; i++) {
-     const char = await Character.findById(party.characters[i]._id);
+     let char = await Character.findById(party.characters[i]._id);
+     if (!char) char = await ModCharacter.findById(party.characters[i]._id);
      if (!char) continue;
      const maxHrt = char.maxHearts ?? 0;
      const maxStam = char.maxStamina ?? 0;
      sumMaxHearts += maxHrt;
      sumMaxStamina += maxStam;
+     const hb = char.buff;
+     if (hb?.active && hb.type === "hearty" && Number(hb.effects?.extraHearts) > 0) {
+      sumHeartyTempHearts += Number(hb.effects.extraHearts) || 0;
+     }
      // Backfill per-character max values if missing
      if (!party.characters[i].maxHearts || party.characters[i].maxHearts === 0) {
       party.characters[i].maxHearts = maxHrt;
@@ -9710,14 +9785,16 @@ module.exports = {
      party.markModified("maxStamina");
     }
     party.markModified("characters");
-    if (!paidHeartsToStruggle && totalHeartsRecovered < 1 && (party.totalHearts ?? 0) < sumMaxHearts) totalHeartsRecovered = 1;
+    // Pool can exceed sum of maxHearts (e.g. Hearty Elixir temp on currentHearts); cap recovery to that effective max, not base max only.
+    const campPoolHeartsCap = sumMaxHearts + sumHeartyTempHearts;
+    if (!paidHeartsToStruggle && totalHeartsRecovered < 1 && (party.totalHearts ?? 0) < campPoolHeartsCap) totalHeartsRecovered = 1;
 
     const quadrantMetaForCampFlavor = await getQuadrantMeta(party.square, party.quadrant);
     const campInHotSpring = (quadrantMetaForCampFlavor.special || []).some((s) => String(s || "").toLowerCase() === "hot spring");
     let hotSpringCampExtraHearts = 0;
     if (campInHotSpring && !paidHeartsToStruggle) {
-     const projectedHearts = Math.min(sumMaxHearts, (party.totalHearts ?? 0) + totalHeartsRecovered);
-     const missingAfterCamp = sumMaxHearts - projectedHearts;
+     const projectedHearts = Math.min(campPoolHeartsCap, (party.totalHearts ?? 0) + totalHeartsRecovered);
+     const missingAfterCamp = campPoolHeartsCap - projectedHearts;
      if (missingAfterCamp > 0 && Math.random() < HOT_SPRING_CAMP_EXTRA_BONUS_CHANCE) {
       const rawCapExtra = Math.floor(sumMaxHearts * HOT_SPRING_HEAL_FRACTION);
       const healCapExtra = Math.max(rawCapExtra, 1);
@@ -9743,7 +9820,7 @@ module.exports = {
       totalStaminaRecovered += hotSpringCampExtraStamina;
      }
     }
-    party.totalHearts = Math.min(sumMaxHearts, Math.max(0, (party.totalHearts ?? 0) + totalHeartsRecovered));
+    party.totalHearts = Math.min(campPoolHeartsCap, Math.max(0, (party.totalHearts ?? 0) + totalHeartsRecovered));
     party.totalStamina = Math.min(sumMaxStamina, Math.max(0, (party.totalStamina ?? 0) + totalStaminaRecovered));
     party.markModified("totalHearts");
     party.markModified("totalStamina");

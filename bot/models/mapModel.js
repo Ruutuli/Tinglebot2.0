@@ -40,7 +40,7 @@ const QuadrantSchema = new Schema({
   exploredAt: { type: Date, default: null },
   // Old map location: when a party reaches this quadrant, prompt if someone has Map #N
   oldMapNumber: { type: Number, default: null },
-  oldMapLeadsTo: { type: String, default: null }, // 'chest' | 'ruins' | 'relic' | 'shrine'
+  oldMapLeadsTo: { type: String, default: null }, // 'chest' | 'ruins' | 'relic' | 'grotto' (legacy: 'shrine')
   // Ruin-rest: when a party found a camp spot in ruins here, future visits auto-recover this much stamina
   ruinRestStamina: { type: Number, default: null },
   /** Pre-established path/village: safe to pass through but camping not allowed. */

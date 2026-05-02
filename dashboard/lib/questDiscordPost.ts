@@ -120,6 +120,18 @@ export type QuestDoc = {
   runByUsername?: string | null;
   /** When set (e.g. dashboard preview with item emojis), used instead of token/specialNote reward formatting. */
   rewardsDisplayText?: string | null;
+  requiredRolls?: number | null;
+  /** Quest board message (bot or dashboard). */
+  messageID?: string | null;
+  targetChannel?: string | null;
+  posted?: boolean | null;
+  participants?: Record<string, QuestParticipantLean> | Map<string, QuestParticipantLean> | null;
+};
+
+type QuestParticipantLean = {
+  characterName?: string;
+  userId?: string;
+  username?: string | null;
 };
 
 const QUEST_EMBED_DESC_MAX = 4096;
@@ -135,6 +147,94 @@ function resolvePostRequirement(quest: QuestDoc): number {
   const n = typeof raw === "number" && Number.isFinite(raw) ? raw : Number(raw);
   if (!Number.isFinite(n)) return DEFAULT_POST_REQUIREMENT;
   return Math.max(0, Math.floor(n));
+}
+
+function resolveRequiredRolls(quest: QuestDoc): number {
+  const raw = quest.requiredRolls;
+  if (raw === null || raw === undefined) return 1;
+  const n = typeof raw === "number" && Number.isFinite(raw) ? raw : Number(raw);
+  if (!Number.isFinite(n)) return 1;
+  return Math.max(1, Math.floor(n));
+}
+
+function getParticipantsRecords(quest: QuestDoc): QuestParticipantLean[] {
+  const p = quest.participants as unknown;
+  if (!p || typeof p !== "object") return [];
+  if (p instanceof Map) {
+    return [...p.values()] as QuestParticipantLean[];
+  }
+  return Object.values(p as Record<string, QuestParticipantLean>);
+}
+
+function formatParticipantEmbedField(quest: QuestDoc): { name: string; value: string; inline: boolean } {
+  const list = getParticipantsRecords(quest);
+  const lines = list.map((part) => {
+    const name = String(part.characterName ?? "Unknown").trim();
+    const un =
+      part.username != null && String(part.username).trim() ? String(part.username).trim() : null;
+    const uid = String(part.userId ?? "").trim();
+    if (un) return `• ${name} (${un})`;
+    if (uid) return `• ${name} (${uid})`;
+    return `• ${name}`;
+  });
+  const cap =
+    quest.participantCap != null && !Number.isNaN(Number(quest.participantCap))
+      ? Number(quest.participantCap)
+      : null;
+  const countStr =
+    cap != null
+      ? `${list.length}/${cap}${list.length >= cap ? " - FULL" : ""}`
+      : String(list.length);
+  const value = lines.length > 0 ? lines.join("\n") : "None";
+  const truncated = value.length > 1024 ? value.slice(0, 1021) + "..." : value;
+  return {
+    name: `**__👥 Participants (${countStr})__**`,
+    value: truncated,
+    inline: false,
+  };
+}
+
+type DiscordEmbedField = { name?: string; value?: string; inline?: boolean };
+
+function isPreservedLiveBoardField(fieldName: string): boolean {
+  const n = fieldName.toLowerCase();
+  if (n.includes("participant")) return false;
+  if (n.includes("recent activity")) return false;
+  if (n.includes("status")) return true;
+  if (n.includes("rp posts")) return true;
+  if (n.includes("posts required")) return true;
+  if (n.includes("table rolls") || n.includes("successful rolls")) return true;
+  if (n.includes("blupee rupees")) return true;
+  if (n.includes("mod action")) return true;
+  return false;
+}
+
+/** Keep bot-maintained progress/status fields and recent activity when refreshing copy from the dashboard. */
+function mergeLiveQuestBoardFields(
+  freshMain: { fields?: DiscordEmbedField[] },
+  oldFields: DiscordEmbedField[] | undefined
+): void {
+  const fields = freshMain.fields;
+  if (!fields?.length || !oldFields?.length) return;
+
+  const participantIdx = fields.findIndex((f) => String(f.name ?? "").includes("Participants"));
+  const insertAt = participantIdx >= 0 ? participantIdx : fields.length;
+  const preserved = oldFields.filter((f) => isPreservedLiveBoardField(String(f.name ?? "")));
+  if (preserved.length) {
+    fields.splice(insertAt, 0, ...preserved);
+  }
+
+  const oldAct = oldFields.find((f) => String(f.name ?? "").includes("Recent Activity"));
+  if (oldAct) {
+    const ai = fields.findIndex((f) => String(f.name ?? "").includes("Recent Activity"));
+    if (ai >= 0) {
+      fields[ai] = {
+        name: oldAct.name,
+        value: oldAct.value ?? "—",
+        inline: false,
+      };
+    }
+  }
 }
 
 function linesToBlockquote(lines: string[]): string {
@@ -293,6 +393,9 @@ export function buildQuestEmbeds(quest: QuestDoc): Record<string, unknown>[] {
   if (questType === "RP" || questType === "Interactive / RP") {
     if (effPosts > 0) participationLines.push(`📝 Post requirement: ${effPosts}`);
   }
+  if (questType === "Interactive" || questType === "Interactive / RP") {
+    participationLines.push(`🎲 Successful rolls required: ${resolveRequiredRolls(quest)}`);
+  }
   if (tableroll)
     participationLines.push(
       `🎲 Table roll${tableroll.includes(",") ? "s" : ""}: **${tableroll}**`
@@ -348,7 +451,7 @@ export function buildQuestEmbeds(quest: QuestDoc): Record<string, unknown>[] {
         value: `\`/quest join questid:${questID}\``,
         inline: false,
       },
-      { name: "**__👥 Participants (0)__**", value: "None", inline: false },
+      formatParticipantEmbedField(quest),
       { name: "**__📊 Recent Activity__**", value: "—", inline: false },
     ],
     image: { url: BORDER_IMAGE },
@@ -423,5 +526,42 @@ export async function postQuestToQuestChannel(quest: QuestDoc): Promise<string |
   } catch (err) {
     console.warn("[questDiscordPost] Failed to post quest to channel:", err);
     return null;
+  }
+}
+
+/**
+ * Refresh the quest board message after a dashboard edit. Rebuilds static embeds from the quest doc,
+ * merges live fields (status, RP/roll progress, recent activity) from the existing Discord message when possible.
+ */
+export async function updateQuestBoardMessage(quest: QuestDoc): Promise<boolean> {
+  const messageId = String(quest.messageID ?? "").trim();
+  const channelId = String(quest.targetChannel?.trim() || QUEST_CHANNEL_ID || "").trim();
+  if (!messageId || !channelId) return false;
+
+  let oldFirst: { fields?: DiscordEmbedField[] } | null = null;
+  try {
+    const msg = await discordApiRequest<{ embeds?: { fields?: DiscordEmbedField[] }[] }>(
+      `channels/${channelId}/messages/${messageId}`,
+      "GET"
+    );
+    oldFirst = msg?.embeds?.[0] ?? null;
+  } catch {
+    /* merge optional */
+  }
+
+  const embeds = buildQuestEmbeds(quest);
+  const main = embeds[0];
+  if (main && typeof main === "object" && oldFirst?.fields?.length) {
+    mergeLiveQuestBoardFields(main as { fields?: DiscordEmbedField[] }, oldFirst.fields);
+  }
+
+  try {
+    await discordApiRequest(`channels/${channelId}/messages/${messageId}`, "PATCH", {
+      embeds: embeds.slice(0, QUEST_EMBED_MAX_PER_MESSAGE),
+    });
+    return true;
+  } catch (err) {
+    console.warn("[questDiscordPost] Failed to update quest board message:", err);
+    return false;
   }
 }

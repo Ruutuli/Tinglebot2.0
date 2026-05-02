@@ -451,6 +451,10 @@ async function handleAutocompleteInternal(interaction, commandName, focusedOptio
                 if (focusedOption.name === "questid") {
                   await handleQuestIdAutocomplete(interaction, focusedOption);
                 }
+              } else if (modSubcommand === "questresearch") {
+                if (focusedOption.name === "questid") {
+                  await handleQuestIdAutocomplete(interaction, focusedOption, { rpOnly: true });
+                }
               } else if (modSubcommand === "villageresources") {
                 if (focusedOption.name === "material") {
                   await handleVillageResourcesMaterialAutocomplete(interaction, focusedOption);
@@ -883,6 +887,10 @@ async function handleAutocompleteInternal(interaction, commandName, focusedOptio
                   await handleQuestIdAutocomplete(interaction, focusedOption);
                 }
               } else if (questSubcommand === "setrpposts") {
+                if (focusedOption.name === "questid") {
+                  await handleQuestIdAutocomplete(interaction, focusedOption, { rpOnly: true });
+                }
+              } else if (questSubcommand === "setresearchvillage") {
                 if (focusedOption.name === "questid") {
                   await handleQuestIdAutocomplete(interaction, focusedOption, { rpOnly: true });
                 }
@@ -3945,17 +3953,25 @@ async function handleExploreDiscoveryAutocomplete(interaction, focusedOption) {
    ]);
   }
 
-  const revisitTypes = ["monster_camp", "grotto"];
+  const revisitTypes = ["monster_camp", "grotto", "shrine"];
+  const grottoLike = (t) => t === "grotto" || t === "shrine";
   const filteredDiscoveries = quadrant.discoveries.filter((d) =>
    revisitTypes.includes(String(d.type || "").toLowerCase())
   );
   const choices = filteredDiscoveries.map((d) => {
    const type = String(d.type || "").toLowerCase();
    const label = type === "monster_camp" ? "Monster Camp" : "Grotto";
-   const grottoName = (type === "grotto" && d.name && String(d.name).trim()) || null;
+   const grottoName = (grottoLike(type) && d.name && String(d.name).trim()) || null;
    const displayLabel = grottoName || label;
-   const totalOfType = filteredDiscoveries.filter((x) => String(x.type || "").toLowerCase() === type).length;
-   const suffix = filteredDiscoveries.filter((x) => String(x.type || "").toLowerCase() === type).indexOf(d) + 1;
+   const totalOfType = filteredDiscoveries.filter((x) => {
+    const xt = String(x.type || "").toLowerCase();
+    return type === "monster_camp" ? xt === "monster_camp" : grottoLike(xt);
+   }).length;
+   const suffix =
+    filteredDiscoveries.filter((x) => {
+     const xt = String(x.type || "").toLowerCase();
+     return type === "monster_camp" ? xt === "monster_camp" : grottoLike(xt);
+    }).indexOf(d) + 1;
    const name =
     totalOfType > 1 ? `${displayLabel} · ${squareId} ${quadrantId} (${suffix})` : `${displayLabel} · ${squareId} ${quadrantId}`;
    return { name: name.length > 100 ? name.slice(0, 97) + "..." : name, value: d.discoveryKey || name };

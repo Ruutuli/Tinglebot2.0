@@ -607,6 +607,10 @@ type FormState = {
   postedAt: string;
   botNotes: string;
   artWritingMode: "both" | "either";
+  /** Paste Discord "Copy Message Link" for the live quest board post (edit only). */
+  discordBoardMessageLink: string;
+  /** When guild id is unknown, shows stored channel/message ids until you paste a link. */
+  boardMessageIdsHint: string;
 };
 
 function getDefaultDateYYYYMM(): string {
@@ -650,6 +654,8 @@ const emptyForm: FormState = {
   postedAt: "",
   botNotes: "",
   artWritingMode: "both",
+  discordBoardMessageLink: "",
+  boardMessageIdsHint: "",
 };
 
 type ParsedToken = {
@@ -695,6 +701,33 @@ function parseTokenReward(tokenReward: string | number | undefined): ParsedToken
 
 function parseInteractiveTablerollTokens(raw: string): string[] {
   return [...new Set(raw.split(/[\n,]+/).map((s) => s.trim()).filter(Boolean))];
+}
+
+/** Jump URL for meta field; requires guild id on the quest doc or NEXT_PUBLIC_DISCORD_GUILD_ID. */
+function buildDiscordBoardMessageLinkForForm(q: QuestRecord): {
+  discordBoardMessageLink: string;
+  boardMessageIdsHint: string;
+} {
+  const mid = String((q as Record<string, unknown>).messageID ?? "").trim();
+  const ch = String((q as Record<string, unknown>).targetChannel ?? "").trim();
+  if (!mid || !ch) {
+    return { discordBoardMessageLink: "", boardMessageIdsHint: "" };
+  }
+  const guild =
+    String((q as Record<string, unknown>).guildId ?? "").trim() ||
+    (typeof process.env.NEXT_PUBLIC_DISCORD_GUILD_ID === "string"
+      ? process.env.NEXT_PUBLIC_DISCORD_GUILD_ID.trim()
+      : "");
+  if (guild) {
+    return {
+      discordBoardMessageLink: `https://discord.com/channels/${guild}/${ch}/${mid}`,
+      boardMessageIdsHint: "",
+    };
+  }
+  return {
+    discordBoardMessageLink: "",
+    boardMessageIdsHint: `Saved board target: channel ${ch}, message ${mid}. Paste Copy Message Link here, then save.`,
+  };
 }
 
 /** Discord thread snowflakes from manual override field (comma / newline / whitespace separated). */
@@ -884,6 +917,7 @@ function questToForm(q: QuestRecord): FormState {
     })(),
     botNotes: String(q.botNotes ?? ""),
     artWritingMode: (q as { artWritingMode?: string }).artWritingMode === "either" ? "either" : "both",
+    ...buildDiscordBoardMessageLinkForForm(q),
   };
 }
 
@@ -990,6 +1024,9 @@ function formToBody(f: FormState, isEdit: boolean): Record<string, unknown> {
   if (f.minRequirements.trim() !== "") {
     const n = parseInt(f.minRequirements, 10);
     body.minRequirements = Number.isNaN(n) ? f.minRequirements : n;
+  }
+  if (isEdit) {
+    body.discordBoardMessageLink = f.discordBoardMessageLink.trim();
   }
   return body;
 }
@@ -1291,6 +1328,7 @@ export default function AdminQuestsPage() {
   const [deleteFromListId, setDeleteFromListId] = useState<string | null>(null);
   const [previewPosting, setPreviewPosting] = useState(false);
   const [viewPreviewPosting, setViewPreviewPosting] = useState(false);
+  const [syncingBoard, setSyncingBoard] = useState(false);
   const [tablerollCatalog, setTablerollCatalog] = useState<TablerollCatalogEntry[]>([]);
   const [sortDateOrder, setSortDateOrder] = useState<"newest" | "oldest">("newest");
   const [manageModalMounted, setManageModalMounted] = useState(false);
@@ -1386,6 +1424,25 @@ export default function AdminQuestsPage() {
       setViewPreviewPosting(false);
     }
   }, [viewQuest]);
+
+  const handleSyncBoardEmbed = useCallback(async () => {
+    if (!editingId) return;
+    setSyncingBoard(true);
+    setError(null);
+    setSuccess(null);
+    try {
+      const res = await fetch(`/api/admin/quests/${editingId}/sync-board`, { method: "POST" });
+      const data = (await res.json().catch(() => ({}))) as { error?: string; message?: string };
+      if (!res.ok) {
+        throw new Error(data.message ?? data.error ?? "Failed to update Discord board message");
+      }
+      setSuccess("Discord board message updated from the saved quest.");
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setSyncingBoard(false);
+    }
+  }, [editingId]);
 
   const fetchQuests = useCallback(async () => {
     setLoading(true);
@@ -2219,6 +2276,45 @@ export default function AdminQuestsPage() {
                           <div>
                             <label className="mb-1 block text-sm font-medium text-[var(--totk-grey-200)]">Posted at</label>
                             <input type="datetime-local" value={form.postedAt} onChange={(e) => setField("postedAt", e.target.value)} className="w-full rounded border border-[var(--totk-dark-ocher)] bg-[var(--botw-warm-black)] px-3 py-2 text-[var(--totk-ivory)]" />
+                          </div>
+                          <div className="sm:col-span-2 space-y-2">
+                            <label className="block text-sm font-medium text-[var(--totk-grey-200)]">
+                              Discord quest board message
+                            </label>
+                            <p className="text-xs text-[var(--totk-grey-200)]">
+                              In Discord, right-click the live quest post → <strong className="text-[var(--totk-ivory)]">Copy Message Link</strong>, paste below, then{" "}
+                              <strong className="text-[var(--totk-ivory)]">Update Quest</strong>. The bot edits that message to match the saved quest. Clear the field and save to unlink.
+                            </p>
+                            {form.boardMessageIdsHint ? (
+                              <p className="text-xs text-[var(--totk-mid-ocher)]">{form.boardMessageIdsHint}</p>
+                            ) : null}
+                            <input
+                              type="url"
+                              autoComplete="off"
+                              placeholder="https://discord.com/channels/…/…/…"
+                              value={form.discordBoardMessageLink}
+                              onChange={(e) =>
+                                setForm((prev) => ({
+                                  ...prev,
+                                  discordBoardMessageLink: e.target.value,
+                                  boardMessageIdsHint: "",
+                                }))
+                              }
+                              className="w-full rounded border border-[var(--totk-dark-ocher)] bg-[var(--botw-warm-black)] px-3 py-2 text-[var(--totk-ivory)] placeholder:text-[var(--totk-grey-200)]/70"
+                            />
+                            <div className="flex flex-wrap items-center gap-2">
+                              <button
+                                type="button"
+                                onClick={handleSyncBoardEmbed}
+                                disabled={syncingBoard || !editingId}
+                                className="rounded-md border border-[var(--totk-mid-ocher)] bg-[var(--totk-mid-ocher)]/20 px-3 py-1.5 text-xs font-semibold text-[var(--totk-ivory)] hover:bg-[var(--totk-mid-ocher)]/40 disabled:opacity-50 disabled:cursor-not-allowed"
+                              >
+                                {syncingBoard ? "Updating…" : "Refresh board embed only"}
+                              </button>
+                              <span className="text-[11px] text-[var(--totk-grey-200)]">
+                                Uses the linked message in the database (save first if you just pasted a new link).
+                              </span>
+                            </div>
                           </div>
                           <div className="sm:col-span-2">
                             <label className="mb-1 block text-sm font-medium text-[var(--totk-grey-200)]">Bot notes</label>

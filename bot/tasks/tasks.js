@@ -1347,6 +1347,12 @@ function buildQuestPostEmbeds(quest) {
   if (questType === 'RP' || questType === 'Interactive / RP') {
     if (effPosts > 0) participationLines.push(`📝 Post requirement: ${effPosts}`);
   }
+  if (questType === 'Interactive' || questType === 'Interactive / RP') {
+    const rr = quest.requiredRolls != null && !isNaN(Number(quest.requiredRolls))
+      ? Math.max(1, Number(quest.requiredRolls))
+      : 1;
+    participationLines.push(`🎲 Successful rolls required: ${rr}`);
+  }
   if (tableroll) participationLines.push(`🎲 Table roll${tableroll.includes(',') ? 's' : ''}: **${tableroll}**`);
   const participationValue = participationLines.length ? participationLines.join('\n') : '—';
 
@@ -2953,7 +2959,7 @@ async function mapAppraisalSendCoordinatesDm(client, _data = {}) {
   try {
     const MapAppraisalRequest = require('@/models/MapAppraisalRequestModel.js');
     const OldMapFound = require('@/models/OldMapFoundModel.js');
-    const { getOldMapByNumber, OLD_MAP_ICON_URL, OLD_MAPS_LINK, MAP_EMBED_BORDER_URL } = require('@/data/oldMaps.js');
+    const { getOldMapByNumber, OLD_MAP_ICON_URL, OLD_MAPS_LINK, MAP_EMBED_BORDER_URL, formatOldMapLeadsToLabel } = require('@/data/oldMaps.js');
     const { sendDiscordDM } = require('@/utils/notificationService.js');
 
     const requests = await MapAppraisalRequest.find({
@@ -2968,7 +2974,8 @@ async function mapAppraisalSendCoordinatesDm(client, _data = {}) {
         const coordinates = mapInfo ? mapInfo.coordinates : '—';
         const mapLabel = `Map #${mapDoc.mapNumber}`;
         let desc = `Your old map has been deciphered.\n\n**${mapLabel}**\n**Coordinates:** ${coordinates}`;
-        if (mapInfo && mapInfo.leadsTo) desc += `\n**Leads to:** ${mapInfo.leadsTo}`;
+        const taskLeadsLabel = formatOldMapLeadsToLabel(mapInfo?.leadsTo);
+        if (taskLeadsLabel) desc += `\n**Leads to:** ${taskLeadsLabel}`;
         const dmEmbed = {
           title: '🗺️ Map appraised — your coordinates',
           description: desc,

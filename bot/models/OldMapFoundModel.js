@@ -16,10 +16,15 @@ const OldMapFoundSchema = new Schema({
   characterName: { type: String, required: true, index: true },
   mapNumber: { type: Number, required: true, min: 1, max: 46 },
   foundAt: { type: Date, default: Date.now },
+  /** Where this copy was found during exploration (e.g. "G9 Q4"). Finder is `characterName` / `characterId`. */
   locationFound: { type: String, default: '' },
   appraised: { type: Boolean, default: false },
   appraisedAt: { type: Date, default: null },
   appraisedBy: { type: String, default: null },
+  /** Snapshot from Map #N seed data at appraisal time: destination type (e.g. grotto, chest). */
+  leadsTo: { type: String, default: null },
+  /** Snapshot: coordinates where the map points (e.g. "G9-Q1"). */
+  leadsToCoordinates: { type: String, default: null },
   /** When set, this map copy was used at its location (one-and-done). */
   redeemedAt: { type: Date, default: null },
 }, { collection: 'oldMapsFound' });

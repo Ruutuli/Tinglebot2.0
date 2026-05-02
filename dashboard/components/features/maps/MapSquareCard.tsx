@@ -6,6 +6,14 @@
 
 import { useEffect, useState } from "react";
 
+/** Match bot oldMaps: grotto wording; legacy DB may still store "shrine". */
+function formatOldMapLeadsToDisplay(v: string | null | undefined): string {
+  if (v == null || v === "") return "—";
+  const t = v.toLowerCase();
+  if (t === "shrine" || t === "grotto") return "Grotto";
+  return v.charAt(0).toUpperCase() + v.slice(1).toLowerCase();
+}
+
 export type QuadrantDoc = {
   quadrantId?: string;
   status?: string;
@@ -301,7 +309,8 @@ function QuadrantBlock({ q, defaultOpen = false, isOpen: controlledOpen, onToggl
           )}
           {showOldMapLine && (q.oldMapNumber != null || q.oldMapLeadsTo) && (
             <p className="text-xs text-[var(--totk-grey-200)] flex items-center gap-1.5">
-              <i className="fas fa-map" aria-hidden /> Old map #{q.oldMapNumber ?? "?"} → {q.oldMapLeadsTo ?? "—"}
+              <i className="fas fa-map" aria-hidden /> Old map #{q.oldMapNumber ?? "?"} →{" "}
+              {formatOldMapLeadsToDisplay(q.oldMapLeadsTo)}
             </p>
           )}
           {q.ruinRestStamina != null && q.ruinRestStamina > 0 && (

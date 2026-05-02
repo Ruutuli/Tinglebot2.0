@@ -3,6 +3,7 @@
 // ============================================================================
 // Purpose:
 // - Populate `characterId` and `ownerUserId` on legacy old map rows.
+// - For appraised rows missing `leadsTo` / `leadsToCoordinates`, snapshot from Map # seed data.
 // - Match by exact character name (case-insensitive) across Character/ModCharacter.
 // - Emit unresolved rows for manual review.
 //
@@ -31,6 +32,7 @@ const MONGODB_URI = process.env.MONGODB_TINGLEBOT_URI || process.env.MONGODB_URI
 const OldMapFound = require(path.join(projectRoot, 'bot', 'models', 'OldMapFoundModel.js'));
 const Character = require(path.join(projectRoot, 'bot', 'models', 'CharacterModel.js'));
 const ModCharacter = require(path.join(projectRoot, 'bot', 'models', 'ModCharacterModel.js'));
+const { getMapDestinationSnapshot } = require(path.join(projectRoot, 'bot', 'utils', 'oldMapUtils.js'));
 
 function byNameKey(name) {
   return String(name || '').trim().toLowerCase();
@@ -144,6 +146,34 @@ async function main() {
   console.log(`Rows already complete: ${skippedAlreadyGood}`);
   console.log(`Rows unresolved: ${unresolved.length}`);
   console.log(`Report: ${reportPath}`);
+
+  // --- Appraisal destination snapshot (leadsTo / leadsToCoordinates) for appraised rows ---
+  const destRows = await OldMapFound.find({
+    appraised: true,
+    $or: [
+      { leadsTo: null },
+      { leadsTo: '' },
+      { leadsTo: { $exists: false } },
+      { leadsToCoordinates: null },
+      { leadsToCoordinates: '' },
+      { leadsToCoordinates: { $exists: false } },
+    ],
+  }).lean();
+
+  let destUpdated = 0;
+  for (const row of destRows) {
+    const snap = getMapDestinationSnapshot(row.mapNumber);
+    if (!snap.leadsTo && !snap.leadsToCoordinates) continue;
+    const set = {};
+    if (snap.leadsTo && !String(row.leadsTo || '').trim()) set.leadsTo = snap.leadsTo;
+    if (snap.leadsToCoordinates && !String(row.leadsToCoordinates || '').trim()) set.leadsToCoordinates = snap.leadsToCoordinates;
+    if (Object.keys(set).length === 0) continue;
+    if (!dryRun) {
+      await OldMapFound.updateOne({ _id: row._id }, { $set: set });
+    }
+    destUpdated += 1;
+  }
+  console.log(`\nAppraisal destination snapshot: ${destRows.length} appraised row(s) missing fields, ${destUpdated} updated${dryRun ? ' (dry-run only)' : ''}.`);
 
   await mongoose.disconnect();
   console.log('\nDone.');

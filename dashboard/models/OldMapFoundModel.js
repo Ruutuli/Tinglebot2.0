@@ -3,7 +3,9 @@ const mongoose = require('mongoose');
 const { Schema } = mongoose;
 
 const OldMapFoundSchema = new Schema({
-  mapId: { type: String, default: '' },                   // Short display ID (e.g. M12345).
+  mapId: { type: String, default: '' },
+  characterId: { type: Schema.Types.ObjectId, ref: 'Character', default: null, index: true },
+  ownerUserId: { type: String, default: '', index: true },
   characterName: { type: String, required: true, index: true },
   mapNumber: { type: Number, required: true, min: 1, max: 46 },
   foundAt: { type: Date, default: Date.now },
@@ -11,6 +13,9 @@ const OldMapFoundSchema = new Schema({
   appraised: { type: Boolean, default: false },
   appraisedAt: { type: Date, default: null },
   appraisedBy: { type: String, default: null },
+  leadsTo: { type: String, default: null },
+  leadsToCoordinates: { type: String, default: null },
+  redeemedAt: { type: Date, default: null },
 }, { collection: 'oldMapsFound' });
 
 module.exports = mongoose.models.OldMapFound || mongoose.model('OldMapFound', OldMapFoundSchema);

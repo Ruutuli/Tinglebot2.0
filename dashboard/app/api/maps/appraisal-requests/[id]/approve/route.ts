@@ -1,7 +1,29 @@
 import { NextRequest, NextResponse } from "next/server";
+import path from "path";
+import { createRequire } from "module";
 import { connect } from "@/lib/db";
 import { getSession, isAdminUser } from "@/lib/session";
 import { isModeratorUser } from "@/lib/moderator";
+
+const require = createRequire(import.meta.url);
+
+function getOldMapMeta(mapNumber: number): { leadsTo?: string; coordinates?: string } | null {
+  const candidates = [
+    path.join(process.cwd(), "bot", "data", "oldMaps.js"),
+    path.join(process.cwd(), "..", "bot", "data", "oldMaps.js"),
+  ];
+  for (const p of candidates) {
+    try {
+      const mod = require(p) as { getOldMapByNumber?: (n: number) => { leadsTo?: string; coordinates?: string } | null };
+      if (typeof mod.getOldMapByNumber === "function") {
+        return mod.getOldMapByNumber(mapNumber) ?? null;
+      }
+    } catch {
+      /* try next path */
+    }
+  }
+  return null;
+}
 
 export const dynamic = "force-dynamic";
 
@@ -85,10 +107,16 @@ export async function POST(
       balanceAfter,
     });
 
+    const mapMeta = getOldMapMeta(mapDoc.mapNumber);
+    const destSet: Record<string, string> = {};
+    if (mapMeta?.leadsTo) destSet.leadsTo = String(mapMeta.leadsTo);
+    if (mapMeta?.coordinates) destSet.leadsToCoordinates = String(mapMeta.coordinates);
+
     await OldMapFound.findByIdAndUpdate(mapDoc._id, {
       appraised: true,
       appraisedAt: new Date(),
       appraisedBy: "NPC",
+      ...destSet,
     });
 
     request.status = "approved";

@@ -3,8 +3,22 @@
 // ============================================================================
 
 const OldMapFound = require('../models/OldMapFoundModel.js');
+const { getOldMapByNumber } = require('../data/oldMaps.js');
 const { generateUniqueId } = require('./uniqueIdUtils.js');
 const logger = require('./logger.js');
+
+/** Destination for this map # from seed data (for DB snapshot at appraisal). */
+function getMapDestinationSnapshot(mapNumber) {
+  if (typeof mapNumber !== 'number' || mapNumber < 1 || mapNumber > 46) {
+    return { leadsTo: null, leadsToCoordinates: null };
+  }
+  const info = getOldMapByNumber(mapNumber);
+  if (!info) return { leadsTo: null, leadsToCoordinates: null };
+  return {
+    leadsTo: info.leadsTo != null ? String(info.leadsTo) : null,
+    leadsToCoordinates: info.coordinates != null ? String(info.coordinates) : null,
+  };
+}
 
 function asObjectIdString(value) {
   if (!value) return '';
@@ -278,17 +292,28 @@ async function getCharacterOldMapsWithDetails(characterRef) {
       `getCharacterOldMapsWithDetails: no rows matchKeys=${Object.keys(ownerMatch).join(',')}`
     );
   }
-  return docs.map((d) => ({
-    _id: d._id,
-    mapId: d.mapId || '',
-    characterId: d.characterId || null,
-    ownerUserId: d.ownerUserId || '',
-    mapNumber: d.mapNumber,
-    appraised: !!d.appraised,
-    redeemedAt: d.redeemedAt || null,
-    foundAt: d.foundAt,
-    locationFound: d.locationFound || '',
-  }));
+  return docs.map((d) => {
+    const snap = getMapDestinationSnapshot(d.mapNumber);
+    const appraised = !!d.appraised;
+    return {
+      _id: d._id,
+      mapId: d.mapId || '',
+      characterId: d.characterId || null,
+      ownerUserId: d.ownerUserId || '',
+      characterName: d.characterName || '',
+      mapNumber: d.mapNumber,
+      appraised,
+      redeemedAt: d.redeemedAt || null,
+      foundAt: d.foundAt,
+      locationFound: d.locationFound || '',
+      foundByCharacterName: d.characterName || '',
+      foundWhere: d.locationFound || '',
+      appraisedBy: d.appraisedBy || null,
+      // Only expose destination after appraisal (DB snapshot or seed fallback for legacy rows).
+      leadsTo: appraised ? d.leadsTo || snap.leadsTo : null,
+      leadsToCoordinates: appraised ? d.leadsToCoordinates || snap.leadsToCoordinates : null,
+    };
+  });
 }
 
 module.exports = {
@@ -296,6 +321,7 @@ module.exports = {
   parseOldMapNumberFromItemName,
   addOldMapToCharacter,
   findOldMapByIdOrMapId,
+  getMapDestinationSnapshot,
   hasOldMap,
   hasAppraisedOldMap,
   hasAppraisedUnexpiredOldMap,

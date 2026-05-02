@@ -133,7 +133,10 @@ async function hasDiscoveriesInQuadrant(squareId, quadrantId) {
         if (!square?.quadrants) return false;
         const q = square.quadrants.find((qu) => String(qu.quadrantId || "").toUpperCase() === String(quadrantId).toUpperCase());
         if (!q?.discoveries?.length) return false;
-        return q.discoveries.some((d) => (d.type || "").toLowerCase() === "monster_camp" || (d.type || "").toLowerCase() === "grotto");
+        return q.discoveries.some((d) => {
+            const t = (d.type || "").toLowerCase();
+            return t === "monster_camp" || t === "grotto" || t === "shrine";
+        });
     } catch {
         return false;
     }

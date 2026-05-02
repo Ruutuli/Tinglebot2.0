@@ -107,19 +107,19 @@ const SUCCESS_OUTCOMES = [
 
 const COMPLETE_OUTCOMES = [
   {
-    flavor: "{char} hits perfectly! It POPS loudly and out drops a chest that... definitely did not fit inside that blimp? You've completed the shrine! Each party member gets a spirit orb.",
+    flavor: "{char} hits perfectly! It POPS loudly and out drops a chest that... definitely did not fit inside that blimp? You've completed the grotto! Each party member gets a spirit orb.",
     ctaHint: "Continue exploring!",
   },
   {
-    flavor: "{char} hits it! It flutters pathetically to the ground, taking about a minute and a half on its descent. You've completed the shrine! Each party member gets a spirit orb.",
+    flavor: "{char} hits it! It flutters pathetically to the ground, taking about a minute and a half on its descent. You've completed the grotto! Each party member gets a spirit orb.",
     ctaHint: "Continue exploring!",
   },
   {
-    flavor: "{char}'s final shot strikes true! The blimp pops in a shower of golden leaves. The shrine glows—spirit orbs materialize for each party member.",
+    flavor: "{char}'s final shot strikes true! The blimp pops in a shower of golden leaves. The grotto glows—spirit orbs materialize for each party member.",
     ctaHint: "Continue exploring!",
   },
   {
-    flavor: "{char} aims true! The blimp bursts and a chest tumbles out (somehow). Shrine complete! Everyone receives a spirit orb.",
+    flavor: "{char} aims true! The blimp bursts and a chest tumbles out (somehow). Grotto complete! Everyone receives a spirit orb.",
     ctaHint: "Continue exploring!",
   },
   {

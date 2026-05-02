@@ -6,7 +6,8 @@
 const { EmbedBuilder } = require('discord.js');
 const Quest = require('@/models/QuestModel');
 const { handleError } = require('@/utils/globalErrorHandler');
-const { QUEST_TYPES, BORDER_IMAGE } = require('./questRewardModule');
+const { QUEST_TYPES, BORDER_IMAGE, extractVillageFromLocation } = require('./questRewardModule');
+const Character = require('@/models/CharacterModel');
 const questModule = require('../commands/world/quest');
 const questRewardModule = require('./questRewardModule');
 const logger = require('@/utils/logger');
@@ -483,6 +484,102 @@ async function updateRPPostCount(questID, userId, newCount) {
     }
 }
 
+/**
+ * Mod fix: set the participant's locked research village (requiredVillage) for RP / Interactive RP quests.
+ * Join snapshots currentVillage; this corrects mistaken locks (e.g. signed up during blight shelter elsewhere).
+ * Optionally restores disqualified participants to active when clearing a village violation.
+ */
+async function setParticipantResearchVillage(questID, userId, villageKey, options = {}) {
+    const { restoreFromDisqualification = true } = options;
+    try {
+        const quest = await Quest.findOne({ questID });
+        if (!quest) {
+            throw new Error(`Quest ${questID} not found`);
+        }
+
+        if (quest.questType !== QUEST_TYPES.RP && quest.questType !== QUEST_TYPES.INTERACTIVE_RP) {
+            throw new Error('This command only applies to RP and Interactive / RP quests');
+        }
+
+        const participant = quest.getParticipant(userId);
+        if (!participant) {
+            throw new Error(`User is not a participant in quest ${questID}`);
+        }
+
+        if (participant.progress !== 'active' && participant.progress !== 'disqualified') {
+            throw new Error(
+                'Participant progress must be active or disqualified. Use the admin dashboard for completed, rewarded, or failed rows.'
+            );
+        }
+
+        const allowed = extractVillageFromLocation(quest.location);
+        if (!allowed || allowed.length === 0) {
+            throw new Error('Could not determine allowed villages from this quest’s location field');
+        }
+
+        const normalized = String(villageKey || '').trim().toLowerCase();
+        if (!normalized || !allowed.includes(normalized)) {
+            const list = allowed.map((v) => v.charAt(0).toUpperCase() + v.slice(1)).join(', ');
+            throw new Error(`Village must be one of this quest’s research locations: ${list}`);
+        }
+
+        const character = await Character.findOne({
+            name: participant.characterName,
+            userId: participant.userId
+        });
+        if (!character) {
+            throw new Error(`Character **${participant.characterName}** not found for this user`);
+        }
+
+        const charVillage = String(character.currentVillage || '').trim().toLowerCase();
+        if (charVillage !== normalized) {
+            const pretty = normalized.charAt(0).toUpperCase() + normalized.slice(1);
+            throw new Error(
+                `**${character.name}** must be in **${pretty}** on their sheet (current: **${character.currentVillage || 'unknown'}**). Use \`/travel\` first, then run this again.`
+            );
+        }
+
+        const previousRequired = participant.requiredVillage || null;
+        participant.requiredVillage = normalized;
+        participant.updatedAt = new Date();
+
+        let restored = false;
+        if (participant.progress === 'disqualified' && restoreFromDisqualification) {
+            participant.progress = 'active';
+            participant.disqualifiedAt = null;
+            participant.disqualificationReason = null;
+            restored = true;
+        }
+
+        await quest.save();
+        logger.info(
+            'QUEST',
+            `Research village set for ${participant.characterName} in ${questID}: ${previousRequired} → ${normalized}` +
+                (restored ? ' (restored from disqualified)' : '')
+        );
+
+        try {
+            const client = getDiscordClient();
+            if (client) {
+                await questModule.updateQuestEmbed(null, quest, client, 'modAction');
+            }
+        } catch (embedErr) {
+            logger.warn('QUEST', `Could not refresh quest embed after research village fix: ${embedErr.message}`);
+        }
+
+        return {
+            success: true,
+            characterName: participant.characterName,
+            previousRequired,
+            newRequired: normalized,
+            restored
+        };
+    } catch (error) {
+        logger.error('QUEST', `setParticipantResearchVillage: ${error.message}`);
+        return { success: false, error: error.message };
+    }
+}
+
 // ------------------- Get RP Quest Status -------------------
 async function getRPQuestStatus(questID) {
     try {
@@ -528,6 +625,7 @@ async function getRPQuestStatus(questID) {
 module.exports = {
     handleRPPostTracking,
     updateRPPostCount,
+    setParticipantResearchVillage,
     getRPQuestStatus,
     validateRPPostWithReason,
     isValidRPPost

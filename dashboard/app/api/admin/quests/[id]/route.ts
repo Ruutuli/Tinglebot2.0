@@ -7,8 +7,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import mongoose from "mongoose";
 import { connect } from "@/lib/db";
-import { discordApiRequest, removeGuildMemberRole } from "@/lib/discord";
-import { buildQuestEmbeds, QUEST_EMBED_MAX_PER_MESSAGE } from "@/lib/questDiscordPost";
+import { discordApiRequest, parseDiscordBoardMessageUrl, removeGuildMemberRole } from "@/lib/discord";
+import { buildQuestEmbeds, QUEST_EMBED_MAX_PER_MESSAGE, updateQuestBoardMessage } from "@/lib/questDiscordPost";
 import { isModeratorUser } from "@/lib/moderator";
 import { getSession, isAdminUser } from "@/lib/session";
 import { logger } from "@/utils/logger";
@@ -736,6 +736,33 @@ export async function PUT(
           : null;
     }
 
+    if (Object.prototype.hasOwnProperty.call(body, "discordBoardMessageLink")) {
+      const linkRaw =
+        typeof body.discordBoardMessageLink === "string" ? body.discordBoardMessageLink.trim() : "";
+      if (linkRaw === "") {
+        (update as Record<string, unknown>).messageID = null;
+        (update as Record<string, unknown>).targetChannel = null;
+      } else {
+        const parsed = parseDiscordBoardMessageUrl(linkRaw);
+        if (!parsed) {
+          return NextResponse.json(
+            {
+              error: "Validation failed",
+              message:
+                "Discord board link must look like https://discord.com/channels/GUILD_ID/CHANNEL_ID/MESSAGE_ID (use Copy Message Link on the quest post).",
+            },
+            { status: 400 }
+          );
+        }
+        (update as Record<string, unknown>).messageID = parsed.messageId;
+        (update as Record<string, unknown>).targetChannel = parsed.channelId;
+        const existingGuild = String((existing as Record<string, unknown>).guildId ?? "").trim();
+        if (!existingGuild && parsed.guildId) {
+          (update as Record<string, unknown>).guildId = parsed.guildId;
+        }
+      }
+    }
+
     const updated = await Quest.findByIdAndUpdate(
       id,
       { $set: update },
@@ -852,6 +879,12 @@ export async function PUT(
     }
 
     const converted = convertParticipantsMapToObject(updatedRecord);
+    if (String(converted.messageID ?? "").trim()) {
+      await enrichParticipantsWithUsernames(converted);
+      await updateQuestBoardMessage(
+        converted as Parameters<typeof updateQuestBoardMessage>[0]
+      );
+    }
     return NextResponse.json(converted);
   } catch (e) {
     logger.error("api/admin/quests/[id] PUT", e instanceof Error ? e.message : String(e));

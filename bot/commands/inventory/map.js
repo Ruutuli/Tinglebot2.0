@@ -13,8 +13,8 @@ const {
   updateTokenBalance,
 } = require('@/database/db.js');
 const { updateCurrentStamina } = require('../../modules/characterStatsModule.js');
-const { getCharacterOldMapsWithDetails, findOldMapByIdOrMapId } = require('@/utils/oldMapUtils.js');
-const { getOldMapByNumber, OLD_MAPS_LINK, OLD_MAP_ICON_URL, MAP_EMBED_BORDER_URL } = require('@/data/oldMaps.js');
+const { getCharacterOldMapsWithDetails, findOldMapByIdOrMapId, getMapDestinationSnapshot } = require('@/utils/oldMapUtils.js');
+const { getOldMapByNumber, OLD_MAPS_LINK, OLD_MAP_ICON_URL, MAP_EMBED_BORDER_URL, formatOldMapLeadsToLabel } = require('@/data/oldMaps.js');
 const { sendDiscordDM } = require('@/utils/notificationService.js');
 const OldMapFound = require('@/models/OldMapFoundModel.js');
 const MapAppraisalRequest = require('@/models/MapAppraisalRequestModel.js');
@@ -114,15 +114,27 @@ module.exports = {
         const appraised = maps.filter((m) => m.appraised);
         const unappraised = maps.filter((m) => !m.appraised);
         const appraisedLines = appraised.length
-          ? appraised.map((m) => `• **Map #${m.mapNumber}** — deciphered${m.redeemedAt ? ' (claimed at location)' : ''}`).join('\n')
+          ? appraised.map((m) => {
+              const redeemedPart = m.redeemedAt ? ' (claimed at location)' : '';
+              const whereFound = (m.foundWhere || m.locationFound || '').trim() || '—';
+              const leadsLbl = formatOldMapLeadsToLabel(m.leadsTo);
+              const destCoords = (m.leadsToCoordinates || '').trim();
+              const destPart =
+                leadsLbl && destCoords
+                  ? ` · **${leadsLbl}** @ **${destCoords}**`
+                  : leadsLbl
+                    ? ` · **${leadsLbl}**`
+                    : '';
+              return `• **Map #${m.mapNumber}** — deciphered${redeemedPart} · **${char.name}** found @ **${whereFound}**${destPart}`;
+            }).join('\n')
           : '—';
         const unappraisedLines = unappraised.length
           ? unappraised.map((m) => {
               const id = (m.mapId || m._id).toString();
               const num = m.mapNumber != null ? m.mapNumber : '?';
-              const where = m.locationFound || 'exploration';
+              const where = (m.foundWhere || m.locationFound || '').trim() || 'exploration';
               const date = m.foundAt ? new Date(m.foundAt).toLocaleDateString() : '—';
-              return `• \`${id}\` — Map #${num} (${where}, ${date})`;
+              return `• \`${id}\` — Map #${num} · **${char.name}** @ **${where}** (${date})`;
             }).join('\n')
           : '—';
         const embed = new EmbedBuilder()
@@ -223,9 +235,12 @@ module.exports = {
             category: 'map_npc_appraisal',
             description: 'NPC map appraisal',
           });
+          const destSnapNpc = getMapDestinationSnapshot(mapDoc.mapNumber);
           mapDoc.appraised = true;
           mapDoc.appraisedAt = new Date();
           mapDoc.appraisedBy = 'NPC';
+          if (destSnapNpc.leadsTo) mapDoc.leadsTo = destSnapNpc.leadsTo;
+          if (destSnapNpc.leadsToCoordinates) mapDoc.leadsToCoordinates = destSnapNpc.leadsToCoordinates;
           await mapDoc.save();
 
           request.updatedAt = new Date();
@@ -234,8 +249,12 @@ module.exports = {
           const mapInfo = getOldMapByNumber(mapDoc.mapNumber);
           const coordinates = mapInfo ? mapInfo.coordinates : '—';
           const mapLabel = `Map #${mapDoc.mapNumber}`;
-          let dmDesc = `Your old map has been deciphered by an NPC.\n\n**${mapLabel}**\n**Coordinates:** ${coordinates}`;
-          if (mapInfo && mapInfo.leadsTo) dmDesc += `\n**Leads to:** ${mapInfo.leadsTo}`;
+          const leadsToLabel = formatOldMapLeadsToLabel(mapInfo?.leadsTo);
+          let dmDesc =
+            `**${char.name}**'s map was brought in for **NPC appraisal** (you paid the **500 tokens**).\n\n` +
+            `**Appraiser:** Inariko Library (NPC service)\n\n` +
+            `**${mapLabel}**\n**Coordinates:** ${coordinates}`;
+          if (leadsToLabel) dmDesc += `\n**Leads to:** ${leadsToLabel}`;
           const dmEmbed = {
             title: '🗺️ Map appraised — your coordinates',
             description: dmDesc,
@@ -250,21 +269,31 @@ module.exports = {
           request.updatedAt = new Date();
           await request.save();
 
-          const leadsTo = mapInfo?.leadsTo ? `\n**Leads to:** ${mapInfo.leadsTo}` : '';
           const successEmbed = new EmbedBuilder()
             .setTitle('🗺️ Map appraised by NPC!')
-            .setDescription(`Your old map has been deciphered. **500 tokens** have been deducted.`)
+            .setDescription(
+              `The **Inariko Library** deciphered this map (**NPC appraisal**). **500 tokens** were deducted from <@${interaction.user.id}>.\n\n` +
+              `**Map owner (character):** **${char.name}** — the map belonged to them when it was submitted.\n` +
+              `**Submitted by:** <@${interaction.user.id}>`
+            )
             .setThumbnail(OLD_MAP_ICON_URL)
             .setImage(MAP_EMBED_BORDER_URL)
             .setColor(0x2ecc71)
             .setURL(OLD_MAPS_LINK)
             .addFields(
+              { name: 'Appraiser', value: 'Inariko Library (NPC)', inline: true },
               { name: 'Map', value: mapLabel, inline: true },
               { name: 'Coordinates', value: coordinates, inline: true },
-              { name: 'DM', value: dmSent ? 'You have been DMed with the coordinates.' : 'Could not DM you (you may have DMs disabled).', inline: false }
+              ...(leadsToLabel
+                ? [{ name: 'Leads to', value: leadsToLabel, inline: true }]
+                : []),
+              {
+                name: 'DM',
+                value: dmSent ? 'Coordinates also sent to your DMs.' : 'Could not DM you (you may have DMs disabled).',
+                inline: false,
+              }
             )
             .setFooter({ text: 'Roots of the Wild • Old Maps' });
-          if (leadsTo) successEmbed.setDescription(successEmbed.data.description + leadsTo);
           return interaction.editReply({ embeds: [successEmbed] });
         }
 
@@ -343,9 +372,12 @@ module.exports = {
         const newStamina = Math.max(0, (appraiserChar.currentStamina ?? 0) - 3);
         await updateCurrentStamina(appraiserChar._id, newStamina, true);
 
+        const destSnapPc = getMapDestinationSnapshot(mapDoc.mapNumber);
         mapDoc.appraised = true;
         mapDoc.appraisedAt = new Date();
         mapDoc.appraisedBy = appraiserName;
+        if (destSnapPc.leadsTo) mapDoc.leadsTo = destSnapPc.leadsTo;
+        if (destSnapPc.leadsToCoordinates) mapDoc.leadsToCoordinates = destSnapPc.leadsToCoordinates;
         await mapDoc.save();
 
         request.status = 'approved';
@@ -357,9 +389,10 @@ module.exports = {
         const mapInfo = getOldMapByNumber(mapDoc.mapNumber);
         const coordinates = mapInfo ? mapInfo.coordinates : '—';
         const mapLabel = `Map #${mapDoc.mapNumber}`;
+        const pcLeadsToLabel = formatOldMapLeadsToLabel(mapInfo?.leadsTo);
         let dmDesc = `Your old map has been deciphered by **${appraiserName}**.\n\n**${mapLabel}**\n**Coordinates:** ${coordinates}`;
-        if (mapInfo && mapInfo.leadsTo) {
-          dmDesc += `\n**Leads to:** ${mapInfo.leadsTo}`;
+        if (pcLeadsToLabel) {
+          dmDesc += `\n**Leads to:** ${pcLeadsToLabel}`;
         }
         const dmEmbed = {
           title: '🗺️ Map appraised — your coordinates',
@@ -375,7 +408,7 @@ module.exports = {
         request.updatedAt = new Date();
         await request.save();
 
-        const leadsToLine = mapInfo?.leadsTo ? `\n**Leads to:** ${mapInfo.leadsTo}` : '';
+        const leadsToLine = pcLeadsToLabel ? `\n**Leads to:** ${pcLeadsToLabel}` : '';
         const pcSuccessEmbed = new EmbedBuilder()
           .setTitle(`🗺️ Map appraised by ${appraiserName}!`)
           .setDescription(`${mapLabel} has been deciphered.${leadsToLine}`)

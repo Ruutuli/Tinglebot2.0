@@ -173,6 +173,35 @@ module.exports = {
       .setRequired(true)
       .setMinValue(0)
     )
+  )
+  .addSubcommand(subcommand =>
+   subcommand
+    .setName("setresearchvillage")
+    .setDescription("[Mods] Fix a participant’s locked research village (RP / Interactive RP quests)")
+    .addStringOption(option =>
+     option
+      .setName("questid")
+      .setDescription("ID of the quest")
+      .setRequired(true)
+      .setAutocomplete(true)
+    )
+    .addUserOption(option =>
+     option
+      .setName("user")
+      .setDescription("Participant’s Discord user")
+      .setRequired(true)
+    )
+    .addStringOption(option =>
+     option
+      .setName("village")
+      .setDescription("Village they are committing to for this quest (must match character sheet + quest locations)")
+      .setRequired(true)
+      .addChoices(
+       { name: "Inariko", value: "inariko" },
+       { name: "Rudania", value: "rudania" },
+       { name: "Vhintl", value: "vhintl" }
+      )
+    )
   ),
 
  // ============================================================================
@@ -191,7 +220,8 @@ module.exports = {
    transfer: () => this.handleLegacyQuestTransfer(interaction),
    stats: () => this.handleQuestStats(interaction),
     postcount: () => this.handlePostCount(interaction),
-    setrpposts: () => this.handleSetRpPosts(interaction)
+    setrpposts: () => this.handleSetRpPosts(interaction),
+    setresearchvillage: () => this.handleSetResearchVillage(interaction)
    };
 
    const handler = handlers[subcommand];
@@ -1514,6 +1544,83 @@ formatQuestCount(count = 0) {
  },
 
  // ============================================================================
+ // ------------------- Mod: set locked research village -------------------
+ // ============================================================================
+ async handleSetResearchVillage(interaction) {
+  const hasModRole = MOD_ROLE_ID && interaction.member?.roles?.cache?.has(MOD_ROLE_ID);
+  const allowed =
+   interaction.memberPermissions?.has(PermissionFlagsBits.ManageGuild) || hasModRole;
+  if (!allowed) {
+   return interaction.reply({
+    content:
+     "❌ You need **Manage Server** or the server’s configured mod role to use `/quest setresearchvillage`.\n\n" +
+      "This fixes the village locked at join (`requiredVillage`) when someone signed up in the wrong place by mistake.",
+    flags: MessageFlags.Ephemeral
+   });
+  }
+
+  await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+
+  try {
+   const questID = interaction.options.getString("questid");
+   const user = interaction.options.getUser("user");
+   const village = interaction.options.getString("village");
+
+   const { setParticipantResearchVillage } = require("../../modules/rpQuestTrackingModule");
+   const result = await setParticipantResearchVillage(questID, user.id, village, {
+    restoreFromDisqualification: true
+   });
+
+   if (result.success) {
+    const prettyV = result.newRequired.charAt(0).toUpperCase() + result.newRequired.slice(1);
+    const prev =
+     result.previousRequired != null && String(result.previousRequired).trim() !== ""
+      ? result.previousRequired.charAt(0).toUpperCase() + result.previousRequired.slice(1).toLowerCase()
+      : "(none)";
+
+    const embed = new EmbedBuilder()
+     .setColor("#00FF00")
+     .setTitle("✅ Research village updated")
+     .setDescription(
+      `Updated the locked research village for **${result.characterName}** (<@${user.id}>) on quest **${questID}**.\n` +
+       "They must stay in this village for RP tracking, matching their character sheet."
+     )
+     .addFields(
+      { name: "Quest ID", value: questID, inline: true },
+      { name: "Previous lock", value: prev, inline: true },
+      { name: "New lock", value: prettyV, inline: true },
+      {
+       name: "Disqualification",
+       value: result.restored ? "Cleared — participant set back to **active**." : "Was not disqualified (no change to progress).",
+       inline: false
+      }
+     )
+     .setImage("https://storage.googleapis.com/tinglebot/Graphics/border.png")
+     .setFooter({ text: `Updated by ${interaction.user.tag}` })
+     .setTimestamp();
+
+    return interaction.editReply({ embeds: [embed] });
+   }
+
+   return interaction.editReply({
+    content: `❌ ${result.error}`,
+   });
+  } catch (error) {
+   await handleInteractionError(error, interaction, {
+    source: "quest.js",
+    commandName: "quest setresearchvillage",
+    userTag: interaction.user.tag,
+    userId: interaction.user.id,
+    questID: interaction.options.getString("questid")
+   });
+
+   return interaction.editReply({
+    content: "[quest.js]❌ An error occurred while updating the research village.",
+   });
+  }
+ },
+
+ // ============================================================================
  // ------------------- Validation Helper Methods -------------------
  // ============================================================================
  // ------------------- Function: parseDeadlineEST -------------------
@@ -2273,8 +2380,8 @@ formatQuestCount(count = 0) {
    inline: false
   });
 
-  // Add table roll information for RP / hybrid when linked table(s) exist
-  if (quest.questType === 'RP' || quest.questType === QUEST_TYPES.INTERACTIVE_RP) {
+  // Optional flavor/reward rolls — only for pure RP. Interactive / RP requires rolls for completion; see rules/meta fields above.
+  if (quest.questType === 'RP') {
     const fromArr = Array.isArray(quest.tableRollNames)
       ? quest.tableRollNames.map((n) => String(n).trim()).filter(Boolean)
       : [];

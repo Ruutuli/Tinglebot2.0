@@ -568,6 +568,22 @@ export async function assignGuildMemberRole(
  * Remove a role from a guild member. Returns the Discord API error message on failure.
  * 404 from Discord (e.g. user not in guild, role not found) is treated as non-fatal.
  */
+/**
+ * Parse guild, channel, and message snowflakes from a Discord "Copy Message Link" URL.
+ * Accepts discord.com and discordapp.com hostnames; ignores trailing query/hash.
+ */
+export function parseDiscordBoardMessageUrl(raw: string): {
+  guildId: string;
+  channelId: string;
+  messageId: string;
+} | null {
+  const s = String(raw ?? "").trim();
+  if (!s) return null;
+  const m = s.match(/discord(?:app)?\.com\/channels\/(\d+)\/(\d+)\/(\d+)/i);
+  if (!m) return null;
+  return { guildId: m[1], channelId: m[2], messageId: m[3] };
+}
+
 export async function removeGuildMemberRole(
   guildId: string,
   userId: string,
