@@ -1185,6 +1185,19 @@ export async function PUT(
       );
     }
 
+    const statusAfterSave = (char as { status?: string | null }).status ?? null;
+    if (!isGearOnlyUpdate && statusAfterSave === "accepted") {
+      try {
+        const { syncMemberJobAndPerkRolesForDiscordUser } = await import("@/lib/services/roleAssignmentService");
+        await syncMemberJobAndPerkRolesForDiscordUser(char.userId);
+      } catch (syncErr) {
+        logger.warn(
+          "api/characters/[id] PUT",
+          `syncMemberJobAndPerkRoles: ${syncErr instanceof Error ? syncErr.message : String(syncErr)}`
+        );
+      }
+    }
+
     // Invalidate cached character page so redirect and mod queue see fresh data
     try {
       const slug = createSlug(char.name);

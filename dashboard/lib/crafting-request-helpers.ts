@@ -30,6 +30,24 @@ export function hasStaminaForCraft(
   return currentStamina >= staminaCost;
 }
 
+/**
+ * Open-call summary for the board, e.g. "Any Cook with 3 stamina".
+ */
+export function formatOpenCommissionSeekingLine(jobs: string[], stamina: number): string {
+  const st = Math.max(0, Math.floor(Number(stamina)) || 0);
+  const list = jobs.map((j) => String(j).trim()).filter(Boolean);
+  if (list.length === 0) {
+    return st > 0 ? `Any crafter with ${st} stamina` : "Any qualified crafter";
+  }
+  const jobPhrase =
+    list.length === 1
+      ? list[0]
+      : list.length === 2
+        ? `${list[0]} or ${list[1]}`
+        : `${list.slice(0, -1).join(", ")}, or ${list[list.length - 1]}`;
+  return `Any ${jobPhrase} with ${st} stamina`;
+}
+
 export type CharacterUnion = {
   _id: mongoose.Types.ObjectId;
   userId: string;

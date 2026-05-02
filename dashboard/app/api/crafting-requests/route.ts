@@ -2,30 +2,14 @@ import { NextResponse } from "next/server";
 import { connect } from "@/lib/db";
 import { getSession } from "@/lib/session";
 import mongoose from "mongoose";
-import {
-  hasStaminaForCraft,
-  jobCanCraftItem,
-  loadCharacterUnionById,
-  parseStaminaToCraft,
-  userOwnsCharacterName,
-} from "@/lib/crafting-request-helpers";
+import { parseStaminaToCraft } from "@/lib/crafting-request-helpers";
+import { craftingRequestNotifyPayload, validateCraftingRequestBody } from "@/lib/crafting-request-mutation";
 import { notifyCraftingRequestCreated } from "@/lib/craftingRequestsNotify";
 
 export const dynamic = "force-dynamic";
 
 const DEFAULT_LIMIT = 25;
 const MAX_LIMIT = 50;
-
-async function getItemByName(itemName: string) {
-  const Item = (await import("@/models/ItemModel.js")).default;
-  return Item.findOne({
-    itemName: itemName.trim(),
-    crafting: true,
-  })
-    .select("itemName craftingJobs staminaToCraft crafting")
-    .lean()
-    .exec();
-}
 
 export async function GET(request: Request) {
   try {
@@ -62,8 +46,36 @@ export async function GET(request: Request) {
       CraftingRequest.countDocuments(filter),
     ]);
 
+    const mongoIds = [
+      ...new Set(
+        rows
+          .map((r) => r.craftItemMongoId)
+          .filter((id): id is mongoose.Types.ObjectId => id != null)
+      ),
+    ];
+    const imageByItemId = new Map<string, string>();
+    if (mongoIds.length > 0) {
+      const Item = (await import("@/models/ItemModel.js")).default;
+      const items = await Item.find({ _id: { $in: mongoIds } })
+        .select("_id image")
+        .lean()
+        .exec();
+      for (const it of items) {
+        const img = typeof it.image === "string" ? it.image : "";
+        if (img && img !== "No Image") {
+          imageByItemId.set(String(it._id), img);
+        }
+      }
+    }
+
+    const requests = rows.map((r) => {
+      const id = r.craftItemMongoId != null ? String(r.craftItemMongoId) : "";
+      const craftItemImage = id ? imageByItemId.get(id) : undefined;
+      return { ...r, craftItemImage };
+    });
+
     return NextResponse.json({
-      requests: rows,
+      requests,
       page,
       limit,
       total,
@@ -84,117 +96,41 @@ export async function POST(request: Request) {
     }
 
     const body = (await request.json()) as Record<string, unknown>;
-    const requesterCharacterName = String(body.requesterCharacterName ?? "").trim();
-    const craftItemName = String(body.craftItemName ?? "").trim();
-    const targetMode = body.targetMode === "specific" ? "specific" : "open";
-    const targetCharacterIdRaw = body.targetCharacterId != null ? String(body.targetCharacterId) : "";
-    const providingAllMaterials = Boolean(body.providingAllMaterials);
-    const materialsDescription = String(body.materialsDescription ?? "").trim();
-    const paymentOffer = String(body.paymentOffer ?? "").trim();
-    const elixirDescription = String(body.elixirDescription ?? "").trim();
+    const parsed = await validateCraftingRequestBody(user, body);
+    if (!parsed.ok) return parsed.res;
 
-    if (!requesterCharacterName) {
-      return NextResponse.json({ error: "Requester OC name is required" }, { status: 400 });
-    }
-    if (!craftItemName) {
-      return NextResponse.json({ error: "Craft item name is required" }, { status: 400 });
-    }
-
-    const ownsOc = await userOwnsCharacterName(user.id, requesterCharacterName);
-    if (!ownsOc) {
-      return NextResponse.json(
-        { error: "Requester OC must be one of your characters" },
-        { status: 400 }
-      );
-    }
+    const v = parsed.data;
+    const staminaSnap = parseStaminaToCraft(v.item.staminaToCraft);
+    const jobsSnap = Array.isArray(v.item.craftingJobs) ? [...v.item.craftingJobs] : [];
 
     await connect();
-    const item = await getItemByName(craftItemName);
-    if (!item) {
-      return NextResponse.json(
-        { error: "Item not found or is not craftable" },
-        { status: 400 }
-      );
-    }
-
-    const staminaSnap = parseStaminaToCraft(item.staminaToCraft);
-    const jobsSnap = Array.isArray(item.craftingJobs) ? [...item.craftingJobs] : [];
-
-    let targetCharacterId: mongoose.Types.ObjectId | null = null;
-    let targetCharacterName = "";
-    let targetCharacterHomeVillage = "";
-    let targetOwnerDiscordId: string | undefined;
-
-    if (targetMode === "specific") {
-      if (!targetCharacterIdRaw || !mongoose.Types.ObjectId.isValid(targetCharacterIdRaw)) {
-        return NextResponse.json(
-          { error: "Target character is required for a specific request" },
-          { status: 400 }
-        );
-      }
-      const target = await loadCharacterUnionById(targetCharacterIdRaw);
-      if (!target) {
-        return NextResponse.json({ error: "Target character not found" }, { status: 400 });
-      }
-      if (!jobCanCraftItem(item, target.job)) {
-        return NextResponse.json(
-          { error: "Target character's job cannot craft this item" },
-          { status: 400 }
-        );
-      }
-      if (!hasStaminaForCraft(staminaSnap, target.currentStamina, target.isModCharacter)) {
-        return NextResponse.json(
-          { error: "Target character does not have enough stamina for this recipe (base cost)" },
-          { status: 400 }
-        );
-      }
-      targetCharacterId = target._id;
-      targetCharacterName = target.name;
-      targetCharacterHomeVillage = target.homeVillage.trim();
-      targetOwnerDiscordId = target.userId;
-    }
-
     const CraftingRequest = (await import("@/models/CraftingRequestModel.js")).default;
 
     const doc = await CraftingRequest.create({
       requesterDiscordId: user.id,
       requesterUsername: user.global_name || user.username || "",
-      requesterCharacterName,
-      craftItemName: item.itemName,
-      craftItemMongoId: item._id,
+      requesterCharacterName: v.requesterCharacterName,
+      craftItemName: v.item.itemName,
+      craftItemMongoId: v.item._id,
       craftingJobsSnapshot: jobsSnap,
       staminaToCraftSnapshot: staminaSnap,
-      targetMode,
-      targetCharacterId,
-      targetCharacterName,
-      targetCharacterHomeVillage,
-      providingAllMaterials,
-      materialsDescription,
-      paymentOffer,
-      elixirDescription,
+      targetMode: v.targetMode,
+      targetCharacterId: v.targetCharacterId,
+      targetCharacterName: v.targetCharacterName,
+      targetCharacterHomeVillage: v.targetCharacterHomeVillage,
+      providingAllMaterials: v.providingAllMaterials,
+      materialsDescription: v.materialsDescription,
+      paymentOffer: v.paymentOffer,
+      elixirDescription: v.elixirDescription,
       status: "open",
     });
 
     const requestId = String(doc._id);
 
     try {
-      const discordMessageId = await notifyCraftingRequestCreated({
-        requestId,
-        requesterDiscordId: user.id,
-        requesterUsername: user.global_name || user.username || undefined,
-        requesterCharacterName,
-        craftItemName: item.itemName,
-        craftingJobsSnapshot: jobsSnap,
-        staminaToCraftSnapshot: staminaSnap,
-        targetMode,
-        targetCharacterName: targetCharacterName || undefined,
-        targetCharacterHomeVillage: targetCharacterHomeVillage || undefined,
-        targetOwnerDiscordId,
-        providingAllMaterials,
-        materialsDescription,
-        paymentOffer,
-        elixirDescription,
-      });
+      const discordMessageId = await notifyCraftingRequestCreated(
+        craftingRequestNotifyPayload(requestId, user, v)
+      );
       if (discordMessageId) {
         await CraftingRequest.findByIdAndUpdate(requestId, { discordMessageId });
       }

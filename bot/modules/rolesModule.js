@@ -57,6 +57,9 @@ const roles = {
       { name: 'Job: Stablehand', color: '#5e626e' },
       { name: 'Job: Villager', color: '#5e626e' },
       { name: 'Job: Witch', color: '#5e626e' },
+      { name: 'Job: Oracle', color: '#5e626e' },
+      { name: 'Job: Sage', color: '#5e626e' },
+      { name: 'Job: Dragon', color: '#5e626e' },
     ],
   
     JobPerks: [

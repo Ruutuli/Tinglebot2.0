@@ -451,6 +451,42 @@ export async function discordApiRequest<T = unknown>(
   }
 }
 
+/** DELETE helper: Discord returns 204 No Content on success (discordApiRequest treats that as null). */
+export async function discordApiDelete(endpoint: string): Promise<boolean> {
+  const token = process.env.DISCORD_TOKEN;
+  if (!token) {
+    console.error("DISCORD_TOKEN not configured");
+    return false;
+  }
+  const cleanEndpoint = endpoint.startsWith("/") ? endpoint.slice(1) : endpoint;
+  const url = `${DISCORD_API_BASE}/${cleanEndpoint}`;
+  try {
+    const res = await fetch(url, {
+      method: "DELETE",
+      headers: { Authorization: `Bot ${token}` },
+    });
+    if (res.status === 429) {
+      const retryAfter = res.headers.get("retry-after");
+      const delay = retryAfter ? parseInt(retryAfter, 10) * 1000 : 1000;
+      await new Promise((resolve) => setTimeout(resolve, delay));
+      const retryRes = await fetch(url, {
+        method: "DELETE",
+        headers: { Authorization: `Bot ${token}` },
+      });
+      return retryRes.status === 204 || retryRes.ok;
+    }
+    if (!res.ok) {
+      const errorText = await res.text();
+      console.error(`Discord API DELETE error (${res.status}): ${errorText}`);
+      return false;
+    }
+    return res.status === 204 || res.ok;
+  } catch (error) {
+    console.error(`Discord DELETE failed: ${error instanceof Error ? error.message : String(error)}`);
+    return false;
+  }
+}
+
 /** Public channel for “mod marked you complete” quest announcements (dashboard actions). */
 export const QUEST_MOD_COMPLETION_ANNOUNCE_CHANNEL_ID = "641858948802150400";
 
@@ -582,6 +618,28 @@ export function parseDiscordBoardMessageUrl(raw: string): {
   const m = s.match(/discord(?:app)?\.com\/channels\/(\d+)\/(\d+)\/(\d+)/i);
   if (!m) return null;
   return { guildId: m[1], channelId: m[2], messageId: m[3] };
+}
+
+/**
+ * Fetch a guild member's current role IDs (snowflakes). Returns null if member not in guild or request failed.
+ */
+export async function fetchGuildMemberRoleIds(
+  guildId: string,
+  userId: string
+): Promise<string[] | null> {
+  const token = process.env.DISCORD_TOKEN;
+  if (!token || !guildId || !userId) return null;
+  try {
+    const res = await fetch(`${DISCORD_API_BASE}/guilds/${guildId}/members/${userId}`, {
+      headers: { Authorization: `Bot ${token}` },
+    });
+    if (res.status === 404) return null;
+    if (!res.ok) return null;
+    const data = (await res.json()) as { roles?: string[] };
+    return Array.isArray(data.roles) ? data.roles : [];
+  } catch {
+    return null;
+  }
 }
 
 export async function removeGuildMemberRole(

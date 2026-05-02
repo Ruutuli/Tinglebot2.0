@@ -1141,6 +1141,13 @@ async function handleEditModCharacter(interaction) {
 
     await updateModCharacterById(modCharacter._id, updateData);
 
+    if (category === 'job' && modCharacter.status === 'accepted') {
+      const { syncMemberJobAndPerkRoles } = require('@/utils/memberJobRolesSync');
+      await syncMemberJobAndPerkRoles(interaction.guild, modCharacter.userId).catch((err) =>
+        console.error(`[modCharacter edit] syncMemberJobAndPerkRoles: ${err.message}`)
+      );
+    }
+
     // Create success embed
     const embed = new EmbedBuilder()
       .setColor(getVillageColorByName(modCharacter.homeVillage))

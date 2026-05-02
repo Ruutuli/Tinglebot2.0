@@ -3,7 +3,12 @@
 // Assigns Discord roles when character is approved
 // ============================================================================
 
-import { discordApiRequest, assignGuildMemberRole, removeGuildMemberRole } from "@/lib/discord";
+import {
+  discordApiRequest,
+  assignGuildMemberRole,
+  removeGuildMemberRole,
+  fetchGuildMemberRoleIds,
+} from "@/lib/discord";
 import { logger } from "@/utils/logger";
 import { getAppUrl } from "@/lib/config";
 import { getJobPerk } from "@/data/jobData";
@@ -36,18 +41,6 @@ const VILLAGE_ROLES: Record<string, string> = {
   Vhintl: process.env.VHINTL_RESIDENT || "",
 };
 
-const JOB_PERK_ROLES: Record<string, string> = {
-  Looting: process.env.JOB_PERK_LOOTING || "",
-  Stealing: process.env.JOB_PERK_STEALING || "",
-  Entertaining: process.env.JOB_PERK_ENTERTAINING || "",
-  Delivering: process.env.JOB_PERK_DELIVERING || "",
-  Healing: process.env.JOB_PERK_HEALING || "",
-  Gathering: process.env.JOB_PERK_GATHERING || "",
-  Crafting: process.env.JOB_PERK_CRAFTING || "",
-  Boosting: process.env.JOB_PERK_BOOSTING || "",
-  Vending: process.env.JOB_PERK_VENDING || "",
-};
-
 // Lowercase-keyed lookups so DB values (e.g. "keaton", "rudania") resolve correctly
 function buildLowerKeyMap(source: Record<string, string>): Record<string, string> {
   const out: Record<string, string> = {};
@@ -59,26 +52,159 @@ function buildLowerKeyMap(source: Record<string, string>): Record<string, string
 const RACE_ROLES_LOWER = buildLowerKeyMap(RACE_ROLES);
 const VILLAGE_ROLES_LOWER = buildLowerKeyMap(VILLAGE_ROLES);
 
-// Map jobData perk string (e.g. "LOOTING", "BOOST") to JOB_PERK_ROLES key
-const PERK_TO_ROLE_KEY: Record<string, string> = {
-  LOOTING: "Looting",
-  STEALING: "Stealing",
-  DELIVERING: "Delivering",
-  HEALING: "Healing",
-  GATHERING: "Gathering",
-  CRAFTING: "Crafting",
-  VENDING: "Vending",
-  BOOST: "Boosting",
-  ENTERTAINING: "Entertaining",
-};
-function perkStringsToRoleIds(perkString: string): string[] {
-  const roleIds: string[] = [];
-  const parts = perkString.split(/[/&,]/).map((p) => p.trim().toUpperCase());
-  for (const part of parts) {
-    const key = PERK_TO_ROLE_KEY[part];
-    if (key && JOB_PERK_ROLES[key]) roleIds.push(JOB_PERK_ROLES[key]);
+/** JOB_* env map — keep in sync with bot utils/memberJobRolesSync.js */
+function jobRoleIdsFromEnv(): Record<string, string> {
+  return {
+    Adventurer: process.env.JOB_ADVENTURER ?? "",
+    Artist: process.env.JOB_ARTIST ?? "",
+    Bandit: process.env.JOB_BANDIT ?? "",
+    Beekeeper: process.env.JOB_BEEKEEPER ?? "",
+    Blacksmith: process.env.JOB_BLACKSMITH ?? "",
+    Cook: process.env.JOB_COOK ?? "",
+    Courier: process.env.JOB_COURIER ?? "",
+    Craftsman: process.env.JOB_CRAFTSMAN ?? "",
+    Farmer: process.env.JOB_FARMER ?? "",
+    Fisherman: process.env.JOB_FISHERMAN ?? "",
+    Forager: process.env.JOB_FORAGER ?? "",
+    "Fortune Teller": process.env.JOB_FORTUNE_TELLER ?? "",
+    Graveskeeper: process.env.JOB_GRAVESKEEPER ?? "",
+    Guard: process.env.JOB_GUARD ?? "",
+    Healer: process.env.JOB_HEALER ?? "",
+    Herbalist: process.env.JOB_HERBALIST ?? "",
+    Hunter: process.env.JOB_HUNTER ?? "",
+    "Mask Maker": process.env.JOB_MASK_MAKER ?? "",
+    Merchant: process.env.JOB_MERCHANT ?? "",
+    Mercenary: process.env.JOB_MERCENARY ?? "",
+    Miner: process.env.JOB_MINER ?? "",
+    Oracle: process.env.JOB_ORACLE ?? "",
+    Priest: process.env.JOB_PRIEST ?? "",
+    Rancher: process.env.JOB_RANCHER ?? "",
+    Researcher: process.env.JOB_RESEARCHER ?? "",
+    Sage: process.env.JOB_SAGE ?? "",
+    Scout: process.env.JOB_SCOUT ?? "",
+    Scholar: process.env.JOB_SCHOLAR ?? "",
+    Shopkeeper: process.env.JOB_SHOPKEEPER ?? "",
+    Stablehand: process.env.JOB_STABLEHAND ?? "",
+    Teacher: process.env.JOB_TEACHER ?? "",
+    Villager: process.env.JOB_VILLAGER ?? "",
+    Weaver: process.env.JOB_WEAVER ?? "",
+    Witch: process.env.JOB_WITCH ?? "",
+    Dragon: process.env.JOB_DRAGON ?? "",
+    Entertainer: process.env.JOB_ENTERTAINER ?? "",
+  };
+}
+
+function jobPerkIdsFromEnv(): Record<string, string> {
+  return {
+    LOOTING: process.env.JOB_PERK_LOOTING ?? "",
+    STEALING: process.env.JOB_PERK_STEALING ?? "",
+    ENTERTAINING: process.env.JOB_PERK_ENTERTAINING ?? "",
+    DELIVERING: process.env.JOB_PERK_DELIVERING ?? "",
+    HEALING: process.env.JOB_PERK_HEALING ?? "",
+    GATHERING: process.env.JOB_PERK_GATHERING ?? "",
+    CRAFTING: process.env.JOB_PERK_CRAFTING ?? "",
+    BOOST: process.env.JOB_PERK_BOOST || process.env.JOB_PERK_BOOSTING || "",
+    VENDING: process.env.JOB_PERK_VENDING ?? "",
+  };
+}
+
+function resolveJobRoleId(jobName: string, jobMap: Record<string, string>): string {
+  if (!jobName?.trim()) return "";
+  const t = jobName.trim();
+  if (jobMap[t]) return jobMap[t];
+  const lower = t.toLowerCase();
+  const key = Object.keys(jobMap).find((k) => k.toLowerCase() === lower);
+  return key ? jobMap[key] : "";
+}
+
+function perkCodesFromJob(jobName: string): string[] {
+  const jp = getJobPerk(jobName);
+  if (!jp?.perk) return [];
+  return jp.perk
+    .split("/")
+    .map((p) => p.trim().toUpperCase())
+    .filter((p) => p && !["N/A", "NONE", "ALL"].includes(p));
+}
+
+/**
+ * Sync Discord job + job-perk roles to the union of all accepted regular + mod OCs (dashboard / API paths).
+ */
+export async function syncMemberJobAndPerkRolesForDiscordUser(discordUserId: string): Promise<void> {
+  const guildId = GUILD_ID;
+  if (!guildId || !process.env.DISCORD_TOKEN) {
+    logger.warn("roleAssignmentService", "syncMemberJobAndPerkRoles: missing GUILD_ID or DISCORD_TOKEN");
+    return;
   }
-  return roleIds;
+
+  const { connect } = await import("@/lib/db");
+  const { default: Character } = await import("@/models/CharacterModel.js");
+  const { default: ModCharacter } = await import("@/models/ModCharacterModel.js");
+  await connect();
+
+  const [chars, modChars] = await Promise.all([
+    Character.find({ userId: discordUserId, status: "accepted" }).select({ job: 1 }).lean(),
+    ModCharacter.find({ userId: discordUserId, status: "accepted" }).select({ job: 1 }).lean(),
+  ]);
+
+  type LeanJob = { job?: string };
+  const jobs = [...(chars as LeanJob[]), ...(modChars as LeanJob[])]
+    .map((c) => c.job)
+    .filter((j): j is string => typeof j === "string" && j.trim().length > 0);
+
+  const jobMap = jobRoleIdsFromEnv();
+  const perkMap = jobPerkIdsFromEnv();
+  const managedJobIds = new Set(Object.values(jobMap).filter(Boolean));
+  const managedPerkIds = new Set(Object.values(perkMap).filter(Boolean));
+
+  const desiredJobIds = new Set<string>();
+  const desiredPerkIds = new Set<string>();
+  for (const job of jobs) {
+    const jid = resolveJobRoleId(job, jobMap);
+    if (jid) desiredJobIds.add(jid);
+    for (const code of perkCodesFromJob(job)) {
+      const pid = perkMap[code];
+      if (pid) desiredPerkIds.add(pid);
+    }
+  }
+
+  const have = await fetchGuildMemberRoleIds(guildId, discordUserId);
+  if (!have) {
+    logger.warn(
+      "roleAssignmentService",
+      `syncMemberJobAndPerkRoles: member not in guild or fetch failed (${discordUserId})`
+    );
+    return;
+  }
+  const haveSet = new Set(have);
+
+  const toRemove: string[] = [];
+  const toAdd: string[] = [];
+  for (const rid of managedJobIds) {
+    if (haveSet.has(rid) && !desiredJobIds.has(rid)) toRemove.push(rid);
+  }
+  for (const rid of desiredJobIds) {
+    if (!haveSet.has(rid)) toAdd.push(rid);
+  }
+  for (const rid of managedPerkIds) {
+    if (haveSet.has(rid) && !desiredPerkIds.has(rid)) toRemove.push(rid);
+  }
+  for (const rid of desiredPerkIds) {
+    if (!haveSet.has(rid)) toAdd.push(rid);
+  }
+
+  for (const rid of toRemove) {
+    await removeGuildMemberRole(guildId, discordUserId, rid);
+  }
+  for (const rid of toAdd) {
+    await assignGuildMemberRole(guildId, discordUserId, rid);
+  }
+
+  if (toRemove.length || toAdd.length) {
+    logger.info(
+      "roleAssignmentService",
+      `syncMemberJobAndPerkRoles ${discordUserId}: +${toAdd.length} -${toRemove.length}`
+    );
+  }
 }
 
 type CharacterDocument = {
@@ -221,32 +347,11 @@ export async function assignCharacterRoles(
       }
     }
 
-    // Assign perk role(s) via job → perk → role (e.g. Healer → HEALING → JOB_PERK_HEALING)
-    if (character.job) {
-      const jobPerk = getJobPerk(character.job);
-      if (jobPerk?.perk) {
-        const roleIds = perkStringsToRoleIds(jobPerk.perk);
-        for (const roleId of roleIds) {
-          if (roleId) {
-            const result = await assignRole(userId, roleId);
-            if (!result.ok) {
-              errors.push(`Failed to assign perk role: ${jobPerk.perk} (job: ${character.job}) — ${result.error}`);
-            }
-          }
-        }
-        if (roleIds.length === 0 && !["N/A", "NONE", "ALL"].includes(jobPerk.perk.toUpperCase())) {
-          logger.warn(
-            "roleAssignmentService",
-            `No role mapping for perk: ${jobPerk.perk} (job: ${character.job})`
-          );
-        }
-      } else {
-        logger.warn(
-          "roleAssignmentService",
-          `No perk defined for job: ${character.job}`
-        );
-      }
-    }
+    await syncMemberJobAndPerkRolesForDiscordUser(userId).catch((e) => {
+      const msg = e instanceof Error ? e.message : String(e);
+      errors.push(`Job/perk role sync failed: ${msg}`);
+      logger.error("roleAssignmentService", `syncMemberJobAndPerkRolesForDiscordUser: ${msg}`);
+    });
 
     // Log errors if any
     if (errors.length > 0) {

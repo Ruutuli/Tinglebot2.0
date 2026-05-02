@@ -2,6 +2,8 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useSession } from "@/hooks/use-session";
+import { formatItemImageUrl } from "@/lib/item-utils";
+import { formatOpenCommissionSeekingLine } from "@/lib/crafting-request-helpers";
 
 type CraftingRequestRow = {
   _id: string;
@@ -9,6 +11,8 @@ type CraftingRequestRow = {
   requesterUsername?: string;
   requesterCharacterName: string;
   craftItemName: string;
+  /** From list API join — raw Item.image */
+  craftItemImage?: string;
   craftingJobsSnapshot: string[];
   staminaToCraftSnapshot: number;
   targetMode: "open" | "specific";
@@ -64,6 +68,9 @@ const craftingModalSelectBg = {
 };
 
 function canAcceptWithCharacter(row: CraftingRequestRow, c: ListChar): boolean {
+  if (row.targetMode === "specific" && row.targetCharacterId) {
+    if (String(c._id) !== String(row.targetCharacterId)) return false;
+  }
   const jobs = row.craftingJobsSnapshot ?? [];
   if (!jobs.includes(c.job)) return false;
   const cost = row.staminaToCraftSnapshot ?? 0;
@@ -162,6 +169,8 @@ export default function CraftingRequestsPage() {
   const [acceptCharId, setAcceptCharId] = useState<string | null>(null);
   const [acceptSubmitting, setAcceptSubmitting] = useState(false);
   const [acceptError, setAcceptError] = useState<string | null>(null);
+  /** In-flight dashboard claim (one-click) without opening the picker modal. */
+  const [claimingRequestId, setClaimingRequestId] = useState<string | null>(null);
 
   const [itemPickerOpen, setItemPickerOpen] = useState(false);
 
@@ -169,6 +178,9 @@ export default function CraftingRequestsPage() {
   const [ocMaterialLoading, setOcMaterialLoading] = useState(false);
 
   const [elixirSuggestOpen, setElixirSuggestOpen] = useState(false);
+
+  /** When set, form submits PATCH to update this open request instead of POST create. */
+  const [editingRequestId, setEditingRequestId] = useState<string | null>(null);
 
   const filteredElixirPresets = useMemo(
     () =>
@@ -347,6 +359,17 @@ export default function CraftingRequestsPage() {
     return myChars.filter((c) => canAcceptWithCharacter(acceptFor, c));
   }, [acceptFor, myChars]);
 
+  /** Open-board rows your roster can claim (job + stamina; named posts only for the target OC). */
+  const requestIdsYouCanAccept = useMemo(() => {
+    if (!user?.id || !myChars.length) return new Set<string>();
+    const ids = new Set<string>();
+    for (const row of openRequests) {
+      if (row.requesterDiscordId === user.id) continue;
+      if (myChars.some((c) => canAcceptWithCharacter(row, c))) ids.add(row._id);
+    }
+    return ids;
+  }, [openRequests, myChars, user?.id]);
+
   useEffect(() => {
     if (!acceptFor) {
       setAcceptCharId(null);
@@ -364,6 +387,7 @@ export default function CraftingRequestsPage() {
   const closeFormModal = () => {
     setFormModalOpen(false);
     setFormError(null);
+    setEditingRequestId(null);
     const r = resetFormState();
     setRequesterCharacterName(r.requesterCharacterName);
     setCraftItemName(r.craftItemName);
@@ -381,6 +405,60 @@ export default function CraftingRequestsPage() {
     setOcMaterialLoading(false);
     setElixirSuggestOpen(false);
   };
+
+  const openEditRequest = useCallback(
+    async (row: CraftingRequestRow) => {
+      if (!user?.id || row.requesterDiscordId !== user.id || row.status !== "open") return;
+      setFormError(null);
+      setEditingRequestId(row._id);
+      setRequesterCharacterName(row.requesterCharacterName);
+      setCraftItemName(row.craftItemName);
+      setSelectedItemMeta({
+        itemName: row.craftItemName,
+        craftingJobs: row.craftingJobsSnapshot,
+        staminaToCraft: row.staminaToCraftSnapshot,
+      });
+      setTargetMode(row.targetMode);
+      setProvidingAllMaterials(row.providingAllMaterials);
+      setMaterialsDescription(row.materialsDescription ?? "");
+      setPaymentOffer(row.paymentOffer ?? "");
+      setElixirDescription(row.elixirDescription ?? "");
+      setItemQuery("");
+      setItemOptions([]);
+      setItemPickerOpen(false);
+      setTargetSearch("");
+      setTargetResults([]);
+
+      if (row.targetMode === "specific" && row.targetCharacterId) {
+        try {
+          const res = await fetch(
+            `/api/characters/${row.targetCharacterId}?skipHelpWanted=true`,
+            { credentials: "include" }
+          );
+          const data = (await res.json()) as Record<string, unknown>;
+          if (res.ok && data && !("error" in data)) {
+            setTargetPick({
+              _id: String(data._id ?? row.targetCharacterId),
+              name: String(data.name ?? row.targetCharacterName ?? ""),
+              job: String(data.job ?? ""),
+              userId: String(data.userId ?? ""),
+              homeVillage: String(data.homeVillage ?? row.targetCharacterHomeVillage ?? ""),
+              currentStamina: Math.max(0, Number(data.currentStamina) || 0),
+              isModCharacter: Boolean(data.isModCharacter),
+            });
+          } else {
+            setTargetPick(null);
+          }
+        } catch {
+          setTargetPick(null);
+        }
+      } else {
+        setTargetPick(null);
+      }
+      setFormModalOpen(true);
+    },
+    [user?.id]
+  );
 
   const handleSelectItem = (it: CraftItemOpt) => {
     setCraftItemName(it.itemName);
@@ -424,23 +502,28 @@ export default function CraftingRequestsPage() {
 
     setSubmitting(true);
     try {
-      const res = await fetch("/api/crafting-requests", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        credentials: "include",
-        body: JSON.stringify({
-          requesterCharacterName: requesterCharacterName.trim(),
-          craftItemName: craftItemName.trim(),
-          targetMode,
-          targetCharacterId: targetMode === "specific" && targetPick ? targetPick._id : undefined,
-          providingAllMaterials,
-          materialsDescription,
-          paymentOffer,
-          elixirDescription,
-        }),
-      });
+      const payload = {
+        requesterCharacterName: requesterCharacterName.trim(),
+        craftItemName: craftItemName.trim(),
+        targetMode,
+        targetCharacterId: targetMode === "specific" && targetPick ? targetPick._id : undefined,
+        providingAllMaterials,
+        materialsDescription,
+        paymentOffer,
+        elixirDescription,
+      };
+      const isEdit = Boolean(editingRequestId);
+      const res = await fetch(
+        isEdit ? `/api/crafting-requests/${editingRequestId}` : "/api/crafting-requests",
+        {
+          method: isEdit ? "PATCH" : "POST",
+          headers: { "Content-Type": "application/json" },
+          credentials: "include",
+          body: JSON.stringify(payload),
+        }
+      );
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "Failed to submit");
+      if (!res.ok) throw new Error(data.error || (isEdit ? "Failed to save" : "Failed to submit"));
 
       closeFormModal();
       await refreshAfterMutation();
@@ -448,6 +531,27 @@ export default function CraftingRequestsPage() {
       setFormError(err instanceof Error ? err.message : "Error");
     } finally {
       setSubmitting(false);
+    }
+  };
+
+  const handleDelete = async (row: CraftingRequestRow) => {
+    if (
+      !confirm(
+        "Delete this commission? It will be removed from the board and the Discord post will be deleted."
+      )
+    ) {
+      return;
+    }
+    try {
+      const res = await fetch(`/api/crafting-requests/${row._id}`, {
+        method: "DELETE",
+        credentials: "include",
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Delete failed");
+      await refreshAfterMutation();
+    } catch (e) {
+      alert(e instanceof Error ? e.message : "Delete failed");
     }
   };
 
@@ -478,14 +582,34 @@ export default function CraftingRequestsPage() {
         body: JSON.stringify({ acceptorCharacterId: acceptCharId }),
       });
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "Accept failed");
+      if (!res.ok) throw new Error(data.error || "Claim failed");
       setAcceptFor(null);
       setAcceptCharId(null);
       await refreshAfterMutation();
     } catch (e) {
-      setAcceptError(e instanceof Error ? e.message : "Accept failed");
+      setAcceptError(e instanceof Error ? e.message : "Claim failed");
     } finally {
       setAcceptSubmitting(false);
+    }
+  };
+
+  const handleClaimDirect = async (row: CraftingRequestRow, charId: string) => {
+    if (!user?.id) return;
+    setClaimingRequestId(row._id);
+    try {
+      const res = await fetch(`/api/crafting-requests/${row._id}/accept`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ acceptorCharacterId: charId }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Claim failed");
+      await refreshAfterMutation();
+    } catch (e) {
+      alert(e instanceof Error ? e.message : "Claim failed");
+    } finally {
+      setClaimingRequestId(null);
     }
   };
 
@@ -532,8 +656,8 @@ export default function CraftingRequestsPage() {
           <div className="rounded-xl border-2 border-[var(--totk-dark-ocher)] bg-gradient-to-br from-[var(--totk-brown)]/90 to-[var(--botw-warm-black)] p-8 shadow-xl">
             <i className="fa-solid fa-hammer mb-4 text-3xl text-[var(--totk-light-green)]" aria-hidden />
             <p className="mb-6 text-[var(--botw-pale)]">
-              Log in to browse open commissions, accept jobs with your crafters, and post new requests to
-              the community board.
+              Log in to browse open commissions, claim them here with your OCs, and post new requests to the
+              community board.
             </p>
             <a
               href="/api/auth/discord"
@@ -581,8 +705,11 @@ export default function CraftingRequestsPage() {
                     <img alt="" className="hidden h-4 w-auto sm:inline sm:h-5" src="/Side=Right.svg" />
                   </div>
                   <p className="max-w-xl text-sm leading-relaxed text-[var(--botw-pale)] md:text-base">
-                    Open commissions from the village board. New posts are mirrored to Discord. Accept
-                    with a character that has the right job and base stamina—or arrange details in-game.
+                    Open commissions from the village board (and Discord).{" "}
+                    <strong className="font-semibold text-[var(--botw-cream)]">
+                      Claim here with one of your OCs
+                    </strong>{" "}
+                    when the job and base stamina match—or coordinate in-game if boosts apply.
                   </p>
                 </div>
               </div>
@@ -590,6 +717,7 @@ export default function CraftingRequestsPage() {
                 <button
                   type="button"
                   onClick={() => {
+                    setEditingRequestId(null);
                     setFormModalOpen(true);
                     setFormError(null);
                   }}
@@ -664,6 +792,34 @@ export default function CraftingRequestsPage() {
                       {row.requesterDiscordId === user.id ? "You posted" : "You accepted"} ·{" "}
                       {row.createdAt ? new Date(row.createdAt).toLocaleDateString() : ""}
                     </p>
+                    {row.requesterDiscordId === user.id &&
+                    row.status === "open" &&
+                    user?.id ? (
+                      <div className="mt-2 flex flex-wrap gap-2">
+                        <button
+                          type="button"
+                          onClick={() => void openEditRequest(row)}
+                          className="rounded-md border border-[var(--totk-light-green)]/40 bg-[var(--totk-light-green)]/10 px-2.5 py-1 text-[11px] font-semibold text-[var(--totk-light-green)] hover:bg-[var(--totk-light-green)]/20"
+                        >
+                          <i className="fa-solid fa-pen-to-square mr-1" aria-hidden />
+                          Edit
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => void handleDelete(row)}
+                          className="rounded-md border border-red-400/40 bg-red-950/20 px-2.5 py-1 text-[11px] font-semibold text-red-200 hover:bg-red-950/35"
+                        >
+                          Delete
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleCancel(row)}
+                          className="rounded-md border border-[var(--botw-border)] px-2.5 py-1 text-[11px] font-medium text-[var(--botw-pale)] hover:bg-white/5"
+                        >
+                          Cancel (keep record)
+                        </button>
+                      </div>
+                    ) : null}
                   </li>
                 ))}
               </ul>
@@ -676,7 +832,8 @@ export default function CraftingRequestsPage() {
             <div>
               <h2 className="text-xl font-bold text-[var(--totk-light-ocher)] md:text-2xl">Open requests</h2>
               <p className="mt-1 text-sm text-[var(--botw-pale)]">
-                Everyone&apos;s active commissions—newest first.
+                Newest first. Use <strong className="text-[var(--botw-cream)]">Claim with your OC</strong>{" "}
+                when your roster qualifies.
               </p>
             </div>
             <button
@@ -713,7 +870,10 @@ export default function CraftingRequestsPage() {
               </p>
               <button
                 type="button"
-                onClick={() => setFormModalOpen(true)}
+                onClick={() => {
+                  setEditingRequestId(null);
+                  setFormModalOpen(true);
+                }}
                 className="mt-6 inline-flex items-center gap-2 rounded-xl bg-[var(--totk-light-green)] px-5 py-2.5 text-sm font-bold text-black hover:brightness-110"
               >
                 <i className="fa-solid fa-plus" aria-hidden />
@@ -722,151 +882,268 @@ export default function CraftingRequestsPage() {
             </div>
           )}
 
-          <ul className="grid gap-5 md:grid-cols-2">
-            {openRequests.map((row) => (
-              <li
-                key={row._id}
-                className="group relative flex flex-col overflow-hidden rounded-2xl border border-[var(--botw-border)] bg-gradient-to-br from-[var(--botw-panel)]/90 to-[var(--botw-deep)]/80 shadow-md transition hover:border-[var(--totk-light-green)]/35 hover:shadow-lg"
-              >
-                <div className="absolute left-0 top-0 h-full w-1 bg-gradient-to-b from-[var(--totk-light-green)] to-[var(--totk-light-ocher)] opacity-80" />
-                <div className="flex flex-1 flex-col p-5 pl-6">
-                  <div className="mb-3 flex flex-wrap items-start justify-between gap-2">
-                    <div>
-                      <p className="text-[10px] font-semibold uppercase tracking-wider text-[var(--totk-light-green)]">
-                        Commission
-                      </p>
-                      <h3 className="text-lg font-bold leading-snug text-[var(--botw-cream)] md:text-xl">
-                        {row.craftItemName}
-                      </h3>
-                    </div>
-                    <span className="shrink-0 rounded-full bg-emerald-900/50 px-2.5 py-1 text-xs font-semibold text-emerald-100 ring-1 ring-emerald-500/30">
-                      Open
-                    </span>
-                  </div>
+          <ul className="grid list-none gap-6 p-0 md:grid-cols-2 lg:gap-7">
+            {openRequests.map((row) => {
+              const thumbSrc = formatItemImageUrl(row.craftItemImage);
+              const isOpenCall = row.targetMode !== "specific" || !row.targetCharacterName;
+              const youCanTake =
+                user && row.requesterDiscordId !== user.id && requestIdsYouCanAccept.has(row._id);
+              return (
+                <li key={row._id}>
+                  <article
+                    className="group relative flex h-full flex-col overflow-hidden rounded-2xl border border-[var(--totk-dark-ocher)]/45 bg-gradient-to-b from-[var(--botw-panel)]/95 via-[var(--botw-deep)]/88 to-[var(--botw-warm-black)]/75 shadow-[0_4px_24px_rgba(0,0,0,0.28)] ring-1 ring-black/20 transition duration-300 hover:border-[var(--totk-light-green)]/40 hover:shadow-[0_12px_40px_rgba(0,0,0,0.35)]"
+                  >
+                    <div
+                      className="pointer-events-none absolute inset-0 opacity-[0.07]"
+                      style={{
+                        backgroundImage: `radial-gradient(ellipse 120% 80% at 100% -20%, var(--totk-light-green), transparent 55%),
+                          radial-gradient(ellipse 90% 70% at 0% 100%, var(--totk-light-ocher), transparent 50%)`,
+                      }}
+                      aria-hidden
+                    />
+                    <div
+                      className="relative h-1.5 w-full shrink-0 bg-gradient-to-r from-[var(--totk-light-green)] via-[var(--totk-mid-ocher)] to-[var(--totk-light-ocher)]"
+                      aria-hidden
+                    />
 
-                  <div className="mb-4 flex flex-wrap gap-2">
-                    {(row.craftingJobsSnapshot ?? []).slice(0, 4).map((j) => (
-                      <span
-                        key={j}
-                        className="rounded-md bg-black/25 px-2 py-0.5 text-[11px] font-medium text-[var(--botw-pale)]"
-                      >
-                        {j}
-                      </span>
-                    ))}
-                    <span className="rounded-md bg-[var(--totk-light-ocher)]/15 px-2 py-0.5 text-[11px] font-medium text-[var(--totk-light-ocher)]">
-                      <i className="fa-solid fa-bolt mr-1 text-[10px]" aria-hidden />
-                      {row.staminaToCraftSnapshot ?? 0} stam
-                    </span>
-                  </div>
-
-                  <dl className="space-y-2 text-sm text-[var(--botw-pale)]">
-                    <div className="flex gap-2">
-                      <dt className="shrink-0 text-[var(--botw-pale)]/70">
-                        <i className="fa-solid fa-user mr-1.5 w-4 text-center text-[var(--totk-light-green)]" />
-                        OC
-                      </dt>
-                      <dd className="font-medium text-[var(--botw-cream)]">{row.requesterCharacterName}</dd>
-                    </div>
-                    <div className="flex gap-2">
-                      <dt className="shrink-0 text-[var(--botw-pale)]/70">
-                        <i className="fa-solid fa-at mr-1.5 w-4 text-center text-[var(--totk-light-green)]" />
-                        Posted by
-                      </dt>
-                      <dd>{row.requesterUsername || row.requesterDiscordId}</dd>
-                    </div>
-                    <div className="flex gap-2">
-                      <dt className="shrink-0 text-[var(--botw-pale)]/70">
-                        <i className="fa-solid fa-bullseye mr-1.5 w-4 text-center text-[var(--totk-light-green)]" />
-                        Target
-                      </dt>
-                      <dd>
-                        {row.targetMode === "specific" && row.targetCharacterName ? (
-                          <span>
-                            <span className="font-medium text-[var(--botw-cream)]">
-                              {row.targetCharacterName}
+                    <div className="relative flex flex-1 flex-col gap-4 p-5 sm:p-6">
+                      <div className="flex gap-4">
+                        <div className="relative shrink-0">
+                          <div className="flex h-[5.25rem] w-[5.25rem] items-center justify-center overflow-hidden rounded-xl border-2 border-[var(--totk-dark-ocher)]/55 bg-[radial-gradient(ellipse_at_center,_rgba(0,0,0,0.35)_0%,_transparent_70%)] shadow-inner ring-1 ring-white/5 sm:h-[5.75rem] sm:w-[5.75rem]">
+                            {/* eslint-disable-next-line @next/next/no-img-element -- dynamic catalog URLs */}
+                            <img
+                              src={thumbSrc}
+                              alt=""
+                              className="h-[85%] w-[85%] object-contain drop-shadow-[0_2px_6px_rgba(0,0,0,0.45)] transition duration-300 group-hover:scale-[1.04]"
+                            />
+                          </div>
+                          {youCanTake ? (
+                            <span className="absolute -bottom-1 left-1/2 z-[1] -translate-x-1/2 whitespace-nowrap rounded-full bg-[var(--totk-light-green)] px-2 py-0.5 text-[9px] font-bold uppercase tracking-wide text-black shadow-md ring-2 ring-[var(--botw-deep)]">
+                              You can claim this
                             </span>
-                            <span className="text-[var(--botw-pale)]"> (specific)</span>
-                            {row.targetCharacterHomeVillage ? (
-                              <span className="mt-0.5 block text-xs text-[var(--totk-mid-ocher)]">
-                                <i className="fa-solid fa-house-chimney mr-1 text-[10px]" aria-hidden />
-                                {row.targetCharacterHomeVillage}
-                              </span>
-                            ) : null}
-                          </span>
-                        ) : (
-                          "Any qualified crafter"
-                        )}
-                      </dd>
-                    </div>
-                    <div className="flex gap-2">
-                      <dt className="shrink-0 text-[var(--botw-pale)]/70">
-                        <i className="fa-solid fa-box mr-1.5 w-4 text-center text-[var(--totk-light-green)]" />
-                        Materials
-                      </dt>
-                      <dd>
-                        {row.providingAllMaterials ? (
-                          <span className="text-emerald-200/90">Provides all listed</span>
-                        ) : (
-                          <span className="text-amber-200/90">Partial / see notes</span>
-                        )}
-                        {row.materialsDescription ? (
-                          <span className="mt-1 block text-xs leading-relaxed opacity-90">
-                            {row.materialsDescription}
-                          </span>
-                        ) : null}
-                      </dd>
-                    </div>
-                    {row.paymentOffer ? (
-                      <div className="flex gap-2">
-                        <dt className="shrink-0 text-[var(--botw-pale)]/70">
-                          <i className="fa-solid fa-handshake mr-1.5 w-4 text-center text-[var(--totk-light-green)]" />
-                          Payment
-                        </dt>
-                        <dd>{row.paymentOffer}</dd>
-                      </div>
-                    ) : null}
-                    {row.elixirDescription ? (
-                      <div className="flex gap-2">
-                        <dt className="shrink-0 text-[var(--botw-pale)]/70">
-                          <i className="fa-solid fa-flask mr-1.5 w-4 text-center text-[var(--totk-light-green)]" />
-                          Elixir
-                        </dt>
-                        <dd>{row.elixirDescription}</dd>
-                      </div>
-                    ) : null}
-                  </dl>
+                          ) : null}
+                        </div>
 
-                  <div className="mt-auto flex flex-wrap items-center justify-between gap-3 border-t border-[var(--botw-border)]/50 pt-4">
-                    <span className="text-[11px] text-[var(--botw-pale)]/60">
-                      {row.createdAt ? new Date(row.createdAt).toLocaleString() : ""}
-                    </span>
-                    <div className="flex flex-wrap gap-2">
-                      {row.requesterDiscordId === user.id && (
-                        <button
-                          type="button"
-                          onClick={() => handleCancel(row)}
-                          className="rounded-lg border border-red-400/40 bg-red-950/20 px-3 py-1.5 text-xs font-semibold text-red-200 transition hover:bg-red-950/40"
+                        <div className="min-w-0 flex-1 pt-0.5">
+                          <div className="mb-1.5 flex flex-wrap items-center gap-2">
+                            <span className="text-[10px] font-bold uppercase tracking-[0.14em] text-[var(--totk-light-green)]">
+                              Commission
+                            </span>
+                            {isOpenCall ? (
+                              <span className="rounded-full bg-emerald-950/65 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-emerald-100 ring-1 ring-emerald-400/25">
+                                Open call
+                              </span>
+                            ) : (
+                              <span className="rounded-full bg-sky-950/65 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-sky-100 ring-1 ring-sky-400/25">
+                                Named artisan
+                              </span>
+                            )}
+                          </div>
+                          <h3 className="text-lg font-bold leading-tight text-[var(--botw-cream)] sm:text-xl">
+                            {row.craftItemName}
+                          </h3>
+                          <div className="mt-2.5 flex flex-wrap gap-1.5">
+                            {(row.craftingJobsSnapshot ?? []).slice(0, 5).map((j) => (
+                              <span
+                                key={j}
+                                className="rounded-md border border-[var(--botw-border)]/50 bg-black/30 px-2 py-0.5 text-[11px] font-medium text-[var(--botw-pale)]"
+                              >
+                                {j}
+                              </span>
+                            ))}
+                            <span className="inline-flex items-center gap-1 rounded-md border border-[var(--totk-light-ocher)]/35 bg-[var(--totk-light-ocher)]/10 px-2 py-0.5 text-[11px] font-semibold text-[var(--totk-light-ocher)]">
+                              <i className="fa-solid fa-bolt text-[10px] opacity-90" aria-hidden />
+                              {row.staminaToCraftSnapshot ?? 0} stamina
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="rounded-xl border border-[var(--botw-border)]/35 bg-black/22 px-4 py-3 backdrop-blur-sm">
+                        <dl className="grid gap-2.5 text-sm text-[var(--botw-pale)]">
+                          <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
+                            <dt className="flex shrink-0 items-center gap-1.5 text-xs font-medium text-[var(--botw-pale)]/75">
+                              <i className="fa-solid fa-user text-[var(--totk-light-green)]" aria-hidden />
+                              For
+                            </dt>
+                            <dd className="font-semibold text-[var(--botw-cream)]">{row.requesterCharacterName}</dd>
+                          </div>
+                          <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
+                            <dt className="flex shrink-0 items-center gap-1.5 text-xs font-medium text-[var(--botw-pale)]/75">
+                              <i className="fa-solid fa-feather-pointed text-[var(--totk-light-green)]" aria-hidden />
+                              Posted by
+                            </dt>
+                            <dd className="text-[var(--botw-pale)]">
+                              {row.requesterUsername?.trim() || row.requesterDiscordId}
+                            </dd>
+                          </div>
+                          <div className="flex flex-wrap items-start gap-x-2 gap-y-0.5">
+                            <dt className="flex shrink-0 items-center gap-1.5 text-xs font-medium text-[var(--botw-pale)]/75">
+                              <i className="fa-solid fa-compass text-[var(--totk-light-green)]" aria-hidden />
+                              Seeking
+                            </dt>
+                            <dd className="min-w-0 text-[var(--botw-pale)]">
+                              {row.targetMode === "specific" && row.targetCharacterName ? (
+                                <span>
+                                  <span className="font-medium text-[var(--botw-cream)]">{row.targetCharacterName}</span>
+                                  {row.targetCharacterHomeVillage ? (
+                                    <span className="mt-0.5 block text-xs text-[var(--totk-mid-ocher)]">
+                                      <i className="fa-solid fa-house-chimney mr-1 text-[10px]" aria-hidden />
+                                      {row.targetCharacterHomeVillage}
+                                    </span>
+                                  ) : null}
+                                </span>
+                              ) : (
+                                <span className="font-medium text-[var(--botw-cream)]">
+                                  {formatOpenCommissionSeekingLine(
+                                    row.craftingJobsSnapshot ?? [],
+                                    row.staminaToCraftSnapshot ?? 0
+                                  )}
+                                </span>
+                              )}
+                            </dd>
+                          </div>
+                          <div className="border-t border-[var(--botw-border)]/30 pt-2.5">
+                            <div className="flex flex-wrap items-start gap-x-2 gap-y-1">
+                              <dt className="flex shrink-0 items-center gap-1.5 text-xs font-medium text-[var(--botw-pale)]/75">
+                                <i className="fa-solid fa-box-open text-[var(--totk-light-green)]" aria-hidden />
+                                Materials
+                              </dt>
+                              <dd className="min-w-0">
+                                {row.providingAllMaterials ? (
+                                  <span className="text-emerald-200/95">Commissioner brings everything listed.</span>
+                                ) : (
+                                  <span className="text-amber-200/95">Still gathering supplies — see notes.</span>
+                                )}
+                                {row.materialsDescription ? (
+                                  <p className="mt-1.5 text-xs leading-relaxed text-[var(--botw-pale)]/88">
+                                    {row.materialsDescription}
+                                  </p>
+                                ) : null}
+                              </dd>
+                            </div>
+                          </div>
+                          {row.paymentOffer ? (
+                            <div className="flex flex-wrap items-start gap-x-2 gap-y-0.5">
+                              <dt className="flex shrink-0 items-center gap-1.5 text-xs font-medium text-[var(--botw-pale)]/75">
+                                <i className="fa-solid fa-coins text-[var(--totk-light-green)]" aria-hidden />
+                                Offer
+                              </dt>
+                              <dd className="min-w-0 text-[var(--botw-pale)]">{row.paymentOffer}</dd>
+                            </div>
+                          ) : null}
+                          {row.elixirDescription ? (
+                            <div className="flex flex-wrap items-start gap-x-2 gap-y-0.5">
+                              <dt className="flex shrink-0 items-center gap-1.5 text-xs font-medium text-[var(--botw-pale)]/75">
+                                <i className="fa-solid fa-flask text-[var(--totk-light-green)]" aria-hidden />
+                                Elixir
+                              </dt>
+                              <dd className="min-w-0 text-[var(--botw-pale)]">{row.elixirDescription}</dd>
+                            </div>
+                          ) : null}
+                        </dl>
+                      </div>
+
+                      <div className="mt-auto flex flex-wrap items-center justify-between gap-3 border-t border-[var(--botw-border)]/40 pt-4">
+                        <time
+                          className="text-[11px] tabular-nums text-[var(--botw-pale)]/55"
+                          dateTime={row.createdAt ?? undefined}
                         >
-                          Cancel
-                        </button>
-                      )}
-                      {row.requesterDiscordId !== user.id && (
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setAcceptFor(row);
-                            setAcceptError(null);
-                          }}
-                          className="rounded-lg bg-[var(--totk-light-green)] px-4 py-1.5 text-xs font-bold text-black shadow transition hover:brightness-110"
-                        >
-                          Accept
-                        </button>
-                      )}
+                          {row.createdAt ? new Date(row.createdAt).toLocaleString() : ""}
+                        </time>
+                        <div className="flex flex-wrap gap-2">
+                          {row.requesterDiscordId === user.id && (
+                            <>
+                              <button
+                                type="button"
+                                onClick={() => void openEditRequest(row)}
+                                className="rounded-lg border border-[var(--totk-light-green)]/45 bg-[var(--totk-light-green)]/12 px-3 py-2 text-xs font-semibold text-[var(--totk-light-green)] transition hover:bg-[var(--totk-light-green)]/22"
+                              >
+                                <i className="fa-solid fa-pen-to-square mr-1" aria-hidden />
+                                Edit
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => void handleDelete(row)}
+                                className="rounded-lg border border-red-400/45 bg-red-950/25 px-3 py-2 text-xs font-semibold text-red-100 transition hover:bg-red-950/45"
+                              >
+                                Delete
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => handleCancel(row)}
+                                className="rounded-lg border border-[var(--botw-border)] bg-[var(--botw-deep)]/50 px-3 py-2 text-xs font-semibold text-[var(--botw-pale)] transition hover:bg-[var(--botw-deep)]/80"
+                              >
+                                Withdraw
+                              </button>
+                            </>
+                          )}
+                          {row.requesterDiscordId !== user.id &&
+                            (() => {
+                              const eligible = myChars.filter((c) => canAcceptWithCharacter(row, c));
+                              const claiming = claimingRequestId === row._id;
+                              if (eligible.length === 0) {
+                                if (row.targetMode === "specific" && row.targetCharacterName) {
+                                  return (
+                                    <p className="max-w-[14rem] text-right text-[11px] leading-snug text-[var(--botw-pale)]/75">
+                                      Only{" "}
+                                      <span className="font-medium text-[var(--botw-cream)]">
+                                        {row.targetCharacterName}
+                                      </span>{" "}
+                                      can claim this commission.
+                                    </p>
+                                  );
+                                }
+                                return (
+                                  <p className="max-w-[14rem] text-right text-[11px] leading-snug text-[var(--botw-pale)]/75">
+                                    No OC on your roster matches job + base stamina.
+                                  </p>
+                                );
+                              }
+                              if (eligible.length === 1) {
+                                const oc = eligible[0]!;
+                                return (
+                                  <button
+                                    type="button"
+                                    disabled={claiming}
+                                    onClick={() => void handleClaimDirect(row, oc._id)}
+                                    className="rounded-lg bg-[var(--totk-light-green)] px-4 py-2 text-xs font-bold text-black shadow-md shadow-black/15 transition hover:brightness-110 active:scale-[0.98] disabled:opacity-60"
+                                  >
+                                    {claiming ? (
+                                      <>
+                                        <i className="fa-solid fa-spinner fa-spin mr-1.5" aria-hidden />
+                                        Claiming…
+                                      </>
+                                    ) : (
+                                      <>
+                                        <i className="fa-solid fa-hand-holding-heart mr-1.5" aria-hidden />
+                                        Claim as {oc.name}
+                                      </>
+                                    )}
+                                  </button>
+                                );
+                              }
+                              return (
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setAcceptFor(row);
+                                    setAcceptError(null);
+                                  }}
+                                  className="rounded-lg bg-[var(--totk-light-green)] px-4 py-2 text-xs font-bold text-black shadow-md shadow-black/15 transition hover:brightness-110 active:scale-[0.98]"
+                                >
+                                  <i className="fa-solid fa-hand-holding-heart mr-1.5" aria-hidden />
+                                  Claim with your OC
+                                </button>
+                              );
+                            })()}
+                        </div>
+                      </div>
                     </div>
-                  </div>
-                </div>
-              </li>
-            ))}
+                  </article>
+                </li>
+              );
+            })}
           </ul>
         </section>
       </div>
@@ -889,9 +1166,13 @@ export default function CraftingRequestsPage() {
               <div className="min-w-0 pr-2 pt-1">
                 <div className="mx-auto mb-2.5 h-1 w-9 rounded-full bg-[var(--totk-mid-ocher)]/45 sm:hidden" aria-hidden />
                 <h2 id="craft-form-title" className="text-base font-semibold tracking-tight text-[var(--totk-light-ocher)]">
-                  New crafting request
+                  {editingRequestId ? "Edit crafting request" : "New crafting request"}
                 </h2>
-                <p className={modalHintClass}>Discord + board · Esc or outside click to close</p>
+                <p className={modalHintClass}>
+                  {editingRequestId
+                    ? "Saving updates the board and your Discord post."
+                    : "Discord + board · Esc or outside click to close"}
+                </p>
               </div>
               <button
                 type="button"
@@ -1350,7 +1631,9 @@ export default function CraftingRequestsPage() {
               <div className="flex shrink-0 items-center justify-between gap-3 border-t border-[var(--totk-dark-ocher)]/55 bg-[var(--botw-black)]/22 px-4 py-2.5 sm:px-5">
                 <p className={`${modalHintClass} hidden min-w-0 sm:block sm:max-w-[55%]`}>
                   <i className="fa-brands fa-discord mr-1 text-[#5865F2]" aria-hidden />
-                  Announced on the community channel when posted.
+                  {editingRequestId
+                    ? "Discord post is updated when you save."
+                    : "Announced on the community channel when posted."}
                 </p>
                 <div className="flex w-full gap-2 sm:w-auto sm:shrink-0">
                   <button
@@ -1368,8 +1651,10 @@ export default function CraftingRequestsPage() {
                     {submitting ? (
                       <>
                         <i className="fa-solid fa-spinner fa-spin text-xs" aria-hidden />
-                        Post…
+                        {editingRequestId ? "Save…" : "Post…"}
                       </>
+                    ) : editingRequestId ? (
+                      "Save changes"
                     ) : (
                       "Post"
                     )}
@@ -1390,16 +1675,17 @@ export default function CraftingRequestsPage() {
         >
           <div className="w-full max-w-md rounded-2xl border border-[var(--botw-border)] bg-[var(--botw-deep)] p-6 shadow-2xl">
             <h3 id="accept-title" className="text-lg font-bold text-[var(--totk-light-ocher)]">
-              Accept request
+              Claim on the dashboard
             </h3>
             <p className="mt-2 text-sm text-[var(--botw-pale)]">
               <strong className="text-[var(--botw-cream)]">{acceptFor.craftItemName}</strong> — base stamina{" "}
-              {acceptFor.staminaToCraftSnapshot ?? 0}. Choose your character:
+              {acceptFor.staminaToCraftSnapshot ?? 0}. Which OC is taking this commission?
             </p>
             {eligibleAcceptors.length === 0 ? (
               <p className="mt-4 rounded-lg border border-amber-500/30 bg-amber-950/20 p-3 text-sm text-amber-100">
-                None of your characters match job + base stamina here. You can still coordinate in-game if
-                boosts apply.
+                None of your characters qualify here (job + base stamina
+                {acceptFor.targetMode === "specific" ? ", or this post names someone else" : ""}). You can
+                still coordinate in-game if boosts apply.
               </p>
             ) : (
               <ul className="mt-4 max-h-48 space-y-2 overflow-auto rounded-lg border border-[var(--botw-border)]/60 p-2">
@@ -1444,7 +1730,7 @@ export default function CraftingRequestsPage() {
                 onClick={() => void handleAccept()}
                 className="rounded-lg bg-[var(--totk-light-green)] px-4 py-2 text-sm font-bold text-black disabled:opacity-50"
               >
-                {acceptSubmitting ? "…" : "Confirm"}
+                {acceptSubmitting ? "…" : "Claim commission"}
               </button>
             </div>
           </div>
