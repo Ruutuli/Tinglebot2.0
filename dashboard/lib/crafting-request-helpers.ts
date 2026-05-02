@@ -74,6 +74,37 @@ type LeanCharacterRow = {
   icon?: string;
 } | null;
 
+function mapLeanRowToCharacterUnion(row: LeanCharacterRow, isModCharacter: boolean): CharacterUnion | null {
+  if (!row || typeof row.userId !== "string") return null;
+  const iconRaw = (row as { icon?: string }).icon;
+  if (isModCharacter) {
+    const maxS = Math.max(0, Number((row as { maxStamina?: number }).maxStamina) || 999);
+    return {
+      _id: row._id as mongoose.Types.ObjectId,
+      userId: row.userId,
+      name: String(row.name ?? ""),
+      job: String(row.job ?? ""),
+      homeVillage: String((row as { homeVillage?: string }).homeVillage ?? ""),
+      currentStamina: Math.max(0, Number(row.currentStamina) || 999),
+      maxStamina: maxS,
+      isModCharacter: true,
+      icon: typeof iconRaw === "string" && iconRaw.trim() ? iconRaw.trim() : undefined,
+    };
+  }
+  const maxS = Math.max(0, Number((row as { maxStamina?: number }).maxStamina) || 0);
+  return {
+    _id: row._id as mongoose.Types.ObjectId,
+    userId: row.userId,
+    name: String(row.name ?? ""),
+    job: String(row.job ?? ""),
+    homeVillage: String((row as { homeVillage?: string }).homeVillage ?? ""),
+    currentStamina: Math.max(0, Number(row.currentStamina) || 0),
+    maxStamina: maxS,
+    isModCharacter: false,
+    icon: typeof iconRaw === "string" && iconRaw.trim() ? iconRaw.trim() : undefined,
+  };
+}
+
 export async function loadCharacterUnionById(id: string): Promise<CharacterUnion | null> {
   if (!mongoose.Types.ObjectId.isValid(id)) return null;
 
@@ -85,43 +116,43 @@ export async function loadCharacterUnionById(id: string): Promise<CharacterUnion
     .select("userId name job homeVillage currentStamina maxStamina icon")
     .lean()
     .exec()) as unknown as LeanCharacterRow;
-  if (c && typeof c.userId === "string") {
-    const maxS = Math.max(0, Number((c as { maxStamina?: number }).maxStamina) || 0);
-    const iconRaw = (c as { icon?: string }).icon;
-    return {
-      _id: c._id as mongoose.Types.ObjectId,
-      userId: c.userId,
-      name: String(c.name ?? ""),
-      job: String(c.job ?? ""),
-      homeVillage: String((c as { homeVillage?: string }).homeVillage ?? ""),
-      currentStamina: Math.max(0, Number(c.currentStamina) || 0),
-      maxStamina: maxS,
-      isModCharacter: false,
-      icon: typeof iconRaw === "string" && iconRaw.trim() ? iconRaw.trim() : undefined,
-    };
-  }
+  const regular = mapLeanRowToCharacterUnion(c, false);
+  if (regular) return regular;
 
   const m = (await ModCharacter.findById(id)
     .select("userId name job homeVillage currentStamina maxStamina icon")
     .lean()
     .exec()) as unknown as LeanCharacterRow;
-  if (m && typeof m.userId === "string") {
-    const maxS = Math.max(0, Number((m as { maxStamina?: number }).maxStamina) || 999);
-    const iconRaw = (m as { icon?: string }).icon;
-    return {
-      _id: m._id as mongoose.Types.ObjectId,
-      userId: m.userId,
-      name: String(m.name ?? ""),
-      job: String(m.job ?? ""),
-      homeVillage: String((m as { homeVillage?: string }).homeVillage ?? ""),
-      currentStamina: Math.max(0, Number(m.currentStamina) || 999),
-      maxStamina: maxS,
-      isModCharacter: true,
-      icon: typeof iconRaw === "string" && iconRaw.trim() ? iconRaw.trim() : undefined,
-    };
-  }
+  return mapLeanRowToCharacterUnion(m, true);
+}
 
-  return null;
+/**
+ * Load a character only if it belongs to the given Discord user (for claim / sensitive actions).
+ */
+export async function loadCharacterUnionByIdForOwner(
+  id: string,
+  ownerDiscordId: string
+): Promise<CharacterUnion | null> {
+  if (!mongoose.Types.ObjectId.isValid(id)) return null;
+  const userId = String(ownerDiscordId ?? "").trim();
+  if (!userId) return null;
+
+  const Character = (await import("@/models/CharacterModel.js")).default;
+  const ModCharacterModule = await import("@/models/ModCharacterModel.js");
+  const ModCharacter = ModCharacterModule.default || ModCharacterModule;
+
+  const c = (await Character.findOne({ _id: id, userId })
+    .select("userId name job homeVillage currentStamina maxStamina icon")
+    .lean()
+    .exec()) as unknown as LeanCharacterRow;
+  const regular = mapLeanRowToCharacterUnion(c, false);
+  if (regular) return regular;
+
+  const m = (await ModCharacter.findOne({ _id: id, userId })
+    .select("userId name job homeVillage currentStamina maxStamina icon")
+    .lean()
+    .exec()) as unknown as LeanCharacterRow;
+  return mapLeanRowToCharacterUnion(m, true);
 }
 
 export async function userOwnsCharacterName(

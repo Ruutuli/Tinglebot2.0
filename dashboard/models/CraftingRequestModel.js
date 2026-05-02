@@ -31,6 +31,21 @@ const CraftingRequestSchema = new Schema(
     materialsDescription: { type: String, default: "" },
     paymentOffer: { type: String, default: "" },
     elixirDescription: { type: String, default: "" },
+    /** 1–3 Basic/Mid/High when craft is a mixer elixir; null otherwise */
+    elixirTier: { type: Number, default: null },
+    /**
+     * Mixer elixirs only: commissioner picks exact inventory rows (and max qty per row) they commit.
+     * Claim consumes rows against the boost-adjusted recipe.
+     */
+    elixirMaterialSelections: {
+      type: [
+        {
+          inventoryDocumentId: { type: Schema.Types.ObjectId, required: true },
+          maxQuantity: { type: Number, required: true, min: 1 },
+        },
+      ],
+      default: [],
+    },
     boostNotes: { type: String, default: "" },
 
     status: {

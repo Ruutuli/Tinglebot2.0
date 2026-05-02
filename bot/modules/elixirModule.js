@@ -220,6 +220,29 @@ function isElixirItemName(name) {
   return !!(key && ELIXIR_EFFECTS[key]);
 }
 
+/** Mixer output names (same set as dashboard `MIXER_ELIXIR_NAMES`) — workshop commissions require per-stack material picks. */
+const MIXER_OUTPUT_ELIXIR_NAME_SET = new Set([
+  'Bright Elixir',
+  'Chilly Elixir',
+  'Electro Elixir',
+  'Enduring Elixir',
+  'Energizing Elixir',
+  'Fairy Tonic',
+  'Hasty Elixir',
+  'Hearty Elixir',
+  'Mighty Elixir',
+  'Sneaky Elixir',
+  'Spicy Elixir',
+  'Sticky Elixir',
+  'Tough Elixir',
+]);
+
+function isMixerOutputElixirName(rawName) {
+  const key = resolveElixirItemName(rawName);
+  if (!key) return false;
+  return MIXER_OUTPUT_ELIXIR_NAME_SET.has(key);
+}
+
 /**
  * Persisted buff numbers: integer hearts/stamina keys stay whole; other numeric stats → nearest **0.25**.
  * Matches Discord display (`formatElixirStatDisplay`) and gameplay math.
@@ -1376,6 +1399,7 @@ module.exports = {
   buildElixirRollMetaForEmbed,
   applyMonsterEncounterElixirForLootOrGather,
   isElixirItemName,
+  isMixerOutputElixirName,
   applyElixirBuff,
   applyImmediateEffects,
   shouldConsumeElixir,

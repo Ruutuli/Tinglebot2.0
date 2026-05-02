@@ -64,6 +64,7 @@ export function FieldRenderer({
           required={field.required}
           placeholder={field.placeholder}
           rows={field.rows}
+          suggestions={field.suggestions}
         />
       );
 

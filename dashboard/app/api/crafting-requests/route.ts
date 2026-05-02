@@ -124,7 +124,11 @@ export async function POST(request: Request) {
       providingAllMaterials: v.providingAllMaterials,
       materialsDescription: v.materialsDescription,
       paymentOffer: v.paymentOffer,
-      elixirDescription: v.elixirDescription,
+      elixirTier: v.elixirTier,
+      elixirMaterialSelections: v.elixirMaterialSelections.map((s) => ({
+        inventoryDocumentId: s.inventoryDocumentId,
+        maxQuantity: s.maxQuantity,
+      })),
       status: "open",
     });
 

@@ -249,6 +249,13 @@ export async function GET(req: NextRequest) {
         const { default: RelicModel } = await import("@/models/RelicModel.js");
         Model = RelicModel as unknown as Model<unknown>;
       }
+    } else if (modelName === "CraftingRequest") {
+      if (mongoose.models.CraftingRequest) {
+        Model = mongoose.models.CraftingRequest;
+      } else {
+        const { default: CraftingRequestModel } = await import("@/models/CraftingRequestModel.js");
+        Model = CraftingRequestModel as unknown as Model<unknown>;
+      }
     } else {
       return NextResponse.json(
         { error: "Invalid model", message: `Model "${modelName}" is not supported` },
@@ -291,9 +298,11 @@ export async function GET(req: NextRequest) {
     }
 
     // ------------------- Fetch All Records -------------------
-    // Fetch all records sorted by itemName for consistency
+    // Crafting requests: newest first (createdAt desc); others use configured sortField ascending
+    const sortSpec =
+      modelName === "CraftingRequest" ? { createdAt: -1 as const } : { [sortField]: 1 as const };
     const records = (await Model.find({})
-      .sort({ [sortField]: 1 })
+      .sort(sortSpec)
       .lean()) as unknown as ItemLean[];
 
     // Convert Map objects to plain objects for JSON serialization.
@@ -527,6 +536,16 @@ export async function GET(req: NextRequest) {
       filterOptions.appraised = Array.from(appraisedSet).sort();
       filterOptions.archived = Array.from(archivedSet).sort();
       filterOptions.discoveredBy = Array.from(discoveredBySet).sort();
+    } else if (modelName === "CraftingRequest") {
+      const statusSet = new Set<string>();
+      const targetModeSet = new Set<string>();
+      convertedRecords.forEach((record) => {
+        const r = record as { status?: string; targetMode?: string };
+        if (r.status) statusSet.add(r.status);
+        if (r.targetMode) targetModeSet.add(r.targetMode);
+      });
+      filterOptions.status = Array.from(statusSet).sort();
+      filterOptions.targetMode = Array.from(targetModeSet).sort();
     }
 
     // ------------------- Return Response -------------------
@@ -779,6 +798,13 @@ export async function PUT(req: NextRequest) {
         const { default: RelicModel } = await import("@/models/RelicModel.js");
         Model = RelicModel as unknown as Model<unknown>;
       }
+    } else if (model === "CraftingRequest") {
+      if (mongoose.models.CraftingRequest) {
+        Model = mongoose.models.CraftingRequest;
+      } else {
+        const { default: CraftingRequestModel } = await import("@/models/CraftingRequestModel.js");
+        Model = CraftingRequestModel as unknown as Model<unknown>;
+      }
     } else {
       return NextResponse.json(
         { error: "Invalid model", message: `Model "${model}" is not supported` },
@@ -901,6 +927,32 @@ export async function PUT(req: NextRequest) {
         "libraryPositionX", "libraryPositionY", "libraryDisplaySize",
         "archived", "deteriorated", "firstCompletionRewardGiven", "duplicateRewardGiven",
         "description", "functionality", "origins", "uses",
+      ];
+    } else if (model === "CraftingRequest") {
+      allowedFields = [
+        "requesterDiscordId",
+        "requesterUsername",
+        "requesterCharacterName",
+        "craftItemName",
+        "craftItemMongoId",
+        "craftingJobsSnapshot",
+        "staminaToCraftSnapshot",
+        "targetMode",
+        "targetCharacterId",
+        "targetCharacterName",
+        "targetCharacterHomeVillage",
+        "providingAllMaterials",
+        "materialsDescription",
+        "paymentOffer",
+        "elixirDescription",
+        "elixirTier",
+        "boostNotes",
+        "status",
+        "acceptedAt",
+        "acceptedByUserId",
+        "acceptedByCharacterId",
+        "acceptedByCharacterName",
+        "discordMessageId",
       ];
     } else {
       // For other models, allow all fields (can be refined per model later)
@@ -1116,6 +1168,36 @@ export async function PUT(req: NextRequest) {
       }
     }
 
+    // ------------------- CraftingRequest: ObjectIds, elixir tier, dates -------------------
+    if (model === "CraftingRequest") {
+      const ud = updateData as Record<string, unknown>;
+      const oidKeys = ["craftItemMongoId", "targetCharacterId", "acceptedByCharacterId"] as const;
+      for (const k of oidKeys) {
+        const v = ud[k];
+        if (v === "" || v == null) {
+          ud[k] = null;
+        } else if (typeof v === "string") {
+          ud[k] = mongoose.Types.ObjectId.isValid(v) ? new mongoose.Types.ObjectId(v) : null;
+        }
+      }
+      if (ud.elixirTier !== undefined) {
+        const n = typeof ud.elixirTier === "number" ? ud.elixirTier : Number(ud.elixirTier);
+        ud.elixirTier = Number.isFinite(n) && n >= 1 && n <= 3 ? n : null;
+      }
+      if (ud.acceptedAt !== undefined) {
+        if (ud.acceptedAt === null || ud.acceptedAt === "") {
+          ud.acceptedAt = null;
+        } else {
+          const v = ud.acceptedAt;
+          const d = v instanceof Date ? v : new Date(v as string | number);
+          ud.acceptedAt = Number.isFinite(d.getTime()) ? d : null;
+        }
+      }
+      if (Array.isArray(ud.craftingJobsSnapshot)) {
+        ud.craftingJobsSnapshot = (ud.craftingJobsSnapshot as unknown[]).map((x) => String(x ?? "").trim()).filter(Boolean);
+      }
+    }
+
     // ------------------- Monster model: prevent validation errors on save -------------------
     if (model === "Monster") {
       const ud = updateData as Record<string, unknown>;
@@ -1320,6 +1402,10 @@ export async function DELETE(req: NextRequest) {
       Model = (mongoose.models.Quest ?? (await import("@/models/QuestModel.js")).default) as unknown as Model<unknown>;
     } else if (model === "Relic") {
       Model = (mongoose.models.Relic ?? (await import("@/models/RelicModel.js")).default) as unknown as Model<unknown>;
+    } else if (model === "CraftingRequest") {
+      Model = (
+        mongoose.models.CraftingRequest ?? (await import("@/models/CraftingRequestModel.js")).default
+      ) as unknown as Model<unknown>;
     } else {
       return NextResponse.json(
         { error: "Invalid model", message: `Model "${model}" is not supported` },

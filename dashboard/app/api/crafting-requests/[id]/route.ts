@@ -60,7 +60,11 @@ export async function PATCH(request: Request, context: RouteContext) {
     reqDoc.providingAllMaterials = v.providingAllMaterials;
     reqDoc.materialsDescription = v.materialsDescription;
     reqDoc.paymentOffer = v.paymentOffer;
-    reqDoc.elixirDescription = v.elixirDescription;
+    reqDoc.elixirTier = v.elixirTier;
+    reqDoc.elixirMaterialSelections = v.elixirMaterialSelections.map((s) => ({
+      inventoryDocumentId: s.inventoryDocumentId,
+      maxQuantity: s.maxQuantity,
+    }));
 
     await reqDoc.save();
 

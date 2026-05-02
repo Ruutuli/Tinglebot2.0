@@ -2,14 +2,12 @@ import { NextResponse } from "next/server";
 import { connect } from "@/lib/db";
 import { getSession } from "@/lib/session";
 import mongoose from "mongoose";
-import {
-  hasStaminaForCraft,
-  jobCanCraftItem,
-  loadCharacterUnionById,
-  parseStaminaToCraft,
-} from "@/lib/crafting-request-helpers";
+import { loadCharacterUnionByIdForOwner } from "@/lib/crafting-request-helpers";
 import { getCraftItemByName } from "@/lib/crafting-request-mutation";
 import { notifyCraftingRequestAccepted } from "@/lib/craftingRequestsNotify";
+
+// eslint-disable-next-line @typescript-eslint/no-require-imports
+const { executeWorkshopCommissionCraft } = require("../../../../../../bot/services/workshopCommissionCraft.js");
 
 export const dynamic = "force-dynamic";
 
@@ -48,12 +46,12 @@ export async function POST(request: Request, context: RouteContext) {
       return NextResponse.json({ error: "You cannot accept your own request" }, { status: 400 });
     }
 
-    const acceptor = await loadCharacterUnionById(acceptorCharacterId);
+    const acceptor = await loadCharacterUnionByIdForOwner(acceptorCharacterId, user.id);
     if (!acceptor) {
-      return NextResponse.json({ error: "Character not found" }, { status: 400 });
-    }
-    if (acceptor.userId !== user.id) {
-      return NextResponse.json({ error: "That character is not yours" }, { status: 403 });
+      return NextResponse.json(
+        { error: "Character not found or not on your roster" },
+        { status: 403 }
+      );
     }
 
     if (reqDoc.targetMode === "specific") {
@@ -71,45 +69,120 @@ export async function POST(request: Request, context: RouteContext) {
       return NextResponse.json({ error: "Craft item no longer exists or is not craftable" }, { status: 400 });
     }
 
-    const staminaCost =
-      reqDoc.staminaToCraftSnapshot > 0
-        ? reqDoc.staminaToCraftSnapshot
-        : parseStaminaToCraft(item.staminaToCraft);
+    const acceptedAt = new Date();
+    const reserved = await CraftingRequest.findOneAndUpdate(
+      {
+        _id: id,
+        status: "open",
+        requesterDiscordId: { $ne: user.id },
+      },
+      {
+        $set: {
+          status: "accepted",
+          acceptedAt,
+          acceptedByUserId: user.id,
+          acceptedByCharacterId: new mongoose.Types.ObjectId(acceptorCharacterId),
+          acceptedByCharacterName: acceptor.name,
+        },
+      },
+      { new: true }
+    ).exec();
 
-    if (!jobCanCraftItem(item, acceptor.job)) {
-      return NextResponse.json(
-        { error: "Your character's job cannot craft this item" },
-        { status: 400 }
-      );
+    if (!reserved) {
+      const latest = await CraftingRequest.findById(id).lean();
+      if (!latest) {
+        return NextResponse.json({ error: "Request not found" }, { status: 404 });
+      }
+      if (latest.requesterDiscordId === user.id) {
+        return NextResponse.json({ error: "You cannot accept your own request" }, { status: 400 });
+      }
+      return NextResponse.json({ error: "This request is no longer open" }, { status: 400 });
     }
-    if (!hasStaminaForCraft(staminaCost, acceptor.currentStamina, acceptor.isModCharacter)) {
+
+    const revertToOpen = async () => {
+      await CraftingRequest.findByIdAndUpdate(id, {
+        $set: {
+          status: "open",
+          acceptedAt: null,
+          acceptedByUserId: null,
+          acceptedByCharacterId: null,
+          acceptedByCharacterName: "",
+        },
+      }).exec();
+    };
+
+    let craftResult: {
+      ok: boolean;
+      code?: string;
+      error?: string;
+      missingMaterials?: string[];
+      craftedQuantity?: number;
+      crafterStaminaPaid?: number;
+      teacherStaminaPaid?: number;
+    };
+    try {
+      const elixirSels = Array.isArray(reserved.elixirMaterialSelections)
+        ? reserved.elixirMaterialSelections.map(
+            (s: { inventoryDocumentId?: unknown; maxQuantity?: unknown }) => ({
+              inventoryDocumentId: s.inventoryDocumentId,
+              maxQuantity: s.maxQuantity,
+            })
+          )
+        : [];
+      craftResult = await executeWorkshopCommissionCraft({
+        crafterUserId: user.id,
+        crafterCharacterId: acceptorCharacterId,
+        commissionerDiscordId: reserved.requesterDiscordId,
+        commissionerCharacterName: reserved.requesterCharacterName,
+        craftItemName: reserved.craftItemName,
+        elixirTier: reserved.elixirTier ?? null,
+        elixirMaterialSelections: elixirSels,
+      });
+    } catch (craftErr) {
+      await revertToOpen();
+      console.error("[crafting-requests accept] craft threw:", craftErr);
+      return NextResponse.json({ error: "Craft failed after locking request; commission was re-opened." }, { status: 500 });
+    }
+
+    if (!craftResult.ok) {
+      await revertToOpen();
+      const status =
+        craftResult.code === "CRAFTER" ? 403 : craftResult.code === "EXECUTION" ? 500 : 400;
       return NextResponse.json(
         {
-          error: `Not enough stamina (base cost ${staminaCost}; boosts may change what you need—coordinate with the requester in RP)`,
+          error: craftResult.error,
+          code: craftResult.code,
+          ...(Array.isArray(craftResult.missingMaterials)
+            ? { missingMaterials: craftResult.missingMaterials }
+            : {}),
         },
-        { status: 400 }
+        { status }
       );
     }
-
-    reqDoc.status = "accepted";
-    reqDoc.acceptedAt = new Date();
-    reqDoc.acceptedByUserId = user.id;
-    reqDoc.acceptedByCharacterId = acceptor._id;
-    reqDoc.acceptedByCharacterName = acceptor.name;
-    await reqDoc.save();
 
     try {
       await notifyCraftingRequestAccepted({
-        requesterDiscordId: reqDoc.requesterDiscordId,
+        requestId: String(reserved._id),
+        requesterDiscordId: reserved.requesterDiscordId,
         acceptorDiscordId: user.id,
         acceptorCharacterName: acceptor.name,
-        craftItemName: reqDoc.craftItemName,
+        craftItemName: reserved.craftItemName,
+        requesterCharacterName: reserved.requesterCharacterName,
+        paymentOffer: reserved.paymentOffer,
+        craftItemImage: typeof item.image === "string" ? item.image : undefined,
       });
     } catch (e) {
       console.warn("[crafting-requests accept] Discord follow-up failed:", e);
     }
 
-    return NextResponse.json(reqDoc.toObject());
+    return NextResponse.json({
+      ...reserved.toObject(),
+      craft: {
+        craftedQuantity: craftResult.craftedQuantity,
+        crafterStaminaPaid: craftResult.crafterStaminaPaid,
+        teacherStaminaPaid: craftResult.teacherStaminaPaid,
+      },
+    });
   } catch (err) {
     console.error("[api/crafting-requests accept]", err);
     return NextResponse.json({ error: "Failed to accept request" }, { status: 500 });

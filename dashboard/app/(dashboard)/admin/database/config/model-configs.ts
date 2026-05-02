@@ -5,6 +5,10 @@
 
 import type { ModelConfig } from "../types/model-types";
 import { FIELD_OPTIONS } from "../constants/field-options";
+import { ALL_JOBS, MOD_JOBS } from "@/data/characterData";
+
+/** Canon character job names for admin editor autocomplete (matches bot / player create flow). */
+const CHARACTER_JOB_SUGGESTIONS = [...ALL_JOBS, ...MOD_JOBS];
 
 export const MODEL_CONFIGS: Record<string, ModelConfig> = {
   Item: {
@@ -889,8 +893,9 @@ export const MODEL_CONFIGS: Record<string, ModelConfig> = {
             key: "job",
             label: "Job",
             type: "text",
-            helpText: "Character's job",
+            helpText: "Character's job — use the dropdown suggestions for canon names (same list as applications)",
             required: true,
+            suggestions: CHARACTER_JOB_SUGGESTIONS,
           },
           {
             key: "jobDateChanged",
@@ -2879,6 +2884,199 @@ export const MODEL_CONFIGS: Record<string, ModelConfig> = {
             type: "text",
             rows: 5,
             helpText: "Potential uses or applications",
+          },
+        ],
+      },
+    ],
+  },
+  CraftingRequest: {
+    name: "CraftingRequest",
+    displayName: "Crafting Requests",
+    icon: "fa-hammer",
+    collection: "craftingrequests",
+    nameField: "craftItemName",
+    sortField: "createdAt",
+    filterKeys: ["status", "targetMode"],
+    tabs: [
+      {
+        id: "basics",
+        label: "Basics",
+        icon: "fa-tag",
+        gridColumns: 2,
+        fields: [
+          {
+            key: "requesterDiscordId",
+            label: "Requester Discord ID",
+            type: "text",
+            helpText: "Discord user ID of the requester",
+            required: true,
+          },
+          {
+            key: "requesterUsername",
+            label: "Requester Username",
+            type: "text",
+            helpText: "Discord username (display)",
+          },
+          {
+            key: "requesterCharacterName",
+            label: "Requester Character",
+            type: "text",
+            helpText: "Character name posting the request",
+            required: true,
+          },
+          {
+            key: "craftItemName",
+            label: "Craft item name",
+            type: "text",
+            helpText: "Catalog name of the item to craft",
+            required: true,
+          },
+          {
+            key: "craftItemMongoId",
+            label: "Craft item MongoDB ID",
+            type: "text",
+            helpText: "Item document ObjectId (24 hex) or empty",
+          },
+          {
+            key: "craftingJobsSnapshot",
+            label: "Crafting jobs snapshot",
+            type: "array",
+            helpText: "Job names captured when the request was created (one per line)",
+          },
+          {
+            key: "staminaToCraftSnapshot",
+            label: "Stamina to craft snapshot",
+            type: "number",
+            helpText: "Stamina cost snapshot",
+            min: 0,
+          },
+          {
+            key: "targetMode",
+            label: "Target mode",
+            type: "select",
+            helpText: "Open commission vs specific character",
+            required: true,
+            options: [
+              { value: "open", label: "Open" },
+              { value: "specific", label: "Specific" },
+            ],
+          },
+          {
+            key: "targetCharacterId",
+            label: "Target character ID",
+            type: "text",
+            helpText: "ObjectId when targetMode is specific; empty for open",
+          },
+          {
+            key: "targetCharacterName",
+            label: "Target character name",
+            type: "text",
+            helpText: "Display name of intended crafter",
+          },
+          {
+            key: "targetCharacterHomeVillage",
+            label: "Target home village",
+            type: "text",
+            helpText: "Home village of target character",
+          },
+        ],
+      },
+      {
+        id: "details",
+        label: "Details",
+        icon: "fa-file-lines",
+        gridColumns: 1,
+        fields: [
+          {
+            key: "providingAllMaterials",
+            label: "Providing all materials",
+            type: "boolean",
+            helpText: "Requester supplies all mats",
+          },
+          {
+            key: "materialsDescription",
+            label: "Materials description",
+            type: "text",
+            rows: 4,
+            helpText: "What materials are offered / needed",
+          },
+          {
+            key: "paymentOffer",
+            label: "Payment / offer",
+            type: "text",
+            rows: 3,
+            helpText: "Payment or compensation offered",
+          },
+          {
+            key: "elixirDescription",
+            label: "Elixir description",
+            type: "text",
+            rows: 3,
+            helpText: "Mixer / elixir details when applicable",
+          },
+          {
+            key: "elixirTier",
+            label: "Elixir tier",
+            type: "number",
+            helpText: "1–3 for mixer elixirs; leave 0 or clear in API to store null",
+            min: 0,
+            max: 3,
+          },
+          {
+            key: "boostNotes",
+            label: "Boost notes",
+            type: "text",
+            rows: 3,
+            helpText: "Teacher / booster notes",
+          },
+        ],
+      },
+      {
+        id: "status",
+        label: "Status & Discord",
+        icon: "fa-flag",
+        gridColumns: 2,
+        fields: [
+          {
+            key: "status",
+            label: "Status",
+            type: "select",
+            helpText: "Request lifecycle",
+            options: [
+              { value: "open", label: "Open" },
+              { value: "accepted", label: "Accepted" },
+              { value: "cancelled", label: "Cancelled" },
+            ],
+          },
+          {
+            key: "acceptedAt",
+            label: "Accepted at",
+            type: "date",
+            helpText: "When the request was accepted",
+          },
+          {
+            key: "acceptedByUserId",
+            label: "Accepted by user ID",
+            type: "text",
+            helpText: "Discord ID of accepting user",
+          },
+          {
+            key: "acceptedByCharacterId",
+            label: "Accepted by character ID",
+            type: "text",
+            helpText: "Character ObjectId of crafter",
+          },
+          {
+            key: "acceptedByCharacterName",
+            label: "Accepted by character name",
+            type: "text",
+            helpText: "Crafter character name",
+          },
+          {
+            key: "discordMessageId",
+            label: "Discord message ID",
+            type: "text",
+            helpText: "Board message ID (if posted)",
           },
         ],
       },

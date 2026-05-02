@@ -1,6 +1,7 @@
 import { discordApiDelete, discordApiRequest } from "@/lib/discord";
 import { getPublicAppUrl } from "@/lib/config";
 import { formatOpenCommissionSeekingLine } from "@/lib/crafting-request-helpers";
+import { elixirTierLabel, isMixerOutputElixirName } from "@/lib/elixir-catalog";
 
 const COMMUNITY_BOARD_CHANNEL_ID =
   process.env.COMMUNITY_BOARD_CHANNEL_ID || "651614266046152705";
@@ -72,7 +73,8 @@ export type CraftingRequestNotifyPayload = {
   providingAllMaterials: boolean;
   materialsDescription: string;
   paymentOffer: string;
-  elixirDescription: string;
+  /** 1–3 when commission is for a mixer elixir */
+  elixirTier?: number | null;
   /** Character `icon` field (commissioner OC) — resolved to a public URL in the embed */
   requesterCharacterIcon?: string;
   /** Character `icon` field (named artisan), when `targetMode === "specific"` */
@@ -109,75 +111,116 @@ export function buildCraftingBoardPingContent(payload: CraftingRequestNotifyPayl
   return parts.join(" ");
 }
 
+const EMBED_TITLE_NEW = "📋 New workshop commission";
+const EMBED_TITLE_UPDATED = "✏️ Workshop commission updated";
+
+function clip(s: string, max: number): string {
+  if (s.length <= max) return s;
+  return `${s.slice(0, max - 1)}…`;
+}
+
 /** Body for create / edit Discord board posts (stable banner per request id). */
-export function buildCraftingRequestBoardMessage(payload: CraftingRequestNotifyPayload): {
+export function buildCraftingRequestBoardMessage(
+  payload: CraftingRequestNotifyPayload,
+  embedTitle: string = EMBED_TITLE_NEW
+): {
   content: string;
   embeds: Record<string, unknown>[];
 } {
   const publicBase = getPublicAppUrl().replace(/\/$/, "");
   const boardUrl = `${publicBase}/crafting-requests`;
 
-  const crafterBlock =
-    payload.targetMode === "specific" && payload.targetCharacterName
-      ? [
-          "**Named artisan**",
-          `${payload.targetCharacterName}${
-            payload.targetCharacterHomeVillage
-              ? ` · ${payload.targetCharacterHomeVillage}`
-              : ""
-          }${
-            payload.targetOwnerDiscordId
-              ? `\n<@${payload.targetOwnerDiscordId}>`
-              : ""
-          }`,
-        ].join("\n")
-      : [
-          "**Open commission**",
-          formatOpenCommissionSeekingLine(
-            payload.craftingJobsSnapshot,
-            payload.staminaToCraftSnapshot
-          ),
-        ].join("\n");
-
   const jobsLine =
     payload.craftingJobsSnapshot.length > 0
-      ? payload.craftingJobsSnapshot.join(", ")
+      ? payload.craftingJobsSnapshot.join(" · ")
       : "—";
 
   const materialsLine = payload.providingAllMaterials
-    ? "The commissioner brings every material listed for this work."
-    : "Not everything is in hand yet — see the notes below.";
+    ? "✅ Commissioner brings **everything** listed for this recipe."
+    : "⚠️ Not all materials in hand yet — see notes below.";
 
-  const description = [
-    `**Commission:** *${payload.craftItemName}*`,
-    "",
-    `**Character:** ${payload.requesterCharacterName}`,
-    `**Arranged by:** <@${payload.requesterDiscordId}>${
-      payload.requesterUsername ? ` (${payload.requesterUsername})` : ""
-    }`,
-    "",
-    crafterBlock,
-    "",
-    `**Trade:** ${jobsLine}`,
-    `**Effort:** ${payload.staminaToCraftSnapshot} stamina (listed for this recipe)`,
-    "",
-    `**Materials:** ${materialsLine}`,
-    payload.materialsDescription.trim()
-      ? `\n${payload.materialsDescription.trim().slice(0, 500)}${
-          payload.materialsDescription.length > 500 ? "…" : ""
-        }`
-      : null,
-    payload.paymentOffer.trim()
-      ? `\n**Offer:** ${payload.paymentOffer.trim().slice(0, 300)}`
-      : null,
-    payload.elixirDescription.trim()
-      ? `\n**Elixir:** ${payload.elixirDescription.trim().slice(0, 300)}`
-      : null,
-    "",
-    `[Step up at the workshop board](${boardUrl})`,
-  ]
-    .filter(Boolean)
-    .join("\n");
+  const materialsNotes = payload.materialsDescription.trim()
+    ? clip(payload.materialsDescription.trim(), 500)
+    : "";
+
+  const offerLine = payload.paymentOffer.trim()
+    ? clip(payload.paymentOffer.trim(), 300)
+    : "";
+
+  const elixirTierLine =
+    isMixerOutputElixirName(payload.craftItemName) &&
+    payload.elixirTier != null &&
+    payload.elixirTier >= 1 &&
+    payload.elixirTier <= 3
+      ? `🧪 **Elixir tier** · **${elixirTierLabel(payload.elixirTier)}** _(mixer — flexible ingredients)_`
+      : "";
+
+  const arrangedBy = `📇 **Arranged by** · <@${payload.requesterDiscordId}>${
+    payload.requesterUsername ? ` _(${payload.requesterUsername})_` : ""
+  }`;
+
+  const descParts: string[] = [];
+
+  descParts.push(`🧾 **Recipe**`);
+  descParts.push(`↳ *${payload.craftItemName}*`);
+  descParts.push("");
+  descParts.push(`👤 **For OC** · **${payload.requesterCharacterName}**`);
+  descParts.push(arrangedBy);
+  descParts.push("");
+  descParts.push("— — — — — —");
+  descParts.push("");
+
+  if (payload.targetMode === "specific" && payload.targetCharacterName) {
+    descParts.push(`🎯 **Named artisan**`);
+    const loc = payload.targetCharacterHomeVillage?.trim()
+      ? ` · _${payload.targetCharacterHomeVillage.trim()}_`
+      : "";
+    descParts.push(`↳ **${payload.targetCharacterName.trim()}**${loc}`);
+    if (payload.targetOwnerDiscordId?.trim()) {
+      descParts.push(`↳ <@${payload.targetOwnerDiscordId.trim()}>`);
+    }
+  } else {
+    descParts.push(`🌐 **Open commission**`);
+    descParts.push(
+      `↳ _${formatOpenCommissionSeekingLine(
+        payload.craftingJobsSnapshot,
+        payload.staminaToCraftSnapshot
+      )}_`
+    );
+  }
+
+  descParts.push("");
+  descParts.push(`⚒️ **Trade** · ${jobsLine}`);
+  descParts.push(
+    `⚡ **Effort** · **${payload.staminaToCraftSnapshot}** stamina _· recipe base_`
+  );
+  descParts.push("");
+  descParts.push("— — — — — —");
+  descParts.push("");
+  descParts.push(`📦 **Materials**`);
+  descParts.push(materialsLine);
+  if (materialsNotes) {
+    descParts.push(`↳ ${materialsNotes}`);
+  }
+  if (offerLine) {
+    descParts.push("");
+    descParts.push(`🎁 **Offer**`);
+    descParts.push(`↳ ${offerLine}`);
+  }
+  if (elixirTierLine) {
+    descParts.push("");
+    descParts.push(elixirTierLine);
+  }
+
+  descParts.push("");
+  descParts.push(`🔗 **[Open the workshop board →](${boardUrl})**`);
+
+  let description = descParts.join("\n");
+  if (description.length > 4096) {
+    description = `${description.slice(0, 4092)}…`;
+  }
+
+  const embedTitleFinal = embedTitle.slice(0, 256);
 
   const bannerUrl = hashPick(payload.requestId, CRAFT_BOARD_IMAGES);
   const thumbUrl = discordEmbedImageUrl(payload.craftItemImage);
@@ -210,11 +253,13 @@ export function buildCraftingRequestBoardMessage(payload: CraftingRequestNotifyP
     footerIcon = authorIcon;
   }
 
-  const footer: Record<string, unknown> = { text: footerText };
+  const footer: Record<string, unknown> = {
+    text: `🪵 ${footerText}`.slice(0, 2048),
+  };
   if (footerIcon) footer.icon_url = footerIcon;
 
   const embed: Record<string, unknown> = {
-    title: "A new commission on the board",
+    title: embedTitleFinal,
     description,
     color: EMBED_COLOR,
     timestamp: new Date().toISOString(),
@@ -263,10 +308,8 @@ export async function syncCraftingRequestBoardMessage(
   if (!COMMUNITY_BOARD_CHANNEL_ID || !discordMessageId?.trim()) {
     return false;
   }
-  const { content, embeds: built } = buildCraftingRequestBoardMessage(payload);
-  const embeds = built.map((e, i) =>
-    i === built.length - 1 ? { ...e, title: "Commission updated on the board" } : e
-  );
+  const { content, embeds: built } = buildCraftingRequestBoardMessage(payload, EMBED_TITLE_UPDATED);
+  const embeds = built;
   const result = await discordApiRequest(
     `channels/${COMMUNITY_BOARD_CHANNEL_ID}/messages/${discordMessageId.trim()}`,
     "PATCH",
@@ -285,22 +328,80 @@ export async function deleteCraftingRequestBoardMessage(discordMessageId: string
   );
 }
 
-export async function notifyCraftingRequestAccepted(options: {
+export type CraftingRequestAcceptedNotifyOptions = {
+  requestId: string;
   requesterDiscordId: string;
   acceptorDiscordId: string;
   acceptorCharacterName: string;
   craftItemName: string;
-}): Promise<void> {
+  requesterCharacterName?: string;
+  paymentOffer?: string;
+  craftItemImage?: string;
+};
+
+/** Rich “accepted” post for the community board channel (pings + embed). */
+export function buildCraftingRequestAcceptedMessage(
+  opts: CraftingRequestAcceptedNotifyOptions
+): { content: string; embeds: Record<string, unknown>[] } {
+  const rid = opts.requesterDiscordId.trim();
+  const aid = opts.acceptorDiscordId.trim();
+  const content = `<@${rid}> <@${aid}>`;
+
+  const forOc = (opts.requesterCharacterName ?? "").trim() || "Commissioner";
+
+  const lines: string[] = [
+    `🧾 **Recipe**`,
+    `↳ *${opts.craftItemName}*`,
+    "",
+    `⚒️ **Crafter OC** · **${opts.acceptorCharacterName}**`,
+    `↳ <@${aid}>`,
+    "",
+    `👤 **For OC** · **${forOc}**`,
+    `↳ <@${rid}>`,
+    "",
+    "— — — — — —",
+    "",
+    `🤝 **Trade & payment**`,
+    `Please **trade** or **gift** (through the bot) any **materials**, **crafted items**, and **payment** you agreed on—match what was listed on the workshop post and in the notes.`,
+  ];
+
+  if (opts.paymentOffer?.trim()) {
+    lines.push("");
+    lines.push(`💰 **Offer on the post**`);
+    lines.push(`↳ ${clip(opts.paymentOffer.trim(), 280)}`);
+  }
+
+  lines.push("");
+  lines.push("_Happy crafting!_");
+
+  let description = lines.join("\n");
+  if (description.length > 4096) {
+    description = `${description.slice(0, 4092)}…`;
+  }
+
+  const bannerUrl = hashPick(opts.requestId || "accept", CRAFT_BOARD_IMAGES);
+  const thumbUrl = discordEmbedImageUrl(opts.craftItemImage);
+
+  const embed: Record<string, unknown> = {
+    title: "✅ Workshop commission accepted",
+    description,
+    color: EMBED_COLOR,
+    timestamp: new Date().toISOString(),
+    image: { url: bannerUrl },
+    footer: { text: "🪵 Tinglebot · Workshop board" },
+  };
+  if (thumbUrl) {
+    embed.thumbnail = { url: thumbUrl };
+  }
+
+  return { content, embeds: [embed] };
+}
+
+export async function notifyCraftingRequestAccepted(
+  options: CraftingRequestAcceptedNotifyOptions
+): Promise<void> {
   if (!COMMUNITY_BOARD_CHANNEL_ID) return;
 
-  const content = [
-    `**Crafting request accepted**`,
-    `**Item:** ${options.craftItemName}`,
-    `**Crafter:** ${options.acceptorCharacterName} (<@${options.acceptorDiscordId}>)`,
-    `**Original request:** <@${options.requesterDiscordId}>`,
-  ].join("\n");
-
-  await discordApiRequest(`channels/${COMMUNITY_BOARD_CHANNEL_ID}/messages`, "POST", {
-    content,
-  });
+  const body = buildCraftingRequestAcceptedMessage(options);
+  await discordApiRequest(`channels/${COMMUNITY_BOARD_CHANNEL_ID}/messages`, "POST", body);
 }

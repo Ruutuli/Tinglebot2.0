@@ -147,6 +147,13 @@ export function ModelItemList({ items, modelConfig, onEdit, onDelete }: ModelIte
         { key: "appraised", label: "Appraised", type: "boolean" },
         { key: "archived", label: "Archived", type: "boolean" },
       ];
+    } else if (modelConfig.name === "CraftingRequest") {
+      return [
+        { key: "requesterCharacterName", label: "Requester", type: "string" },
+        { key: "status", label: "Status", type: "string" },
+        { key: "targetMode", label: "Target", type: "string" },
+        { key: "createdAt", label: "Created", type: "string" },
+      ];
     }
     return [];
   };
@@ -215,7 +222,9 @@ export function ModelItemList({ items, modelConfig, onEdit, onDelete }: ModelIte
                       ? "Discord ID"
                       : modelConfig.name === "Relic"
                         ? "Relic ID"
-                        : "Name"}
+                        : modelConfig.name === "CraftingRequest"
+                          ? "Craft item"
+                          : "Name"}
                     <SortIcon field={nameField} />
                   </div>
                 </th>

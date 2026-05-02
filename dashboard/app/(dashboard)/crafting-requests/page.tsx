@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { useSession } from "@/hooks/use-session";
 import { formatItemImageUrl } from "@/lib/item-utils";
 import { formatOpenCommissionSeekingLine } from "@/lib/crafting-request-helpers";
+import { elixirTierLabel, isMixerOutputElixirName } from "@/lib/elixir-catalog";
 
 type CraftingRequestRow = {
   _id: string;
@@ -22,7 +23,8 @@ type CraftingRequestRow = {
   providingAllMaterials: boolean;
   materialsDescription?: string;
   paymentOffer?: string;
-  elixirDescription?: string;
+  /** 1–3 Basic / Mid / High for mixer elixirs */
+  elixirTier?: number | null;
   status: string;
   acceptedAt?: string | null;
   acceptedByUserId?: string | null;
@@ -52,6 +54,22 @@ type CraftItemOpt = {
   itemName: string;
   craftingJobs?: string[];
   staminaToCraft?: unknown;
+  isElixir?: boolean;
+  elixirLevel?: number | null;
+};
+
+type ElixirGuideResponse = {
+  craftItemName: string;
+  effectFamily: string;
+  targetLevel: number;
+  tierLabel: string;
+  partRequirement: string;
+  rarityGuidance: string;
+  eligibleCritters: string[];
+  eligibleParts: string[];
+  eligibleCrittersCapped?: boolean;
+  eligiblePartsCapped?: boolean;
+  slots: { role: string; detail: string }[];
 };
 
 function parseStamina(v: unknown): number {
@@ -105,43 +123,6 @@ function canAcceptWithCharacter(row: CraftingRequestRow, c: ListChar): boolean {
   return c.currentStamina >= cost;
 }
 
-/** Elixir effect names aligned with `buff.type` / mixer families in CharacterModel. */
-const ELIXIR_EFFECT_ORDER = [
-  "Bright",
-  "Chilly",
-  "Electro",
-  "Enduring",
-  "Energizing",
-  "Hasty",
-  "Hearty",
-  "Mighty",
-  "Sneaky",
-  "Spicy",
-  "Sticky",
-  "Tough",
-] as const;
-
-const ELIXIR_LEVEL_ORDER = ["Low-Level", "Mid-Level", "High-Level"] as const;
-
-const CRAFTING_ELIXIR_PRESETS: string[] = (() => {
-  const rows: string[] = [];
-  for (const lv of ELIXIR_LEVEL_ORDER) {
-    for (const eff of ELIXIR_EFFECT_ORDER) {
-      rows.push(`${lv} ${eff} Elixir`);
-    }
-  }
-  return rows.sort((a, b) => a.localeCompare(b));
-})();
-
-const PRESET_SUGGEST_LIMIT_EMPTY = 15;
-const PRESET_SUGGEST_LIMIT_QUERY = 25;
-
-function filterNamePresets(presets: string[], query: string, limitEmpty: number, limitQuery: number): string[] {
-  const q = query.trim().toLowerCase();
-  if (!q) return presets.slice(0, limitEmpty);
-  return presets.filter((p) => p.toLowerCase().includes(q)).slice(0, limitQuery);
-}
-
 function resetFormState() {
   return {
     requesterCharacterName: "",
@@ -154,7 +135,7 @@ function resetFormState() {
     providingAllMaterials: true,
     materialsDescription: "",
     paymentOffer: "",
-    elixirDescription: "",
+    elixirTier: 1 as 1 | 2 | 3,
   };
 }
 
@@ -192,7 +173,9 @@ export default function CraftingRequestsPage() {
   const [providingAllMaterials, setProvidingAllMaterials] = useState(true);
   const [materialsDescription, setMaterialsDescription] = useState("");
   const [paymentOffer, setPaymentOffer] = useState("");
-  const [elixirDescription, setElixirDescription] = useState("");
+  const [elixirTier, setElixirTier] = useState<1 | 2 | 3>(1);
+  const [elixirGuide, setElixirGuide] = useState<ElixirGuideResponse | null>(null);
+  const [elixirGuideLoading, setElixirGuideLoading] = useState(false);
 
   const [formError, setFormError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
@@ -209,21 +192,8 @@ export default function CraftingRequestsPage() {
   const [ocMaterialCheck, setOcMaterialCheck] = useState<OcMaterialCheckResult | null>(null);
   const [ocMaterialLoading, setOcMaterialLoading] = useState(false);
 
-  const [elixirSuggestOpen, setElixirSuggestOpen] = useState(false);
-
   /** When set, form submits PATCH to update this open request instead of POST create. */
   const [editingRequestId, setEditingRequestId] = useState<string | null>(null);
-
-  const filteredElixirPresets = useMemo(
-    () =>
-      filterNamePresets(
-        CRAFTING_ELIXIR_PRESETS,
-        elixirDescription,
-        PRESET_SUGGEST_LIMIT_EMPTY,
-        PRESET_SUGGEST_LIMIT_QUERY
-      ),
-    [elixirDescription]
-  );
 
   const loadOpenRequests = useCallback(async () => {
     if (!user?.id) return;
@@ -378,6 +348,36 @@ export default function CraftingRequestsPage() {
   }, [formModalOpen, craftItemName, requesterCharacterName]);
 
   useEffect(() => {
+    if (!formModalOpen || !craftItemName.trim() || !selectedItemMeta?.isElixir) {
+      setElixirGuide(null);
+      setElixirGuideLoading(false);
+      return;
+    }
+    const t = window.setTimeout(() => {
+      (async () => {
+        setElixirGuideLoading(true);
+        try {
+          const res = await fetch(
+            `/api/crafting-requests/elixir-guide?craftItemName=${encodeURIComponent(craftItemName.trim())}&targetLevel=${elixirTier}`,
+            { credentials: "include" }
+          );
+          const data = (await res.json()) as Partial<ElixirGuideResponse> & { error?: string };
+          if (res.ok && data && Array.isArray(data.slots)) {
+            setElixirGuide(data as ElixirGuideResponse);
+          } else {
+            setElixirGuide(null);
+          }
+        } catch {
+          setElixirGuide(null);
+        } finally {
+          setElixirGuideLoading(false);
+        }
+      })();
+    }, 220);
+    return () => clearTimeout(t);
+  }, [formModalOpen, craftItemName, selectedItemMeta?.isElixir, elixirTier]);
+
+  useEffect(() => {
     if (!targetPick || !selectedItemMeta) return;
     const jobs = selectedItemMeta.craftingJobs ?? [];
     if (jobs.length > 0 && !characterJobMatchesCraftingJobs(jobs, targetPick.job)) {
@@ -431,11 +431,12 @@ export default function CraftingRequestsPage() {
     setProvidingAllMaterials(r.providingAllMaterials);
     setMaterialsDescription(r.materialsDescription);
     setPaymentOffer(r.paymentOffer);
-    setElixirDescription(r.elixirDescription);
+    setElixirTier(r.elixirTier);
+    setElixirGuide(null);
+    setElixirGuideLoading(false);
     setItemPickerOpen(false);
     setOcMaterialCheck(null);
     setOcMaterialLoading(false);
-    setElixirSuggestOpen(false);
   };
 
   const openEditRequest = useCallback(
@@ -445,16 +446,23 @@ export default function CraftingRequestsPage() {
       setEditingRequestId(row._id);
       setRequesterCharacterName(row.requesterCharacterName);
       setCraftItemName(row.craftItemName);
+      const isEx = isMixerOutputElixirName(row.craftItemName);
       setSelectedItemMeta({
         itemName: row.craftItemName,
         craftingJobs: row.craftingJobsSnapshot,
         staminaToCraft: row.staminaToCraftSnapshot,
+        isElixir: isEx,
+        elixirLevel: null,
       });
       setTargetMode(row.targetMode);
       setProvidingAllMaterials(row.providingAllMaterials);
       setMaterialsDescription(row.materialsDescription ?? "");
       setPaymentOffer(row.paymentOffer ?? "");
-      setElixirDescription(row.elixirDescription ?? "");
+      const tier = row.elixirTier;
+      setElixirTier(
+        isEx && (tier === 2 || tier === 3) ? tier : isEx ? 1 : 1
+      );
+      setElixirGuide(null);
       setItemQuery("");
       setItemOptions([]);
       setItemPickerOpen(false);
@@ -504,6 +512,13 @@ export default function CraftingRequestsPage() {
   const handleSelectItem = (it: CraftItemOpt) => {
     setCraftItemName(it.itemName);
     setSelectedItemMeta(it);
+    if (it.isElixir) {
+      const lv = it.elixirLevel;
+      setElixirTier(lv === 2 || lv === 3 ? lv : 2);
+    } else {
+      setElixirTier(1);
+    }
+    setElixirGuide(null);
     setItemQuery("");
     setItemOptions([]);
     setItemPickerOpen(false);
@@ -551,7 +566,7 @@ export default function CraftingRequestsPage() {
         providingAllMaterials,
         materialsDescription,
         paymentOffer,
-        elixirDescription,
+        elixirTier: selectedItemMeta?.isElixir ? elixirTier : undefined,
       };
       const isEdit = Boolean(editingRequestId);
       const res = await fetch(
@@ -685,7 +700,7 @@ export default function CraftingRequestsPage() {
 
   if (!user) {
     return (
-      <div className="min-h-full p-4 sm:p-6 md:p-8">
+      <div className="min-h-full px-3 py-4 pb-[max(1.5rem,env(safe-area-inset-bottom,0px))] pt-[max(1rem,env(safe-area-inset-top,0px))] sm:p-6 md:p-8">
         <div className="mx-auto max-w-lg text-center">
           <div className="mb-6 flex items-center justify-center gap-3">
             {/* eslint-disable-next-line @next/next/no-img-element -- decorative header SVG */}
@@ -726,20 +741,20 @@ export default function CraftingRequestsPage() {
   const modalHintClass = "text-xs leading-snug text-[var(--botw-pale)]/78";
 
   return (
-    <div className="min-h-full w-full pb-16">
-      <div className="relative mx-auto max-w-6xl px-4 pt-6 md:px-6 md:pt-10">
-        <div className="mb-8 overflow-hidden rounded-2xl border-2 border-[var(--totk-dark-ocher)]/80 bg-gradient-to-br from-[var(--totk-brown)]/95 via-[var(--botw-warm-black)] to-[var(--botw-deep)] shadow-[0_8px_32px_rgba(0,0,0,0.35)]">
-          <div className="border-b border-[var(--botw-border)]/60 bg-black/20 px-5 py-5 md:px-8 md:py-7">
+    <div className="min-h-full w-full pb-[max(4rem,env(safe-area-inset-bottom,0px))]">
+      <div className="relative mx-auto max-w-6xl px-3 pt-4 sm:px-4 sm:pt-6 md:px-6 md:pt-10">
+        <div className="mb-6 overflow-hidden rounded-2xl border-2 border-[var(--totk-dark-ocher)]/80 bg-gradient-to-br from-[var(--totk-brown)]/95 via-[var(--botw-warm-black)] to-[var(--botw-deep)] shadow-[0_8px_32px_rgba(0,0,0,0.35)] sm:mb-8">
+          <div className="border-b border-[var(--botw-border)]/60 bg-black/20 px-4 py-4 sm:px-5 sm:py-5 md:px-8 md:py-7">
             <div className="flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between">
-              <div className="flex items-start gap-4">
-                <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-xl bg-[var(--totk-light-green)]/15 ring-1 ring-[var(--totk-light-green)]/30">
-                  <i className="fa-solid fa-hammer text-2xl text-[var(--totk-light-green)]" aria-hidden />
+              <div className="flex min-w-0 items-start gap-3 sm:gap-4">
+                <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-[var(--totk-light-green)]/15 ring-1 ring-[var(--totk-light-green)]/30 sm:h-14 sm:w-14">
+                  <i className="fa-solid fa-hammer text-xl text-[var(--totk-light-green)] sm:text-2xl" aria-hidden />
                 </div>
-                <div>
+                <div className="min-w-0 flex-1">
                   <div className="mb-1 flex flex-wrap items-center gap-2">
                     {/* eslint-disable-next-line @next/next/no-img-element */}
                     <img alt="" className="hidden h-4 w-auto sm:inline sm:h-5" src="/Side=Left.svg" />
-                    <h1 className="text-2xl font-bold tracking-tight text-[var(--totk-light-ocher)] md:text-3xl">
+                    <h1 className="text-[1.35rem] font-bold tracking-tight text-[var(--totk-light-ocher)] min-[400px]:text-2xl md:text-3xl">
                       Crafting requests
                     </h1>
                     {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -755,7 +770,7 @@ export default function CraftingRequestsPage() {
                   </p>
                 </div>
               </div>
-              <div className="flex flex-col gap-2 sm:flex-row sm:items-center lg:flex-col xl:flex-row">
+              <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:items-center sm:justify-end lg:flex-col lg:items-stretch xl:flex-row xl:items-center">
                 <button
                   type="button"
                   onClick={() => {
@@ -763,7 +778,7 @@ export default function CraftingRequestsPage() {
                     setFormModalOpen(true);
                     setFormError(null);
                   }}
-                  className="inline-flex items-center justify-center gap-2 rounded-xl bg-[var(--totk-light-green)] px-5 py-3 text-sm font-bold text-black shadow-lg shadow-black/20 transition hover:brightness-110 active:scale-[0.98]"
+                  className="inline-flex min-h-[2.75rem] w-full items-center justify-center gap-2 rounded-xl bg-[var(--totk-light-green)] px-5 py-3 text-sm font-bold text-black shadow-lg shadow-black/20 transition hover:brightness-110 active:scale-[0.98] sm:w-auto"
                 >
                   <i className="fa-solid fa-plus" aria-hidden />
                   Post a request
@@ -771,109 +786,255 @@ export default function CraftingRequestsPage() {
                 <button
                   type="button"
                   onClick={() => setMyActivityOpen((v) => !v)}
-                  className={`inline-flex items-center justify-center gap-2 rounded-xl border-2 px-5 py-3 text-sm font-semibold transition ${
+                  aria-expanded={myActivityOpen}
+                  aria-controls="crafting-my-activity-panel"
+                  className={`group inline-flex min-h-[2.75rem] w-full min-w-0 items-center justify-center gap-2.5 rounded-xl border-2 px-4 py-3 text-sm font-bold shadow-md shadow-black/15 transition active:scale-[0.98] sm:w-auto sm:min-w-[10.5rem] sm:px-5 ${
                     myActivityOpen
-                      ? "border-[var(--totk-light-green)] bg-[var(--totk-light-green)]/10 text-[var(--totk-light-green)]"
-                      : "border-[var(--botw-border)] bg-[var(--botw-deep)]/50 text-[var(--botw-pale)] hover:border-[var(--totk-light-ocher)]/50"
+                      ? "border-[var(--totk-light-green)]/80 bg-gradient-to-br from-[var(--totk-light-green)]/18 to-[var(--totk-light-green)]/6 text-[var(--totk-light-green)] ring-1 ring-[var(--totk-light-green)]/25"
+                      : "border-[var(--totk-dark-ocher)]/55 bg-[var(--botw-deep)]/70 text-[var(--botw-cream)] hover:border-[var(--totk-light-ocher)]/45 hover:bg-[var(--botw-deep)]/90"
                   }`}
                 >
-                  <i className="fa-solid fa-clipboard-list" aria-hidden />
-                  My activity
-                  <i className={`fa-solid fa-chevron-down text-xs transition ${myActivityOpen ? "rotate-180" : ""}`} />
+                  <span
+                    className={`flex h-8 w-8 items-center justify-center rounded-lg transition ${
+                      myActivityOpen
+                        ? "bg-[var(--totk-light-green)]/20 text-[var(--totk-light-green)]"
+                        : "bg-black/25 text-[var(--totk-light-ocher)] group-hover:text-[var(--totk-light-green)]"
+                    }`}
+                  >
+                    <i className="fa-solid fa-clipboard-list text-sm" aria-hidden />
+                  </span>
+                  <span className="flex flex-col items-start leading-tight">
+                    <span>My activity</span>
+                    <span
+                      className={`text-[10px] font-medium uppercase tracking-wide ${
+                        myActivityOpen ? "text-[var(--totk-light-green)]/75" : "text-[var(--botw-pale)]/65"
+                      }`}
+                    >
+                      {myActivityOpen ? "Hide panel" : "Posts & claims"}
+                    </span>
+                  </span>
+                  <i
+                    className={`fa-solid fa-chevron-down text-xs opacity-70 transition duration-200 ${myActivityOpen ? "rotate-180" : ""}`}
+                    aria-hidden
+                  />
                 </button>
               </div>
             </div>
-            <div className="mt-5 flex flex-wrap gap-3 text-xs md:text-sm">
-              <span className="inline-flex items-center gap-2 rounded-full bg-black/30 px-3 py-1.5 text-[var(--botw-pale)] ring-1 ring-white/10">
-                <i className="fa-solid fa-list-ul text-[var(--totk-light-green)]" aria-hidden />
-                <strong className="text-[var(--botw-cream)]">{openRequests.length}</strong> open
+            <div className="mt-4 flex flex-wrap gap-2 text-xs sm:mt-5 sm:gap-3 md:text-sm">
+              <span className="inline-flex max-w-full items-center gap-2 rounded-full bg-black/30 px-3 py-1.5 text-[var(--botw-pale)] ring-1 ring-white/10">
+                <i className="fa-solid fa-list-ul shrink-0 text-[var(--totk-light-green)]" aria-hidden />
+                <span className="min-w-0">
+                  <strong className="text-[var(--botw-cream)]">{openRequests.length}</strong> open
+                </span>
               </span>
-              <span className="inline-flex items-center gap-2 rounded-full bg-black/30 px-3 py-1.5 text-[var(--botw-pale)] ring-1 ring-white/10">
-                <i className="fa-brands fa-discord text-[#5865F2]" aria-hidden />
-                Announced on community board
+              <span className="inline-flex max-w-full items-center gap-2 rounded-full bg-black/30 px-3 py-1.5 text-[var(--botw-pale)] ring-1 ring-white/10">
+                <i className="fa-brands fa-discord shrink-0 text-[#5865F2]" aria-hidden />
+                <span className="min-w-0 leading-snug">
+                  <span className="hidden min-[380px]:inline">Announced on </span>community board
+                </span>
               </span>
             </div>
           </div>
         </div>
 
         {myActivityOpen && (
-          <section className="mb-10 rounded-2xl border border-[var(--botw-border)] bg-[var(--botw-panel)]/70 p-5 shadow-lg backdrop-blur-sm md:p-6">
-            <h2 className="mb-4 flex items-center gap-2 text-lg font-semibold text-[var(--totk-light-ocher)]">
-              <i className="fa-solid fa-user-clock text-[var(--totk-light-green)]" aria-hidden />
-              Your requests &amp; acceptances
-            </h2>
-            {loadingMine ? (
-              <p className="text-sm text-[var(--botw-pale)]">
-                <i className="fas fa-spinner fa-spin mr-2" aria-hidden />
-                Loading…
-              </p>
-            ) : myRequests.length === 0 ? (
-              <p className="text-sm text-[var(--botw-pale)]/80">No entries yet.</p>
-            ) : (
-              <ul className="space-y-3">
-                {myRequests.map((row) => (
-                  <li
-                    key={row._id}
-                    className="rounded-xl border border-[var(--botw-border)]/80 bg-[var(--botw-deep)]/40 px-4 py-3"
-                  >
-                    <div className="flex flex-wrap items-center justify-between gap-2">
-                      <span className="font-medium text-[var(--botw-cream)]">{row.craftItemName}</span>
-                      <span
-                        className={`rounded-full px-2.5 py-0.5 text-xs font-medium ${
-                          row.status === "open"
-                            ? "bg-emerald-900/60 text-emerald-200"
-                            : row.status === "accepted"
-                              ? "bg-sky-900/60 text-sky-200"
-                              : "bg-zinc-800 text-zinc-400"
-                        }`}
-                      >
-                        {row.status}
-                      </span>
+          <section
+            id="crafting-my-activity-panel"
+            className="relative mb-10 overflow-hidden rounded-2xl border-2 border-[var(--totk-dark-ocher)]/45 bg-gradient-to-b from-[var(--botw-panel)]/95 via-[var(--botw-deep)]/88 to-[var(--botw-warm-black)]/75 shadow-[0_8px_32px_rgba(0,0,0,0.28)] ring-1 ring-black/20"
+          >
+            <div
+              className="pointer-events-none absolute inset-0 opacity-[0.06]"
+              style={{
+                background:
+                  "radial-gradient(900px 280px at 10% -20%, var(--totk-light-green), transparent 55%), radial-gradient(700px 200px at 100% 0%, var(--totk-light-ocher), transparent 50%)",
+              }}
+            />
+            <div className="relative border-b border-[var(--botw-border)]/50 bg-gradient-to-r from-black/20 via-black/12 to-transparent px-4 py-4 sm:px-5 md:px-6 md:py-5">
+              <div className="flex flex-col gap-4 sm:flex-row sm:flex-wrap sm:items-start sm:justify-between">
+                <div className="flex min-w-0 items-start gap-3 sm:gap-4">
+                  <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-[var(--totk-light-green)]/14 ring-1 ring-[var(--totk-light-green)]/30 shadow-inner">
+                    <i className="fa-solid fa-user-clock text-xl text-[var(--totk-light-green)]" aria-hidden />
+                  </div>
+                  <div className="min-w-0 pt-0.5">
+                    <div className="flex flex-wrap items-center gap-2 gap-y-1">
+                      <h2 className="text-lg font-bold tracking-tight text-[var(--totk-light-ocher)] md:text-xl">
+                        Your requests &amp; acceptances
+                      </h2>
+                      {!loadingMine && myRequests.length > 0 ? (
+                        <span className="inline-flex items-center gap-1 rounded-full bg-[var(--totk-light-green)]/15 px-2.5 py-0.5 text-[11px] font-bold tabular-nums text-[var(--totk-light-green)] ring-1 ring-[var(--totk-light-green)]/25">
+                          {myRequests.length}
+                        </span>
+                      ) : null}
                     </div>
-                    <p className="mt-1 text-xs text-[var(--botw-pale)]">
-                      {row.requesterDiscordId === user.id ? "You posted" : "You accepted"} ·{" "}
-                      {row.createdAt ? new Date(row.createdAt).toLocaleDateString() : ""}
+                    <p className="mt-1 max-w-prose text-xs leading-relaxed text-[var(--botw-pale)]/88 md:text-sm">
+                      Commissions you posted and jobs you claimed stay listed here.
                     </p>
-                    {row.requesterDiscordId === user.id &&
-                    row.status === "open" &&
-                    user?.id ? (
-                      <div className="mt-2 flex flex-wrap gap-2">
-                        <button
-                          type="button"
-                          onClick={() => void openEditRequest(row)}
-                          className="rounded-md border border-[var(--totk-light-green)]/40 bg-[var(--totk-light-green)]/10 px-2.5 py-1 text-[11px] font-semibold text-[var(--totk-light-green)] hover:bg-[var(--totk-light-green)]/20"
+                  </div>
+                </div>
+                {!loadingMine && myRequests.length > 0 ? (
+                  <span className="inline-flex w-fit shrink-0 items-center gap-2 rounded-full border border-[var(--botw-border)]/55 bg-black/28 px-3.5 py-1.5 text-[11px] font-semibold text-[var(--botw-cream)] shadow-sm">
+                    <i className="fa-solid fa-list-check text-[var(--totk-light-ocher)]" aria-hidden />
+                    {myRequests.length} {myRequests.length === 1 ? "entry" : "entries"}
+                  </span>
+                ) : null}
+              </div>
+            </div>
+            <div className="relative p-3 sm:p-4 md:p-6">
+              {loadingMine ? (
+                <div className="flex min-h-[8.5rem] flex-col items-center justify-center gap-3 rounded-2xl border border-dashed border-[var(--botw-border)]/70 bg-black/20 py-10">
+                  <i className="fa-solid fa-spinner fa-spin text-2xl text-[var(--totk-light-green)]" aria-hidden />
+                  <p className="text-sm text-[var(--botw-pale)]">Loading your activity…</p>
+                </div>
+              ) : myRequests.length === 0 ? (
+                <div className="rounded-2xl border border-dashed border-[var(--botw-border)]/60 bg-black/15 px-5 py-10 text-center">
+                  <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-xl bg-[var(--totk-light-ocher)]/10 ring-1 ring-[var(--totk-light-ocher)]/20">
+                    <i className="fa-solid fa-scroll text-[var(--totk-light-ocher)]/90" aria-hidden />
+                  </div>
+                  <p className="text-sm font-medium text-[var(--botw-cream)]">Nothing here yet</p>
+                  <p className="mx-auto mt-1 max-w-sm text-xs text-[var(--botw-pale)]/85">
+                    Post a commission or claim one from the open board — it will show up in this list.
+                  </p>
+                </div>
+              ) : (
+                <ul className="flex flex-col gap-3 sm:gap-4">
+                  {myRequests.map((row) => {
+                    const youPosted = row.requesterDiscordId === user?.id;
+                    const statusLabel =
+                      row.status === "open"
+                        ? "Open"
+                        : row.status === "accepted"
+                          ? "Accepted"
+                          : row.status;
+                    const accentClass = youPosted
+                      ? "from-[var(--totk-light-ocher)]/35"
+                      : "from-[var(--totk-light-green)]/40";
+                    return (
+                      <li key={row._id}>
+                        <div
+                          className={`group relative overflow-hidden rounded-2xl border border-[var(--totk-dark-ocher)]/40 bg-gradient-to-br from-[var(--botw-deep)]/80 to-[var(--botw-warm-black)]/55 shadow-[0_2px_16px_rgba(0,0,0,0.2)] ring-1 ring-black/15 transition hover:border-[var(--totk-light-green)]/30 hover:ring-[var(--totk-light-green)]/10`}
                         >
-                          <i className="fa-solid fa-pen-to-square mr-1" aria-hidden />
-                          Edit
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => void handleDelete(row)}
-                          className="rounded-md border border-red-400/40 bg-red-950/20 px-2.5 py-1 text-[11px] font-semibold text-red-200 hover:bg-red-950/35"
-                        >
-                          Delete
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => handleCancel(row)}
-                          className="rounded-md border border-[var(--botw-border)] px-2.5 py-1 text-[11px] font-medium text-[var(--botw-pale)] hover:bg-white/5"
-                        >
-                          Cancel (keep record)
-                        </button>
-                      </div>
-                    ) : null}
-                  </li>
-                ))}
-              </ul>
-            )}
+                          <div
+                            className={`pointer-events-none absolute left-0 top-0 h-full w-1 bg-gradient-to-b ${accentClass} to-transparent`}
+                            aria-hidden
+                          />
+                          <div className="flex flex-col gap-4 p-4 pl-5 sm:p-5 md:flex-row md:items-stretch md:justify-between md:gap-5 md:pl-6">
+                            <div className="min-w-0 flex-1 space-y-3">
+                              <div className="flex flex-wrap items-start justify-between gap-2 gap-y-2">
+                                <h3 className="text-base font-bold leading-snug text-[var(--botw-cream)] sm:text-lg">
+                                  {row.craftItemName}
+                                </h3>
+                                <div className="flex flex-wrap items-center gap-1.5 sm:justify-end">
+                                  <span
+                                    className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide ${
+                                      row.status === "open"
+                                        ? "bg-emerald-950/75 text-emerald-100 ring-1 ring-emerald-400/35"
+                                        : row.status === "accepted"
+                                          ? "bg-sky-950/75 text-sky-100 ring-1 ring-sky-400/35"
+                                          : "bg-zinc-900/85 text-zinc-300 ring-1 ring-zinc-600/35"
+                                    }`}
+                                  >
+                                    {row.status === "open" ? (
+                                      <i className="fa-solid fa-circle-notch text-[9px] opacity-90" aria-hidden />
+                                    ) : row.status === "accepted" ? (
+                                      <i className="fa-solid fa-check text-[9px]" aria-hidden />
+                                    ) : null}
+                                    {statusLabel}
+                                  </span>
+                                  <span
+                                    className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[10px] font-semibold ${
+                                      youPosted
+                                        ? "bg-[var(--totk-light-ocher)]/18 text-[var(--totk-light-ocher)] ring-1 ring-[var(--totk-light-ocher)]/25"
+                                        : "bg-[var(--totk-light-green)]/14 text-[var(--totk-light-green)] ring-1 ring-[var(--totk-light-green)]/22"
+                                    }`}
+                                  >
+                                    <i
+                                      className={`fa-solid ${youPosted ? "fa-paper-plane" : "fa-hand-holding-heart"} text-[10px] opacity-90`}
+                                      aria-hidden
+                                    />
+                                    {youPosted ? "You posted" : "You accepted"}
+                                  </span>
+                                </div>
+                              </div>
+                              <div className="flex flex-wrap items-center gap-x-3 gap-y-1 border-t border-[var(--botw-border)]/35 pt-2.5 text-[11px] text-[var(--botw-pale)]/80 sm:text-xs">
+                                <span className="inline-flex items-center gap-1.5 tabular-nums text-[var(--botw-pale)]/85">
+                                  <i className="fa-regular fa-calendar shrink-0 text-[var(--totk-light-ocher)]/90" aria-hidden />
+                                  {row.createdAt
+                                    ? new Date(row.createdAt).toLocaleString(undefined, {
+                                        dateStyle: "medium",
+                                        timeStyle: "short",
+                                      })
+                                    : "—"}
+                                </span>
+                              </div>
+                            </div>
+                            {youPosted && row.status === "open" && user?.id ? (
+                              <div className="flex shrink-0 flex-col gap-2 border-t border-[var(--botw-border)]/40 pt-3 md:w-[min(100%,13.5rem)] md:border-l md:border-t-0 md:pl-5 md:pt-0">
+                                <p className="text-[10px] font-semibold uppercase tracking-wider text-[var(--botw-pale)]/55 md:pt-1">
+                                  Manage
+                                </p>
+                                <div className="flex flex-col gap-2">
+                                  <button
+                                    type="button"
+                                    onClick={() => void openEditRequest(row)}
+                                    className="inline-flex min-h-[2.5rem] w-full items-center justify-center gap-2 rounded-xl border border-[var(--totk-light-green)]/40 bg-[var(--totk-light-green)]/15 px-3 py-2 text-xs font-bold text-[var(--totk-light-green)] shadow-sm transition hover:bg-[var(--totk-light-green)]/25 md:min-h-[2.35rem]"
+                                  >
+                                    <i className="fa-solid fa-pen-to-square text-[13px]" aria-hidden />
+                                    Edit
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => void handleDelete(row)}
+                                    className="inline-flex min-h-[2.5rem] w-full items-center justify-center gap-2 rounded-xl border border-red-400/35 bg-red-950/35 px-3 py-2 text-xs font-bold text-red-100 shadow-sm transition hover:bg-red-950/55 md:min-h-[2.35rem]"
+                                  >
+                                    <i className="fa-solid fa-trash text-[13px]" aria-hidden />
+                                    Delete
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => handleCancel(row)}
+                                    className="inline-flex min-h-[2.5rem] w-full items-center justify-center gap-2 rounded-xl border border-[var(--botw-border)]/45 bg-black/25 px-3 py-2 text-xs font-semibold text-[var(--botw-pale)] transition hover:bg-white/8 md:min-h-[2.35rem]"
+                                  >
+                                    <i className="fa-solid fa-ban text-[12px] opacity-90" aria-hidden />
+                                    Withdraw
+e have de                                  </button>
+                                </div>
+                                <p className="hidden text-[10px] leading-snug text-[var(--botw-pale)]/60 md:block">
+                                  Withdraw keeps a record; Delete removes the board post.
+                                </p>
+                              </div>
+                            ) : youPosted && row.status === "accepted" ? (
+                              <div className="flex items-center border-t border-[var(--botw-border)]/40 pt-3 md:border-l md:border-t-0 md:pl-5 md:pt-0">
+                                <p className="text-[11px] leading-relaxed text-[var(--botw-pale)]/75 md:max-w-[12rem] md:self-center md:pt-1">
+                                  <i className="fa-solid fa-circle-check mr-1 text-[var(--totk-light-green)]" aria-hidden />
+                                  Someone claimed this commission.
+                                </p>
+                              </div>
+                            ) : !youPosted ? (
+                              <div className="flex items-center border-t border-[var(--botw-border)]/40 pt-3 md:border-l md:border-t-0 md:pl-5 md:pt-0">
+                                <p className="text-[11px] leading-relaxed text-[var(--botw-pale)]/75 md:max-w-[12rem] md:self-center md:pt-1">
+                                  <i className="fa-solid fa-hammer mr-1 text-[var(--totk-light-ocher)]" aria-hidden />
+                                  You&apos;re crafting this one.
+                                </p>
+                              </div>
+                            ) : null}
+                          </div>
+                        </div>
+                      </li>
+                    );
+                  })}
+                </ul>
+              )}
+            </div>
           </section>
         )}
 
         <section>
-          <div className="mb-6 flex flex-wrap items-end justify-between gap-3">
-            <div>
-              <h2 className="text-xl font-bold text-[var(--totk-light-ocher)] md:text-2xl">Open requests</h2>
-              <p className="mt-1 text-sm text-[var(--botw-pale)]">
+          <div className="mb-5 flex flex-col gap-3 sm:mb-6 sm:flex-row sm:flex-wrap sm:items-end sm:justify-between">
+            <div className="min-w-0">
+              <h2 className="text-lg font-bold text-[var(--totk-light-ocher)] sm:text-xl md:text-2xl">
+                Open requests
+              </h2>
+              <p className="mt-1 text-sm leading-snug text-[var(--botw-pale)]">
                 Newest first. Use <strong className="text-[var(--botw-cream)]">Claim with your OC</strong>{" "}
                 when your roster qualifies.
               </p>
@@ -881,7 +1042,7 @@ export default function CraftingRequestsPage() {
             <button
               type="button"
               onClick={() => void loadOpenRequests()}
-              className="inline-flex items-center gap-2 rounded-lg border border-[var(--botw-border)] bg-[var(--botw-deep)]/60 px-3 py-2 text-xs font-medium text-[var(--botw-pale)] transition hover:border-[var(--totk-light-green)]/40 hover:text-[var(--totk-light-green)]"
+              className="inline-flex min-h-[2.5rem] w-full shrink-0 items-center justify-center gap-2 rounded-lg border border-[var(--botw-border)] bg-[var(--botw-deep)]/60 px-3 py-2 text-xs font-medium text-[var(--botw-pale)] transition hover:border-[var(--totk-light-green)]/40 hover:text-[var(--totk-light-green)] sm:w-auto sm:justify-start"
             >
               <i className={`fa-solid fa-rotate ${loadingOpen ? "fa-spin" : ""}`} aria-hidden />
               Refresh
@@ -924,7 +1085,7 @@ export default function CraftingRequestsPage() {
             </div>
           )}
 
-          <ul className="grid list-none gap-6 p-0 md:grid-cols-2 lg:gap-7">
+          <ul className="grid list-none gap-5 p-0 sm:gap-6 md:grid-cols-2 md:gap-6 lg:gap-7">
             {openRequests.map((row) => {
               const thumbSrc = formatItemImageUrl(row.craftItemImage);
               const isOpenCall = row.targetMode !== "specific" || !row.targetCharacterName;
@@ -948,10 +1109,10 @@ export default function CraftingRequestsPage() {
                       aria-hidden
                     />
 
-                    <div className="relative flex flex-1 flex-col gap-4 p-5 sm:p-6">
-                      <div className="flex gap-4">
-                        <div className="relative shrink-0">
-                          <div className="flex h-[5.25rem] w-[5.25rem] items-center justify-center overflow-hidden rounded-xl border-2 border-[var(--totk-dark-ocher)]/55 bg-[radial-gradient(ellipse_at_center,_rgba(0,0,0,0.35)_0%,_transparent_70%)] shadow-inner ring-1 ring-white/5 sm:h-[5.75rem] sm:w-[5.75rem]">
+                    <div className="relative flex flex-1 flex-col gap-4 p-4 sm:p-5 md:p-6">
+                      <div className="flex flex-col gap-3 sm:flex-row sm:gap-4">
+                        <div className="relative mx-auto shrink-0 sm:mx-0">
+                          <div className="flex h-[4.75rem] w-[4.75rem] items-center justify-center overflow-hidden rounded-xl border-2 border-[var(--totk-dark-ocher)]/55 bg-[radial-gradient(ellipse_at_center,_rgba(0,0,0,0.35)_0%,_transparent_70%)] shadow-inner ring-1 ring-white/5 min-[400px]:h-[5.25rem] min-[400px]:w-[5.25rem] sm:h-[5.75rem] sm:w-[5.75rem]">
                             {/* eslint-disable-next-line @next/next/no-img-element -- dynamic catalog URLs */}
                             <img
                               src={thumbSrc}
@@ -960,14 +1121,14 @@ export default function CraftingRequestsPage() {
                             />
                           </div>
                           {youCanTake ? (
-                            <span className="absolute -bottom-1 left-1/2 z-[1] -translate-x-1/2 whitespace-nowrap rounded-full bg-[var(--totk-light-green)] px-2 py-0.5 text-[9px] font-bold uppercase tracking-wide text-black shadow-md ring-2 ring-[var(--botw-deep)]">
+                            <span className="absolute -bottom-1 left-1/2 z-[1] max-w-[11rem] -translate-x-1/2 rounded-full bg-[var(--totk-light-green)] px-2 py-0.5 text-center text-[9px] font-bold uppercase leading-tight tracking-wide text-black shadow-md ring-2 ring-[var(--botw-deep)] sm:max-w-none sm:whitespace-nowrap">
                               You can claim this
                             </span>
                           ) : null}
                         </div>
 
-                        <div className="min-w-0 flex-1 pt-0.5">
-                          <div className="mb-1.5 flex flex-wrap items-center gap-2">
+                        <div className="min-w-0 flex-1 pt-0.5 text-center sm:text-left">
+                          <div className="mb-1.5 flex flex-wrap items-center justify-center gap-2 sm:justify-start">
                             <span className="text-[10px] font-bold uppercase tracking-[0.14em] text-[var(--totk-light-green)]">
                               Commission
                             </span>
@@ -981,10 +1142,10 @@ export default function CraftingRequestsPage() {
                               </span>
                             )}
                           </div>
-                          <h3 className="text-lg font-bold leading-tight text-[var(--botw-cream)] sm:text-xl">
+                          <h3 className="text-base font-bold leading-snug text-[var(--botw-cream)] min-[400px]:text-lg sm:text-xl">
                             {row.craftItemName}
                           </h3>
-                          <div className="mt-2.5 flex flex-wrap gap-1.5">
+                          <div className="mt-2.5 flex flex-wrap justify-center gap-1.5 sm:justify-start">
                             {(row.craftingJobsSnapshot ?? []).slice(0, 5).map((j) => (
                               <span
                                 key={j}
@@ -1001,7 +1162,7 @@ export default function CraftingRequestsPage() {
                         </div>
                       </div>
 
-                      <div className="rounded-xl border border-[var(--botw-border)]/35 bg-black/22 px-4 py-3 backdrop-blur-sm">
+                      <div className="rounded-xl border border-[var(--botw-border)]/35 bg-black/22 px-3 py-3 backdrop-blur-sm sm:px-4">
                         <dl className="grid gap-2.5 text-sm text-[var(--botw-pale)]">
                           <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
                             <dt className="flex shrink-0 items-center gap-1.5 text-xs font-medium text-[var(--botw-pale)]/75">
@@ -1074,32 +1235,37 @@ export default function CraftingRequestsPage() {
                               <dd className="min-w-0 text-[var(--botw-pale)]">{row.paymentOffer}</dd>
                             </div>
                           ) : null}
-                          {row.elixirDescription ? (
+                          {isMixerOutputElixirName(row.craftItemName) &&
+                          row.elixirTier != null &&
+                          row.elixirTier >= 1 &&
+                          row.elixirTier <= 3 ? (
                             <div className="flex flex-wrap items-start gap-x-2 gap-y-0.5">
                               <dt className="flex shrink-0 items-center gap-1.5 text-xs font-medium text-[var(--botw-pale)]/75">
                                 <i className="fa-solid fa-flask text-[var(--totk-light-green)]" aria-hidden />
-                                Elixir
+                                Elixir tier
                               </dt>
-                              <dd className="min-w-0 text-[var(--botw-pale)]">{row.elixirDescription}</dd>
+                              <dd className="min-w-0 text-[var(--botw-pale)]">
+                                {elixirTierLabel(row.elixirTier)} (mixer)
+                              </dd>
                             </div>
                           ) : null}
                         </dl>
                       </div>
 
-                      <div className="mt-auto flex flex-wrap items-center justify-between gap-3 border-t border-[var(--botw-border)]/40 pt-4">
+                      <div className="mt-auto flex flex-col gap-3 border-t border-[var(--botw-border)]/40 pt-4 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
                         <time
-                          className="text-[11px] tabular-nums text-[var(--botw-pale)]/55"
+                          className="order-2 text-[11px] tabular-nums text-[var(--botw-pale)]/55 sm:order-1"
                           dateTime={row.createdAt ?? undefined}
                         >
                           {row.createdAt ? new Date(row.createdAt).toLocaleString() : ""}
                         </time>
-                        <div className="flex flex-wrap gap-2">
+                        <div className="order-1 flex w-full flex-wrap gap-2 sm:order-2 sm:w-auto sm:justify-end">
                           {row.requesterDiscordId === user.id && (
                             <>
                               <button
                                 type="button"
                                 onClick={() => void openEditRequest(row)}
-                                className="rounded-lg border border-[var(--totk-light-green)]/45 bg-[var(--totk-light-green)]/12 px-3 py-2 text-xs font-semibold text-[var(--totk-light-green)] transition hover:bg-[var(--totk-light-green)]/22"
+                                className="min-h-[2.5rem] flex-1 basis-[calc(50%-0.25rem)] rounded-lg border border-[var(--totk-light-green)]/45 bg-[var(--totk-light-green)]/12 px-3 py-2 text-xs font-semibold text-[var(--totk-light-green)] transition hover:bg-[var(--totk-light-green)]/22 sm:flex-initial sm:basis-auto"
                               >
                                 <i className="fa-solid fa-pen-to-square mr-1" aria-hidden />
                                 Edit
@@ -1107,14 +1273,14 @@ export default function CraftingRequestsPage() {
                               <button
                                 type="button"
                                 onClick={() => void handleDelete(row)}
-                                className="rounded-lg border border-red-400/45 bg-red-950/25 px-3 py-2 text-xs font-semibold text-red-100 transition hover:bg-red-950/45"
+                                className="min-h-[2.5rem] flex-1 basis-[calc(50%-0.25rem)] rounded-lg border border-red-400/45 bg-red-950/25 px-3 py-2 text-xs font-semibold text-red-100 transition hover:bg-red-950/45 sm:flex-initial sm:basis-auto"
                               >
                                 Delete
                               </button>
                               <button
                                 type="button"
                                 onClick={() => handleCancel(row)}
-                                className="rounded-lg border border-[var(--botw-border)] bg-[var(--botw-deep)]/50 px-3 py-2 text-xs font-semibold text-[var(--botw-pale)] transition hover:bg-[var(--botw-deep)]/80"
+                                className="min-h-[2.5rem] w-full flex-[1_1_100%] rounded-lg border border-[var(--botw-border)] bg-[var(--botw-deep)]/50 px-3 py-2 text-xs font-semibold text-[var(--botw-pale)] transition hover:bg-[var(--botw-deep)]/80 sm:w-auto sm:flex-initial"
                               >
                                 Withdraw
                               </button>
@@ -1127,7 +1293,7 @@ export default function CraftingRequestsPage() {
                               if (eligible.length === 0) {
                                 if (row.targetMode === "specific" && row.targetCharacterName) {
                                   return (
-                                    <p className="max-w-[14rem] text-right text-[11px] leading-snug text-[var(--botw-pale)]/75">
+                                    <p className="w-full text-left text-[11px] leading-snug text-[var(--botw-pale)]/75 sm:ml-auto sm:max-w-[14rem] sm:text-right">
                                       Only{" "}
                                       <span className="font-medium text-[var(--botw-cream)]">
                                         {row.targetCharacterName}
@@ -1137,7 +1303,7 @@ export default function CraftingRequestsPage() {
                                   );
                                 }
                                 return (
-                                  <p className="max-w-[14rem] text-right text-[11px] leading-snug text-[var(--botw-pale)]/75">
+                                  <p className="w-full text-left text-[11px] leading-snug text-[var(--botw-pale)]/75 sm:ml-auto sm:max-w-[14rem] sm:text-right">
                                     No OC on your roster matches job + base stamina.
                                   </p>
                                 );
@@ -1149,7 +1315,7 @@ export default function CraftingRequestsPage() {
                                     type="button"
                                     disabled={claiming}
                                     onClick={() => void handleClaimDirect(row, oc._id)}
-                                    className="rounded-lg bg-[var(--totk-light-green)] px-4 py-2 text-xs font-bold text-black shadow-md shadow-black/15 transition hover:brightness-110 active:scale-[0.98] disabled:opacity-60"
+                                    className="min-h-[2.75rem] w-full rounded-lg bg-[var(--totk-light-green)] px-4 py-2.5 text-xs font-bold text-black shadow-md shadow-black/15 transition hover:brightness-110 active:scale-[0.98] disabled:opacity-60 sm:w-auto"
                                   >
                                     {claiming ? (
                                       <>
@@ -1172,7 +1338,7 @@ export default function CraftingRequestsPage() {
                                     setAcceptFor(row);
                                     setAcceptError(null);
                                   }}
-                                  className="rounded-lg bg-[var(--totk-light-green)] px-4 py-2 text-xs font-bold text-black shadow-md shadow-black/15 transition hover:brightness-110 active:scale-[0.98]"
+                                  className="min-h-[2.75rem] w-full rounded-lg bg-[var(--totk-light-green)] px-4 py-2.5 text-xs font-bold text-black shadow-md shadow-black/15 transition hover:brightness-110 active:scale-[0.98] sm:w-auto"
                                 >
                                   <i className="fa-solid fa-hand-holding-heart mr-1.5" aria-hidden />
                                   Claim with your OC
@@ -1192,7 +1358,7 @@ export default function CraftingRequestsPage() {
 
       {formModalOpen && (
         <div
-          className="fixed inset-0 z-50 flex items-end justify-center bg-black/55 p-0 backdrop-blur-[3px] sm:items-center sm:p-4"
+          className="fixed inset-0 z-50 flex items-end justify-center bg-black/55 p-0 pt-[env(safe-area-inset-top,0px)] backdrop-blur-[3px] sm:items-center sm:p-4"
           role="dialog"
           aria-modal="true"
           aria-labelledby="craft-form-title"
@@ -1201,7 +1367,7 @@ export default function CraftingRequestsPage() {
           }}
         >
           <div
-            className="flex max-h-[92dvh] w-full max-w-xl flex-col overflow-hidden rounded-t-2xl border-2 border-[var(--totk-dark-ocher)]/75 bg-gradient-to-b from-[var(--totk-brown)] via-[var(--totk-brown)] to-[var(--botw-warm-black)] text-[var(--botw-pale)] shadow-[0_-8px_40px_rgba(0,0,0,0.45)] sm:max-h-[min(88dvh,720px)] sm:max-w-5xl sm:rounded-xl sm:shadow-2xl lg:max-w-6xl"
+            className="flex max-h-[min(92dvh,100dvh)] w-full max-w-xl flex-col overflow-hidden rounded-t-2xl border-2 border-[var(--totk-dark-ocher)]/75 bg-gradient-to-b from-[var(--totk-brown)] via-[var(--totk-brown)] to-[var(--botw-warm-black)] text-[var(--botw-pale)] shadow-[0_-8px_40px_rgba(0,0,0,0.45)] sm:max-h-[min(88dvh,720px)] sm:max-w-5xl sm:rounded-xl sm:shadow-2xl lg:max-w-6xl"
             onClick={(e) => e.stopPropagation()}
           >
             <header className="relative flex shrink-0 items-start justify-between gap-3 border-b border-[var(--totk-dark-ocher)]/55 bg-[var(--botw-black)]/15 px-4 py-3 sm:px-5 sm:py-3">
@@ -1226,7 +1392,7 @@ export default function CraftingRequestsPage() {
               </button>
             </header>
             <form onSubmit={handleSubmit} className="flex min-h-0 flex-1 flex-col">
-              <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 py-3 sm:px-5 sm:py-3 [scrollbar-gutter:stable]">
+              <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 py-3 touch-pan-y sm:px-5 sm:py-3 [scrollbar-gutter:stable]">
                 <div className="space-y-5">
                   <section className="space-y-2">
                     <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-[var(--totk-mid-ocher)]">
@@ -1248,6 +1414,8 @@ export default function CraftingRequestsPage() {
                             onClick={() => {
                               setCraftItemName("");
                               setSelectedItemMeta(null);
+                              setElixirTier(1);
+                              setElixirGuide(null);
                               setItemPickerOpen(false);
                               setTargetPick(null);
                               setTargetSearch("");
@@ -1308,6 +1476,120 @@ export default function CraftingRequestsPage() {
                     </div>
                   </section>
 
+                  {craftItemName && selectedItemMeta?.isElixir ? (
+                    <section className="space-y-3 rounded-xl border border-[var(--totk-light-green)]/40 bg-[var(--totk-light-green)]/08 p-4 ring-1 ring-[var(--totk-light-green)]/15">
+                      <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-[var(--totk-light-green)]">
+                        Elixir mixer — customize
+                      </p>
+                      <p className="text-sm leading-relaxed text-[var(--botw-pale)]">
+                        You chose{" "}
+                        <strong className="text-[var(--botw-cream)]">{craftItemName}</strong>. Pick the{" "}
+                        <strong className="text-[var(--botw-cream)]">potency tier</strong> you want. Mixer recipes
+                        are flexible — use{" "}
+                        <strong className="text-[var(--botw-cream)]">Materials &amp; notes</strong> for exact
+                        bottles, fairies, or who brings which critters/parts.
+                      </p>
+                      <div>
+                        <label className={modalLabelClass} htmlFor="craft-elixir-tier">
+                          What level do you want?
+                        </label>
+                        <select
+                          id="craft-elixir-tier"
+                          value={elixirTier}
+                          onChange={(e) =>
+                            setElixirTier(Number(e.target.value) as 1 | 2 | 3)
+                          }
+                          className={modalSelectClass}
+                          style={craftingModalSelectBg}
+                        >
+                          <option value={1}>Basic</option>
+                          <option value={2}>Mid</option>
+                          <option value={3}>High</option>
+                        </select>
+                      </div>
+                      {elixirGuideLoading ? (
+                        <p className={`${modalHintClass} flex items-center gap-2`}>
+                          <i className="fa-solid fa-spinner fa-spin text-xs" aria-hidden />
+                          Calculating mixer slots &amp; examples…
+                        </p>
+                      ) : elixirGuide ? (
+                        <div className="space-y-3 rounded-lg border border-[var(--totk-dark-ocher)]/50 bg-black/22 p-3 text-xs leading-relaxed text-[var(--botw-pale)]">
+                          <p className="font-semibold text-[var(--totk-light-ocher)]">
+                            What to bring (flexible recipe)
+                          </p>
+                          <ul className="list-inside list-disc space-y-1.5">
+                            {elixirGuide.slots.map((s) => (
+                              <li key={s.role}>
+                                <span className="font-medium text-[var(--botw-cream)]">{s.role}:</span>{" "}
+                                {s.detail}
+                              </li>
+                            ))}
+                          </ul>
+                          <p>
+                            <span className="font-semibold text-[var(--totk-light-ocher)]">
+                              Monster part rule:
+                            </span>{" "}
+                            {elixirGuide.partRequirement}
+                          </p>
+                          <p className="text-[var(--botw-pale)]/92">{elixirGuide.rarityGuidance}</p>
+                          {elixirGuide.eligibleCritters.length > 0 ? (
+                            <div className="space-y-1.5">
+                              <p className="font-semibold text-[var(--totk-light-ocher)]">
+                                Eligible critters ({elixirGuide.eligibleCritters.length}
+                                {elixirGuide.eligibleCrittersCapped ? "+" : ""})
+                              </p>
+                              <p className="text-[10px] leading-snug text-[var(--botw-pale)]/75">
+                                Same effect family as this elixir — any one satisfies the critter slot; extras
+                                optional.
+                              </p>
+                              <div className="max-h-52 overflow-y-auto rounded-md border border-[var(--botw-border)]/35 bg-black/28 px-2.5 py-2">
+                                <ul className="grid list-none gap-x-3 gap-y-0.5 sm:grid-cols-2">
+                                  {elixirGuide.eligibleCritters.map((name) => (
+                                    <li
+                                      key={name}
+                                      className="flex gap-1.5 text-[11px] leading-snug text-[var(--botw-pale)]/90"
+                                    >
+                                      <span className="shrink-0 text-[var(--totk-mid-ocher)]" aria-hidden>
+                                        •
+                                      </span>
+                                      <span className="min-w-0">{name}</span>
+                                    </li>
+                                  ))}
+                                </ul>
+                              </div>
+                            </div>
+                          ) : null}
+                          {elixirGuide.eligibleParts.length > 0 ? (
+                            <div className="space-y-1.5">
+                              <p className="font-semibold text-[var(--totk-light-ocher)]">
+                                Eligible monster parts ({elixirGuide.eligibleParts.length}
+                                {elixirGuide.eligiblePartsCapped ? "+" : ""})
+                              </p>
+                              <p className="text-[10px] leading-snug text-[var(--botw-pale)]/75">
+                                Element rule: {elixirGuide.partRequirement}. Any one satisfies the part slot.
+                              </p>
+                              <div className="max-h-52 overflow-y-auto rounded-md border border-[var(--botw-border)]/35 bg-black/28 px-2.5 py-2">
+                                <ul className="grid list-none gap-x-3 gap-y-0.5 sm:grid-cols-2">
+                                  {elixirGuide.eligibleParts.map((name) => (
+                                    <li
+                                      key={name}
+                                      className="flex gap-1.5 text-[11px] leading-snug text-[var(--botw-pale)]/90"
+                                    >
+                                      <span className="shrink-0 text-[var(--totk-mid-ocher)]" aria-hidden>
+                                        •
+                                      </span>
+                                      <span className="min-w-0">{name}</span>
+                                    </li>
+                                  ))}
+                                </ul>
+                              </div>
+                            </div>
+                          ) : null}
+                        </div>
+                      ) : null}
+                    </section>
+                  ) : null}
+
                   <section className="space-y-2">
                     <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-[var(--totk-mid-ocher)]">
                       2 · Who&apos;s involved
@@ -1349,8 +1631,8 @@ export default function CraftingRequestsPage() {
                         <p className="text-[11px] font-semibold uppercase tracking-wider text-[var(--totk-light-ocher)]">
                           Who can accept
                         </p>
-                        <div className="flex flex-wrap gap-x-5 gap-y-2 text-sm text-[var(--botw-pale)]">
-                          <label className="inline-flex cursor-pointer items-center gap-2">
+                        <div className="flex flex-col gap-2 text-sm text-[var(--botw-pale)] sm:flex-row sm:flex-wrap sm:gap-x-5 sm:gap-y-2">
+                          <label className="inline-flex min-h-[2.5rem] cursor-pointer items-center gap-2 sm:min-h-0">
                             <input
                               type="radio"
                               name="targetMode"
@@ -1365,7 +1647,7 @@ export default function CraftingRequestsPage() {
                             />
                             Open — any matching crafter
                           </label>
-                          <label className="inline-flex cursor-pointer items-center gap-2">
+                          <label className="inline-flex min-h-[2.5rem] cursor-pointer items-center gap-2 sm:min-h-0">
                             <input
                               type="radio"
                               name="targetMode"
@@ -1623,80 +1905,23 @@ export default function CraftingRequestsPage() {
                         onChange={(e) => setMaterialsDescription(e.target.value)}
                         rows={2}
                         className={modalFieldClass}
-                        placeholder="Quantities, who brings what…"
+                        placeholder="Quantities, elixir bottle details, who brings which parts…"
                       />
                     </div>
                       </div>
 
-                      <div className="grid gap-3 sm:grid-cols-2">
-                    <div>
-                      <label className={modalLabelClass} htmlFor="craft-payment">
-                        Payment / trade
-                      </label>
-                      <textarea
-                        id="craft-payment"
-                        value={paymentOffer}
-                        onChange={(e) => setPaymentOffer(e.target.value)}
-                        rows={2}
-                        className={modalFieldClass}
-                        placeholder="Optional"
-                      />
-                    </div>
-                    <div>
-                      <label className={modalLabelClass} htmlFor="craft-elixir">
-                        Elixir
-                      </label>
-                      <p className={`${modalHintClass} mb-1`}>
-                        Search standard elixirs or type anything (custom mix, none, TBD…).
-                      </p>
-                      <div className="flex gap-2">
-                        <div className="relative z-[100] min-w-0 flex-1">
-                          <input
-                            id="craft-elixir"
-                            value={elixirDescription}
-                            onChange={(e) => {
-                              setElixirDescription(e.target.value);
-                              setElixirSuggestOpen(true);
-                            }}
-                            onFocus={() => setElixirSuggestOpen(true)}
-                            onBlur={() => {
-                              window.setTimeout(() => setElixirSuggestOpen(false), 120);
-                            }}
-                            className={modalFieldClass}
-                            placeholder="Search or type…"
-                            autoComplete="off"
-                            aria-autocomplete="list"
-                            aria-expanded={elixirSuggestOpen && filteredElixirPresets.length > 0}
-                          />
-                          {elixirSuggestOpen && filteredElixirPresets.length > 0 ? (
-                            <ul className="absolute bottom-full left-0 right-0 z-[1] mb-1 max-h-44 overflow-auto rounded-md border border-[var(--totk-dark-ocher)]/55 bg-[var(--botw-warm-black)] py-0.5 shadow-xl">
-                              {filteredElixirPresets.map((p) => (
-                                <li key={p}>
-                                  <button
-                                    type="button"
-                                    className="w-full px-3 py-2 text-left text-sm text-[var(--botw-pale)] hover:bg-[var(--totk-brown)]/90"
-                                    onMouseDown={(e) => e.preventDefault()}
-                                    onClick={() => {
-                                      setElixirDescription(p);
-                                      setElixirSuggestOpen(false);
-                                    }}
-                                  >
-                                    {p}
-                                  </button>
-                                </li>
-                              ))}
-                            </ul>
-                          ) : null}
-                        </div>
-                        <button
-                          type="button"
-                          onClick={() => setElixirDescription("")}
-                          className="shrink-0 rounded-md border border-[var(--totk-dark-ocher)]/55 bg-[var(--botw-black)]/20 px-2.5 py-2 text-xs font-medium text-[var(--botw-pale)]/85 hover:bg-[var(--botw-black)]/35"
-                        >
-                          Clear
-                        </button>
-                      </div>
-                    </div>
+                      <div>
+                        <label className={modalLabelClass} htmlFor="craft-payment">
+                          Payment / trade
+                        </label>
+                        <textarea
+                          id="craft-payment"
+                          value={paymentOffer}
+                          onChange={(e) => setPaymentOffer(e.target.value)}
+                          rows={2}
+                          className={modalFieldClass}
+                          placeholder="Optional"
+                        />
                       </div>
                     </fieldset>
                   </section>
@@ -1712,25 +1937,25 @@ export default function CraftingRequestsPage() {
                   </div>
                 ) : null}
               </div>
-              <div className="flex shrink-0 items-center justify-between gap-3 border-t border-[var(--totk-dark-ocher)]/55 bg-[var(--botw-black)]/22 px-4 py-2.5 sm:px-5">
-                <p className={`${modalHintClass} hidden min-w-0 sm:block sm:max-w-[55%]`}>
+              <div className="flex shrink-0 flex-col gap-2 border-t border-[var(--totk-dark-ocher)]/55 bg-[var(--botw-black)]/22 px-4 py-3 pb-[max(0.75rem,env(safe-area-inset-bottom,0px))] sm:flex-row sm:items-center sm:justify-between sm:px-5 sm:py-2.5 sm:pb-3">
+                <p className={`${modalHintClass} order-2 hidden min-w-0 sm:order-1 sm:block sm:max-w-[55%]`}>
                   <i className="fa-brands fa-discord mr-1 text-[#5865F2]" aria-hidden />
                   {editingRequestId
                     ? "Discord post is updated when you save."
                     : "Announced on the community channel when posted."}
                 </p>
-                <div className="flex w-full gap-2 sm:w-auto sm:shrink-0">
+                <div className="order-1 flex w-full gap-2 sm:order-2 sm:w-auto sm:shrink-0">
                   <button
                     type="button"
                     onClick={closeFormModal}
-                    className="flex-1 rounded-md border border-[var(--totk-dark-ocher)]/65 bg-[var(--botw-black)]/25 px-4 py-2 text-sm font-medium text-[var(--botw-pale)] hover:bg-[var(--botw-black)]/45 sm:flex-initial"
+                    className="min-h-[2.75rem] flex-1 rounded-md border border-[var(--totk-dark-ocher)]/65 bg-[var(--botw-black)]/25 px-4 py-2.5 text-sm font-medium text-[var(--botw-pale)] hover:bg-[var(--botw-black)]/45 sm:min-h-0 sm:flex-initial sm:py-2"
                   >
                     Cancel
                   </button>
                   <button
                     type="submit"
                     disabled={submitting}
-                    className="flex flex-1 items-center justify-center gap-2 rounded-md bg-[var(--totk-light-green)] px-4 py-2 text-sm font-semibold text-black hover:brightness-105 disabled:opacity-50 sm:flex-initial sm:min-w-[8.5rem]"
+                    className="flex min-h-[2.75rem] flex-1 items-center justify-center gap-2 rounded-md bg-[var(--totk-light-green)] px-4 py-2.5 text-sm font-semibold text-black hover:brightness-105 disabled:opacity-50 sm:min-h-0 sm:flex-initial sm:min-w-[8.5rem] sm:py-2"
                   >
                     {submitting ? (
                       <>
@@ -1752,12 +1977,12 @@ export default function CraftingRequestsPage() {
 
       {acceptFor && (
         <div
-          className="fixed inset-0 z-[60] flex items-center justify-center bg-black/65 p-4 backdrop-blur-[2px]"
+          className="fixed inset-0 z-[60] flex items-end justify-center bg-black/65 p-0 pb-[env(safe-area-inset-bottom,0px)] pt-[env(safe-area-inset-top,0px)] backdrop-blur-[2px] sm:items-center sm:p-4"
           role="dialog"
           aria-modal="true"
           aria-labelledby="accept-title"
         >
-          <div className="w-full max-w-md rounded-2xl border border-[var(--botw-border)] bg-[var(--botw-deep)] p-6 shadow-2xl">
+          <div className="max-h-[min(90dvh,100dvh)] w-full max-w-md overflow-y-auto rounded-t-2xl border border-[var(--botw-border)] bg-[var(--botw-deep)] p-4 shadow-2xl sm:rounded-2xl sm:p-6">
             <h3 id="accept-title" className="text-lg font-bold text-[var(--totk-light-ocher)]">
               Claim on the dashboard
             </h3>
@@ -1796,10 +2021,10 @@ export default function CraftingRequestsPage() {
               </ul>
             )}
             {acceptError && <p className="mt-3 text-sm text-red-300">{acceptError}</p>}
-            <div className="mt-6 flex justify-end gap-2">
+            <div className="mt-5 flex flex-col-reverse gap-2 sm:mt-6 sm:flex-row sm:justify-end">
               <button
                 type="button"
-                className="rounded-lg border border-[var(--botw-border)] px-4 py-2 text-sm font-medium text-[var(--botw-pale)] hover:bg-white/5"
+                className="min-h-[2.75rem] w-full rounded-lg border border-[var(--botw-border)] px-4 py-2.5 text-sm font-medium text-[var(--botw-pale)] hover:bg-white/5 sm:w-auto sm:min-h-0 sm:py-2"
                 onClick={() => {
                   setAcceptFor(null);
                   setAcceptCharId(null);
@@ -1812,7 +2037,7 @@ export default function CraftingRequestsPage() {
                 type="button"
                 disabled={!acceptCharId || acceptSubmitting}
                 onClick={() => void handleAccept()}
-                className="rounded-lg bg-[var(--totk-light-green)] px-4 py-2 text-sm font-bold text-black disabled:opacity-50"
+                className="min-h-[2.75rem] w-full rounded-lg bg-[var(--totk-light-green)] px-4 py-2.5 text-sm font-bold text-black disabled:opacity-50 sm:w-auto sm:min-h-0 sm:py-2"
               >
                 {acceptSubmitting ? "…" : "Claim commission"}
               </button>

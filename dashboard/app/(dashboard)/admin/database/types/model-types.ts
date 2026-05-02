@@ -38,6 +38,8 @@ export type FieldConfig = {
   getHelpText?: (data: Record<string, unknown>) => string;
   // For text fields: when set and > 1, render as textarea with this many rows
   rows?: number;
+  /** For type "text" (single-line): browser datalist suggestions (e.g. canon job names) */
+  suggestions?: string[];
   // For array fields
   readOnly?: boolean;
   autoPopulated?: boolean;

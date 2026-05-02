@@ -11,12 +11,18 @@ import {
   userOwnsCharacterName,
 } from "@/lib/crafting-request-helpers";
 import type { CraftingRequestNotifyPayload } from "@/lib/craftingRequestsNotify";
+import { isMixerOutputElixirName } from "@/lib/elixir-catalog";
+import {
+  validateElixirMaterialSelectionsForCommission,
+  type ElixirMaterialSelection,
+} from "@/lib/elixir-commission-materials";
 
 export type CraftItemLean = ItemCraftFields & {
   itemName: string;
   image?: string;
   crafting?: boolean;
   _id: mongoose.Types.ObjectId;
+  craftingMaterial?: Array<{ itemName: string; quantity: number }>;
 };
 
 export async function getCraftItemByName(itemName: string): Promise<CraftItemLean | null> {
@@ -25,7 +31,7 @@ export async function getCraftItemByName(itemName: string): Promise<CraftItemLea
     itemName: itemName.trim(),
     crafting: true,
   })
-    .select("itemName image craftingJobs staminaToCraft crafting")
+    .select("itemName image craftingJobs staminaToCraft crafting craftingMaterial")
     .lean()
     .exec();
   if (doc == null) return null;
@@ -45,7 +51,10 @@ export type ValidatedCraftingRequestBody = {
   providingAllMaterials: boolean;
   materialsDescription: string;
   paymentOffer: string;
-  elixirDescription: string;
+  /** 1–3 when item is a mixer elixir; null otherwise */
+  elixirTier: number | null;
+  /** Mixer elixir only — commissioner inventory stack picks */
+  elixirMaterialSelections: ElixirMaterialSelection[];
 };
 
 export async function validateCraftingRequestBody(
@@ -59,7 +68,6 @@ export async function validateCraftingRequestBody(
   const providingAllMaterials = Boolean(body.providingAllMaterials);
   const materialsDescription = String(body.materialsDescription ?? "").trim();
   const paymentOffer = String(body.paymentOffer ?? "").trim();
-  const elixirDescription = String(body.elixirDescription ?? "").trim();
 
   if (!requesterCharacterName) {
     return { ok: false, res: NextResponse.json({ error: "Requester OC name is required" }, { status: 400 }) };
@@ -130,6 +138,27 @@ export async function validateCraftingRequestBody(
     targetOwnerDiscordId = target.userId;
   }
 
+  let elixirTier: number | null = null;
+  let elixirMaterialSelections: ElixirMaterialSelection[] = [];
+
+  if (isMixerOutputElixirName(item.itemName)) {
+    const t = Number(body.elixirTier);
+    if (t === 2 || t === 3) elixirTier = t;
+    else elixirTier = 1;
+
+    const rawMats = Array.isArray(item.craftingMaterial) ? item.craftingMaterial : [];
+    const elixirVal = await validateElixirMaterialSelectionsForCommission(
+      user.id,
+      requesterCharacterName,
+      rawMats as Array<{ itemName: string; quantity: number }>,
+      body.elixirMaterialSelections
+    );
+    if (!elixirVal.ok) {
+      return { ok: false, res: NextResponse.json({ error: elixirVal.error }, { status: 400 }) };
+    }
+    elixirMaterialSelections = elixirVal.selections;
+  }
+
   return {
     ok: true,
     data: {
@@ -143,7 +172,8 @@ export async function validateCraftingRequestBody(
       providingAllMaterials,
       materialsDescription,
       paymentOffer,
-      elixirDescription,
+      elixirTier,
+      elixirMaterialSelections,
     },
   };
 }
@@ -171,7 +201,7 @@ export function craftingRequestNotifyPayload(
     providingAllMaterials: v.providingAllMaterials,
     materialsDescription: v.materialsDescription,
     paymentOffer: v.paymentOffer,
-    elixirDescription: v.elixirDescription,
+    elixirTier: v.elixirTier,
   };
 }
 

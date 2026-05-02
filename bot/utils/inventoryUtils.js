@@ -401,7 +401,13 @@ async function addItemInventoryDatabase(characterId, itemName, quantity, interac
       elixirLevel: optElixirLevel = null,
       modifierHearts: optModifierHearts = null,
     } = options;
-    const allowedNullInteractionObtain = ['Trade', 'Character Birthday', 'Duplicate Relic Turn-In'];
+    const allowedNullInteractionObtain = [
+      'Trade',
+      'Character Birthday',
+      'Duplicate Relic Turn-In',
+      'Workshop Commission',
+      'Workshop Commission Refund',
+    ];
     if (!interaction && !allowedNullInteractionObtain.includes(obtain)) {
       throw new Error("Interaction object is undefined.");
     }

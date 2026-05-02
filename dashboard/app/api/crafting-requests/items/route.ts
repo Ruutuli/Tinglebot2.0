@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { connect } from "@/lib/db";
 import { getSession } from "@/lib/session";
+import { isMixerOutputElixirName } from "@/lib/elixir-catalog";
 
 export const dynamic = "force-dynamic";
 
@@ -25,12 +26,28 @@ export async function GET(request: Request) {
     // Empty q: first N craftable items alphabetically (for picker bootstrap)
 
     const items = await Item.find(filter)
-      .select("itemName craftingJobs staminaToCraft emoji")
+      .select("itemName craftingJobs staminaToCraft emoji elixirLevel")
       .sort({ itemName: 1 })
       .limit(limit)
       .lean();
 
-    return NextResponse.json({ items });
+    const out = items.map((it) => {
+      const itemName = String((it as { itemName?: string }).itemName ?? "");
+      const elixirLevel = (it as { elixirLevel?: number | null }).elixirLevel;
+      return {
+        itemName,
+        craftingJobs: (it as { craftingJobs?: string[] }).craftingJobs,
+        staminaToCraft: (it as { staminaToCraft?: unknown }).staminaToCraft,
+        emoji: (it as { emoji?: string }).emoji,
+        isElixir: isMixerOutputElixirName(itemName),
+        elixirLevel:
+          typeof elixirLevel === "number" && Number.isFinite(elixirLevel)
+            ? Math.min(3, Math.max(1, Math.floor(elixirLevel)))
+            : null,
+      };
+    });
+
+    return NextResponse.json({ items: out });
   } catch (err) {
     console.error("[api/crafting-requests/items]", err);
     return NextResponse.json({ error: "Failed to fetch items" }, { status: 500 });

@@ -133,6 +133,7 @@ export default function AdminDatabasePage() {
         village: "Village",
         race: "Race",
         questType: "Quest Type",
+        targetMode: "Target mode",
         appraised: "Appraised",
         archived: "Archived",
         discoveredBy: "Discovered By",
@@ -178,6 +179,13 @@ export default function AdminDatabasePage() {
           const relicName = item.name;
           const relicNameMatch = relicName && String(relicName).toLowerCase().includes(query);
           return nameMatch || relicNameMatch;
+        }
+        if (selectedModel === "CraftingRequest") {
+          const requester = item.requesterCharacterName;
+          const requesterMatch = requester && String(requester).toLowerCase().includes(query);
+          const requesterUser = item.requesterUsername;
+          const userMatch = requesterUser && String(requesterUser).toLowerCase().includes(query);
+          return nameMatch || requesterMatch || userMatch;
         }
         return nameMatch;
       });
@@ -255,6 +263,10 @@ export default function AdminDatabasePage() {
             (typeof status === "string" || typeof status === "number" || typeof status === "boolean") &&
             selectedValues.includes(status)
           );
+        }
+        if (key === "targetMode") {
+          const tm = item.targetMode;
+          return typeof tm === "string" && selectedValues.includes(tm);
         }
         if (key === "job") {
           const jobs: Record<string, string> = {
