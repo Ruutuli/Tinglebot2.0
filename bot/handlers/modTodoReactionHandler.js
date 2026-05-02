@@ -24,6 +24,11 @@ const COMPLETE_EMOJI = '⭕';
 // Default due time (12 hours from now)
 const DEFAULT_DUE_HOURS = 12;
 
+function modTaskDashboardUrl(taskId) {
+    const base = (process.env.DASHBOARD_URL || process.env.APP_URL || 'https://tinglebot.xyz').replace(/\/$/, '');
+    return `${base}/admin/todo?task=${taskId}`;
+}
+
 // Substring match on task title + description; keep in sync with
 // dashboard/app/api/admin/tasks/route.ts (AUTO_ASSIGNMENT_RULES).
 //
@@ -521,13 +526,17 @@ async function resolveAutoAssignees(message, guild, fallbackUserInfo) {
 
 /**
  * Send a confirmation reply to the channel
+ * @param {{ url: string, title?: string } | null} link - Optional clickable embed title (dashboard task URL)
  */
-async function sendConfirmation(message, content, color = 0x49d59c) {
+async function sendConfirmation(message, content, color = 0x49d59c, link = null) {
     try {
         const embed = new EmbedBuilder()
             .setDescription(content)
             .setColor(color)
             .setTimestamp();
+        if (link?.url) {
+            embed.setTitle(link.title || 'View task').setURL(link.url);
+        }
         
         const reply = await message.reply({ embeds: [embed] });
         
@@ -564,7 +573,9 @@ async function handlePinReaction(reaction, user, client) {
             
             await sendConfirmation(
                 message,
-                `📌 **${userInfo.username}** has been assigned to this task.`
+                `📌 **${userInfo.username}** has been assigned to this task.`,
+                0x49d59c,
+                { url: modTaskDashboardUrl(existingTask._id.toString()) }
             );
             
             logger.info('MOD_TODO', `User ${user.id} assigned to existing task ${existingTask._id}`);
@@ -621,7 +632,9 @@ async function handlePinReaction(reaction, user, client) {
         `Assigned to: **${assignees.map((a) => a.username).join(', ')}**\n` +
         `Due: ${dueDateStr}\n\n` +
         `React with 📌 to also be assigned.\n` +
-        `React with ⭕ when complete.`
+        `React with ⭕ when complete.`,
+        0x49d59c,
+        { url: modTaskDashboardUrl(task._id.toString()) }
     );
     
     logger.info('MOD_TODO', `Task created from message ${message.id} by ${user.id}`);
@@ -670,7 +683,8 @@ async function handleCompleteReaction(reaction, user, client) {
         message,
         `⭕ **Task completed!**\n` +
         `Marked as done by: **${userInfo.username}**`,
-        0x00ff00
+        0x00ff00,
+        { url: modTaskDashboardUrl(task._id.toString()) }
     );
     
     logger.info('MOD_TODO', `Task ${task._id} completed by ${user.id}`);
