@@ -19,7 +19,6 @@ type CraftingRequestRow = {
   materialsDescription?: string;
   paymentOffer?: string;
   elixirDescription?: string;
-  boostNotes?: string;
   status: string;
   acceptedAt?: string | null;
   acceptedByUserId?: string | null;
@@ -36,6 +35,9 @@ type ListChar = {
 };
 
 type SearchChar = ListChar & { userId: string; homeVillage?: string };
+
+type OcMaterialLine = { itemName: string; quantity: number; ownedQty: number; sufficient: boolean };
+type OcMaterialCheckResult = { hasRecipe: boolean; allMaterialsMet: boolean; lines: OcMaterialLine[] };
 
 type CraftItemOpt = {
   itemName: string;
@@ -97,15 +99,14 @@ const CRAFTING_ELIXIR_PRESETS: string[] = (() => {
   return rows.sort((a, b) => a.localeCompare(b));
 })();
 
-/** Crafting-relevant boosts (Teacher / Priest / Scholar, etc.). */
-const CRAFTING_BOOST_PRESETS: string[] = [
-  "Coordinate boosts in Discord before the craft",
-  "Fortune Teller or other — details in materials",
-  "No boost needed",
-  "Priest — reduced crafting stamina cost",
-  "Scholar — material reduction (when applicable)",
-  "Teacher — stamina split while crafting",
-].sort((a, b) => a.localeCompare(b));
+const PRESET_SUGGEST_LIMIT_EMPTY = 15;
+const PRESET_SUGGEST_LIMIT_QUERY = 25;
+
+function filterNamePresets(presets: string[], query: string, limitEmpty: number, limitQuery: number): string[] {
+  const q = query.trim().toLowerCase();
+  if (!q) return presets.slice(0, limitEmpty);
+  return presets.filter((p) => p.toLowerCase().includes(q)).slice(0, limitQuery);
+}
 
 function resetFormState() {
   return {
@@ -120,7 +121,6 @@ function resetFormState() {
     materialsDescription: "",
     paymentOffer: "",
     elixirDescription: "",
-    boostNotes: "",
   };
 }
 
@@ -154,7 +154,6 @@ export default function CraftingRequestsPage() {
   const [materialsDescription, setMaterialsDescription] = useState("");
   const [paymentOffer, setPaymentOffer] = useState("");
   const [elixirDescription, setElixirDescription] = useState("");
-  const [boostNotes, setBoostNotes] = useState("");
 
   const [formError, setFormError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
@@ -165,6 +164,22 @@ export default function CraftingRequestsPage() {
   const [acceptError, setAcceptError] = useState<string | null>(null);
 
   const [itemPickerOpen, setItemPickerOpen] = useState(false);
+
+  const [ocMaterialCheck, setOcMaterialCheck] = useState<OcMaterialCheckResult | null>(null);
+  const [ocMaterialLoading, setOcMaterialLoading] = useState(false);
+
+  const [elixirSuggestOpen, setElixirSuggestOpen] = useState(false);
+
+  const filteredElixirPresets = useMemo(
+    () =>
+      filterNamePresets(
+        CRAFTING_ELIXIR_PRESETS,
+        elixirDescription,
+        PRESET_SUGGEST_LIMIT_EMPTY,
+        PRESET_SUGGEST_LIMIT_QUERY
+      ),
+    [elixirDescription]
+  );
 
   const loadOpenRequests = useCallback(async () => {
     if (!user?.id) return;
@@ -286,6 +301,39 @@ export default function CraftingRequestsPage() {
   }, [targetSearch, targetMode, formModalOpen, craftItemName, selectedItemMeta]);
 
   useEffect(() => {
+    if (!formModalOpen || !craftItemName.trim() || !requesterCharacterName.trim()) {
+      setOcMaterialCheck(null);
+      setOcMaterialLoading(false);
+      return;
+    }
+    const t = setTimeout(async () => {
+      setOcMaterialLoading(true);
+      setOcMaterialCheck(null);
+      try {
+        const params = new URLSearchParams({
+          craftItemName: craftItemName.trim(),
+          requesterCharacterName: requesterCharacterName.trim(),
+        });
+        const res = await fetch(`/api/crafting-requests/material-check?${params}`, {
+          credentials: "include",
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || "Check failed");
+        setOcMaterialCheck({
+          hasRecipe: Boolean(data.hasRecipe),
+          allMaterialsMet: Boolean(data.allMaterialsMet),
+          lines: Array.isArray(data.lines) ? data.lines : [],
+        });
+      } catch {
+        setOcMaterialCheck(null);
+      } finally {
+        setOcMaterialLoading(false);
+      }
+    }, 400);
+    return () => clearTimeout(t);
+  }, [formModalOpen, craftItemName, requesterCharacterName]);
+
+  useEffect(() => {
     if (!targetPick || !selectedItemMeta) return;
     const jobs = selectedItemMeta.craftingJobs ?? [];
     if (jobs.length > 0 && !jobs.includes(targetPick.job)) {
@@ -328,8 +376,10 @@ export default function CraftingRequestsPage() {
     setMaterialsDescription(r.materialsDescription);
     setPaymentOffer(r.paymentOffer);
     setElixirDescription(r.elixirDescription);
-    setBoostNotes(r.boostNotes);
     setItemPickerOpen(false);
+    setOcMaterialCheck(null);
+    setOcMaterialLoading(false);
+    setElixirSuggestOpen(false);
   };
 
   const handleSelectItem = (it: CraftItemOpt) => {
@@ -387,7 +437,6 @@ export default function CraftingRequestsPage() {
           materialsDescription,
           paymentOffer,
           elixirDescription,
-          boostNotes,
         }),
       });
       const data = await res.json();
@@ -785,15 +834,6 @@ export default function CraftingRequestsPage() {
                         <dd>{row.elixirDescription}</dd>
                       </div>
                     ) : null}
-                    {row.boostNotes ? (
-                      <div className="flex gap-2">
-                        <dt className="shrink-0 text-[var(--botw-pale)]/70">
-                          <i className="fa-solid fa-wand-magic-sparkles mr-1.5 w-4 text-center text-[var(--totk-light-green)]" />
-                          Boost
-                        </dt>
-                        <dd>{row.boostNotes}</dd>
-                      </div>
-                    ) : null}
                   </dl>
 
                   <div className="mt-auto flex flex-wrap items-center justify-between gap-3 border-t border-[var(--botw-border)]/50 pt-4">
@@ -842,7 +882,7 @@ export default function CraftingRequestsPage() {
           }}
         >
           <div
-            className="flex max-h-[88dvh] w-full max-w-lg flex-col overflow-hidden rounded-t-2xl border-2 border-[var(--totk-dark-ocher)]/75 bg-gradient-to-b from-[var(--totk-brown)] via-[var(--totk-brown)] to-[var(--botw-warm-black)] text-[var(--botw-pale)] shadow-[0_-8px_40px_rgba(0,0,0,0.45)] sm:max-h-[min(72dvh,560px)] sm:max-w-3xl sm:rounded-xl sm:shadow-2xl"
+            className="flex max-h-[92dvh] w-full max-w-xl flex-col overflow-hidden rounded-t-2xl border-2 border-[var(--totk-dark-ocher)]/75 bg-gradient-to-b from-[var(--totk-brown)] via-[var(--totk-brown)] to-[var(--botw-warm-black)] text-[var(--botw-pale)] shadow-[0_-8px_40px_rgba(0,0,0,0.45)] sm:max-h-[min(88dvh,720px)] sm:max-w-5xl sm:rounded-xl sm:shadow-2xl lg:max-w-6xl"
             onClick={(e) => e.stopPropagation()}
           >
             <header className="relative flex shrink-0 items-start justify-between gap-3 border-b border-[var(--totk-dark-ocher)]/55 bg-[var(--botw-black)]/15 px-4 py-3 sm:px-5 sm:py-3">
@@ -894,10 +934,20 @@ export default function CraftingRequestsPage() {
                             Change
                           </button>
                           {selectedItemMeta ? (
-                            <span className="w-full text-xs text-[var(--totk-mid-ocher)]">
-                              Jobs: {(selectedItemMeta.craftingJobs ?? []).join(", ") || "—"} · Stamina{" "}
-                              {parseStamina(selectedItemMeta.staminaToCraft)}
-                            </span>
+                            <div className="w-full space-y-1 text-xs text-[var(--totk-mid-ocher)]">
+                              <p>
+                                <span className="font-semibold text-[var(--totk-light-ocher)]">
+                                  Crafting jobs:{" "}
+                                </span>
+                                {(selectedItemMeta.craftingJobs ?? []).join(", ") || "—"}
+                              </p>
+                              <p>
+                                <span className="font-semibold text-[var(--totk-light-ocher)]">
+                                  Base stamina:{" "}
+                                </span>
+                                {parseStamina(selectedItemMeta.staminaToCraft)}
+                              </p>
+                            </div>
                           ) : null}
                         </div>
                       ) : (
@@ -1157,6 +1207,51 @@ export default function CraftingRequestsPage() {
                       <label className={modalLabelClass} htmlFor="craft-materials">
                         Materials &amp; notes
                       </label>
+                      {craftItemName && requesterCharacterName ? (
+                        <div className="mb-2 space-y-2">
+                          {ocMaterialLoading ? (
+                            <p className={`${modalHintClass} flex items-center gap-2`}>
+                              <i className="fa-solid fa-spinner fa-spin text-xs" aria-hidden />
+                              Checking {requesterCharacterName}&apos;s inventory against this recipe…
+                            </p>
+                          ) : ocMaterialCheck ? (
+                            !ocMaterialCheck.hasRecipe ? (
+                              <p className="rounded-md border border-[var(--totk-dark-ocher)]/45 bg-[var(--botw-black)]/25 px-2.5 py-2 text-xs leading-relaxed text-[var(--totk-mid-ocher)]">
+                                No recipe materials are listed in the catalog for this item. Use the
+                                notes field for what you&apos;re bringing; inventory can&apos;t be
+                                compared automatically.
+                              </p>
+                            ) : ocMaterialCheck.allMaterialsMet ? (
+                              <p className="rounded-md border border-emerald-500/35 bg-emerald-950/25 px-2.5 py-2 text-xs leading-relaxed text-emerald-100">
+                                <i className="fa-solid fa-circle-check mr-1.5 text-emerald-400" aria-hidden />
+                                <strong className="text-emerald-50">{requesterCharacterName}</strong> has
+                                enough of each recipe material in inventory (stack totals; same rules as
+                                the crafting guide).
+                              </p>
+                            ) : (
+                              <div className="rounded-md border border-amber-500/40 bg-amber-950/25 px-2.5 py-2 text-xs leading-relaxed text-amber-50">
+                                <p className="font-semibold text-amber-100">
+                                  {requesterCharacterName} is short on recipe materials
+                                </p>
+                                <ul className="mt-1.5 list-inside list-disc space-y-0.5 text-amber-100/95">
+                                  {ocMaterialCheck.lines
+                                    .filter((l) => !l.sufficient)
+                                    .map((l) => (
+                                      <li key={l.itemName}>
+                                        <span className="font-medium">{l.itemName}</span>: need{" "}
+                                        {l.quantity}, have {l.ownedQty}
+                                      </li>
+                                    ))}
+                                </ul>
+                              </div>
+                            )
+                          ) : null}
+                        </div>
+                      ) : craftItemName ? (
+                        <p className={`${modalHintClass} mb-2`}>
+                          Choose your OC in step 2 to compare their inventory to this recipe.
+                        </p>
+                      ) : null}
                       <textarea
                         id="craft-materials"
                         value={materialsDescription}
@@ -1173,42 +1268,61 @@ export default function CraftingRequestsPage() {
                       <label className={modalLabelClass} htmlFor="craft-payment">
                         Payment / trade
                       </label>
-                      <p className={`${modalHintClass} mb-1`}>No rupees — tokens, items, favors.</p>
-                      <input
+                      <textarea
                         id="craft-payment"
                         value={paymentOffer}
                         onChange={(e) => setPaymentOffer(e.target.value)}
+                        rows={2}
                         className={modalFieldClass}
                         placeholder="Optional"
-                        list="crafting-payment-hints"
                       />
-                      <datalist id="crafting-payment-hints">
-                        <option value="Village tokens (amount TBD in Discord)" />
-                        <option value="Items from my inventory (list in materials)" />
-                        <option value="Trade / barter — discuss before accepting" />
-                        <option value="No extra payment — materials + thanks" />
-                      </datalist>
                     </div>
                     <div>
                       <label className={modalLabelClass} htmlFor="craft-elixir">
                         Elixir
                       </label>
-                      <p className={`${modalHintClass} mb-1`}>Type for presets or custom line.</p>
+                      <p className={`${modalHintClass} mb-1`}>
+                        Search standard elixirs or type anything (custom mix, none, TBD…).
+                      </p>
                       <div className="flex gap-2">
-                        <input
-                          id="craft-elixir"
-                          value={elixirDescription}
-                          onChange={(e) => setElixirDescription(e.target.value)}
-                          className={`${modalFieldClass} min-w-0 flex-1`}
-                          placeholder="None"
-                          list="crafting-elixir-datalist"
-                          autoComplete="off"
-                        />
-                        <datalist id="crafting-elixir-datalist">
-                          {CRAFTING_ELIXIR_PRESETS.map((p) => (
-                            <option key={p} value={p} />
-                          ))}
-                        </datalist>
+                        <div className="relative z-[100] min-w-0 flex-1">
+                          <input
+                            id="craft-elixir"
+                            value={elixirDescription}
+                            onChange={(e) => {
+                              setElixirDescription(e.target.value);
+                              setElixirSuggestOpen(true);
+                            }}
+                            onFocus={() => setElixirSuggestOpen(true)}
+                            onBlur={() => {
+                              window.setTimeout(() => setElixirSuggestOpen(false), 120);
+                            }}
+                            className={modalFieldClass}
+                            placeholder="Search or type…"
+                            autoComplete="off"
+                            aria-autocomplete="list"
+                            aria-expanded={elixirSuggestOpen && filteredElixirPresets.length > 0}
+                          />
+                          {elixirSuggestOpen && filteredElixirPresets.length > 0 ? (
+                            <ul className="absolute bottom-full left-0 right-0 z-[1] mb-1 max-h-44 overflow-auto rounded-md border border-[var(--totk-dark-ocher)]/55 bg-[var(--botw-warm-black)] py-0.5 shadow-xl">
+                              {filteredElixirPresets.map((p) => (
+                                <li key={p}>
+                                  <button
+                                    type="button"
+                                    className="w-full px-3 py-2 text-left text-sm text-[var(--botw-pale)] hover:bg-[var(--totk-brown)]/90"
+                                    onMouseDown={(e) => e.preventDefault()}
+                                    onClick={() => {
+                                      setElixirDescription(p);
+                                      setElixirSuggestOpen(false);
+                                    }}
+                                  >
+                                    {p}
+                                  </button>
+                                </li>
+                              ))}
+                            </ul>
+                          ) : null}
+                        </div>
                         <button
                           type="button"
                           onClick={() => setElixirDescription("")}
@@ -1217,36 +1331,6 @@ export default function CraftingRequestsPage() {
                           Clear
                         </button>
                       </div>
-                    </div>
-                      </div>
-
-                      <div>
-                    <label className={modalLabelClass} htmlFor="craft-boost">
-                      Boosts
-                    </label>
-                    <p className={`${modalHintClass} mb-1`}>Teacher, Priest, Scholar…</p>
-                    <div className="flex gap-2">
-                      <input
-                        id="craft-boost"
-                        value={boostNotes}
-                        onChange={(e) => setBoostNotes(e.target.value)}
-                        className={`${modalFieldClass} min-w-0 flex-1`}
-                        placeholder="Optional"
-                        list="crafting-boost-datalist"
-                        autoComplete="off"
-                      />
-                      <datalist id="crafting-boost-datalist">
-                        {CRAFTING_BOOST_PRESETS.map((p) => (
-                          <option key={p} value={p} />
-                        ))}
-                      </datalist>
-                      <button
-                        type="button"
-                        onClick={() => setBoostNotes("")}
-                        className="shrink-0 rounded-md border border-[var(--totk-dark-ocher)]/55 bg-[var(--botw-black)]/20 px-2.5 py-2 text-xs font-medium text-[var(--botw-pale)]/85 hover:bg-[var(--botw-black)]/35"
-                      >
-                        Clear
-                      </button>
                     </div>
                       </div>
                     </fieldset>

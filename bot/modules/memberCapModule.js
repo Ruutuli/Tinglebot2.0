@@ -6,6 +6,7 @@ const { EmbedBuilder, PermissionFlagsBits } = require('discord.js');
 const Character = require('@/models/CharacterModel');
 const OcReservation = require('@/models/OcReservationModel');
 const MemberCapTracker = require('@/models/MemberCapTrackerModel');
+const { isVillageExclusiveJob } = require('@/modules/jobsModule');
 const logger = require('@/utils/logger');
 
 const FILE = 'MEMBER_CAP';
@@ -151,38 +152,56 @@ function extractVillageFromSegment(segment) {
   return null;
 }
 
-function findVillageInApplicationParts(parts) {
-  for (let i = 0; i < parts.length; i++) {
-    const v = extractVillageFromSegment(parts[i]);
-    if (v) return v;
-  }
-  return null;
-}
-
 /** Shown when a post in the OC reserve channel does not match the required template. */
 const OC_CHANNEL_FORMAT_REMINDER =
   'Please make sure your format is:\n`Name | race | village | Job | Virtue`\n' +
-  '*(Village must be **Rudania**, **Inariko**, or **Vhintl**.)*\n' +
-  '• **Slot reserve (two fields only):** `Character Name | Village`';
+  '*(Village must be **Rudania**, **Inariko**, or **Vhintl**.)*\n\n' +
+  '_This bot reminder will be **deleted and reposted** within the next **5 minutes**._';
+
+const OC_FORMAT_REMINDER_REPOST_MS = 5 * 60 * 1000;
+
+/** Sends the format reminder, then deletes and reposts the same reminder once after 5 minutes. */
+async function sendOcFormatReminderWithRepost(channel, authorId) {
+  const content = `<@${authorId}> ${OC_CHANNEL_FORMAT_REMINDER}`;
+  const payload = {
+    content,
+    allowedMentions: { users: [authorId] },
+  };
+  let sent;
+  try {
+    sent = await channel.send(payload);
+  } catch {
+    return;
+  }
+  setTimeout(async () => {
+    try {
+      await sent.delete().catch(() => {});
+      await channel.send(payload);
+    } catch (err) {
+      logger.warn(FILE, `OC format reminder repost: ${err.message}`);
+    }
+  }, OC_FORMAT_REMINDER_REPOST_MS);
+}
 
 /**
- * Valid: `Name | Village` (two fields), or at least five fields with home village in the **third** field.
+ * Valid: `Name | race | village | Job | Virtue` — at least five fields; home village in the **third** field.
  * @param {string | undefined} rawLine First non-empty line of the message.
  */
 function isValidOcReserveChannelPost(rawLine) {
   if (!rawLine || !String(rawLine).trim()) return false;
   if (!rawLine.includes('|')) return false;
   const parts = rawLine.split('|').map((p) => p.trim());
-  if (parts.length < 2) return false;
-
-  if (parts.length === 2) {
-    if (!parts[0]) return false;
-    return !!extractVillageFromSegment(parts[1]);
-  }
-
   if (parts.length < 5) return false;
-  if (!parts[0] || !parts[1] || !parts[3] || !parts[4]) return false;
+  if (!parts[0] || !parts[1] || !parts[2] || !parts[3] || !parts[4]) return false;
   return !!extractVillageFromSegment(parts[2]);
+}
+
+/** General jobs are allowed in any village; village-exclusive jobs must match `villageNorm`. */
+function villageJobMatchesHome(jobRaw, villageNorm) {
+  if (!jobRaw || !String(jobRaw).trim() || !villageNorm) return false;
+  const exclusive = isVillageExclusiveJob(jobRaw);
+  if (!exclusive) return true;
+  return exclusive === villageNorm;
 }
 
 function villageDisplay(key) {
@@ -582,29 +601,10 @@ async function removeOcReserveWhenPromotedToResident(oldMember, newMember) {
 }
 
 const TIP_RESERVE_VS_APP =
-  '**This channel is for reserves and full roster posts.**\n' +
-  '• **Slot reserve (bot tracks it):** exactly **Character Name | Village** — only two fields, nothing else.\n' +
-  '• **Mods may also react** with a village emoji (<:rudania:…>, <:inariko:…>, <:vhintl:…>) on someone’s roster post to log that reserve.\n' +
-  '• **Full application (roster line):** at minimum **character name** and **home village** (Rudania / Inariko / Vhintl), e.g. `Name | Race | Village | Virtue | Job | Image` per the pinned template.';
+  '**This channel is for OC roster reserves.** Post one line: `Name | race | village | Job | Virtue` (village: **Rudania**, **Inariko**, or **Vhintl**). Village-exclusive jobs must match that village.\n' +
+  '• **Mods** can react with a village emoji (<:rudania:…>, <:inariko:…>, <:vhintl:…>) to log a reserve manually when needed.';
 
 const MOD_ROLE_ID_DEFAULT = process.env.MOD_ROLE_ID || '606128760655183882';
-
-/** Where to ping mods for full roster lines (not the short reserve format). */
-function rosterReviewModChannelId() {
-  return (
-    process.env.ROSTER_REVIEW_MOD_CHANNEL_ID ||
-    process.env.MOD_QUEUE_CHANNEL_ID ||
-    process.env.MOD_LOG_CHANNEL_ID ||
-    ''
-  ).trim();
-}
-
-/** Optional role ping for roster review (defaults to MOD_ROLE_ID). Set ROSTER_REVIEW_MOD_ROLE_ID="" to disable. */
-function rosterReviewModRoleId() {
-  const raw = process.env.ROSTER_REVIEW_MOD_ROLE_ID;
-  if (raw === '') return '';
-  return (raw || MOD_ROLE_ID_DEFAULT || '').trim();
-}
 
 async function reactRosterPostWithVillageEmoji(message, villageNorm) {
   const id = VILLAGE_CUSTOM_EMOJI_ID[villageNorm];
@@ -623,34 +623,6 @@ async function reactRosterPostWithVillageEmoji(message, villageNorm) {
   }
 }
 
-/**
- * Notify mods that a full roster line was posted (no public thread reply).
- */
-async function notifyModsRosterPost(client, message) {
-  const channelId = rosterReviewModChannelId();
-  if (!channelId) {
-    logger.warn(
-      FILE,
-      'No roster review mod channel — set ROSTER_REVIEW_MOD_CHANNEL_ID (or MOD_QUEUE_CHANNEL_ID / MOD_LOG_CHANNEL_ID)'
-    );
-    return;
-  }
-  const ch = await client.channels.fetch(channelId).catch(() => null);
-  if (!ch || !ch.isTextBased()) {
-    logger.warn(FILE, `Roster review channel missing or not text-based: ${channelId}`);
-    return;
-  }
-  const roleId = rosterReviewModRoleId();
-  const prefix = roleId ? `<@&${roleId}> ` : '';
-  const body = `New roster post! Please review! \`${message.id}\` in <#${message.channelId}>\n${message.url}`;
-  await ch
-    .send({
-      content: `${prefix}${body}`,
-      allowedMentions: roleId ? { roles: [roleId] } : {},
-    })
-    .catch((err) => logger.warn(FILE, `Roster mod notify send failed: ${err.message}`));
-}
-
 async function memberCanModerateReserves(member) {
   if (!member) return false;
   if (member.permissions.has(PermissionFlagsBits.Administrator)) return true;
@@ -660,7 +632,7 @@ async function memberCanModerateReserves(member) {
 }
 
 /**
- * Persist reservation + announcement embed + tracker refresh (member posts & mod reactions).
+ * Persist reservation + tracker refresh. Optional embed/reply unless `silentSuccess`.
  */
 async function executeReservationFlow(message, client, options) {
   const {
@@ -669,6 +641,7 @@ async function executeReservationFlow(message, client, options) {
     suppressReserveTips,
     replyIntro,
     moderatorMember,
+    silentSuccess = false,
   } = options;
 
   await message.guild.members.fetch().catch(() => null);
@@ -717,56 +690,58 @@ async function executeReservationFlow(message, client, options) {
     { upsert: true, new: true }
   );
 
-  const dupChar = await Character.findOne({
-    ...acceptedCharacterQuery(),
-    name: new RegExp(`^${characterName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'i'),
-  }).lean();
+  if (!silentSuccess) {
+    const dupChar = await Character.findOne({
+      ...acceptedCharacterQuery(),
+      name: new RegExp(`^${characterName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'i'),
+    }).lean();
 
-  const reserveEmbed = new EmbedBuilder()
-    .setColor(0xd889a4)
-    .setTitle('OC RESERVATION')
-    .setImage(BORDER_IMAGE)
-    .addFields(
-      { name: 'CHARACTER NAME', value: characterName },
-      {
-        name: 'VILLAGE',
-        value: `${villageEmojiMarkup(villageNorm)} ${villageDisplay(villageNorm)}`,
-      },
-      {
-        name: 'APPLICANT',
-        value: `${message.author} (${message.author.tag})`,
-      },
-      {
-        name: 'DATE OF RESERVE',
-        value: new Date().toLocaleDateString('en-US', { timeZone: 'America/New_York' }),
-      },
-      {
-        name: 'ORIGINAL MESSAGE',
-        value: `[Jump](${message.url})`,
-      }
-    );
+    const reserveEmbed = new EmbedBuilder()
+      .setColor(0xd889a4)
+      .setTitle('OC RESERVATION')
+      .setImage(BORDER_IMAGE)
+      .addFields(
+        { name: 'CHARACTER NAME', value: characterName },
+        {
+          name: 'VILLAGE',
+          value: `${villageEmojiMarkup(villageNorm)} ${villageDisplay(villageNorm)}`,
+        },
+        {
+          name: 'APPLICANT',
+          value: `${message.author} (${message.author.tag})`,
+        },
+        {
+          name: 'DATE OF RESERVE',
+          value: new Date().toLocaleDateString('en-US', { timeZone: 'America/New_York' }),
+        },
+        {
+          name: 'ORIGINAL MESSAGE',
+          value: `[Jump](${message.url})`,
+        }
+      );
 
-  if (moderatorMember) {
-    reserveEmbed.addFields({
-      name: 'LOGGED BY',
-      value: `${moderatorMember.user.tag} (${moderatorMember.id})`,
-    });
+    if (moderatorMember) {
+      reserveEmbed.addFields({
+        name: 'LOGGED BY',
+        value: `${moderatorMember.user.tag} (${moderatorMember.id})`,
+      });
+    }
+
+    if (dupChar) {
+      reserveEmbed.addFields({
+        name: 'NOTE',
+        value:
+          'A character with this name already exists in the database — mods may still follow up if this is intentional.',
+      });
+    }
+
+    const tipSuffix = suppressReserveTips ? '' : `\n\n${TIP_RESERVE_VS_APP}`;
+    await message.reply({
+      content: `${replyIntro}${tipSuffix}`,
+      embeds: [reserveEmbed],
+      allowedMentions: { users: [message.author.id] },
+    }).catch(() => {});
   }
-
-  if (dupChar) {
-    reserveEmbed.addFields({
-      name: 'NOTE',
-      value:
-        'A character with this name already exists in the database — mods may still follow up if this is intentional.',
-    });
-  }
-
-  const tipSuffix = suppressReserveTips ? '' : `\n\n${TIP_RESERVE_VS_APP}`;
-  await message.reply({
-    content: `${replyIntro}${tipSuffix}`,
-    embeds: [reserveEmbed],
-    allowedMentions: { users: [message.author.id] },
-  }).catch(() => {});
 
   await refreshMemberCapTracker(client).catch((err) =>
     logger.error(FILE, `Tracker refresh after reserve: ${err.message}`)
@@ -813,12 +788,11 @@ async function handleModReserveReaction(reaction, user, client) {
           return;
         }
       } else {
-        // Village from reaction; OC name from first line (legacy posts).
         characterName = rawLine.slice(0, 80).trim();
         if (!characterName) {
           await msg.reply({
             content:
-              `❌ **Mod reserve:** Couldn’t read a character name — use text on the first line, or **Name | Village**.`,
+              '❌ **Mod reserve:** Couldn’t read a character name — use the roster line format `Name | race | village | Job | Virtue` (or a plain first line).',
           }).catch(() => {});
           return;
         }
@@ -844,19 +818,11 @@ async function handleModReserveReaction(reaction, user, client) {
       }
     }
 
-    let replyIntro =
-      `✅ **Reserve saved** (${villageEmojiMarkup(villageNorm)} **${villageDisplay(villageNorm)}**) via mod reaction by **${moderator.displayName}**.`;
-    if (!rawLine) {
-      replyIntro +=
-        '\n_Village from your emoji reaction · OC name from **their server display name** (empty post)._';
-    }
-
     await executeReservationFlow(msg, client, {
       villageNorm,
       characterName,
-      suppressReserveTips: true,
-      replyIntro,
       moderatorMember: moderator,
+      silentSuccess: true,
     });
   } catch (err) {
     logger.error(FILE, `Mod reserve reaction: ${err.message}`);
@@ -873,89 +839,67 @@ async function handleOcReserveMessage(message, client) {
     .find(Boolean);
 
   if (!isValidOcReserveChannelPost(rawLine)) {
-    await message.channel
-      .send({
-        content: `<@${message.author.id}> ${OC_CHANNEL_FORMAT_REMINDER}`,
-        allowedMentions: { users: [message.author.id] },
-      })
-      .catch(() => {});
+    await sendOcFormatReminderWithRepost(message.channel, message.author.id);
     return;
   }
 
   const parts = rawLine.split('|').map((p) => p.trim());
+  const appName = parts[0];
+  const villageNorm = extractVillageFromSegment(parts[2]);
+  const jobField = parts[3];
 
-  if (parts.length < 2) {
+  if (!appName) {
     await message.reply({
       content:
-        `❌ **Need at least two fields** separated by \`|\`.\n\n${TIP_RESERVE_VS_APP}`,
+        `❌ **Character name missing** — put the **OC name first** (before the first \`|\`).\n\n${TIP_RESERVE_VS_APP}`,
     });
     return;
   }
 
-  // Long lines = roster / full application (e.g. Name | Race | Rudania:... | Virtue | Job | Image)
-  if (parts.length >= 3) {
-    const appName = parts[0];
-    if (!appName) {
-      await message.reply({
-        content:
-          `❌ **Character name missing** — put the **OC name first** (before the first \`|\`).\n\n${TIP_RESERVE_VS_APP}`,
-      });
-      return;
-    }
-    const villageNorm = findVillageInApplicationParts(parts.slice(1));
-    if (!villageNorm) {
-      await message.reply({
-        content:
-          `❌ **Couldn’t find a home village** (Rudania, Inariko, or Vhintl) in your line. Full roster posts must include **name** and **village** at minimum.\n\n${TIP_RESERVE_VS_APP}`,
-      });
-      return;
-    }
-
-    await reactRosterPostWithVillageEmoji(message, villageNorm);
-    await notifyModsRosterPost(client, message);
-    logger.info(
-      FILE,
-      `Roster line OK (silent): ${appName} → ${villageNorm} by ${message.author.tag} — mod channel ping + village react`
-    );
-    return;
-  }
-
-  // Strict two-part line → slot reserve
-  const characterName = parts[0];
-  const villageNorm = extractVillageFromSegment(parts[1]);
-
-  if (!characterName) {
-    await message.reply({
-      content: `❌ **Character name missing** before the first \`|\`.\n\n${TIP_RESERVE_VS_APP}`,
-    });
-    return;
-  }
-
-  if (!villageNorm) {
+  if (!villageNorm || !VILLAGES.includes(villageNorm)) {
     await message.reply({
       content:
-        `❌ **"${parts[1]}"** isn’t a recognized village.\n\n` +
-        `**Reserve:** \`Character Name | Rudania\` (or Inariko / Vhintl)\n` +
-        `**Full application:** add more fields — e.g. \`Name | Race | Rudania | …\`\n\n` +
-        TIP_RESERVE_VS_APP,
+        `❌ **Village** in the third field must be **Rudania**, **Inariko**, or **Vhintl**.\n\n${TIP_RESERVE_VS_APP}`,
     });
     return;
   }
 
-  if (characterName.length > 80) {
+  if (!villageJobMatchesHome(jobField, villageNorm)) {
+    const exclusive = isVillageExclusiveJob(jobField);
+    const need = exclusive ? villageDisplay(exclusive) : 'your home village';
+    await message.reply({
+      content:
+        `❌ **Job and village don’t match** — **${jobField.trim()}** is tied to **${need}**, but your home village is **${villageDisplay(villageNorm)}**. Fix the line or pick a general job.\n\n${TIP_RESERVE_VS_APP}`,
+    });
+    return;
+  }
+
+  if (appName.length > 80) {
     await message.reply({
       content: '❌ Character name is too long (max 80 characters).',
     });
     return;
   }
 
-  await executeReservationFlow(message, client, {
+  const reserveResult = await executeReservationFlow(message, client, {
     villageNorm,
-    characterName,
-    suppressReserveTips: false,
-    replyIntro: '✅ **Reserve recorded** — tracker updated.',
+    characterName: appName,
     moderatorMember: null,
+    silentSuccess: true,
   });
+
+  if (!reserveResult?.ok) return;
+
+  await reactRosterPostWithVillageEmoji(message, villageNorm);
+  try {
+    await message.react('✅');
+  } catch (err) {
+    logger.warn(FILE, `Roster checkmark react failed: ${err.message}`);
+  }
+  logger.info(
+    FILE,
+    `Roster reserve OK: ${appName} → ${villageNorm} by ${message.author.tag} — tracker, village react, ✅`
+  );
 }
 
 function registerMemberCapTracking(client) {

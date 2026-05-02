@@ -22,7 +22,6 @@ export type CraftingRequestNotifyPayload = {
   materialsDescription: string;
   paymentOffer: string;
   elixirDescription: string;
-  boostNotes: string;
 };
 
 /**
@@ -81,9 +80,6 @@ export async function notifyCraftingRequestCreated(
       : null,
     payload.elixirDescription.trim()
       ? `**Elixir:** ${payload.elixirDescription.trim().slice(0, 300)}`
-      : null,
-    payload.boostNotes.trim()
-      ? `**Boost / notes:** ${payload.boostNotes.trim().slice(0, 300)}`
       : null,
     "",
     `[View & accept on dashboard](${boardUrl})`,

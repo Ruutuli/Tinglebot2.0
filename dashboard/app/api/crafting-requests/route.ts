@@ -92,7 +92,6 @@ export async function POST(request: Request) {
     const materialsDescription = String(body.materialsDescription ?? "").trim();
     const paymentOffer = String(body.paymentOffer ?? "").trim();
     const elixirDescription = String(body.elixirDescription ?? "").trim();
-    const boostNotes = String(body.boostNotes ?? "").trim();
 
     if (!requesterCharacterName) {
       return NextResponse.json({ error: "Requester OC name is required" }, { status: 400 });
@@ -173,7 +172,6 @@ export async function POST(request: Request) {
       materialsDescription,
       paymentOffer,
       elixirDescription,
-      boostNotes,
       status: "open",
     });
 
@@ -196,7 +194,6 @@ export async function POST(request: Request) {
         materialsDescription,
         paymentOffer,
         elixirDescription,
-        boostNotes,
       });
       if (discordMessageId) {
         await CraftingRequest.findByIdAndUpdate(requestId, { discordMessageId });
