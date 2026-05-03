@@ -411,9 +411,9 @@ export async function POST(request: Request) {
               const pid = String(partyId).trim().slice(0, 32);
               const squareUpper = squarePart.trim().toUpperCase();
               // Only stamp the map copy redeemed on this expedition at this cell—avoids marking a later find of the same map #.
-              const pinNotSet = {
+              const pinNotSet: Record<string, unknown> = {
                 $or: [{ exploreMapPinnedAt: null }, { exploreMapPinnedAt: { $exists: false } }],
-              } as const;
+              };
               const destMatchesPin = {
                 $or: [
                   {
