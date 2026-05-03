@@ -1,4 +1,5 @@
 import mongoose from "mongoose";
+import { leanOne } from "@/lib/mongoose-lean";
 
 export type ItemCraftFields = {
   craftingJobs?: string[];
@@ -189,12 +190,16 @@ export async function loadCharacterIconForOwner(
   const ModCharacterModule = await import("@/models/ModCharacterModel.js");
   const ModCharacter = ModCharacterModule.default || ModCharacterModule;
 
-  const a = await Character.findOne({ userId: discordId, name: re }).select("icon").lean();
-  const iconA = (a as { icon?: string } | null)?.icon;
+  const a = leanOne<{ icon?: string }>(
+    await Character.findOne({ userId: discordId, name: re }).select("icon").lean()
+  );
+  const iconA = a?.icon;
   if (typeof iconA === "string" && iconA.trim()) return iconA.trim();
 
-  const b = await ModCharacter.findOne({ userId: discordId, name: re }).select("icon").lean();
-  const iconB = (b as { icon?: string } | null)?.icon;
+  const b = leanOne<{ icon?: string }>(
+    await ModCharacter.findOne({ userId: discordId, name: re }).select("icon").lean()
+  );
+  const iconB = b?.icon;
   if (typeof iconB === "string" && iconB.trim()) return iconB.trim();
 
   return undefined;

@@ -1,6 +1,7 @@
 import mongoose from "mongoose";
 import { connect, getInventoriesDb } from "@/lib/db";
 import { userOwnsCharacterName } from "@/lib/crafting-request-helpers";
+import { leanOne } from "@/lib/mongoose-lean";
 import { generalCategories } from "@/lib/general-item-categories";
 
 export type RecipeMaterialLine = {
@@ -77,14 +78,14 @@ export async function evaluateRecipeMaterialsOnInventory(
   const esc = requesterCharacterName.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
   const nameRe = new RegExp(`^${esc}$`, "i");
 
-  let charDoc = await Character.findOne({ userId, name: nameRe })
-    .select("_id name")
-    .lean<{ _id: mongoose.Types.ObjectId; name: string } | null>();
-
+  type LeanChar = { _id: mongoose.Types.ObjectId | string; name: string };
+  let charDoc = leanOne<LeanChar>(
+    await Character.findOne({ userId, name: nameRe }).select("_id name").lean()
+  );
   if (!charDoc) {
-    charDoc = await ModCharacter.findOne({ userId, name: nameRe })
-      .select("_id name")
-      .lean<{ _id: mongoose.Types.ObjectId; name: string } | null>();
+    charDoc = leanOne<LeanChar>(
+      await ModCharacter.findOne({ userId, name: nameRe }).select("_id name").lean()
+    );
   }
 
   if (!charDoc) {

@@ -7,6 +7,7 @@ import {
   mixerCommissionEligibleSync,
   mixerNormKey,
 } from "@/lib/mixer-commission-pool";
+import { leanOne } from "@/lib/mongoose-lean";
 import {
   itemMatchesRecipeLine,
   MIXER_BREW_MAX_INGREDIENT_UNITS,
@@ -114,9 +115,14 @@ export async function validateElixirMaterialSelectionsForCommission(
   const esc = requesterCharacterName.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
   const nameRe = new RegExp(`^${esc}$`, "i");
 
-  let charDoc = await Character.findOne({ userId, name: nameRe }).select("_id name").lean();
+  type LeanChar = { _id: mongoose.Types.ObjectId | string; name: string };
+  let charDoc = leanOne<LeanChar>(
+    await Character.findOne({ userId, name: nameRe }).select("_id name").lean()
+  );
   if (!charDoc) {
-    charDoc = await ModCharacter.findOne({ userId, name: nameRe }).select("_id name").lean();
+    charDoc = leanOne<LeanChar>(
+      await ModCharacter.findOne({ userId, name: nameRe }).select("_id name").lean()
+    );
   }
   if (!charDoc?._id) {
     return { ok: false, error: "Requester OC not found." };

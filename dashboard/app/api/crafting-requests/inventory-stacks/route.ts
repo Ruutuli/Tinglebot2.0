@@ -11,6 +11,7 @@ import {
   mixerNormKey,
 } from "@/lib/mixer-commission-pool";
 import { normalizedInventoryItemNameForRecipeMatch } from "@/lib/elixir-material-line-match";
+import { leanOne } from "@/lib/mongoose-lean";
 
 function escapeRegex(s: string): string {
   return String(s ?? "").replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
@@ -45,14 +46,14 @@ export async function GET(request: Request) {
     const esc = characterName.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
     const nameRe = new RegExp(`^${esc}$`, "i");
 
-    let charDoc = await Character.findOne({ userId: user.id, name: nameRe })
-      .select("_id name")
-      .lean<{ _id: mongoose.Types.ObjectId; name: string } | null>();
-
+    type LeanChar = { _id: mongoose.Types.ObjectId | string; name: string };
+    let charDoc = leanOne<LeanChar>(
+      await Character.findOne({ userId: user.id, name: nameRe }).select("_id name").lean()
+    );
     if (!charDoc) {
-      charDoc = await ModCharacter.findOne({ userId: user.id, name: nameRe })
-        .select("_id name")
-        .lean<{ _id: mongoose.Types.ObjectId; name: string } | null>();
+      charDoc = leanOne<LeanChar>(
+        await ModCharacter.findOne({ userId: user.id, name: nameRe }).select("_id name").lean()
+      );
     }
 
     if (!charDoc) {
