@@ -161,6 +161,20 @@ async function mergeWorkshopPriestStaminaReduction(crafterName, commissionerName
   return Math.min(afterCrafter, afterComm);
 }
 
+/** TempData / devBoostOverride may use a placeholder — never a real character name. */
+function isDevBoostPlaceholderBoosterName(name) {
+  const s = String(name || '').trim().toLowerCase();
+  return s === '(dev override)' || s.includes('dev override');
+}
+
+function isWorkshopCraftingBoostActive(activeBoost) {
+  if (!activeBoost || activeBoost.status !== 'accepted') return false;
+  if (String(activeBoost.category || '').trim() !== 'Crafting') return false;
+  const now = Date.now();
+  if (activeBoost.boostExpiresAt && now > activeBoost.boostExpiresAt) return false;
+  return true;
+}
+
 async function maybeDeactivateEntertainerBoosterVoucherForWorkshop(character) {
   if (!character?.name) return;
   const activeBoost = await retrieveBoostingRequestFromTempDataByCharacter(character.name);
@@ -171,9 +185,10 @@ async function maybeDeactivateEntertainerBoosterVoucherForWorkshop(character) {
   const boosterJob = (activeBoost?.boosterJob || '').trim().toLowerCase();
   if (
     activeBoost &&
-    activeBoost.category === 'Crafting' &&
+    isWorkshopCraftingBoostActive(activeBoost) &&
     boosterJob === 'entertainer' &&
-    boosterName
+    boosterName &&
+    !isDevBoostPlaceholderBoosterName(boosterName)
   ) {
     const b = await fetchCharacterByName(boosterName);
     if (b && isBoosterUsingVoucherForJob(b, 'Entertainer')) {
@@ -184,22 +199,20 @@ async function maybeDeactivateEntertainerBoosterVoucherForWorkshop(character) {
 
 async function workshopHasFortuneTellerCraftingBoost(character) {
   if (!character?.name) return false;
+  const activeBoost = await retrieveBoostingRequestFromTempDataByCharacter(character.name);
+  if (
+    activeBoost?.isDevOverride &&
+    isWorkshopCraftingBoostActive(activeBoost) &&
+    String(activeBoost.boosterJob || '').trim().toLowerCase() === 'fortune teller'
+  ) {
+    return true;
+  }
   let boosterName = character.boostedBy;
-  if (!boosterName) {
-    const activeBoost = await retrieveBoostingRequestFromTempDataByCharacter(character.name);
-    const currentTime = Date.now();
-    const notExpired = !activeBoost?.boostExpiresAt || currentTime <= activeBoost.boostExpiresAt;
-    if (
-      activeBoost &&
-      activeBoost.status === 'accepted' &&
-      activeBoost.category === 'Crafting' &&
-      activeBoost.boostingCharacter &&
-      notExpired
-    ) {
-      boosterName = activeBoost.boostingCharacter;
-    }
+  if (!boosterName && activeBoost && isWorkshopCraftingBoostActive(activeBoost) && activeBoost.boostingCharacter) {
+    boosterName = activeBoost.boostingCharacter;
   }
   if (!boosterName) return false;
+  if (isDevBoostPlaceholderBoosterName(boosterName)) return false;
   const boosterCharacter = await fetchCharacterByName(boosterName);
   return !!(boosterCharacter && getEffectiveJob(boosterCharacter) === 'Fortune Teller');
 }
@@ -670,38 +683,54 @@ async function executeWorkshopCommissionCraft(opts) {
     staminaCost
   );
 
+  const workshopBoostResolved = await retrieveBoostingRequestFromTempDataByCharacter(freshCrafter.name);
+  const boosterJobResolved = String(workshopBoostResolved?.boosterJob || '').trim().toLowerCase();
+  const isDevTeacherBoost =
+    !!workshopBoostResolved?.isDevOverride &&
+    isWorkshopCraftingBoostActive(workshopBoostResolved) &&
+    boosterJobResolved === 'teacher';
+  const isDevEntertainerBoost =
+    !!workshopBoostResolved?.isDevOverride &&
+    isWorkshopCraftingBoostActive(workshopBoostResolved) &&
+    boosterJobResolved === 'entertainer';
+
   let teacherStaminaContribution = 0;
   let crafterStaminaCost = staminaCost;
   let boosterName = freshCrafter.boostedBy;
-  if (!boosterName) {
-    const activeBoost = await retrieveBoostingRequestFromTempDataByCharacter(freshCrafter.name);
-    const currentTime = Date.now();
-    const notExpired = !activeBoost?.boostExpiresAt || currentTime <= activeBoost.boostExpiresAt;
-    if (
-      activeBoost &&
-      activeBoost.status === 'accepted' &&
-      activeBoost.category === 'Crafting' &&
-      activeBoost.boostingCharacter &&
-      notExpired
-    ) {
-      boosterName = activeBoost.boostingCharacter;
+  if (
+    !boosterName &&
+    workshopBoostResolved &&
+    isWorkshopCraftingBoostActive(workshopBoostResolved) &&
+    workshopBoostResolved.boostingCharacter
+  ) {
+    boosterName = workshopBoostResolved.boostingCharacter;
+    if (!workshopBoostResolved.isDevOverride && !isDevBoostPlaceholderBoosterName(boosterName)) {
       freshCrafter.boostedBy = boosterName;
       await freshCrafter.save();
     }
   }
-  if (boosterName) {
-    const boosterCharacter = await fetchCharacterByName(boosterName);
-    if (boosterCharacter && getEffectiveJob(boosterCharacter) === 'Teacher') {
-      const halfCost = Math.ceil(staminaCost / 2);
-      teacherStaminaContribution = Math.min(halfCost, 3);
-      crafterStaminaCost = staminaCost - teacherStaminaContribution;
-      if (boosterCharacter.currentStamina < teacherStaminaContribution) {
-        return {
-          ok: false,
-          code: 'TEACHER_STAMINA',
-          error: `Teacher ${boosterCharacter.name} lacks stamina (${boosterCharacter.currentStamina}/${teacherStaminaContribution}).`,
-        };
-      }
+
+  let boosterCharacterForTeacher = null;
+  if (boosterName && !isDevBoostPlaceholderBoosterName(boosterName)) {
+    boosterCharacterForTeacher = await fetchCharacterByName(boosterName);
+  }
+  const effectiveTeacherBoost =
+    (boosterCharacterForTeacher && getEffectiveJob(boosterCharacterForTeacher) === 'Teacher') ||
+    isDevTeacherBoost;
+
+  if (effectiveTeacherBoost) {
+    const halfCost = Math.ceil(staminaCost / 2);
+    teacherStaminaContribution = Math.min(halfCost, 3);
+    crafterStaminaCost = staminaCost - teacherStaminaContribution;
+    if (
+      boosterCharacterForTeacher &&
+      boosterCharacterForTeacher.currentStamina < teacherStaminaContribution
+    ) {
+      return {
+        ok: false,
+        code: 'TEACHER_STAMINA',
+        error: `Teacher ${boosterCharacterForTeacher.name} lacks stamina (${boosterCharacterForTeacher.currentStamina}/${teacherStaminaContribution}).`,
+      };
     }
   }
 
@@ -833,12 +862,12 @@ async function executeWorkshopCommissionCraft(opts) {
     }
   }
 
-  if (teacherStaminaContribution > 0 && freshCrafter.boostedBy) {
+  if (teacherStaminaContribution > 0 && !isDevTeacherBoost && freshCrafter.boostedBy) {
     const boosterCharacter = await fetchCharacterByName(freshCrafter.boostedBy);
     const needsTeacherSecondVoucher =
       boosterCharacter && isBoosterUsingVoucherForJob(boosterCharacter, 'Teacher');
     if (needsTeacherSecondVoucher) {
-      const activeBoost = await retrieveBoostingRequestFromTempDataByCharacter(freshCrafter.name);
+      const activeBoost = workshopBoostResolved;
       if (!activeBoost || !activeBoost.boosterUsedSecondVoucher) {
         for (const mat of materialsUsed) {
           await addItemInventoryDatabase(
@@ -858,14 +887,16 @@ async function executeWorkshopCommissionCraft(opts) {
     }
   }
 
-  if (freshCrafter.boostedBy) {
-    const boosterCharacter = await fetchCharacterByName(freshCrafter.boostedBy);
-    const activeBoost = await retrieveBoostingRequestFromTempDataByCharacter(freshCrafter.name);
+  if (freshCrafter.boostedBy || isDevEntertainerBoost) {
+    const boosterCharacter = freshCrafter.boostedBy
+      ? await fetchCharacterByName(freshCrafter.boostedBy)
+      : null;
+    const activeBoost = workshopBoostResolved;
     const isEntertainerCraftingBoost =
       activeBoost &&
       activeBoost.category === 'Crafting' &&
       (activeBoost.boosterJob || '').trim().toLowerCase() === 'entertainer';
-    if (isEntertainerCraftingBoost && boosterCharacter) {
+    if (isEntertainerCraftingBoost && !activeBoost.isDevOverride && boosterCharacter) {
       const boosterIsNativeEntertainer =
         (boosterCharacter.job || '').trim().toLowerCase() === 'entertainer';
       const boosterIsCurrentlyEntertainer =
@@ -908,17 +939,21 @@ async function executeWorkshopCommissionCraft(opts) {
     crafterStaminaAfter = Math.max(0, Number(crafterStaminaAfterReading) || 0);
     staminaDeducted = true;
 
-    if (teacherStaminaContribution > 0 && freshCrafter.boostedBy) {
-      const boosterCharacter = await fetchCharacterByName(freshCrafter.boostedBy);
-      if (boosterCharacter && getEffectiveJob(boosterCharacter) === 'Teacher') {
-        teacherCharacterName = String(boosterCharacter.name || '').trim();
-        teacherStaminaBefore = Math.max(0, Number(boosterCharacter.currentStamina) || 0);
-        const teacherAfterReading = await checkAndUseStamina(boosterCharacter, teacherStaminaContribution, {
-          source: 'Workshop commission (Teacher support)',
-          itemName: itemName || null,
-        });
-        teacherStaminaAfter = Math.max(0, Number(teacherAfterReading) || 0);
-        teacherDeducted = true;
+    if (teacherStaminaContribution > 0) {
+      if (isDevTeacherBoost) {
+        teacherCharacterName = 'Teacher (dev boost)';
+      } else if (freshCrafter.boostedBy) {
+        const boosterCharacter = await fetchCharacterByName(freshCrafter.boostedBy);
+        if (boosterCharacter && getEffectiveJob(boosterCharacter) === 'Teacher') {
+          teacherCharacterName = String(boosterCharacter.name || '').trim();
+          teacherStaminaBefore = Math.max(0, Number(boosterCharacter.currentStamina) || 0);
+          const teacherAfterReading = await checkAndUseStamina(boosterCharacter, teacherStaminaContribution, {
+            source: 'Workshop commission (Teacher support)',
+            itemName: itemName || null,
+          });
+          teacherStaminaAfter = Math.max(0, Number(teacherAfterReading) || 0);
+          teacherDeducted = true;
+        }
       }
     }
 
@@ -952,7 +987,11 @@ async function executeWorkshopCommissionCraft(opts) {
 
     await clearBoostAfterUse(freshCrafter, { client: null, context: 'workshop_commission_craft' });
 
-    if (teacherStaminaContribution > 0 && boosterNameBeforeClear) {
+    if (
+      teacherStaminaContribution > 0 &&
+      boosterNameBeforeClear &&
+      !isDevBoostPlaceholderBoosterName(boosterNameBeforeClear)
+    ) {
       const b = await fetchCharacterByName(boosterNameBeforeClear);
       if (b && b.jobVoucher) {
         await deactivateJobVoucher(b._id, { afterUse: true });

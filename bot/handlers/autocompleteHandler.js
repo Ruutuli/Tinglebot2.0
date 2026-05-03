@@ -2140,6 +2140,7 @@ async function handleCraftingAcceptRequestIdAutocomplete(interaction, focusedOpt
 
     await DatabaseConnectionManager.connectToTinglebot();
     const CraftingRequest = require("@/models/CraftingRequestModel");
+    const { ensureCraftingRequestCommissionId } = require("../commands/jobs/craftingRequestAccept");
 
     const rows = await CraftingRequest.find({ status: "open" })
       .sort({ createdAt: -1 })
@@ -2153,11 +2154,24 @@ async function handleCraftingAcceptRequestIdAutocomplete(interaction, focusedOpt
       })
       .lean();
 
-    const choices = rows.map((r) => {
-      const id =
-        typeof r.commissionID === "string" && r.commissionID.trim()
-          ? r.commissionID.trim()
-          : String(r._id);
+    const rowsResolved = await Promise.all(
+      rows.map(async (r) => {
+        let publicId =
+          typeof r.commissionID === "string" && r.commissionID.trim()
+            ? r.commissionID.trim()
+            : "";
+        if (!publicId) {
+          try {
+            publicId = await ensureCraftingRequestCommissionId(CraftingRequest, r);
+          } catch (_) {
+            publicId = String(r._id);
+          }
+        }
+        return { row: r, publicId };
+      })
+    );
+
+    const choices = rowsResolved.map(({ row: r, publicId }) => {
       const item = String(r.craftItemName || "").trim() || "Item";
       const forName = String(r.requesterCharacterName || "").trim() || "OC";
       const st = r.staminaToCraftSnapshot != null ? Number(r.staminaToCraftSnapshot) : 0;
@@ -2169,8 +2183,8 @@ async function handleCraftingAcceptRequestIdAutocomplete(interaction, focusedOpt
             .join(", ")
         : "";
       const jobsBit = jobs ? ` · ${jobs}` : "";
-      const name = `${id} | ${item} | ${forName}${jobsBit} · ${st} st`;
-      return { name, value: id };
+      const name = `${publicId} | ${item} | ${forName}${jobsBit} · ${st} st`;
+      return { name, value: publicId };
     });
 
     await respondWithFilteredChoices(interaction, focusedOption, choices);

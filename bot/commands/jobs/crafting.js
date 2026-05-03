@@ -154,6 +154,7 @@ module.exports = {
         userId: interaction.user.id,
         userTag: interaction.user.tag,
         sourceTag: 'CRAFT_ACCEPT_SLASH',
+        client: interaction.client,
       });
       return interaction.editReply({ embeds: [embed] });
     }

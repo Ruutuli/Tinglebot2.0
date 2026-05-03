@@ -14,11 +14,198 @@ const {
   connectToTinglebot,
   fetchCharacterByNameAndUserId,
   fetchModCharacterByNameAndUserId,
+  fetchItemByName,
 } = require('@/database/db');
 const { executeWorkshopCommissionCraft } = require('@/services/workshopCommissionCraft');
+const { generateUniqueId } = require('@/utils/uniqueIdUtils');
 const logger = require('@/utils/logger');
 
 const BORDER = 'https://storage.googleapis.com/tinglebot/Graphics/border.png';
+const COMMUNITY_BOARD_CHANNEL_ID =
+  process.env.COMMUNITY_BOARD_CHANNEL_ID || '651614266046152705';
+const ACCEPT_EMBED_COLOR = 0x5d8aa8;
+const GCS_PUBLIC_BASE = 'https://storage.googleapis.com/tinglebot';
+
+function clipAnnounce(s, max) {
+  if (s.length <= max) return s;
+  return `${s.slice(0, max - 1)}…`;
+}
+
+/** Match dashboard `discordEmbedImageUrl` / public GCS paths for embed images. */
+function discordEmbedImageUrlAnnounce(raw) {
+  if (!raw || raw === 'No Image') return undefined;
+  if (String(raw).startsWith(`${GCS_PUBLIC_BASE}/`)) return String(raw);
+  if (String(raw).startsWith('https://') || String(raw).startsWith('http://')) return String(raw);
+  const path = String(raw).replace(/^\/+/, '');
+  return `${GCS_PUBLIC_BASE}/${path}`;
+}
+
+/**
+ * Same copy + layout as `buildCraftingRequestAcceptedMessage` in `dashboard/lib/craftingRequestsNotify.ts`.
+ * @param {Record<string, unknown>} opts
+ * @returns {{ content: string, embed: import('discord.js').EmbedBuilder }}
+ */
+function buildCraftingRequestAcceptedAnnouncement(opts) {
+  const rid = String(opts.requesterDiscordId ?? '').trim();
+  const aid = String(opts.acceptorDiscordId ?? '').trim();
+  const content = `<@${rid}> <@${aid}>`;
+
+  const forOc = (opts.requesterCharacterName ?? '').trim() || 'Commissioner';
+  const mongoRef = String(opts.requestId ?? '').trim();
+  const pubCode = String(opts.commissionID ?? '').trim();
+  const acceptIdDisplay = (pubCode || mongoRef).trim() || '—';
+
+  const lines = [
+    `🔖 **Commission ID** · \`${acceptIdDisplay}\``,
+    '',
+    `🧾 **Recipe**`,
+    `↳ *${opts.craftItemName}*`,
+    '',
+    `⚒️ **Crafter OC** · **${opts.acceptorCharacterName}**`,
+    `↳ <@${aid}>`,
+    '',
+    `👤 **For OC** · **${forOc}**`,
+    `↳ <@${rid}>`,
+    '',
+    '— — — — — —',
+    '',
+    `📦 **Items used**`,
+  ];
+
+  const mats = opts.materialsUsed ?? [];
+  const maxMatLines = 18;
+  if (mats.length > 0) {
+    for (const m of mats.slice(0, maxMatLines)) {
+      const q = Math.max(0, Math.round(Number(m.quantity) || 0));
+      const label = String(m.itemName ?? '').trim() || '—';
+      lines.push(`↳ **${q}×** ${label}`);
+    }
+    if (mats.length > maxMatLines) {
+      lines.push(`↳ _…and ${mats.length - maxMatLines} more._`);
+    }
+  } else {
+    lines.push(
+      '↳ _No line-item breakdown returned — materials were still consumed from the commissioner._'
+    );
+  }
+
+  lines.push('');
+  lines.push('⚡ **Stamina**');
+  const craftOc = (opts.acceptorCharacterName ?? '').trim() || 'Crafter';
+  if (
+    opts.crafterStaminaBefore != null &&
+    opts.crafterStaminaAfter != null &&
+    Number.isFinite(Number(opts.crafterStaminaBefore)) &&
+    Number.isFinite(Number(opts.crafterStaminaAfter))
+  ) {
+    const used =
+      opts.crafterStaminaUsed != null && Number.isFinite(opts.crafterStaminaUsed)
+        ? Math.max(0, Math.round(Number(opts.crafterStaminaUsed)))
+        : Math.max(
+            0,
+            Math.round(Number(opts.crafterStaminaBefore) - Number(opts.crafterStaminaAfter))
+          );
+    lines.push(
+      `↳ **${craftOc}**'s stamina · ${Math.round(Number(opts.crafterStaminaBefore))} → ${Math.round(
+        Number(opts.crafterStaminaAfter)
+      )} _(used ${used} stamina)_`
+    );
+  } else {
+    lines.push(`↳ **${craftOc}** — stamina was deducted when the craft completed.`);
+  }
+
+  if (
+    String(opts.teacherCharacterName ?? '').trim() &&
+    opts.teacherStaminaBefore != null &&
+    opts.teacherStaminaAfter != null &&
+    Number.isFinite(Number(opts.teacherStaminaBefore)) &&
+    Number.isFinite(Number(opts.teacherStaminaAfter))
+  ) {
+    const tu =
+      opts.teacherStaminaUsed != null && Number.isFinite(opts.teacherStaminaUsed)
+        ? Math.max(0, Math.round(Number(opts.teacherStaminaUsed)))
+        : Math.max(
+            0,
+            Math.round(Number(opts.teacherStaminaBefore) - Number(opts.teacherStaminaAfter))
+          );
+    const tn = String(opts.teacherCharacterName).trim();
+    lines.push(
+      `↳ **${tn}** (Teacher) stamina · ${Math.round(Number(opts.teacherStaminaBefore))} → ${Math.round(
+        Number(opts.teacherStaminaAfter)
+      )} _(used ${tu} stamina)_`
+    );
+  }
+
+  lines.push('');
+  lines.push('💰 **Payment**');
+  lines.push(
+    '↳ Send any agreed **payment** with the **gift** command (through the bot)—match what was listed on the workshop post and in the notes.'
+  );
+
+  if (String(opts.paymentOffer ?? '').trim()) {
+    lines.push('');
+    lines.push('💰 **Offer on the post**');
+    lines.push(`↳ ${clipAnnounce(String(opts.paymentOffer).trim(), 280)}`);
+  }
+
+  let description = lines.join('\n');
+  if (description.length > 4096) {
+    description = `${description.slice(0, 4092)}…`;
+  }
+
+  const requesterIconUrl = discordEmbedImageUrlAnnounce(opts.requesterCharacterIcon);
+  const acceptorIconUrl = discordEmbedImageUrlAnnounce(opts.acceptorCharacterIcon);
+  const thumbUrl = discordEmbedImageUrlAnnounce(opts.craftItemImage);
+
+  const authorName = forOc.slice(0, 256) || 'Commissioner';
+  const crafterLabel = (opts.acceptorCharacterName ?? '').trim() || 'Crafter';
+
+  const embed = new EmbedBuilder()
+    .setTitle('✅ Workshop commission accepted')
+    .setDescription(description)
+    .setColor(ACCEPT_EMBED_COLOR)
+    .setTimestamp(new Date())
+    .setImage(BORDER);
+
+  embed.setAuthor({
+    name: authorName,
+    ...(requesterIconUrl ? { iconURL: requesterIconUrl } : {}),
+  });
+
+  embed.setFooter({
+    text: `🪵 ${crafterLabel} · crafter · ${acceptIdDisplay}`.slice(0, 2048),
+    ...(acceptorIconUrl ? { iconURL: acceptorIconUrl } : {}),
+  });
+
+  if (thumbUrl) {
+    embed.setThumbnail(thumbUrl);
+  }
+
+  return { content, embed };
+}
+
+/** Posts the rich “accepted” message to the workshop community board (same channel as dashboard `notifyCraftingRequestAccepted`). */
+async function postCraftingRequestAcceptedToCommunityBoard(client, opts) {
+  if (!COMMUNITY_BOARD_CHANNEL_ID || !client?.channels?.fetch) return;
+
+  const { content, embed } = buildCraftingRequestAcceptedAnnouncement(opts);
+  const channel = await client.channels.fetch(COMMUNITY_BOARD_CHANNEL_ID).catch(() => null);
+  if (!channel || typeof channel.send !== 'function') {
+    logger.warn('CRAFT_ACCEPT_ANNOUNCE', `Could not use community board channel ${COMMUNITY_BOARD_CHANNEL_ID}`);
+    return;
+  }
+
+  const userIds = [
+    String(opts.requesterDiscordId ?? '').trim(),
+    String(opts.acceptorDiscordId ?? '').trim(),
+  ].filter(Boolean);
+
+  await channel.send({
+    content,
+    embeds: [embed],
+    allowedMentions: { users: userIds },
+  });
+}
 
 function isMongoObjectId24(s) {
   return /^[a-fA-F0-9]{24}$/.test(String(s || '').trim());
@@ -44,6 +231,66 @@ async function findCraftingRequestForAccept(token) {
   const code = normalizeWorkshopCommissionCode(raw);
   if (!code) return null;
   return CraftingRequest.findOne({ commissionID: code }).exec();
+}
+
+/**
+ * Persist a public **K######** on legacy open rows (matches dashboard `ensureCraftingRequestCommissionId`).
+ * Used by `/crafting accept` autocomplete so choices are never Mongo `_id` when a K code can exist.
+ */
+async function ensureCraftingRequestCommissionId(CraftingRequestModel, doc) {
+  const existing =
+    typeof doc.commissionID === 'string' && doc.commissionID.trim()
+      ? doc.commissionID.trim()
+      : '';
+  if (existing) return existing;
+
+  const oid = doc._id;
+
+  for (let attempt = 0; attempt < 12; attempt++) {
+    const candidate = generateUniqueId('K');
+    try {
+      const updated = await CraftingRequestModel.findOneAndUpdate(
+        {
+          _id: oid,
+          $or: [{ commissionID: null }, { commissionID: { $exists: false } }, { commissionID: '' }],
+        },
+        { $set: { commissionID: candidate } },
+        { new: true, lean: true }
+      ).exec();
+      const cid =
+        updated &&
+        typeof updated === 'object' &&
+        typeof updated.commissionID === 'string' &&
+        updated.commissionID.trim()
+          ? updated.commissionID.trim()
+          : '';
+      if (cid) return cid;
+    } catch (e) {
+      const code = e && typeof e === 'object' && 'code' in e ? e.code : undefined;
+      if (code !== 11000) throw e;
+    }
+    const refetch = await CraftingRequestModel.findById(oid).select('commissionID').lean().exec();
+    const rid =
+      refetch &&
+      typeof refetch === 'object' &&
+      typeof refetch.commissionID === 'string' &&
+      refetch.commissionID.trim()
+        ? refetch.commissionID.trim()
+        : '';
+    if (rid) return rid;
+  }
+
+  const last = await CraftingRequestModel.findById(oid).select('commissionID').lean().exec();
+  if (
+    last &&
+    typeof last === 'object' &&
+    typeof last.commissionID === 'string' &&
+    last.commissionID.trim()
+  ) {
+    return last.commissionID.trim();
+  }
+
+  throw new Error('Could not assign workshop commission ID');
 }
 
 function parseCraftingAcceptPrefix(raw) {
@@ -109,7 +356,7 @@ function usageEmbed() {
 
 /**
  * Shared accept flow for prefix and `/crafting accept` slash.
- * @param {{ requestId: string, characterName: string, userId: string, userTag?: string, sourceTag?: string }} opts
+ * @param {{ requestId: string, characterName: string, userId: string, userTag?: string, sourceTag?: string, client?: import('discord.js').Client | null }} opts
  * @returns {Promise<import('discord.js').EmbedBuilder>}
  */
 async function runWorkshopCraftingAccept({
@@ -118,6 +365,7 @@ async function runWorkshopCraftingAccept({
   userId: acceptorDiscordId,
   userTag,
   sourceTag = 'CRAFT_ACCEPT',
+  client = null,
 }) {
   const requestToken = String(requestIdRaw || '').trim();
   const characterName = String(characterNameRaw || '').trim();
@@ -300,6 +548,43 @@ async function runWorkshopCraftingAccept({
     `${userTag || acceptorDiscordId} accepted ${mongoRequestId} as ${acceptor.name} — ${reserved.craftItemName}`
   );
 
+  if (client && typeof client.channels?.fetch === 'function') {
+    try {
+      let craftItemImage;
+      try {
+        const itemDoc = await fetchItemByName(reserved.craftItemName);
+        if (itemDoc && typeof itemDoc.image === 'string') {
+          craftItemImage = itemDoc.image;
+        }
+      } catch (itemErr) {
+        logger.warn(sourceTag, `fetchItemByName for accept announce: ${itemErr.message}`);
+      }
+      await postCraftingRequestAcceptedToCommunityBoard(client, {
+        requestId: mongoRequestId,
+        commissionID: reserved.commissionID ? String(reserved.commissionID) : undefined,
+        requesterDiscordId: reserved.requesterDiscordId,
+        acceptorDiscordId,
+        acceptorCharacterName: acceptor.name,
+        craftItemName: reserved.craftItemName,
+        requesterCharacterName: reserved.requesterCharacterName,
+        paymentOffer: reserved.paymentOffer,
+        craftItemImage,
+        materialsUsed: craftResult.materialsUsed,
+        crafterStaminaBefore: craftResult.crafterStaminaBefore ?? null,
+        crafterStaminaAfter: craftResult.crafterStaminaAfter ?? null,
+        crafterStaminaUsed: craftResult.crafterStaminaUsed ?? null,
+        teacherCharacterName: craftResult.teacherCharacterName,
+        teacherStaminaBefore: craftResult.teacherStaminaBefore ?? null,
+        teacherStaminaAfter: craftResult.teacherStaminaAfter ?? null,
+        teacherStaminaUsed: craftResult.teacherStaminaUsed ?? null,
+        requesterCharacterIcon: requesterChar.icon,
+        acceptorCharacterIcon: acceptor.icon,
+      });
+    } catch (annErr) {
+      logger.warn(sourceTag, `Community board accepted embed failed: ${annErr.message}`);
+    }
+  }
+
   return new EmbedBuilder()
     .setColor(0x2ecc71)
     .setTitle('Workshop commission complete')
@@ -346,6 +631,7 @@ async function tryHandleCraftingAcceptPrefixMessage(message) {
     userId: message.author.id,
     userTag: message.author.tag,
     sourceTag: 'CRAFT_ACCEPT_PREFIX',
+    client: message.client,
   });
   await reply(embed);
   return true;
@@ -356,4 +642,5 @@ module.exports = {
   tryHandleCraftingAcceptPrefixMessage,
   runWorkshopCraftingAccept,
   usageEmbed,
+  ensureCraftingRequestCommissionId,
 };
