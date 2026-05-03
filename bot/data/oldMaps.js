@@ -69,6 +69,45 @@ function getOldMapByNumber(number) {
   return OLD_MAPS.find((m) => m.number === number) || null;
 }
 
+/** Normalize square + quadrant to the same form as `coordinates` in this file (e.g. G9 + Q1 → "G9-Q1"). */
+function normalizeOldMapCellKey(squareId, quadrantId) {
+  const sq = String(squareId ?? "")
+    .trim()
+    .toUpperCase()
+    .replace(/\s+/g, "");
+  let q = String(quadrantId ?? "")
+    .trim()
+    .toUpperCase()
+    .replace(/\s+/g, "");
+  if (!sq || !q) return "";
+  if (!q.startsWith("Q")) q = `Q${q}`;
+  return `${sq}-${q}`;
+}
+
+/** All catalog rows for this cell, sorted by map number (used when coordinates collide). */
+function getAllOldMapsByCoordinates(squareId, quadrantId) {
+  const key = normalizeOldMapCellKey(squareId, quadrantId);
+  if (!key) return [];
+  const matches = OLD_MAPS.filter((m) => {
+    const c = String(m.coordinates ?? "")
+      .trim()
+      .toUpperCase()
+      .replace(/\s+/g, "");
+    return c === key;
+  });
+  return matches.sort((a, b) => a.number - b.number);
+}
+
+/**
+ * Look up a map by world cell when Square quadrants are missing oldMapNumber/oldMapLeadsTo (seed gap).
+ * Returns null if zero matches or more than one catalog row shares this cell (caller must disambiguate).
+ */
+function getOldMapByCoordinates(squareId, quadrantId) {
+  const all = getAllOldMapsByCoordinates(squareId, quadrantId);
+  if (all.length !== 1) return null;
+  return all[0];
+}
+
 /** Display label for map appraisal / embeds. "shrine" is the old term for grotto—same destination type. */
 function formatOldMapLeadsToLabel(leadsTo) {
   if (leadsTo == null || leadsTo === "") return null;
@@ -85,5 +124,8 @@ module.exports = {
   MAP_EMBED_BORDER_URL,
   getRandomOldMap,
   getOldMapByNumber,
+  normalizeOldMapCellKey,
+  getAllOldMapsByCoordinates,
+  getOldMapByCoordinates,
   formatOldMapLeadsToLabel,
 };

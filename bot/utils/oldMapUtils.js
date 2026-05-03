@@ -3,7 +3,7 @@
 // ============================================================================
 
 const OldMapFound = require('../models/OldMapFoundModel.js');
-const { getOldMapByNumber } = require('../data/oldMaps.js');
+const { getOldMapByNumber, normalizeOldMapCellKey, getAllOldMapsByCoordinates } = require('../data/oldMaps.js');
 const { generateUniqueId } = require('./uniqueIdUtils.js');
 const logger = require('./logger.js');
 
@@ -172,6 +172,93 @@ function resolveOwnerMatch(characterRef) {
     return { characterId: normalized.characterId };
   }
   return { characterName: charNameRegex(normalized.characterName) };
+}
+
+function coordsSnapshotMatchesCell(leadsToCoordinates, squareId, quadrantId) {
+  const target = normalizeOldMapCellKey(squareId, quadrantId);
+  if (!target) return false;
+  const tCompact = target.replace(/-/g, '');
+  const sCompact = String(leadsToCoordinates ?? '')
+    .trim()
+    .toUpperCase()
+    .replace(/[\s\-_]/g, '');
+  return tCompact === sCompact && tCompact.length > 0;
+}
+
+/**
+ * When multiple catalog maps share one grid cell, pick the map # from party state / appraisal snapshots (never guess blindly).
+ * @param {{ characters?: Array<{ _id?: unknown, name?: string, userId?: string }> }} party
+ * @param {string} squareId
+ * @param {string} quadrantId
+ * @param {Array<{ number: number, leadsTo: string, coordinates: string }>} catalogCandidates — same cell, sorted by number
+ * @returns {Promise<number|null>}
+ */
+async function resolveOldMapNumberForAmbiguousCell(party, squareId, quadrantId, catalogCandidates) {
+  if (!catalogCandidates || catalogCandidates.length === 0) return null;
+  if (catalogCandidates.length === 1) return catalogCandidates[0].number;
+  if (!party?.characters?.length) return null;
+
+  for (const cand of catalogCandidates) {
+    for (const pc of party.characters) {
+      const ref = { _id: pc._id, name: pc.name, userId: pc.userId };
+      if (await hasAppraisedUnexpiredOldMap(ref, cand.number)) return cand.number;
+    }
+  }
+
+  for (const pc of party.characters) {
+    const ownerMatch = resolveOwnerMatch({ _id: pc._id, name: pc.name, userId: pc.userId });
+    if (!ownerMatch) continue;
+    const docs = await OldMapFound.find({
+      ...ownerMatch,
+      appraised: true,
+      redeemedAt: null,
+    }).lean();
+    for (const d of docs) {
+      if (!catalogCandidates.some((c) => c.number === d.mapNumber)) continue;
+      if (coordsSnapshotMatchesCell(d.leadsToCoordinates, squareId, quadrantId)) return d.mapNumber;
+    }
+  }
+
+  for (const cand of catalogCandidates) {
+    for (const pc of party.characters) {
+      const ref = { _id: pc._id, name: pc.name, userId: pc.userId };
+      const hasU = await hasOldMap(ref, cand.number);
+      const appr = await hasAppraisedOldMap(ref, cand.number);
+      if (hasU && !appr) return cand.number;
+    }
+  }
+
+  return null;
+}
+
+/**
+ * Resolve map # for this cell (single catalog row, DB quadrant, or ambiguous-cell disambiguation).
+ */
+async function resolveOldMapNumberForExplorationMove(party, squareId, quadrantId, quadFromDb) {
+  let num =
+    quadFromDb != null && quadFromDb.oldMapNumber != null && quadFromDb.oldMapNumber !== ''
+      ? Number(quadFromDb.oldMapNumber)
+      : null;
+  if (num != null && (Number.isNaN(num) || num < 1 || num > 46)) num = null;
+
+  const catalogCandidates = getAllOldMapsByCoordinates(squareId, quadrantId);
+  const uniqueCatalog = catalogCandidates.length === 1 ? catalogCandidates[0] : null;
+
+  if (num == null && uniqueCatalog) num = uniqueCatalog.number;
+  if (num == null && catalogCandidates.length > 1) {
+    num = await resolveOldMapNumberForAmbiguousCell(party, squareId, quadrantId, catalogCandidates);
+  }
+
+  let leadsTo =
+    quadFromDb?.oldMapLeadsTo != null && String(quadFromDb.oldMapLeadsTo).trim() !== ''
+      ? String(quadFromDb.oldMapLeadsTo)
+      : null;
+  if (num != null && (leadsTo == null || leadsTo === '')) {
+    const byNum = getOldMapByNumber(num);
+    leadsTo = byNum?.leadsTo ?? uniqueCatalog?.leadsTo ?? catalogCandidates[0]?.leadsTo ?? 'chest';
+  }
+
+  return { resolvedOldMapNumber: num, resolvedOldMapLeadsTo: leadsTo, catalogCandidates, usedCatalogFallback: quadFromDb == null || quadFromDb.oldMapNumber == null };
 }
 
 /**
@@ -362,4 +449,6 @@ module.exports = {
   findAndRedeemOldMap,
   getCharacterOldMaps,
   getCharacterOldMapsWithDetails,
+  resolveOldMapNumberForAmbiguousCell,
+  resolveOldMapNumberForExplorationMove,
 };

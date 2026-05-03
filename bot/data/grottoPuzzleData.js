@@ -10,7 +10,12 @@ const OFFERING_STATUE = 'offering_statue';
 const ODD_STRUCTURE_VARIANTS = [
   {
     flavor: 'As you enter the space beneath the stump, you encounter an odd structure, with runes of an age far gone. It doesn\'t seem fully built, however, but maybe help building it will open up something cool?',
-    hint: 'Offer 50 Wood & 20 Ancient Screw.',
+    hint: 'The carved tally asks for **50** rough-cut lengths taken from trees, and **20** tiny twisted fasteners meant to bite through metal plates—offer both stacks together.',
+    wrongGuessHints: [
+      'The larger number belongs to splintery beam-stock; the smaller belongs to minuscule threaded spirals—different families, both mandatory.',
+      'Spark-chips and long hollow rods are not part of this tally—only beam lengths and tiny twist-fasteners.',
+      'Neither count can slip: **50** beam pieces and **20** bite-sized spirals, in one combined offering.',
+    ],
     // Exact match required
     required: [
       { itemName: 'Wood', minQuantity: 50 },
@@ -19,7 +24,12 @@ const ODD_STRUCTURE_VARIANTS = [
   },
   {
     flavor: 'As you enter the space beneath the stump, you encounter an odd structure, with runes of an age far gone. It doesn\'t seem fully built, however, but maybe help building it will open up something cool?',
-    hint: 'Offer 40 Flint & 20 Ancient Shaft.',
+    hint: 'The script pairs **40** shards that flash when struck against stone with **20** long, slender metal splinters—two kinds of scrap in one submission.',
+    wrongGuessHints: [
+      'You need both tallies: strike-flash fragments **and** elongated rod-pieces—one cannot replace the other.',
+      'The higher count is for brittle spark-stone chips; the lower is for straight ruins-metal splinters, not timber.',
+      'Offer **40** of the glittering strike fragments plus **20** of the forearm-long metal sticks together.',
+    ],
     required: [
       { itemName: 'Flint', minQuantity: 40 },
       { itemName: 'Ancient Shaft', minQuantity: 20 },
@@ -27,7 +37,12 @@ const ODD_STRUCTURE_VARIANTS = [
   },
   {
     flavor: 'A half-finished frame of wood and metal sits in the grotto. Ancient script winds around its beams. It looks like something was meant to be completed here—and perhaps still can be.',
-    hint: 'Offer materials to complete it (wood, flint, ancient parts, etc.).',
+    hint: 'Two piles at once: **30** lengths of rough forest timber, **and** a second pile whose size **exactly matches one** of these rune-numbers—**20**, **10**, **10**, **5**, or **3**—each number ties to a different family of ancient spare parts (strike-shards, tiny coils, slender pins, interlocking wheels, or fist-sized glowing cores). Only **one** of those second paths counts.',
+    wrongGuessHints: [
+      'A single donation never finishes the frame: you always owe **30** beam-pieces **plus** another pile meeting **20**, **10**, **10**, **5**, or **3**—never timber alone.',
+      'If the second pile uses the wrong count for what you brought—or you stop short of **30** on the beams—the script stays cold.',
+      'Match **30** on the splintery beam stack first; then add **one** qualifying second stack at **20**, **10**, **10**, **5**, or **3** pieces—never split across two “second” families.',
+    ],
     // Flexible: Wood >= 30 AND at least one other material type
     flexible: {
       required: [{ itemName: 'Wood', minQuantity: 30 }],
@@ -42,7 +57,12 @@ const ODD_STRUCTURE_VARIANTS = [
   },
   {
     flavor: 'You find a scaffold of roots and stone. Parts are missing—gaps where metal or wood should slot in. The runes suggest a ritual of assembly. Contribute what you carry.',
-    hint: 'Offer materials as required. Wood (×40–50), Flint (×20–40), Ancient Screw or Ancient Shaft (×15–20), Eldin Ore or Iron bar.',
+    hint: 'Lay **40** forest beams and **20** strike-spark chips first. Then add **one** more stack sized **15**, **15**, **10**, or **3**—depending whether you bring tiny spirals, long pins, molten mountain glass, or small refined bars.',
+    wrongGuessHints: [
+      'Three kinds of scrap in one offering: the two fixed tallies (**40** / **20**) **plus** exactly **one** branch sized **15**, **15**, **10**, or **3**.',
+      'The third stack cannot be another pile of beams or spark-chips—you must pick among spiral bites, long rods, hot ore chunks, or compact ingots.',
+      'All three counts must appear together in a single command; short-changing any column fails the ritual.',
+    ],
     flexible: {
       required: [
         { itemName: 'Wood', minQuantity: 40 },
@@ -58,7 +78,12 @@ const ODD_STRUCTURE_VARIANTS = [
   },
   {
     flavor: 'A skeletal structure dominates the chamber. It hums with dormant energy. Scattered components lie nearby. Perhaps if you supply the rest, it will awaken—and reward you.',
-    hint: 'Offer materials as required. Wood (×40–50), Ancient Screw (×15–20), Ancient Shaft (×15–20), Ancient Gear or Ancient Core, Flint (×20–40).',
+    hint: 'Start with **40** rough beam lengths. Then meet **two different** extra rune-lines—each demands enough pieces from separate junk families (tiny spirals, long pins, toothed discs, glowing cores, or spark-chips)—the counts land around **15**, **15**, **10**, **5**, or **20** depending which pair you choose.',
+    wrongGuessHints: [
+      'One pile of timber is not enough—you need **40** beams **and** two **distinct** second categories, each at its own threshold.',
+      'Doubling up on the same scrap family only counts once; spread the requirement across two different ancient part types.',
+      'Think “beam foundation + two branches from different bins”—all minimums must clear in one submission.',
+    ],
     flexible: {
       required: [{ itemName: 'Wood', minQuantity: 40 }],
       atLeastTwoOf: [
@@ -350,6 +375,23 @@ function getOfferingStatueClueText(grotto) {
   return c.hintTiers[tierIndex];
 }
 
+/**
+ * After a wrong offering, returns the next name-free script hint for Odd Structure (indexed by offeringAttempts).
+ * @param {Object} grotto
+ * @returns {string|null}
+ */
+function getOddStructureWrongGuessHint(grotto) {
+  const state = grotto?.puzzleState || {};
+  if (state.puzzleSubType !== ODDS_STRUCTURE) return null;
+  const v = ODD_STRUCTURE_VARIANTS[state.puzzleVariant ?? 0];
+  const tiers = v?.wrongGuessHints;
+  if (!tiers?.length) return null;
+  const attempts = state.offeringAttempts ?? 0;
+  const idx = Math.min(attempts - 1, tiers.length - 1);
+  if (idx < 0) return null;
+  return tiers[idx];
+}
+
 function getPuzzleFlavor(grotto, cmdId) {
   const state = grotto?.puzzleState || {};
   const subType = state.puzzleSubType;
@@ -357,7 +399,15 @@ function getPuzzleFlavor(grotto, cmdId) {
 
   if (subType === ODDS_STRUCTURE) {
     const v = ODD_STRUCTURE_VARIANTS[state.puzzleVariant ?? 0];
-    return v ? `${v.flavor}\n\n↳ ${v.hint} Only the required amount will be taken from party inventories (any character's inventory — not loadout; no transfers during expedition).` : null;
+    if (!v) return null;
+    let text = `${v.flavor}\n\n↳ ${v.hint} Only the required amount will be taken from party inventories (any character's inventory — not loadout; no transfers during expedition).`;
+    const attempts = state.offeringAttempts ?? 0;
+    const extra = v.wrongGuessHints || [];
+    if (attempts > 0 && extra.length) {
+      const shown = extra.slice(0, Math.min(attempts, extra.length));
+      text += `\n\n*Further lines visible after wrong offerings:*\n${shown.map((h) => `• ${h}`).join("\n")}`;
+    }
+    return text;
   }
   if (subType === OFFERING_STATUE) {
     const idx = state.puzzleClueIndex ?? 0;
@@ -558,6 +608,7 @@ module.exports = {
   rollPuzzleConfig,
   getPuzzleFlavor,
   getOfferingStatueClueText,
+  getOddStructureWrongGuessHint,
   ensurePuzzleConfig,
   checkPuzzleOffer,
   getPuzzleConsumeItems,

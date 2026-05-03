@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import mongoose from "mongoose";
 import { connect, isDatabaseUnavailableError, logDatabaseUnavailableOnce } from "@/lib/db";
 import { getSession } from "@/lib/session";
+import { getAllOldMapsByCoordinates, getOldMapByCoordinates, getOldMapByNumber } from "@/lib/oldMapCatalog";
 
 export const dynamic = "force-dynamic";
 
@@ -397,13 +398,54 @@ export async function POST(request: Request) {
             const quadDoc = (squareLean as { quadrants?: Array<{ quadrantId?: string; oldMapNumber?: number | null; oldMapLeadsTo?: string | null }> })?.quadrants?.find(
               (qq) => String(qq.quadrantId ?? "").toUpperCase() === quadrantPart
             );
-            const oldMapNum = quadDoc?.oldMapNumber;
-            const leadsToField = quadDoc?.oldMapLeadsTo;
+            const catalogUnique = getOldMapByCoordinates(squarePart, quadrantPart);
+            const catalogAtCellAll = getAllOldMapsByCoordinates(squarePart, quadrantPart);
+            let oldMapNum = quadDoc?.oldMapNumber;
+            let leadsToField = quadDoc?.oldMapLeadsTo;
+            if (oldMapNum == null && catalogUnique) {
+              oldMapNum = catalogUnique.number;
+            }
+            if (oldMapNum == null && catalogAtCellAll.length > 1) {
+              const byOutcome = catalogAtCellAll.filter((m) =>
+                pinOutcomeMatchesOldMapQuadrantLead(outcomePart, m.leadsTo)
+              );
+              if (byOutcome.length === 1) {
+                oldMapNum = byOutcome[0].number;
+                leadsToField = byOutcome[0].leadsTo;
+              }
+            }
+            if (
+              (leadsToField == null || String(leadsToField).trim() === "") &&
+              typeof oldMapNum === "number" &&
+              oldMapNum >= 1 &&
+              oldMapNum <= 46
+            ) {
+              leadsToField =
+                getOldMapByNumber(oldMapNum)?.leadsTo ?? catalogUnique?.leadsTo ?? catalogAtCellAll[0]?.leadsTo ?? null;
+            }
+            let outcomeMatches = pinOutcomeMatchesOldMapQuadrantLead(outcomePart, leadsToField);
+            if (
+              !outcomeMatches &&
+              typeof oldMapNum === "number" &&
+              oldMapNum >= 1 &&
+              oldMapNum <= 46
+            ) {
+              const catRow = getOldMapByNumber(oldMapNum);
+              if (catRow) outcomeMatches = pinOutcomeMatchesOldMapQuadrantLead(outcomePart, catRow.leadsTo);
+            }
+            if (
+              !outcomeMatches &&
+              catalogUnique &&
+              typeof oldMapNum === "number" &&
+              catalogUnique.number === oldMapNum
+            ) {
+              outcomeMatches = pinOutcomeMatchesOldMapQuadrantLead(outcomePart, catalogUnique.leadsTo);
+            }
             if (
               typeof oldMapNum === "number" &&
               oldMapNum >= 1 &&
               oldMapNum <= 46 &&
-              pinOutcomeMatchesOldMapQuadrantLead(outcomePart, leadsToField)
+              outcomeMatches
             ) {
               const OldMapFoundMod = await import("@/models/OldMapFoundModel.js");
               const OldMapFound = (OldMapFoundMod as { default?: mongoose.Model<unknown> }).default || OldMapFoundMod;

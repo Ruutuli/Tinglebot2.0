@@ -114,9 +114,13 @@ function parseStamina(v: unknown): number {
   return Number.isFinite(n) ? Math.max(0, n) : 0;
 }
 
+/** Shared closed/open list styling for modal selects & suggestion panels (matches catalog pickers). */
+const MODAL_DROPDOWN_CHROME =
+  "border border-[var(--totk-light-green)]/45 bg-[var(--totk-black)]/95 shadow-lg shadow-black/40 ring-1 ring-[var(--totk-light-green)]/20";
+
 /** Custom chevron: native arrow + `leading-snug` + global select `background-color` were misaligned. */
 const craftingModalSelectBg = {
-  backgroundImage: `url("data:image/svg+xml;charset=UTF-8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23c9b896' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E")`,
+  backgroundImage: `url("data:image/svg+xml;charset=UTF-8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%2349d59c' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E")`,
   backgroundRepeat: "no-repeat" as const,
   backgroundPosition: "right 0.65rem center",
   backgroundSize: "1rem 1rem",
@@ -1018,8 +1022,7 @@ export default function CraftingRequestsPage() {
   const modalFieldClass =
     "w-full rounded-md border border-[var(--totk-dark-ocher)]/55 bg-[var(--botw-black)]/28 px-3 py-2 text-sm leading-snug text-[var(--botw-pale)] placeholder:text-[var(--totk-grey-200)]/85 focus:border-[var(--totk-light-green)]/65 focus:outline-none focus:ring-1 focus:ring-[var(--totk-light-green)]/30 md:min-h-12 md:px-4 md:py-3 md:text-base";
   /** Selects: avoid `leading-snug` + native chevron clash; reserve space for SVG arrow. */
-  const modalSelectClass =
-    "w-full min-h-[2.5rem] rounded-md border border-[var(--totk-dark-ocher)]/55 px-3 py-2 pr-9 text-sm leading-normal text-[var(--botw-pale)] focus:border-[var(--totk-light-green)]/65 focus:outline-none focus:ring-1 focus:ring-[var(--totk-light-green)]/30 appearance-none md:min-h-12 md:px-4 md:py-3 md:pr-10 md:text-base";
+  const modalSelectClass = `w-full min-h-[2.5rem] rounded-md ${MODAL_DROPDOWN_CHROME} px-3 py-2 pr-9 text-sm leading-normal text-[var(--totk-light-green)] focus:border-[var(--totk-light-green)] focus:outline-none focus:ring-2 focus:ring-[var(--totk-light-green)]/35 appearance-none md:min-h-12 md:px-4 md:py-3 md:pr-10 md:text-base`;
   const modalLabelClass =
     "mb-1 block text-sm font-medium text-[var(--totk-light-ocher)] md:mb-1.5 md:text-[0.9375rem]";
   const modalHintClass =
@@ -1749,7 +1752,7 @@ export default function CraftingRequestsPage() {
                             <p className={`${modalHintClass} mt-1`}>Searching…</p>
                           ) : null}
                           {itemOptions.length > 0 ? (
-                            <ul className="absolute z-[80] mt-1 max-h-36 w-full overflow-auto overscroll-contain rounded-md border border-[var(--totk-light-green)]/45 bg-[var(--totk-black)]/95 py-0.5 shadow-xl shadow-black/40 ring-1 ring-[var(--totk-light-green)]/20 md:max-h-[min(50vh,20rem)]">
+                            <ul className={`absolute z-[80] mt-1 max-h-36 w-full overflow-auto overscroll-contain rounded-md py-0.5 md:max-h-[min(50vh,20rem)] ${MODAL_DROPDOWN_CHROME}`}>
                               {itemOptions.map((it) => (
                                 <li key={it.itemName}>
                                   <button
@@ -2032,7 +2035,7 @@ export default function CraftingRequestsPage() {
                                   </li>
                                 </ul>
                               </div>
-                              <ul className="max-h-48 space-y-2 overflow-auto overscroll-contain rounded-md border border-[var(--totk-dark-ocher)]/45 bg-[var(--botw-black)]/22 p-2 md:max-h-[min(52vh,24rem)] md:space-y-2.5 md:p-3">
+                              <ul className={`max-h-48 space-y-2 overflow-auto overscroll-contain rounded-md p-2 md:max-h-[min(52vh,24rem)] md:space-y-2.5 md:p-3 ${MODAL_DROPDOWN_CHROME}`}>
                                 {mixerEligibleStacks.map((st) => {
                                   const stackRole = mixerStackRoleBadge(st.itemName);
                                   const stackRolePhrase =
@@ -2054,7 +2057,7 @@ export default function CraftingRequestsPage() {
                                   return (
                                     <li
                                       key={st._id}
-                                      className="rounded-lg border border-[var(--totk-dark-ocher)]/40 bg-[var(--botw-black)]/35 px-3 py-3 text-[var(--botw-pale)] md:px-4 md:py-3.5"
+                                      className="rounded-lg border border-[var(--totk-light-green)]/30 bg-[var(--botw-black)]/50 px-3 py-3 text-[var(--botw-pale)] md:px-4 md:py-3.5"
                                     >
                                       <div className="flex flex-wrap items-center gap-x-2 gap-y-1.5">
                                         <p className="text-sm font-medium leading-snug text-[var(--totk-ivory)] md:text-base">
@@ -2118,7 +2121,7 @@ export default function CraftingRequestsPage() {
                                                 return next;
                                               });
                                             }}
-                                            className="h-11 w-full min-w-[5.5rem] rounded-lg border-2 border-[var(--totk-dark-ocher)]/60 bg-[var(--botw-warm-black)] px-3 text-center text-base font-semibold tabular-nums text-[var(--botw-cream)] shadow-inner focus:border-[var(--totk-light-green)]/70 focus:outline-none focus:ring-2 focus:ring-[var(--totk-light-green)]/25 enabled:cursor-text disabled:cursor-not-allowed disabled:opacity-45 sm:max-w-[7rem] md:h-12 md:text-lg"
+                                            className="h-11 w-full min-w-[5.5rem] rounded-lg border-2 border-[var(--totk-light-green)]/40 bg-[var(--botw-black)]/80 px-3 text-center text-base font-semibold tabular-nums text-[var(--totk-light-green)] shadow-inner focus:border-[var(--totk-light-green)] focus:outline-none focus:ring-2 focus:ring-[var(--totk-light-green)]/30 enabled:cursor-text disabled:cursor-not-allowed disabled:opacity-45 sm:max-w-[7rem] md:h-12 md:text-lg"
                                             aria-label={`Commit up to how many ${st.itemName} (${stackRole}, max ${maxCommit} with current brew budget)`}
                                           />
                                         </label>
@@ -2165,8 +2168,8 @@ export default function CraftingRequestsPage() {
                         </div>
 
                         {targetMode === "specific" && craftItemName ? (
-                          <div className="relative z-[2] overflow-hidden rounded-xl border border-[var(--totk-dark-ocher)]/55 bg-[var(--botw-black)]/28 shadow-[inset_0_1px_0_rgba(255,255,255,0.05)]">
-                            <div className="border-b border-[var(--totk-dark-ocher)]/35 bg-[var(--botw-black)]/20 px-3 py-2.5 sm:px-4">
+                          <div className={`relative z-[2] overflow-hidden rounded-xl shadow-[inset_0_1px_0_rgba(255,255,255,0.05)] ${MODAL_DROPDOWN_CHROME}`}>
+                            <div className="border-b border-[var(--totk-light-green)]/25 bg-[var(--botw-black)]/35 px-3 py-2.5 sm:px-4">
                               <div className="flex flex-wrap items-center gap-2">
                                 <span className="text-xs font-bold uppercase tracking-wide text-[var(--totk-light-ocher)]">
                                   Find crafter
@@ -2182,7 +2185,7 @@ export default function CraftingRequestsPage() {
                                   (selectedItemMeta?.craftingJobs ?? []).filter(Boolean).map((j) => (
                                     <span
                                       key={j}
-                                      className="rounded-md border border-[var(--totk-dark-ocher)]/45 bg-[var(--totk-brown)]/35 px-2 py-0.5 text-[11px] font-medium text-[var(--totk-ivory)]"
+                                      className="rounded-md border border-[var(--totk-light-green)]/35 bg-[var(--totk-dark-green)]/40 px-2 py-0.5 text-[11px] font-medium text-[var(--totk-light-green)]"
                                     >
                                       {j}
                                     </span>
@@ -2288,7 +2291,7 @@ export default function CraftingRequestsPage() {
                                     </p>
                                   ) : null}
                                   {targetResults.length > 0 ? (
-                                    <ul className="mt-2 max-h-44 overflow-auto rounded-lg border border-[var(--totk-light-green)]/45 bg-[var(--totk-black)]/95 shadow-lg shadow-black/40 ring-1 ring-[var(--totk-light-green)]/20">
+                                    <ul className={`mt-2 max-h-44 overflow-auto rounded-lg ${MODAL_DROPDOWN_CHROME}`}>
                                       {targetResults.map((c) => {
                                         const stamShort = c.isModCharacter
                                           ? "mod"
@@ -2536,10 +2539,10 @@ export default function CraftingRequestsPage() {
                 still sort it out with the requester in RP if boosts change the numbers.
               </p>
             ) : (
-              <ul className="mt-4 max-h-[min(50vh,18rem)] space-y-2 overflow-auto overscroll-contain rounded-lg border border-[var(--botw-border)]/60 p-2 md:max-h-72 md:space-y-1.5 md:p-3">
+              <ul className={`mt-4 max-h-[min(50vh,18rem)] space-y-2 overflow-auto overscroll-contain rounded-lg p-2 md:max-h-72 md:space-y-1.5 md:p-3 ${MODAL_DROPDOWN_CHROME}`}>
                 {eligibleAcceptors.map((c) => (
                   <li key={c._id}>
-                    <label className="flex min-h-[3rem] cursor-pointer touch-manipulation items-center gap-3 rounded-lg px-3 py-3 text-sm text-[var(--botw-pale)] hover:bg-white/5 has-[:checked]:bg-[var(--totk-light-green)]/10 md:min-h-[3.25rem] md:text-base">
+                    <label className="flex min-h-[3rem] cursor-pointer touch-manipulation items-center gap-3 rounded-md px-3 py-3 text-sm transition hover:bg-[var(--totk-light-green)]/12 has-[:checked]:bg-[var(--totk-light-green)]/18 md:min-h-[3.25rem] md:text-base">
                       <input
                         type="radio"
                         name="acceptChar"
@@ -2548,8 +2551,8 @@ export default function CraftingRequestsPage() {
                         className="h-4 w-4 shrink-0 accent-[var(--totk-light-green)] md:h-5 md:w-5"
                       />
                       <span>
-                        {c.name}{" "}
-                        <span className="text-[var(--botw-pale)]/70">
+                        <span className="font-medium text-[var(--totk-light-green)]">{c.name}</span>{" "}
+                        <span className="text-[var(--totk-mid-ocher)]">
                           ({c.job}
                           {c.isModCharacter ? ", mod" : `, ${c.currentStamina} stam`})
                         </span>

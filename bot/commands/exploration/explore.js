@@ -83,7 +83,15 @@ const { partyHasRelic, consumeBlightCandleUse, partyHasLensOfTruthRelic, charact
 // ------------------- Utils ------------------
 const { handleInteractionError } = require('@/utils/globalErrorHandler.js');
 const { addItemInventoryDatabase, removeItemInventoryDatabase, logItemRemovalToDatabase } = require('@/utils/inventoryUtils.js');
-const { addOldMapToCharacter, hasOldMap, hasAppraisedOldMap, hasAppraisedUnexpiredOldMap, hasAppraisedRedeemedOldMap, findAndRedeemOldMap } = require('@/utils/oldMapUtils.js');
+const {
+  addOldMapToCharacter,
+  hasOldMap,
+  hasAppraisedOldMap,
+  hasAppraisedUnexpiredOldMap,
+  hasAppraisedRedeemedOldMap,
+  findAndRedeemOldMap,
+  resolveOldMapNumberForExplorationMove,
+} = require('@/utils/oldMapUtils.js');
 const { checkInventorySync } = require('@/utils/characterUtils.js');
 const { enforceJail } = require('@/utils/jailCheck');
 // Set to true to allow roll/move/camp/secure/end/grotto/discovery/item without pinning discoveries (for testing). false = must set a pin for grottos/monster camps etc. before other actions.
@@ -97,7 +105,7 @@ const path = require("path");
 
 // ------------------- Data ------------------
 const { rollGrottoTrialType, getTrialLabel, GROTTO_CLEARED_FLAVOR, GROTTO_ALREADY_CLEARED_BLESSING, GROTTO_CLEANSED_VS_CLEARED, GROTTO_STATUS_LEGEND } = require('@/data/grottoTrials.js');
-const { rollPuzzleConfig, getPuzzleFlavor, getOfferingStatueClueText, ensurePuzzleConfig, checkPuzzleOffer, getPuzzleConsumeItems, getRandomPuzzleSuccessFlavor } = require('@/data/grottoPuzzleData.js');
+const { rollPuzzleConfig, getPuzzleFlavor, getOfferingStatueClueText, getOddStructureWrongGuessHint, ensurePuzzleConfig, checkPuzzleOffer, getPuzzleConsumeItems, getRandomPuzzleSuccessFlavor } = require('@/data/grottoPuzzleData.js');
 const { getRandomGrottoName, getRandomGrottoNameUnused } = require('@/data/grottoNames.js');
 const { getFailOutcome, getMissOutcome, getSuccessOutcome, getCompleteOutcome } = require('@/data/grottoTargetPracticeOutcomes.js');
 const { getGrottoMazeOutcome, getGrottoMazeTrapOutcome, getGazepScryingOutcome, getGrottoMazeChestLoot, getGrottoMazeRandomMoveEvent } = require('@/data/grottoMazeOutcomes.js');
@@ -2782,7 +2790,7 @@ module.exports = {
       return interaction.editReply({ embeds: [createExplorationErrorEmbed("❌ **Puzzle attempts used**", `The party used all 3 puzzle attempts. The grotto is **not cleared** — it stays until someone submits the correct offering. Use </explore grotto leave:${leaveCmdId}> or </explore roll:${rollCmdId}> to leave. Come back later with </explore grotto continue> to get 3 more attempts.`, { party, expeditionId, location, nextCharacter: party?.characters?.[party?.currentTurn] ?? null, showNextAndCommands: true })] });
      }
      if (grotto.trialType === "puzzle" && grotto.puzzleState?.offeringSubmitted && grotto.puzzleState?.offeringApproved === false) {
-      return interaction.editReply({ embeds: [createExplorationErrorEmbed("❌ **Puzzle offering denied**", `The puzzle offering was denied. Items offered are still consumed. You can try again (up to 3 attempts total) with </explore grotto puzzle:${getExploreCommandId()}> (items), or use </explore grotto leave:${getExploreCommandId()}> to leave and come back later (no more items consumed).`, { party, expeditionId, location, nextCharacter: party?.characters?.[party?.currentTurn] ?? null, showNextAndCommands: true })] });
+      return interaction.editReply({ embeds: [createExplorationErrorEmbed("❌ **Puzzle offering denied**", `Staff denied this puzzle offering (no Spirit Orbs). You can try again (up to 3 attempts total) with </explore grotto puzzle:${getExploreCommandId()}> (items), or use </explore grotto leave:${getExploreCommandId()}> to leave. Contact mods if you believe items were removed before denial.`, { party, expeditionId, location, nextCharacter: party?.characters?.[party?.currentTurn] ?? null, showNextAndCommands: true })] });
      }
      if (grotto.trialType === "test_of_power") {
       // Only one raid per grotto: check DB for active raid linked to this grotto (handles race / double continue)
@@ -3341,7 +3349,21 @@ module.exports = {
       logger.warn("EXPLORE", `[explore.js]⚠️ Puzzle getPartyWideInventory failed: ${err?.message || err}`);
       return interaction.editReply({ embeds: [createExplorationErrorEmbed("❌ **Inventory error**", "Could not read party inventories. Try again or contact staff.", { party, expeditionId, location, nextCharacter: party?.characters?.[party?.currentTurn] ?? null, showNextAndCommands: true })] });
      }
+     for (const p of parsedItems) {
+      const qty = p.quantity || 1;
+      const key = (p.itemName || "").trim().toLowerCase();
+      if (!key) continue;
+      const have = partyInv.totalByItem.get(key) || 0;
+      if (have < qty) {
+       return interaction.editReply({
+        embeds: [createExplorationErrorEmbed("❌ **Not enough items**", `Your party doesn't have enough **${p.itemName}** in anyone's inventory. You offered ${qty} but the party has ${have} total. Items must be in a character's inventory (not loadout); no transfers during expedition.`, { party, expeditionId, location, nextCharacter: party?.characters?.[party?.currentTurn] ?? null, showNextAndCommands: true })],
+       });
+      }
+     }
+    const offeredDisplay = parsedItems.map((x) => (x.quantity > 1 ? `${x.itemName} x${x.quantity}` : x.itemName));
     const checkResult = checkPuzzleOffer(grotto, parsedItems);
+    let displayItems = [];
+    if (checkResult.approved) {
     // Use getPuzzleConsumeItems so we only take the required amount (e.g. Offering Statue = 1). When it returns empty (wrong item or type unknown), cap at 1 per item so we never over-consume.
     const capped = getPuzzleConsumeItems(grotto, parsedItems);
     const consumeItems = capped.length > 0
@@ -3352,7 +3374,7 @@ module.exports = {
       const have = partyInv.totalByItem.get(key) || 0;
       if (have < quantity) {
        return interaction.editReply({
-        embeds: [createExplorationErrorEmbed("❌ **Not enough items**", `Your party doesn't have enough **${itemName}** in anyone's inventory. ${checkResult.approved ? `The puzzle requires ${quantity}` : `You offered ${quantity}`} but the party has ${have} total. Items must be in a character's inventory (not loadout); no transfers during expedition.`, { party, expeditionId, location, nextCharacter: party?.characters?.[party?.currentTurn] ?? null, showNextAndCommands: true })],
+        embeds: [createExplorationErrorEmbed("❌ **Not enough items**", `Your party doesn't have enough **${itemName}** in anyone's inventory. The puzzle requires ${quantity} but the party has ${have} total. Items must be in a character's inventory (not loadout); no transfers during expedition.`, { party, expeditionId, location, nextCharacter: party?.characters?.[party?.currentTurn] ?? null, showNextAndCommands: true })],
        });
       }
      }
@@ -3391,7 +3413,8 @@ module.exports = {
        }).catch(() => {});
       }
      }
-     const displayItems = consumeItems.map((p) => (p.quantity > 1 ? `${p.itemName} x${p.quantity}` : p.itemName));
+     displayItems = consumeItems.map((p) => (p.quantity > 1 ? `${p.itemName} x${p.quantity}` : p.itemName));
+    }
      if (checkResult.approved) {
       grotto.puzzleState.offeringSubmitted = true;
       grotto.puzzleState.offeringApproved = true;
@@ -3419,11 +3442,11 @@ module.exports = {
      const wrongAttempts = (grotto.puzzleState?.offeringAttempts ?? 0) + (checkResult.approved ? 0 : 1);
      if (!checkResult.approved) {
       grotto.puzzleState.offeringAttempts = wrongAttempts;
-      grotto.puzzleState.offeringItems = displayItems;
+      grotto.puzzleState.offeringItems = offeredDisplay;
       grotto.puzzleState.offeringBy = character.name;
       grotto.puzzleState.offeredAt = new Date();
      }
-     pushProgressLog(party, character.name, "grotto_puzzle_offering", `Puzzle offering submitted: ${displayItems.join(", ")}. ${checkResult.approved ? "Approved." : "Denied."}`, undefined, undefined, new Date());
+     pushProgressLog(party, character.name, "grotto_puzzle_offering", `Puzzle offering submitted: ${(checkResult.approved ? displayItems : offeredDisplay).join(", ")}. ${checkResult.approved ? "Approved." : "Denied."}`, undefined, undefined, new Date());
      await grotto.save();
      await party.save(); // Always persist so dashboard shows current hearts/stamina/progress
      if (checkResult.approved) {
@@ -3466,24 +3489,29 @@ module.exports = {
       party.markModified("leftGrottoQuadrant");
       await party.save();
       const leaveCmdId = getExploreCommandId();
+      const lockoutOddHint = getOddStructureWrongGuessHint(grotto);
+      const lockoutBase = `**${character.name}** submitted an offering: **${offeredDisplay.join(", ")}**\n\nThe offering was not correct. **No items were taken.** **No attempts remaining.** The grotto is **not cleared** — it stays until someone submits the correct offering. Use </explore grotto leave:${leaveCmdId}> or </explore roll:${cmdIdDenied}> to leave. Come back later with </explore grotto continue> to get 3 more attempts.`;
+      const lockoutDesc = lockoutOddHint ? `${lockoutBase}\n\n*A final glimmer from the runes:*\n${lockoutOddHint}` : lockoutBase;
       return interaction.editReply({
        embeds: [
         new EmbedBuilder()
          .setTitle("🗺️ **Grotto: Puzzle — No More Attempts**")
          .setColor(getExploreOutcomeColor("grotto_puzzle_offering", regionColors[party.region] || "#00ff99"))
-         .setDescription(
-          `**${character.name}** submitted an offering: **${displayItems.join(", ")}**\n\nThe offering was not correct. Items are consumed. **No attempts remaining.** The grotto is **not cleared** — it stays until someone submits the correct offering. Use </explore grotto leave:${leaveCmdId}> or </explore roll:${cmdIdDenied}> to leave. Come back later with </explore grotto continue> to get 3 more attempts.`
-         )
+         .setDescription(lockoutDesc)
          .setImage(puzzleDeniedBanner.imageUrl),
        ],
        ...(puzzleDeniedBanner.attachment ? { files: [puzzleDeniedBanner.attachment] } : {}),
       });
      }
-     const wrongDescBase = `**${character.name}** submitted an offering: **${displayItems.join(", ")}**\n\nThe offering was not correct. Items are consumed. You have **${attemptsLeft}** attempt(s) left. Try again with </explore grotto puzzle:${cmdIdDenied}> (items), or use </explore grotto leave:${cmdIdDenied}> to leave and come back later (no more items consumed).`;
+     const wrongDescBase = `**${character.name}** submitted an offering: **${offeredDisplay.join(", ")}**\n\nThe offering was not correct. **No items were taken.** You have **${attemptsLeft}** attempt(s) left. Try again with </explore grotto puzzle:${cmdIdDenied}> (items), or use </explore grotto leave:${cmdIdDenied}> to leave and come back later.`;
     const newClueText = getOfferingStatueClueText(grotto);
-    const wrongDesc = newClueText
-      ? `${wrongDescBase}\n\n*The statue shifts; new writing appears:*\n*${newClueText}*`
-      : wrongDescBase;
+    const oddWrongHint = getOddStructureWrongGuessHint(grotto);
+    let wrongDesc = wrongDescBase;
+    if (newClueText) {
+     wrongDesc = `${wrongDescBase}\n\n*The statue shifts; new writing appears:*\n*${newClueText}*`;
+    } else if (oddWrongHint) {
+     wrongDesc = `${wrongDescBase}\n\n*Another line of the script sharpens into view:*\n${oddWrongHint}`;
+    }
     const tryAgainEmbed = new EmbedBuilder()
       .setTitle("🗺️ **Grotto: Puzzle — Wrong Offering**")
       .setColor(getExploreOutcomeColor("grotto_puzzle_offering", regionColors[party.region] || "#00ff99"))
@@ -8384,16 +8412,27 @@ module.exports = {
     const quadWithMap = destMapSquare && destMapSquare.quadrants ? destMapSquare.quadrants.find(
       (qu) => String(qu.quadrantId).toUpperCase() === String(newLocation.quadrant).toUpperCase()
     ) : null;
-    if (quadWithMap && quadWithMap.oldMapNumber != null) {
-      const mapItemName = `Map #${quadWithMap.oldMapNumber}`;
-      const leadsTo = (quadWithMap.oldMapLeadsTo || "chest").toLowerCase();
+    const {
+      resolvedOldMapNumber,
+      resolvedOldMapLeadsTo,
+      catalogCandidates,
+      usedCatalogFallback,
+    } = await resolveOldMapNumberForExplorationMove(party, newLocation.square, newLocation.quadrant, quadWithMap);
+    if (usedCatalogFallback && catalogCandidates.length > 0 && (quadWithMap == null || quadWithMap.oldMapNumber == null)) {
+      logger.info(
+        "EXPLORE",
+        `[explore.js] Old map cell resolved from catalog (DB missing oldMapNumber): ${newLocation.square} ${newLocation.quadrant} → map # candidates ${catalogCandidates.map((c) => c.number).join(",")}`
+      );
+    }
+    if (resolvedOldMapNumber != null) {
+      const leadsTo = (resolvedOldMapLeadsTo || "chest").toLowerCase();
       const leadsToLabel =
-       formatOldMapLeadsToLabel(quadWithMap.oldMapLeadsTo) ||
-       (quadWithMap.oldMapLeadsTo || "treasure").charAt(0).toUpperCase() + (quadWithMap.oldMapLeadsTo || "").slice(1).toLowerCase();
+       formatOldMapLeadsToLabel(resolvedOldMapLeadsTo) ||
+       (resolvedOldMapLeadsTo || "treasure").charAt(0).toUpperCase() + (resolvedOldMapLeadsTo || "").slice(1).toLowerCase();
       const whoHasUnexpiredMap = [];
       try {
         for (const pc of party.characters) {
-          const hasIt = await hasAppraisedUnexpiredOldMap({ _id: pc._id, name: pc.name, userId: pc.userId }, quadWithMap.oldMapNumber);
+          const hasIt = await hasAppraisedUnexpiredOldMap({ _id: pc._id, name: pc.name, userId: pc.userId }, resolvedOldMapNumber);
           if (hasIt) whoHasUnexpiredMap.push(pc);
         }
         if (whoHasUnexpiredMap.length > 0) {
@@ -8419,7 +8458,7 @@ module.exports = {
           const mapOwnerName = mapOwnerCharRef?.name || "Unknown";
           const redeemed = await findAndRedeemOldMap(
             { _id: mapOwnerCharRef?._id, name: mapOwnerCharRef?.name, userId: mapOwnerCharRef?.userId },
-            quadWithMap.oldMapNumber,
+            resolvedOldMapNumber,
             {
               partyId: party.partyId,
               destinationSquare: newLocation.square,
@@ -8430,7 +8469,7 @@ module.exports = {
             if (leadsTo === "chest") {
               const chestResult = await grantExplorationChestLootToParty(party, locationMove, interaction);
               mapLedChestLootEmbed = chestResult?.lootEmbed ?? null;
-              pushProgressLog(party, mapOwnerName, "map_chest", `Map #${quadWithMap.oldMapNumber} led to a chest at **${locationMove}**. Opened.`, undefined, undefined);
+              pushProgressLog(party, mapOwnerName, "map_chest", `Map #${resolvedOldMapNumber} led to a chest at **${locationMove}**. Opened.`, undefined, undefined);
               moveDescription += `\n\n🗺️ **Your map led you here!** **${mapOwnerName}**'s map revealed a **Chest** — opened!`;
             } else if (leadsTo === "relic") {
               const mapOwnerChar = party.characters.find((c) => c.name === mapOwnerName);
@@ -8443,7 +8482,7 @@ module.exports = {
                     await addItemInventoryDatabase(mapOwnerDoc._id, fallbackItem.itemName, 1, interaction, "Exploration Map");
                     if (!party.gatheredItems) party.gatheredItems = [];
                     party.gatheredItems.push({ characterId: mapOwnerDoc._id, characterName: mapOwnerDoc.name, itemName: fallbackItem.itemName, quantity: 1, emoji: fallbackItem.emoji || "" });
-                    pushProgressLog(party, mapOwnerName, "map_chest", `Map #${quadWithMap.oldMapNumber} would have led to a relic at **${locationMove}**, but **${mapOwnerName}** is still carrying one (appraise or submit art first)—found **${fallbackItem.itemName}** instead.`, { itemName: fallbackItem.itemName, emoji: fallbackItem.emoji || "" }, undefined);
+                    pushProgressLog(party, mapOwnerName, "map_chest", `Map #${resolvedOldMapNumber} would have led to a relic at **${locationMove}**, but **${mapOwnerName}** is still carrying one (appraise or submit art first)—found **${fallbackItem.itemName}** instead.`, { itemName: fallbackItem.itemName, emoji: fallbackItem.emoji || "" }, undefined);
                     await party.save();
                     moveDescription += `\n\n🗺️ **Your map led you here!** **${mapOwnerName}**'s map would have revealed a relic, but they're still carrying one (get it appraised or submit your art first)—they found **${fallbackItem.itemName}** instead.`;
                   } catch (err) {
@@ -8451,7 +8490,7 @@ module.exports = {
                     moveDescription += `\n\n🗺️ **Your map led you here!** **${mapOwnerName}**'s map would have revealed a relic, but they're still carrying one—grant failed.`;
                   }
                 } else {
-                  pushProgressLog(party, mapOwnerName, "map_chest", `Map #${quadWithMap.oldMapNumber} would have led to a relic at **${locationMove}**, but **${mapOwnerName}** is still carrying one (appraise or submit art first).`, undefined, undefined);
+                  pushProgressLog(party, mapOwnerName, "map_chest", `Map #${resolvedOldMapNumber} would have led to a relic at **${locationMove}**, but **${mapOwnerName}** is still carrying one (appraise or submit art first).`, undefined, undefined);
                   await party.save();
                   moveDescription += `\n\n🗺️ **Your map led you here!** **${mapOwnerName}**'s map would have revealed a relic, but they're still carrying one (get it appraised or submit your art first).`;
                 }
@@ -8473,7 +8512,7 @@ module.exports = {
                   });
                   if (!party.gatheredItems) party.gatheredItems = [];
                   party.gatheredItems.push({ characterId: mapOwnerDoc._id, characterName: mapOwnerDoc.name, itemName: "Unknown Relic", quantity: 1, emoji: "🔸" });
-                  pushProgressLog(party, mapOwnerName, "relic", `Map #${quadWithMap.oldMapNumber} led to a relic at **${locationMove}**; take to Artist/Researcher to appraise.`, { itemName: "Unknown Relic", emoji: "🔸" }, undefined);
+                  pushProgressLog(party, mapOwnerName, "relic", `Map #${resolvedOldMapNumber} led to a relic at **${locationMove}**; take to Artist/Researcher to appraise.`, { itemName: "Unknown Relic", emoji: "🔸" }, undefined);
                   await party.save();
                   moveDescription += `\n\n🗺️ **Your map led you here!** **${mapOwnerName}**'s map revealed a **Relic** (${savedRelic?.relicId || "—"})!`;
                 } catch (err) {
@@ -8511,26 +8550,32 @@ module.exports = {
                 skipGrottoPull: true,
                });
               }
-              pushProgressLog(party, mapOwnerName, "grotto", `Map #${quadWithMap.oldMapNumber} led to a grotto at **${locationMove}**.`, undefined, undefined, atMapLedGrotto);
+              pushProgressLog(party, mapOwnerName, "grotto", `Map #${resolvedOldMapNumber} led to a grotto at **${locationMove}**.`, undefined, undefined, atMapLedGrotto);
               await party.save();
               moveDescription += `\n\n🗺️ **Your map led you here!** **${mapOwnerName}**'s map revealed a **Grotto** — discovery added to the map.`;
             } else if (leadsTo === "ruins") {
               await pushDiscoveryToMap(party, "ruins", new Date(), interaction.user?.id);
-              pushProgressLog(party, mapOwnerName, "map_ruins", `Map #${quadWithMap.oldMapNumber} led to ruins at **${locationMove}**.`, undefined, undefined);
+              pushProgressLog(party, mapOwnerName, "map_ruins", `Map #${resolvedOldMapNumber} led to ruins at **${locationMove}**.`, undefined, undefined);
               await party.save();
               moveDescription += `\n\n🗺️ **Your map led you here!** **${mapOwnerName}**'s map revealed **Ruins** — discovery added to the map.`;
             } else {
               moveDescription += `\n\n🗺️ **Your map led you here!** **${mapOwnerName}**'s map revealed a **${leadsToLabel}**!`;
             }
             await setQuadrantOldMapLeadConsumed(newLocation.square, newLocation.quadrant);
+          } else {
+            logger.warn(
+              "EXPLORE",
+              `[explore.js] Old map redeem failed map=#${resolvedOldMapNumber} owner=${mapOwnerName} party=${party.partyId}`
+            );
+            moveDescription += `\n\n⚠️ Could not confirm your old map redemption—try moving again. If the issue continues, contact a moderator.`;
           }
           }
         } else {
           // Only mention "map location" if someone in the party has this map but hasn't appraised it yet
           const whoHasMapUnappraised = [];
           for (const pc of party.characters) {
-            const hasMap = await hasOldMap({ _id: pc._id, name: pc.name, userId: pc.userId }, quadWithMap.oldMapNumber);
-            const hasAppraised = await hasAppraisedOldMap({ _id: pc._id, name: pc.name, userId: pc.userId }, quadWithMap.oldMapNumber);
+            const hasMap = await hasOldMap({ _id: pc._id, name: pc.name, userId: pc.userId }, resolvedOldMapNumber);
+            const hasAppraised = await hasAppraisedOldMap({ _id: pc._id, name: pc.name, userId: pc.userId }, resolvedOldMapNumber);
             if (hasMap && !hasAppraised) whoHasMapUnappraised.push(pc.name);
           }
           if (whoHasMapUnappraised.length > 0) {

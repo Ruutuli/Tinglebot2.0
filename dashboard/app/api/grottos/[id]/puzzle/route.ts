@@ -67,7 +67,7 @@ export async function PATCH(
       ok: true,
       message: approved
         ? "Puzzle offering approved. The party can use /explore grotto continue in Discord to receive Spirit Orbs."
-        : "Puzzle offering denied. Items are still consumed; no Spirit Orbs.",
+        : "Puzzle offering denied. No Spirit Orbs.",
     });
   } catch (err) {
     console.error("[api/grottos/[id]/puzzle]", err);

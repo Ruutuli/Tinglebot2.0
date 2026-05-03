@@ -56,3 +56,38 @@ const OLD_MAPS: OldMapEntry[] = [
 export function getOldMapByNumber(number: number): OldMapEntry | null {
   return OLD_MAPS.find((m) => m.number === number) ?? null;
 }
+
+/** Same normalization as bot/data/oldMaps.js — coordinates use "SQUARE-Qn" (e.g. G9-Q1). */
+export function normalizeOldMapCellKey(squareId: string, quadrantId: string): string {
+  const sq = String(squareId ?? "")
+    .trim()
+    .toUpperCase()
+    .replace(/\s+/g, "");
+  let q = String(quadrantId ?? "")
+    .trim()
+    .toUpperCase()
+    .replace(/\s+/g, "");
+  if (!sq || !q) return "";
+  if (!q.startsWith("Q")) q = `Q${q}`;
+  return `${sq}-${q}`;
+}
+
+export function getAllOldMapsByCoordinates(squareId: string, quadrantId: string): OldMapEntry[] {
+  const key = normalizeOldMapCellKey(squareId, quadrantId);
+  if (!key) return [];
+  const matches = OLD_MAPS.filter((m) => {
+    const c = String(m.coordinates ?? "")
+      .trim()
+      .toUpperCase()
+      .replace(/\s+/g, "");
+    return c === key;
+  });
+  return matches.sort((a, b) => a.number - b.number);
+}
+
+/** Single unequivocal catalog row for this cell, or null if zero / multiple rows share coordinates. */
+export function getOldMapByCoordinates(squareId: string, quadrantId: string): OldMapEntry | null {
+  const all = getAllOldMapsByCoordinates(squareId, quadrantId);
+  if (all.length !== 1) return null;
+  return all[0];
+}
