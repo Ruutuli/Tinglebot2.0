@@ -847,25 +847,6 @@ async function handleChangeJob(interaction) {
             : process.env.MONGODB_VENDING_URI_DEV)
         || process.env.MONGODB_VENDING_URI;
 
-      if (!vendingUri) {
-        console.warn('[handleChangeJob] Vending URI not configured. Skipping vending reset.');
-        // Reset character vending fields even if database connection fails
-        character.vendingPoints = 0;
-        character.vendingSetup = null;
-        character.vendingSync = false;
-        character.shopLink = null;
-        character.shopPouch = null;
-        character.pouchSize = 0;
-        character.vendorType = null;
-        return; // Exit early without database operations
-      }
-
-      const vendingClient = new MongoClient(vendingUri);
-      await vendingClient.connect();
-      const vendingDb = vendingClient.db("vending");
-      const vendingCollection = vendingDb.collection(character.name.toLowerCase());
-
-      await vendingCollection.deleteMany({});
       character.vendingPoints = 0;
       character.vendingSetup = null;
       character.vendingSync = false;
@@ -874,7 +855,18 @@ async function handleChangeJob(interaction) {
       character.pouchSize = 0;
       character.vendorType = null;
 
-      await vendingClient.close();
+      if (!vendingUri) {
+        console.warn('[handleChangeJob] Vending URI not configured. Skipping vending collection wipe; character vending fields cleared on save.');
+      } else {
+        const vendingClient = new MongoClient(vendingUri);
+        await vendingClient.connect();
+        const vendingDb = vendingClient.db("vending");
+        const vendingCollection = vendingDb.collection(character.name.toLowerCase());
+
+        await vendingCollection.deleteMany({});
+
+        await vendingClient.close();
+      }
 
     } catch (err) {
       console.error(`[handleChangeJob] Vending reset failed:`, err);
