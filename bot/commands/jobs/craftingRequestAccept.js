@@ -55,22 +55,36 @@ function buildCraftingRequestAcceptedAnnouncement(opts) {
   const pubCode = String(opts.commissionID ?? '').trim();
   const acceptIdDisplay = (pubCode || mongoRef).trim() || '—';
 
+  const craftedQtyRaw = Number(opts.craftedQuantity);
+  const craftedQty =
+    Number.isFinite(craftedQtyRaw) && craftedQtyRaw >= 1 ? Math.round(craftedQtyRaw) : 1;
+  const craftItemLabel = String(opts.craftItemName ?? '').trim() || 'Item';
+
   const lines = [
     `🔖 **Commission ID** · \`${acceptIdDisplay}\``,
     '',
     `🧾 **Recipe**`,
     `↳ *${opts.craftItemName}*`,
     '',
-    `⚒️ **Crafter OC** · **${opts.acceptorCharacterName}**`,
-    `↳ <@${aid}>`,
-    '',
-    `👤 **For OC** · **${forOc}**`,
-    `↳ <@${rid}>`,
-    '',
-    '— — — — — —',
-    '',
-    `📦 **Items used**`,
+    `🎁 **Crafted**`,
+    `↳ **${craftedQty}×** *${craftItemLabel}*`,
   ];
+  if (craftedQty > 1) {
+    const bonus = craftedQty - 1;
+    lines.push(
+      `↳ _Includes **+${bonus}** from a **crafting boost** (e.g. Entertainer — Song of Double Time). Bonus items used no extra recipe materials._`
+    );
+  }
+  lines.push('');
+  lines.push(`⚒️ **Crafter OC** · **${opts.acceptorCharacterName}**`);
+  lines.push(`↳ <@${aid}>`);
+  lines.push('');
+  lines.push(`👤 **For OC** · **${forOc}**`);
+  lines.push(`↳ <@${rid}>`);
+  lines.push('');
+  lines.push('— — — — — —');
+  lines.push('');
+  lines.push(`📦 **Items used**`);
 
   const mats = opts.materialsUsed ?? [];
   const maxMatLines = 18;
@@ -566,6 +580,7 @@ async function runWorkshopCraftingAccept({
         acceptorDiscordId,
         acceptorCharacterName: acceptor.name,
         craftItemName: reserved.craftItemName,
+        craftedQuantity: craftResult.craftedQuantity ?? 1,
         requesterCharacterName: reserved.requesterCharacterName,
         paymentOffer: reserved.paymentOffer,
         craftItemImage,
@@ -585,12 +600,19 @@ async function runWorkshopCraftingAccept({
     }
   }
 
+  const qty = Math.max(1, Math.round(Number(craftResult.craftedQuantity) || 1));
+  const boosterNote =
+    qty > 1
+      ? `\n_Bonus output includes **+${qty - 1}** from a crafting boost (e.g. Song of Double Time)._`
+      : '';
+
   return new EmbedBuilder()
     .setColor(0x2ecc71)
     .setTitle('Workshop commission complete')
     .setDescription(
       `**${reserved.craftItemName}** crafted for **${reserved.requesterCharacterName}**.\n` +
-        `Quantity: **${craftResult.craftedQuantity ?? 1}** · Your stamina paid: **${craftResult.crafterStaminaPaid ?? '—'}**`
+        `Quantity: **${qty}** · Your stamina paid: **${craftResult.crafterStaminaPaid ?? '—'}**` +
+        boosterNote
     )
     .setImage(BORDER);
 }

@@ -379,6 +379,7 @@ export async function POST(request: Request, context: RouteContext) {
         acceptorDiscordId: user.id,
         acceptorCharacterName: acceptor.name,
         craftItemName: reserved.craftItemName,
+        craftedQuantity: craftResult.craftedQuantity ?? 1,
         requesterCharacterName: reserved.requesterCharacterName,
         paymentOffer: reserved.paymentOffer,
         craftItemImage: typeof item.image === "string" ? item.image : undefined,

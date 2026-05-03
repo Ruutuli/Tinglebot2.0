@@ -347,6 +347,15 @@ export function normalizeCraftingCommissionID(raw: string): string | null {
   return t.charAt(0).toUpperCase() + t.slice(1);
 }
 
+/** Trimmed display/storage value for `commissionID` (legacy rows may use odd types or whitespace). */
+export function effectiveCommissionIdFromDoc(doc: { commissionID?: unknown } | null): string {
+  if (!doc || typeof doc !== "object") return "";
+  const raw = doc.commissionID;
+  if (raw == null) return "";
+  const s = String(raw).trim();
+  return s;
+}
+
 type LeanCraftingCommissionRow = {
   _id: unknown;
   commissionID?: string | null;
@@ -370,32 +379,33 @@ export async function ensureCraftingRequestCommissionId(
   CraftingRequest: CraftingRequestModelForCommissionId,
   doc: LeanCraftingCommissionRow
 ): Promise<string> {
-  const existing =
-    typeof doc.commissionID === "string" && doc.commissionID.trim()
-      ? doc.commissionID.trim()
-      : "";
+  const existing = effectiveCommissionIdFromDoc(doc);
   if (existing) return existing;
 
-  for (let attempt = 0; attempt < 12; attempt++) {
+  /** Rows where atomic assign must run (missing, null, "", whitespace-only, etc.). */
+  const emptyCommissionFilter = {
+    $or: [
+      { commissionID: null },
+      { commissionID: { $exists: false } },
+      { commissionID: "" },
+      { commissionID: { $regex: /^\s*$/ } },
+    ],
+  };
+
+  for (let attempt = 0; attempt < 24; attempt++) {
     const candidate = generateUniqueId("K");
     try {
       const updated = await CraftingRequest.findOneAndUpdate(
         {
           _id: doc._id,
-          $or: [
-            { commissionID: null },
-            { commissionID: { $exists: false } },
-            { commissionID: "" },
-          ],
+          ...emptyCommissionFilter,
         },
         { $set: { commissionID: candidate } },
         { new: true, lean: true }
       );
       const cid =
-        updated &&
-        typeof updated === "object" &&
-        typeof (updated as LeanCraftingCommissionRow).commissionID === "string"
-          ? String((updated as LeanCraftingCommissionRow).commissionID).trim()
+        updated && typeof updated === "object"
+          ? effectiveCommissionIdFromDoc(updated as LeanCraftingCommissionRow)
           : "";
       if (cid) return cid;
     } catch (e: unknown) {
@@ -407,20 +417,16 @@ export async function ensureCraftingRequestCommissionId(
     }
     const refetch = await CraftingRequest.findById(doc._id).select("commissionID").lean();
     const rid =
-      refetch &&
-      typeof refetch === "object" &&
-      typeof (refetch as LeanCraftingCommissionRow).commissionID === "string"
-        ? String((refetch as LeanCraftingCommissionRow).commissionID).trim()
+      refetch && typeof refetch === "object"
+        ? effectiveCommissionIdFromDoc(refetch as LeanCraftingCommissionRow)
         : "";
     if (rid) return rid;
   }
 
   const last = await CraftingRequest.findById(doc._id).select("commissionID").lean();
   const finalId =
-    last &&
-    typeof last === "object" &&
-    typeof (last as LeanCraftingCommissionRow).commissionID === "string"
-      ? String((last as LeanCraftingCommissionRow).commissionID).trim()
+    last && typeof last === "object"
+      ? effectiveCommissionIdFromDoc(last as LeanCraftingCommissionRow)
       : "";
   if (finalId) return finalId;
 

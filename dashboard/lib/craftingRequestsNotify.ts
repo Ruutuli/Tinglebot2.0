@@ -446,6 +446,8 @@ export type CraftingRequestAcceptedNotifyOptions = {
   acceptorDiscordId: string;
   acceptorCharacterName: string;
   craftItemName: string;
+  /** Final stack count granted to the commissioner (includes crafting quantity boosts). Defaults to 1. */
+  craftedQuantity?: number;
   requesterCharacterName?: string;
   paymentOffer?: string;
   craftItemImage?: string;
@@ -478,22 +480,36 @@ export function buildCraftingRequestAcceptedMessage(
   const pubCode = (opts.commissionID ?? "").trim();
   const acceptIdDisplay = (pubCode || mongoRef).trim() || "—";
 
+  const craftedQtyRaw = Number(opts.craftedQuantity);
+  const craftedQty =
+    Number.isFinite(craftedQtyRaw) && craftedQtyRaw >= 1 ? Math.round(craftedQtyRaw) : 1;
+  const craftItemLabel = (opts.craftItemName ?? "").trim() || "Item";
+
   const lines: string[] = [
     `🔖 **Commission ID** · \`${acceptIdDisplay}\``,
     "",
     `🧾 **Recipe**`,
     `↳ *${opts.craftItemName}*`,
     "",
-    `⚒️ **Crafter OC** · **${opts.acceptorCharacterName}**`,
-    `↳ <@${aid}>`,
-    "",
-    `👤 **For OC** · **${forOc}**`,
-    `↳ <@${rid}>`,
-    "",
-    "— — — — — —",
-    "",
-    `📦 **Items used**`,
+    `🎁 **Crafted**`,
+    `↳ **${craftedQty}×** *${craftItemLabel}*`,
   ];
+  if (craftedQty > 1) {
+    const bonus = craftedQty - 1;
+    lines.push(
+      `↳ _Includes **+${bonus}** from a **crafting boost** (e.g. Entertainer — Song of Double Time). Bonus items used no extra recipe materials._`
+    );
+  }
+  lines.push("");
+  lines.push(`⚒️ **Crafter OC** · **${opts.acceptorCharacterName}**`);
+  lines.push(`↳ <@${aid}>`);
+  lines.push("");
+  lines.push(`👤 **For OC** · **${forOc}**`);
+  lines.push(`↳ <@${rid}>`);
+  lines.push("");
+  lines.push("— — — — — —");
+  lines.push("");
+  lines.push(`📦 **Items used**`);
 
   const mats = opts.materialsUsed ?? [];
   const maxMatLines = 18;
