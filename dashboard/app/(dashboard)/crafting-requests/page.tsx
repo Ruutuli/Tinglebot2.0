@@ -43,13 +43,22 @@ type CraftingRequestRow = {
   acceptedByUserId?: string | null;
   acceptedByCharacterName?: string;
   createdAt?: string;
+  /** Live requester location (for same-village accept UI); from list API */
+  requesterCurrentVillage?: string | null;
 };
 
 type ListChar = {
   _id: string;
   name: string;
   job: string;
+  /** Mirrors OC sheet / bot — active voucher qualifies for recipe jobs */
+  jobVoucher?: boolean;
+  jobVoucherJob?: string | null;
   currentStamina: number;
+  /** Present from /api/characters/list after voucher support */
+  maxStamina?: number;
+  /** Current in-world village (workshop commissions require same village as requester) */
+  currentVillage?: string;
   isModCharacter: boolean;
 };
 
@@ -58,6 +67,9 @@ type SearchChar = ListChar & {
   homeVillage?: string;
   /** From character search API; used to warn when max stamina < recipe base. */
   maxStamina?: number;
+  jobVoucher?: boolean;
+  jobVoucherJob?: string | null;
+  currentVillage?: string;
 };
 
 type OcMaterialLine = { itemName: string; quantity: number; ownedQty: number; sufficient: boolean };
@@ -204,11 +216,21 @@ function CraftingModalGreenSelect({
   );
 }
 
-/** Item craftingJobs vs character.job (DB casing may differ). */
-function characterJobMatchesCraftingJobs(craftingJobs: string[] | undefined, characterJob: string): boolean {
+/** Item craftingJobs vs permanent job, restricted voucher job, or unrestricted voucher (any recipe job). */
+function characterMatchesCraftingJobsSnapshot(
+  craftingJobs: string[] | undefined,
+  c: Pick<ListChar, "job" | "jobVoucher" | "jobVoucherJob">
+): boolean {
   const jobs = craftingJobs ?? [];
   if (!jobs.length) return true;
-  const jl = characterJob.trim().toLowerCase();
+  if (c.jobVoucher && (c.jobVoucherJob == null || String(c.jobVoucherJob).trim() === "")) {
+    return true;
+  }
+  if (c.jobVoucher && c.jobVoucherJob != null && String(c.jobVoucherJob).trim() !== "") {
+    const jl = String(c.jobVoucherJob).trim().toLowerCase();
+    return jobs.some((g) => String(g).trim().toLowerCase() === jl);
+  }
+  const jl = c.job.trim().toLowerCase();
   return jobs.some((g) => String(g).trim().toLowerCase() === jl);
 }
 
@@ -230,8 +252,13 @@ function canAcceptWithCharacter(row: CraftingRequestRow, c: ListChar): boolean {
   if (row.targetMode === "specific" && row.targetCharacterId) {
     if (String(c._id) !== String(row.targetCharacterId)) return false;
   }
+  const rv = row.requesterCurrentVillage?.trim().toLowerCase() ?? "";
+  if (rv) {
+    const cv = (c.currentVillage ?? "").trim().toLowerCase();
+    if (!cv || cv !== rv) return false;
+  }
   const jobs = row.craftingJobsSnapshot ?? [];
-  if (!characterJobMatchesCraftingJobs(jobs, c.job)) return false;
+  if (!characterMatchesCraftingJobsSnapshot(jobs, c)) return false;
   const cost = row.staminaToCraftSnapshot ?? 0;
   if (c.isModCharacter) return true;
   return c.currentStamina >= cost;
@@ -500,6 +527,11 @@ export default function CraftingRequestsPage() {
         if (q.length > 0) params.set("q", q);
         for (const j of jobs) params.append("job", j);
         params.set("limit", "24");
+        const reqOc = myChars.find(
+          (c) => c.name.trim().toLowerCase() === requesterCharacterName.trim().toLowerCase()
+        );
+        const commissionVillage = reqOc?.currentVillage?.trim();
+        if (commissionVillage) params.set("village", commissionVillage);
         const res = await fetch(`/api/characters/search?${params.toString()}`, {
           credentials: "include",
         });
@@ -512,7 +544,15 @@ export default function CraftingRequestsPage() {
       }
     }, delay);
     return () => clearTimeout(t);
-  }, [targetSearch, targetMode, formModalOpen, craftItemName, selectedItemMeta]);
+  }, [
+    targetSearch,
+    targetMode,
+    formModalOpen,
+    craftItemName,
+    selectedItemMeta,
+    requesterCharacterName,
+    myChars,
+  ]);
 
   useEffect(() => {
     if (!formModalOpen || !craftItemName.trim() || !requesterCharacterName.trim()) {
@@ -637,7 +677,7 @@ export default function CraftingRequestsPage() {
   useEffect(() => {
     if (!targetPick || !selectedItemMeta) return;
     const jobs = selectedItemMeta.craftingJobs ?? [];
-    if (jobs.length > 0 && !characterJobMatchesCraftingJobs(jobs, targetPick.job)) {
+    if (jobs.length > 0 && !characterMatchesCraftingJobsSnapshot(jobs, targetPick)) {
       setTargetPick(null);
       setTargetSearch("");
     }
@@ -877,7 +917,7 @@ export default function CraftingRequestsPage() {
       targetMode === "specific" &&
       targetPick &&
       selectedItemMeta?.craftingJobs?.length &&
-      !characterJobMatchesCraftingJobs(selectedItemMeta.craftingJobs, targetPick.job)
+      !characterMatchesCraftingJobsSnapshot(selectedItemMeta.craftingJobs, targetPick)
     ) {
       setFormError("That character's job can't craft this item — pick someone else or use Open.");
       return;

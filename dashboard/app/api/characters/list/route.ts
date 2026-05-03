@@ -23,11 +23,11 @@ export async function GET() {
 
     const [regularChars, modChars] = await Promise.all([
       Character.find({ userId: user.id })
-        .select("_id name job currentStamina")
+        .select("_id name job jobVoucher jobVoucherJob currentStamina maxStamina currentVillage")
         .sort({ name: 1 })
         .lean(),
       ModCharacter.find({ userId: user.id })
-        .select("_id name job currentStamina")
+        .select("_id name job jobVoucher jobVoucherJob currentStamina maxStamina currentVillage")
         .sort({ name: 1 })
         .lean(),
     ]);
@@ -37,14 +37,24 @@ export async function GET() {
         _id: String(c._id),
         name: c.name,
         job: c.job,
+        jobVoucher: Boolean(c.jobVoucher),
+        jobVoucherJob:
+          c.jobVoucherJob === undefined || c.jobVoucherJob === null ? null : String(c.jobVoucherJob),
         currentStamina: c.currentStamina,
+        maxStamina: Math.max(0, Number((c as { maxStamina?: number }).maxStamina) || 0),
+        currentVillage: String((c as { currentVillage?: string }).currentVillage ?? "").trim(),
         isModCharacter: false,
       })),
       ...modChars.map((c) => ({
         _id: String(c._id),
         name: c.name,
         job: c.job,
+        jobVoucher: Boolean(c.jobVoucher),
+        jobVoucherJob:
+          c.jobVoucherJob === undefined || c.jobVoucherJob === null ? null : String(c.jobVoucherJob),
         currentStamina: c.currentStamina,
+        maxStamina: Math.max(0, Number((c as { maxStamina?: number }).maxStamina) || 999),
+        currentVillage: String((c as { currentVillage?: string }).currentVillage ?? "").trim(),
         isModCharacter: true,
       })),
     ].sort((a, b) => a.name.localeCompare(b.name));

@@ -7,6 +7,7 @@ import {
   craftingRequestNotifyPayloadForDiscord,
   validateCraftingRequestBody,
 } from "@/lib/crafting-request-mutation";
+import { loadCharacterUnionForOwnerByName } from "@/lib/crafting-request-helpers";
 import { notifyCraftingRequestCreated } from "@/lib/craftingRequestsNotify";
 
 export const dynamic = "force-dynamic";
@@ -71,11 +72,23 @@ export async function GET(request: Request) {
       }
     }
 
-    const requests = rows.map((r) => {
-      const id = r.craftItemMongoId != null ? String(r.craftItemMongoId) : "";
-      const craftItemImage = id ? imageByItemId.get(id) : undefined;
-      return { ...r, craftItemImage };
-    });
+    const requests = await Promise.all(
+      rows.map(async (r) => {
+        const id = r.craftItemMongoId != null ? String(r.craftItemMongoId) : "";
+        const craftItemImage = id ? imageByItemId.get(id) : undefined;
+        let requesterCurrentVillage: string | null = null;
+        try {
+          const reqChar = await loadCharacterUnionForOwnerByName(
+            String(r.requesterDiscordId ?? ""),
+            String(r.requesterCharacterName ?? "")
+          );
+          requesterCurrentVillage = reqChar?.currentVillage?.trim() || null;
+        } catch {
+          requesterCurrentVillage = null;
+        }
+        return { ...r, craftItemImage, requesterCurrentVillage };
+      })
+    );
 
     return NextResponse.json({
       requests,

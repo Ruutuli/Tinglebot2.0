@@ -16,9 +16,21 @@ export function parseStaminaToCraft(value: unknown): number {
   return Number.isFinite(n) ? Math.max(0, n) : 0;
 }
 
-export function jobCanCraftItem(item: ItemCraftFields, job: string): boolean {
+export function jobCanCraftItem(
+  item: ItemCraftFields,
+  job: string,
+  voucher?: { jobVoucher?: boolean; jobVoucherJob?: string | null }
+): boolean {
   const jobs = item.craftingJobs ?? [];
   if (!jobs.length) return false;
+  if (voucher?.jobVoucher) {
+    const vj = voucher.jobVoucherJob;
+    if (vj == null || String(vj).trim() === "") {
+      return true;
+    }
+    const j = String(vj).trim().toLowerCase();
+    return jobs.some((g) => String(g).trim().toLowerCase() === j);
+  }
   const j = job.trim().toLowerCase();
   return jobs.some((g) => String(g).trim().toLowerCase() === j);
 }
@@ -56,7 +68,12 @@ export type CharacterUnion = {
   userId: string;
   name: string;
   job: string;
+  /** Active job voucher (Discord bot); unrestricted when jobVoucherJob is null/empty */
+  jobVoucher?: boolean;
+  jobVoucherJob?: string | null;
   homeVillage: string;
+  /** In-world location (same village required for workshop commissions with another OC). */
+  currentVillage: string;
   currentStamina: number;
   maxStamina: number;
   isModCharacter: boolean;
@@ -69,7 +86,10 @@ type LeanCharacterRow = {
   userId?: string;
   name?: unknown;
   job?: unknown;
+  jobVoucher?: boolean;
+  jobVoucherJob?: string | null;
   homeVillage?: string;
+  currentVillage?: string;
   currentStamina?: unknown;
   maxStamina?: number;
   icon?: string;
@@ -78,6 +98,12 @@ type LeanCharacterRow = {
 function mapLeanRowToCharacterUnion(row: LeanCharacterRow, isModCharacter: boolean): CharacterUnion | null {
   if (!row || typeof row.userId !== "string") return null;
   const iconRaw = (row as { icon?: string }).icon;
+  const voucherRaw = (row as { jobVoucher?: boolean }).jobVoucher;
+  const voucherJobRaw = (row as { jobVoucherJob?: string | null }).jobVoucherJob;
+  const jobVoucher = Boolean(voucherRaw);
+  const jobVoucherJob =
+    voucherJobRaw === undefined || voucherJobRaw === null ? null : String(voucherJobRaw);
+  const currentVillage = String((row as { currentVillage?: string }).currentVillage ?? "").trim();
   if (isModCharacter) {
     const maxS = Math.max(0, Number((row as { maxStamina?: number }).maxStamina) || 999);
     return {
@@ -85,7 +111,10 @@ function mapLeanRowToCharacterUnion(row: LeanCharacterRow, isModCharacter: boole
       userId: row.userId,
       name: String(row.name ?? ""),
       job: String(row.job ?? ""),
+      jobVoucher,
+      jobVoucherJob,
       homeVillage: String((row as { homeVillage?: string }).homeVillage ?? ""),
+      currentVillage,
       currentStamina: Math.max(0, Number(row.currentStamina) || 999),
       maxStamina: maxS,
       isModCharacter: true,
@@ -98,12 +127,37 @@ function mapLeanRowToCharacterUnion(row: LeanCharacterRow, isModCharacter: boole
     userId: row.userId,
     name: String(row.name ?? ""),
     job: String(row.job ?? ""),
+    jobVoucher,
+    jobVoucherJob,
     homeVillage: String((row as { homeVillage?: string }).homeVillage ?? ""),
+    currentVillage,
     currentStamina: Math.max(0, Number(row.currentStamina) || 0),
     maxStamina: maxS,
     isModCharacter: false,
     icon: typeof iconRaw === "string" && iconRaw.trim() ? iconRaw.trim() : undefined,
   };
+}
+
+/** Workshop commissions: commissioner OC and crafter OC must share the same current village (Discord bot parity). */
+export function workshopCommissionVillagesCompatible(
+  a: { name: string; currentVillage?: string | null },
+  b: { name: string; currentVillage?: string | null }
+): { ok: true } | { ok: false; error: string } {
+  const av = String(a.currentVillage ?? "").trim().toLowerCase();
+  const bv = String(b.currentVillage ?? "").trim().toLowerCase();
+  if (!av || !bv) {
+    return {
+      ok: false,
+      error: `Village data is missing. Both characters need a **current village** set (travel in Discord if needed). **${a.name}:** ${String(a.currentVillage ?? "").trim() || "—"} · **${b.name}:** ${String(b.currentVillage ?? "").trim() || "—"}`,
+    };
+  }
+  if (av !== bv) {
+    return {
+      ok: false,
+      error: `**${a.name}** is in **${String(a.currentVillage).trim()}** but **${b.name}** is in **${String(b.currentVillage).trim()}**. Workshop commissions require both OCs to be in the same village.`,
+    };
+  }
+  return { ok: true };
 }
 
 export async function loadCharacterUnionById(id: string): Promise<CharacterUnion | null> {
@@ -114,14 +168,18 @@ export async function loadCharacterUnionById(id: string): Promise<CharacterUnion
   const ModCharacter = ModCharacterModule.default || ModCharacterModule;
 
   const c = (await Character.findById(id)
-    .select("userId name job homeVillage currentStamina maxStamina icon")
+    .select(
+      "userId name job jobVoucher jobVoucherJob homeVillage currentVillage currentStamina maxStamina icon"
+    )
     .lean()
     .exec()) as unknown as LeanCharacterRow;
   const regular = mapLeanRowToCharacterUnion(c, false);
   if (regular) return regular;
 
   const m = (await ModCharacter.findById(id)
-    .select("userId name job homeVillage currentStamina maxStamina icon")
+    .select(
+      "userId name job jobVoucher jobVoucherJob homeVillage currentVillage currentStamina maxStamina icon"
+    )
     .lean()
     .exec()) as unknown as LeanCharacterRow;
   return mapLeanRowToCharacterUnion(m, true);
@@ -143,14 +201,54 @@ export async function loadCharacterUnionByIdForOwner(
   const ModCharacter = ModCharacterModule.default || ModCharacterModule;
 
   const c = (await Character.findOne({ _id: id, userId })
-    .select("userId name job homeVillage currentStamina maxStamina icon")
+    .select(
+      "userId name job jobVoucher jobVoucherJob homeVillage currentVillage currentStamina maxStamina icon"
+    )
     .lean()
     .exec()) as unknown as LeanCharacterRow;
   const regular = mapLeanRowToCharacterUnion(c, false);
   if (regular) return regular;
 
   const m = (await ModCharacter.findOne({ _id: id, userId })
-    .select("userId name job homeVillage currentStamina maxStamina icon")
+    .select(
+      "userId name job jobVoucher jobVoucherJob homeVillage currentVillage currentStamina maxStamina icon"
+    )
+    .lean()
+    .exec()) as unknown as LeanCharacterRow;
+  return mapLeanRowToCharacterUnion(m, true);
+}
+
+/**
+ * Load a character by name for a Discord user (regular OC first, then mod), same as ownership checks.
+ */
+export async function loadCharacterUnionForOwnerByName(
+  ownerDiscordId: string,
+  characterName: string
+): Promise<CharacterUnion | null> {
+  const trimmed = characterName.trim();
+  if (!trimmed) return null;
+  const esc = trimmed.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const re = new RegExp(`^${esc}$`, "i");
+  const userId = String(ownerDiscordId ?? "").trim();
+  if (!userId) return null;
+
+  const Character = (await import("@/models/CharacterModel.js")).default;
+  const ModCharacterModule = await import("@/models/ModCharacterModel.js");
+  const ModCharacter = ModCharacterModule.default || ModCharacterModule;
+
+  const c = (await Character.findOne({ userId, name: re })
+    .select(
+      "userId name job jobVoucher jobVoucherJob homeVillage currentVillage currentStamina maxStamina icon"
+    )
+    .lean()
+    .exec()) as unknown as LeanCharacterRow;
+  const regular = mapLeanRowToCharacterUnion(c, false);
+  if (regular) return regular;
+
+  const m = (await ModCharacter.findOne({ userId, name: re })
+    .select(
+      "userId name job jobVoucher jobVoucherJob homeVillage currentVillage currentStamina maxStamina icon"
+    )
     .lean()
     .exec()) as unknown as LeanCharacterRow;
   return mapLeanRowToCharacterUnion(m, true);

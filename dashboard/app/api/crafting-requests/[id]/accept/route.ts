@@ -2,7 +2,11 @@ import { NextResponse } from "next/server";
 import { connect } from "@/lib/db";
 import { getSession } from "@/lib/session";
 import mongoose from "mongoose";
-import { loadCharacterUnionByIdForOwner } from "@/lib/crafting-request-helpers";
+import {
+  loadCharacterUnionByIdForOwner,
+  loadCharacterUnionForOwnerByName,
+  workshopCommissionVillagesCompatible,
+} from "@/lib/crafting-request-helpers";
 import { getCraftItemByName } from "@/lib/crafting-request-mutation";
 import { notifyCraftingRequestAccepted } from "@/lib/craftingRequestsNotify";
 import { getBotInternalApiConfig } from "@/lib/config";
@@ -50,6 +54,24 @@ export async function POST(request: Request, context: RouteContext) {
         { error: "Character not found or not on your roster" },
         { status: 403 }
       );
+    }
+
+    const requesterCharacter = await loadCharacterUnionForOwnerByName(
+      reqDoc.requesterDiscordId,
+      reqDoc.requesterCharacterName
+    );
+    if (!requesterCharacter) {
+      return NextResponse.json(
+        { error: "Could not load the commissioner's character for village validation." },
+        { status: 400 }
+      );
+    }
+    const villageAccept = workshopCommissionVillagesCompatible(
+      { name: requesterCharacter.name, currentVillage: requesterCharacter.currentVillage },
+      { name: acceptor.name, currentVillage: acceptor.currentVillage }
+    );
+    if (!villageAccept.ok) {
+      return NextResponse.json({ error: villageAccept.error }, { status: 400 });
     }
 
     if (reqDoc.targetMode === "specific") {
@@ -160,20 +182,77 @@ export async function POST(request: Request, context: RouteContext) {
           elixirTier: reserved.elixirTier ?? null,
           elixirMaterialSelections: elixirSels,
         }),
+        signal: AbortSignal.timeout(180_000),
       });
 
-      craftResult = (await craftRes.json()) as typeof craftResult;
-      if (!craftRes.ok && typeof craftResult?.ok !== "boolean") {
+      const rawBody = await craftRes.text();
+      let parsed: unknown;
+      try {
+        parsed = rawBody.trim() ? JSON.parse(rawBody) : null;
+      } catch {
+        await revertToOpen();
+        console.error(
+          "[crafting-requests accept] Bot returned non-JSON body",
+          craftRes.status,
+          rawBody?.slice(0, 600)
+        );
+        return NextResponse.json(
+          {
+            error:
+              "The crafting bot returned an unreadable response (often a wrong BOT_INTERNAL_API_URL, proxy HTML, or the bot is down). Commission was re-opened.",
+            status: craftRes.status,
+          },
+          { status: 502 }
+        );
+      }
+
+      craftResult = parsed as typeof craftResult;
+      if (
+        !craftResult ||
+        typeof craftResult !== "object" ||
+        typeof (craftResult as { ok?: unknown }).ok !== "boolean"
+      ) {
+        await revertToOpen();
+        console.error("[crafting-requests accept] Bot JSON missing ok:", craftRes.status, parsed);
+        return NextResponse.json(
+          {
+            error: "Bot craft service returned an unexpected payload; commission was re-opened.",
+            status: craftRes.status,
+          },
+          { status: 502 }
+        );
+      }
+
+      if (!craftRes.ok && (craftResult as { ok: boolean }).ok) {
         await revertToOpen();
         return NextResponse.json(
-          { error: "Bot craft service returned an error; commission was re-opened.", status: craftRes.status },
+          {
+            error:
+              "Bot returned an HTTP error even though the payload said success — check bot logs. Commission was re-opened.",
+            status: craftRes.status,
+          },
           { status: 502 }
         );
       }
     } catch (craftErr) {
       await revertToOpen();
-      console.error("[crafting-requests accept] craft threw:", craftErr);
-      return NextResponse.json({ error: "Craft failed after locking request; commission was re-opened." }, { status: 500 });
+      const msg = craftErr instanceof Error ? craftErr.message : String(craftErr);
+      const name = craftErr instanceof Error ? craftErr.name : "";
+      console.error("[crafting-requests accept] craft threw:", name, msg);
+      const isAbort =
+        name === "AbortError" ||
+        msg.includes("aborted") ||
+        msg.includes("The operation was aborted");
+      return NextResponse.json(
+        {
+          error: isAbort
+            ? "Crafting timed out after 3 minutes — the bot may be busy or unreachable. Commission was re-opened."
+            : "Could not reach the crafting bot (network/DNS/SSL). Commission was re-opened.",
+          hint: "Verify BOT_INTERNAL_API_URL is the bot service URL where GET /health works, and BOT_INTERNAL_API_SECRET matches the bot.",
+          ...(process.env.NODE_ENV === "development" ? { debug: msg } : {}),
+        },
+        { status: isAbort ? 504 : 503 }
+      );
     }
 
     if (!craftResult.ok) {

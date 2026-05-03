@@ -119,6 +119,28 @@ function mixerRecipeMinimumUnits(mats) {
   return n;
 }
 
+/**
+ * Effective crafter job for workshop commissions (aligned with /crafting + dashboard).
+ * Unrestricted voucher: prefer permanent job if it matches the recipe list, else first recipe job.
+ */
+function resolveWorkshopCommissionJob(crafter, item) {
+  const craftingJobs = Array.isArray(item.craftingJobs) ? item.craftingJobs : [];
+  const baseJob = String(crafter.job || '').trim();
+
+  if (!crafter.jobVoucher) {
+    return baseJob;
+  }
+  const vj = crafter.jobVoucherJob;
+  if (vj != null && String(vj).trim() !== '') {
+    return String(vj).trim();
+  }
+  const lowerBase = baseJob.toLowerCase();
+  const matchByBase = craftingJobs.find((j) => String(j).trim().toLowerCase() === lowerBase);
+  if (matchByBase) return String(matchByBase).trim();
+  if (craftingJobs.length) return String(craftingJobs[0]).trim();
+  return baseJob;
+}
+
 function stackMatchesAnyRecipeLine(itemName, craftingMaterial) {
   const base = normalizedInventoryItemNameForRecipeMatch(itemName);
   const mats = Array.isArray(craftingMaterial) ? craftingMaterial : [];
@@ -387,6 +409,25 @@ async function executeWorkshopCommissionCraft(opts) {
     return { ok: false, code: 'COMMISSIONER', error: 'Commissioner character not found.' };
   }
 
+  const villageNorm = (ch) => String(ch.currentVillage ?? '').trim().toLowerCase();
+  const commVillage = villageNorm(commissioner);
+  const crafterVillage = villageNorm(crafter);
+  if (!commVillage || !crafterVillage) {
+    return {
+      ok: false,
+      code: 'VILLAGE',
+      error:
+        'Both characters must have a current village set. Travel in Discord or sync location before accepting.',
+    };
+  }
+  if (commVillage !== crafterVillage) {
+    return {
+      ok: false,
+      code: 'VILLAGE',
+      error: 'Workshop commissions require the commissioner and crafter to be in the same village.',
+    };
+  }
+
   if (commissioner.inJail) {
     return { ok: false, code: 'JAIL', error: 'Commissioner OC is in jail; commission cannot complete.' };
   }
@@ -411,7 +452,25 @@ async function executeWorkshopCommissionCraft(opts) {
 
   const baseStaminaRecipe = parseBaseStaminaToCraft(item);
 
-  const jobResolved = crafter.jobVoucher && crafter.jobVoucherJob ? crafter.jobVoucherJob : crafter.job;
+  const craftingJobsLower = (Array.isArray(item.craftingJobs) ? item.craftingJobs : []).map((j) =>
+    String(j).trim().toLowerCase()
+  );
+  if (
+    crafter.jobVoucher &&
+    crafter.jobVoucherJob != null &&
+    String(crafter.jobVoucherJob).trim() !== ''
+  ) {
+    const v = String(crafter.jobVoucherJob).trim().toLowerCase();
+    if (!craftingJobsLower.includes(v)) {
+      return {
+        ok: false,
+        code: 'JOB',
+        error: "Your job voucher's job doesn't match this recipe's allowed crafters.",
+      };
+    }
+  }
+
+  const jobResolved = resolveWorkshopCommissionJob(crafter, item);
   const jobNormalizedEarly = jobResolved ? String(jobResolved).trim() : '';
   const jobLowerEarly = jobNormalizedEarly.toLowerCase();
 

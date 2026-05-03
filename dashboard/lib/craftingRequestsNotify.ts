@@ -10,21 +10,8 @@ const EMBED_COLOR = 0x5d8aa8;
 
 const GCS_PUBLIC_BASE = "https://storage.googleapis.com/tinglebot";
 
-/** Decorative board banners (same family as quests / village posts). */
-const CRAFT_BOARD_IMAGES = [
-  `${GCS_PUBLIC_BASE}/Graphics/ROTW_border_red_bottom.png`,
-  `${GCS_PUBLIC_BASE}/Graphics/ROTW_border_blue_bottom.png`,
-  `${GCS_PUBLIC_BASE}/Graphics/ROTW_border_green_bottom.png`,
-  `${GCS_PUBLIC_BASE}/Graphics/border.png`,
-];
-
-function hashPick<T>(seed: string, choices: T[]): T {
-  let h = 0;
-  for (let i = 0; i < seed.length; i++) {
-    h = (h * 31 + seed.charCodeAt(i)) >>> 0;
-  }
-  return choices[h % choices.length];
-}
+/** Standard embed border (match bot `border.png` — not village / ROTW bottom borders). */
+const CRAFT_BOARD_BORDER_URL = `${GCS_PUBLIC_BASE}/Graphics/border.png`;
 
 /**
  * Discord must fetch embed URLs from the public internet — use full GCS URLs, not /api/images.
@@ -48,12 +35,56 @@ function jobNameToRoleEnvKey(jobName: string): string {
 
 const DISCORD_SNOWFLAKE = /^\d{17,20}$/;
 
-function roleMentionFromJobName(jobName: string): string | null {
+/** Resolve `JOB_*` snowflake (same keys as `bot/utils/memberJobRolesSync.js`). */
+function jobRoleIdFromEnv(jobName: string): string | null {
   const key = jobNameToRoleEnvKey(jobName.trim());
   const raw = process.env[key];
   const id = typeof raw === "string" ? raw.trim() : "";
   if (!id || !DISCORD_SNOWFLAKE.test(id)) return null;
-  return `<@&${id}>`;
+  return id;
+}
+
+function roleMentionFromJobName(jobName: string): string | null {
+  const id = jobRoleIdFromEnv(jobName);
+  return id ? `<@&${id}>` : null;
+}
+
+/** Role IDs for Discord `allowed_mentions.roles` (open commissions). */
+function jobRoleIdsFromSnapshot(jobs: string[] | undefined): string[] {
+  const out: string[] = [];
+  const seen = new Set<string>();
+  for (const job of jobs ?? []) {
+    const id = jobRoleIdFromEnv(job);
+    if (id && !seen.has(id)) {
+      seen.add(id);
+      out.push(id);
+    }
+  }
+  return out;
+}
+
+/**
+ * Discord strips pings unless `allowed_mentions` permits them.
+ * Use explicit `users` / `roles` snowflake arrays (same IDs as in message `content`).
+ */
+function allowedMentionsForBoardMessage(payload: CraftingRequestNotifyPayload): Record<string, unknown> {
+  const userIds: string[] = [];
+  const pushUser = (id: string | undefined) => {
+    const t = id?.trim();
+    if (t && DISCORD_SNOWFLAKE.test(t)) userIds.push(t);
+  };
+  pushUser(payload.requesterDiscordId);
+  if (payload.targetMode === "specific" && payload.targetOwnerDiscordId?.trim()) {
+    const tid = payload.targetOwnerDiscordId.trim();
+    if (tid !== payload.requesterDiscordId) pushUser(tid);
+  }
+  const roleIds =
+    payload.targetMode === "open" ? jobRoleIdsFromSnapshot(payload.craftingJobsSnapshot) : [];
+
+  const out: Record<string, unknown> = {};
+  if (userIds.length > 0) out.users = userIds;
+  if (roleIds.length > 0) out.roles = roleIds;
+  return out;
 }
 
 export type CraftingRequestNotifyPayload = {
@@ -126,6 +157,7 @@ export function buildCraftingRequestBoardMessage(
 ): {
   content: string;
   embeds: Record<string, unknown>[];
+  allowed_mentions: Record<string, unknown>;
 } {
   const publicBase = getPublicAppUrl().replace(/\/$/, "");
   const boardUrl = `${publicBase}/crafting-requests`;
@@ -222,7 +254,7 @@ export function buildCraftingRequestBoardMessage(
 
   const embedTitleFinal = embedTitle.slice(0, 256);
 
-  const bannerUrl = hashPick(payload.requestId, CRAFT_BOARD_IMAGES);
+  const bannerUrl = CRAFT_BOARD_BORDER_URL;
   const thumbUrl = discordEmbedImageUrl(payload.craftItemImage);
   const authorIcon = discordEmbedImageUrl(payload.requesterCharacterIcon);
   const artisanIcon = discordEmbedImageUrl(payload.targetCharacterIcon);
@@ -275,6 +307,7 @@ export function buildCraftingRequestBoardMessage(
   return {
     content: buildCraftingBoardPingContent(payload),
     embeds: [embed],
+    allowed_mentions: allowedMentionsForBoardMessage(payload),
   };
 }
 
@@ -291,6 +324,15 @@ export async function notifyCraftingRequestCreated(
   }
 
   const body = buildCraftingRequestBoardMessage(payload);
+  if (
+    payload.targetMode === "open" &&
+    (payload.craftingJobsSnapshot?.length ?? 0) > 0 &&
+    jobRoleIdsFromSnapshot(payload.craftingJobsSnapshot).length === 0
+  ) {
+    console.warn(
+      "[craftingRequestsNotify] Open commission has recipe jobs but no JOB_* role IDs resolved — add e.g. JOB_ARTIST=<role snowflake> to the dashboard env (same as the bot)."
+    );
+  }
   const result = await discordApiRequest<{ id: string }>(
     `channels/${COMMUNITY_BOARD_CHANNEL_ID}/messages`,
     "POST",
@@ -308,12 +350,15 @@ export async function syncCraftingRequestBoardMessage(
   if (!COMMUNITY_BOARD_CHANNEL_ID || !discordMessageId?.trim()) {
     return false;
   }
-  const { content, embeds: built } = buildCraftingRequestBoardMessage(payload, EMBED_TITLE_UPDATED);
+  const { content, embeds: built, allowed_mentions } = buildCraftingRequestBoardMessage(
+    payload,
+    EMBED_TITLE_UPDATED
+  );
   const embeds = built;
   const result = await discordApiRequest(
     `channels/${COMMUNITY_BOARD_CHANNEL_ID}/messages/${discordMessageId.trim()}`,
     "PATCH",
-    { content, embeds }
+    { content, embeds, allowed_mentions }
   );
   return result !== null;
 }
@@ -379,7 +424,7 @@ export function buildCraftingRequestAcceptedMessage(
     description = `${description.slice(0, 4092)}…`;
   }
 
-  const bannerUrl = hashPick(opts.requestId || "accept", CRAFT_BOARD_IMAGES);
+  const bannerUrl = CRAFT_BOARD_BORDER_URL;
   const thumbUrl = discordEmbedImageUrl(opts.craftItemImage);
 
   const embed: Record<string, unknown> = {

@@ -1465,6 +1465,67 @@ async function relicExistsAtSquareQuadrant(squareNorm, quadrantNorm) {
  return !!existing;
 }
 
+// Summarize monster combat from progressLog for "Returned Home" embed (quick encounters, raids, camps, grotto).
+function getExpeditionMonsterCombatStatsFromLog(progressLog) {
+ const log = Array.isArray(progressLog) ? progressLog : [];
+ let defeated = 0;
+ let encountered = 0;
+ let campPerKillCount = 0;
+ let campSummaryMonsters = 0;
+ let campWaveStarts = 0;
+
+ for (const e of log) {
+  const o = e.outcome;
+  const msg = String(e.message || "");
+
+  if (o === "monster") {
+   encountered += 1;
+   if (msg.includes("Win!/Loot") || /divine power|legendary prowess|ancient|divine authority/i.test(msg)) defeated += 1;
+   continue;
+  }
+  if (o === "raid") {
+   encountered += 1;
+   continue;
+  }
+  if (o === "raid_over") {
+   if (/Raid defeated/i.test(msg)) defeated += 1;
+   continue;
+  }
+  if (o === "monster_camp_monster_defeated") {
+   campPerKillCount += 1;
+   defeated += 1;
+   encountered += 1;
+   continue;
+  }
+  if (o === "monster_camp_defeated") {
+   const m = msg.match(/All\s+(\d+)\s+monsters/i);
+   if (m) campSummaryMonsters += parseInt(m[1], 10);
+   continue;
+  }
+  if (o === "grotto_maze_raid") {
+   if (/Raid started/i.test(msg)) encountered += 1;
+   else if (/fought/i.test(msg)) {
+    encountered += 1;
+    if (msg.includes("Win!/Loot")) defeated += 1;
+   } else if (/Random encounter:/i.test(msg)) encountered += 1;
+   continue;
+  }
+  if (o === "monster_camp_fight" || o === "monster_camp_revisit") {
+   campWaveStarts += 1;
+   continue;
+  }
+ }
+
+ if (campPerKillCount === 0 && campSummaryMonsters > 0) {
+  defeated += campSummaryMonsters;
+  encountered += campSummaryMonsters;
+ } else if (campPerKillCount === 0 && campSummaryMonsters === 0 && campWaveStarts > 0) {
+  encountered += campWaveStarts;
+ }
+
+ return { defeated, encountered };
+}
+
 // ------------------- buildTestingEndAfterGrottoEmbed ------------------
 // Testing only: end expedition immediately after grotto completion (same cleanup as "end" in testing mode).
 // - Resets map state (quadrants unexplored, discoveries cleared, pins removed), deletes grottos, closes raids.
@@ -1604,6 +1665,7 @@ async function buildTestingEndAfterGrottoEmbed(party, expeditionId, characterNam
  const hours = Math.floor(durationMins / 60);
  const mins = durationMins % 60;
  const durationText = hours > 0 ? `${hours}h ${mins}m` : `${mins}m`;
+ const combatStatsEnd = getExpeditionMonsterCombatStatsFromLog(log);
  const memberNamesEnd = (party.characters || []).map((c) => c.name).filter(Boolean);
  const membersTextEnd = memberNamesEnd.length > 0 ? memberNamesEnd.join(", ") : "—";
  const embed = new EmbedBuilder()
@@ -1617,7 +1679,12 @@ async function buildTestingEndAfterGrottoEmbed(party, expeditionId, characterNam
  embed.addFields(
   { name: "👥 **Party**", value: membersTextEnd, inline: true },
   { name: "📊 **Actions**", value: String(turnsOrActions), inline: true },
-  { name: "⏱️ **Duration**", value: durationText, inline: true }
+  { name: "⏱️ **Duration**", value: durationText, inline: true },
+  {
+   name: "👹 **Monsters**",
+   value: `**${combatStatsEnd.defeated}** defeated · **${combatStatsEnd.encountered}** encountered`,
+   inline: false,
+  }
  );
  if (splitLinesEnd.length > 0) {
   embed.addFields({ name: "❤️ **Hearts & stamina split**", value: splitLinesEnd.join("\n"), inline: false });
@@ -9467,6 +9534,7 @@ module.exports = {
     const hours = Math.floor(durationMins / 60);
     const mins = durationMins % 60;
     const durationText = hours > 0 ? `${hours}h ${mins}m` : `${mins}m`;
+    const combatStatsEnd = getExpeditionMonsterCombatStatsFromLog(log);
     const embed = new EmbedBuilder()
      .setTitle("🗺️ **Expedition: Returned Home**")
      .setColor(getExploreOutcomeColor("end", regionColors[party.region] || "#4CAF50"))
@@ -9478,7 +9546,12 @@ module.exports = {
     embed.addFields(
      { name: "👥 **Party**", value: membersTextEnd, inline: true },
      { name: "📊 **Actions**", value: String(turnsOrActions), inline: true },
-     { name: "⏱️ **Duration**", value: durationText, inline: true }
+     { name: "⏱️ **Duration**", value: durationText, inline: true },
+     {
+      name: "👹 **Monsters**",
+      value: `**${combatStatsEnd.defeated}** defeated · **${combatStatsEnd.encountered}** encountered`,
+      inline: false,
+     }
     );
     if (splitLinesEnd.length > 0) {
      embed.addFields({ name: "❤️ **Hearts & stamina split**", value: splitLinesEnd.join("\n"), inline: false });

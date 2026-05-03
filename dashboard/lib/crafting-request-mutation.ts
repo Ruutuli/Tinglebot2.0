@@ -6,7 +6,9 @@ import {
   jobCanCraftItem,
   loadCharacterIconForOwner,
   loadCharacterUnionById,
+  loadCharacterUnionForOwnerByName,
   parseStaminaToCraft,
+  workshopCommissionVillagesCompatible,
   type ItemCraftFields,
   userOwnsCharacterName,
 } from "@/lib/crafting-request-helpers";
@@ -97,6 +99,14 @@ export async function validateCraftingRequestBody(
     };
   }
 
+  const requester = await loadCharacterUnionForOwnerByName(user.id, requesterCharacterName);
+  if (!requester) {
+    return {
+      ok: false,
+      res: NextResponse.json({ error: "Requester character could not be loaded" }, { status: 400 }),
+    };
+  }
+
   const recipeMatEval = await evaluateRecipeMaterialsOnInventory(
     user.id,
     requesterCharacterName,
@@ -139,7 +149,12 @@ export async function validateCraftingRequestBody(
     if (!target) {
       return { ok: false, res: NextResponse.json({ error: "Target character not found" }, { status: 400 }) };
     }
-    if (!jobCanCraftItem(item, target.job)) {
+    if (
+      !jobCanCraftItem(item, target.job, {
+        jobVoucher: target.jobVoucher,
+        jobVoucherJob: target.jobVoucherJob,
+      })
+    ) {
       return {
         ok: false,
         res: NextResponse.json(
@@ -159,6 +174,13 @@ export async function validateCraftingRequestBody(
           { status: 400 }
         ),
       };
+    }
+    const villageCheck = workshopCommissionVillagesCompatible(
+      { name: requester.name, currentVillage: requester.currentVillage },
+      { name: target.name, currentVillage: target.currentVillage }
+    );
+    if (!villageCheck.ok) {
+      return { ok: false, res: NextResponse.json({ error: villageCheck.error }, { status: 400 }) };
     }
     targetCharacterId = target._id;
     targetCharacterName = target.name;

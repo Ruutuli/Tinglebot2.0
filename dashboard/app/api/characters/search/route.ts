@@ -19,17 +19,60 @@ function caseInsensitiveJobOr(jobNames: string[]) {
   };
 }
 
-function buildRegularFilter(jobFilters: string[], nameRe: RegExp | null): Record<string, unknown> {
+/** Permanent job match, restricted voucher job match, or unrestricted voucher (any crafter job). */
+function jobOrVoucherMatchesCraftFilters(jobFilters: string[]): Record<string, unknown> {
+  const jobPart = caseInsensitiveJobOr(jobFilters);
+  const voucherRestricted = {
+    $and: [
+      { jobVoucher: true },
+      {
+        $or: jobFilters.map((value) => {
+          const escaped = value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+          return { jobVoucherJob: new RegExp(`^${escaped}$`, "i") };
+        }),
+      },
+    ],
+  };
+  const voucherUnrestricted = {
+    $and: [
+      { jobVoucher: true },
+      {
+        $or: [{ jobVoucherJob: null }, { jobVoucherJob: "" }, { jobVoucherJob: { $exists: false } }],
+      },
+    ],
+  };
+  return {
+    $or: [jobPart, voucherRestricted, voucherUnrestricted],
+  };
+}
+
+function buildRegularFilter(
+  jobFilters: string[],
+  nameRe: RegExp | null,
+  sameVillageAs: string | null
+): Record<string, unknown> {
   const parts: Record<string, unknown>[] = [{ ...PLAYABLE_REGULAR_CHARACTER }];
-  if (jobFilters.length) parts.push(caseInsensitiveJobOr(jobFilters));
+  if (jobFilters.length) parts.push(jobOrVoucherMatchesCraftFilters(jobFilters));
   if (nameRe) parts.push({ name: nameRe });
+  if (sameVillageAs) {
+    const escaped = sameVillageAs.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    parts.push({ currentVillage: new RegExp(`^${escaped}$`, "i") });
+  }
   return { $and: parts };
 }
 
-function buildModFilter(jobFilters: string[], nameRe: RegExp | null): Record<string, unknown> {
+function buildModFilter(
+  jobFilters: string[],
+  nameRe: RegExp | null,
+  sameVillageAs: string | null
+): Record<string, unknown> {
   const parts: Record<string, unknown>[] = [];
-  if (jobFilters.length) parts.push(caseInsensitiveJobOr(jobFilters));
+  if (jobFilters.length) parts.push(jobOrVoucherMatchesCraftFilters(jobFilters));
   if (nameRe) parts.push({ name: nameRe });
+  if (sameVillageAs) {
+    const escaped = sameVillageAs.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    parts.push({ currentVillage: new RegExp(`^${escaped}$`, "i") });
+  }
   if (parts.length === 0) return {};
   return parts.length === 1 ? parts[0]! : { $and: parts };
 }
@@ -37,6 +80,7 @@ function buildModFilter(jobFilters: string[], nameRe: RegExp | null): Record<str
 /**
  * Search accepted player characters + mod characters by name (for crafting request target picker).
  * Optional repeated `job` query params restrict to characters with those jobs (e.g. only crafters for an item).
+ * Optional `village` restricts to characters whose **currentVillage** matches (commissions require same village).
  * With `job` set and empty `q`, returns an alphabetical browse list (up to limit).
  */
 export async function GET(request: Request) {
@@ -53,6 +97,9 @@ export async function GET(request: Request) {
       .map((j) => j.trim())
       .filter(Boolean);
 
+    const villageFilter = (url.searchParams.get("village") ?? "").trim();
+    const sameVillageAs = villageFilter.length > 0 ? villageFilter : null;
+
     const browseByJobs = jobFilters.length > 0 && q.length === 0;
     const searchOk = q.length >= 2 || (jobFilters.length > 0 && q.length >= 1);
 
@@ -65,8 +112,8 @@ export async function GET(request: Request) {
     const esc = q.length > 0 ? q.replace(/[.*+?^${}()|[\]\\]/g, "\\$&") : "";
     const nameRe = esc ? new RegExp(esc, "i") : null;
 
-    const charFilter = buildRegularFilter(jobFilters, nameRe);
-    const modFilter = buildModFilter(jobFilters, nameRe);
+    const charFilter = buildRegularFilter(jobFilters, nameRe, sameVillageAs);
+    const modFilter = buildModFilter(jobFilters, nameRe, sameVillageAs);
 
     await connect();
     const Character = (await import("@/models/CharacterModel.js")).default;
@@ -75,12 +122,16 @@ export async function GET(request: Request) {
 
     const [regular, mod] = await Promise.all([
       Character.find(charFilter)
-        .select("_id name userId job currentStamina maxStamina homeVillage")
+        .select(
+          "_id name userId job jobVoucher jobVoucherJob currentStamina maxStamina homeVillage currentVillage"
+        )
         .sort({ name: 1 })
         .limit(limit)
         .lean(),
       ModCharacter.find(modFilter)
-        .select("_id name userId job currentStamina maxStamina homeVillage")
+        .select(
+          "_id name userId job jobVoucher jobVoucherJob currentStamina maxStamina homeVillage currentVillage"
+        )
         .sort({ name: 1 })
         .limit(limit)
         .lean(),
@@ -92,9 +143,16 @@ export async function GET(request: Request) {
         name: c.name,
         userId: c.userId,
         job: c.job,
+        jobVoucher: Boolean((c as { jobVoucher?: boolean }).jobVoucher),
+        jobVoucherJob:
+          (c as { jobVoucherJob?: string | null }).jobVoucherJob === undefined ||
+          (c as { jobVoucherJob?: string | null }).jobVoucherJob === null
+            ? null
+            : String((c as { jobVoucherJob?: string | null }).jobVoucherJob),
         currentStamina: c.currentStamina,
         maxStamina: Math.max(0, Number((c as { maxStamina?: number }).maxStamina) || 0),
         homeVillage: c.homeVillage,
+        currentVillage: String((c as { currentVillage?: string }).currentVillage ?? "").trim(),
         isModCharacter: false,
       })),
       ...mod.map((c) => ({
@@ -102,9 +160,16 @@ export async function GET(request: Request) {
         name: c.name,
         userId: c.userId,
         job: c.job,
+        jobVoucher: Boolean((c as { jobVoucher?: boolean }).jobVoucher),
+        jobVoucherJob:
+          (c as { jobVoucherJob?: string | null }).jobVoucherJob === undefined ||
+          (c as { jobVoucherJob?: string | null }).jobVoucherJob === null
+            ? null
+            : String((c as { jobVoucherJob?: string | null }).jobVoucherJob),
         currentStamina: c.currentStamina,
         maxStamina: Math.max(0, Number((c as { maxStamina?: number }).maxStamina) || 999),
         homeVillage: c.homeVillage,
+        currentVillage: String((c as { currentVillage?: string }).currentVillage ?? "").trim(),
         isModCharacter: true,
       })),
     ];
