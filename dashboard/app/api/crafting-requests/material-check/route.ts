@@ -37,7 +37,9 @@ export async function GET(request: Request) {
       return NextResponse.json({ error: "Craftable item not found" }, { status: 404 });
     }
 
-    const rawMaterials = (item as { craftingMaterial?: unknown }).craftingMaterial ?? [];
+    const itemDoc = item as unknown as { itemName?: string; craftingMaterial?: unknown };
+    const resolvedCraftItemName = String(itemDoc.itemName ?? craftItemName).trim();
+    const rawMaterials = itemDoc.craftingMaterial ?? [];
     const evalResult = await evaluateRecipeMaterialsOnInventory(
       user.id,
       requesterCharacterName,
@@ -51,7 +53,7 @@ export async function GET(request: Request) {
 
     if (!evalResult.hasRecipe) {
       return NextResponse.json({
-        craftItemName: (item as { itemName: string }).itemName,
+        craftItemName: resolvedCraftItemName,
         hasRecipe: false,
         allMaterialsMet: false,
         lines: [],
@@ -59,7 +61,7 @@ export async function GET(request: Request) {
     }
 
     return NextResponse.json({
-      craftItemName: (item as { itemName: string }).itemName,
+      craftItemName: resolvedCraftItemName,
       hasRecipe: true,
       allMaterialsMet: evalResult.allMaterialsMet,
       lines: evalResult.lines,
