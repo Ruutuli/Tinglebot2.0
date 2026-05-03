@@ -39,9 +39,9 @@ const ODD_STRUCTURE_VARIANTS = [
     flavor: 'A half-finished frame of wood and metal sits in the grotto. Ancient script winds around its beams. It looks like something was meant to be completed here—and perhaps still can be.',
     hint: 'Think of it as a **spine** and a **filler**. The spine is fixed: **30** rough-hewn pieces cut from living trees—the bones of the frame. The filler is **one** batch from the old ruins: strike-chips, brassy twists, long pins, toothed discs, or orange heart-lights. Each *kind* of filler names its own toll on the beam: **20** for the commonest heavy scrap, **10** for two different midweight families, **5** for a handful of interlocking bits, **3** for a tiny clutch of burning cores. Offer **spine + one filler** in the **same** submission—the count on your second pile must be the **exact** toll for whichever filler family you actually chose (not “close enough”).',
     wrongGuessHints: [
-      'Half the inscription is about timber; half is about machine-scrap. Bringing **only** one category—or stopping at **29** on the tree half—leaves the frame hollow.',
-      'The five numbers are **not** five separate offerings. They are **five possible prices** for **one** second pile. Match the **size** of what you carry to the **price line** it belongs to: the big scrap-line wants **20**, two different lines want **10**, the small gear-handful wants **5**, the rare core-cluster wants **3**.',
-      'Picture two stacks in one command: left hand **30** splinter-beams; right hand **one** ancient junk-line at full price (**20**, **10**, **10**, **5**, or **3**). Wrong answers are usually “second pile only,” “beams only,” “almost **30** beams,” or “two different fillers at once.”',
+      'The carving isn’t asking for “something ancient”—it wants **30 rough wood beams** for the spine **and**, in the **same** ritual, **one** pile from the **exact salvage families** it names (strike-flash chips, brass twists, long pins, gear teeth, or core lights). Random relics or supplies that aren’t those families won’t fit the slots.',
+      'The tolls **20 / 10 / 10 / 5 / 3** aren’t five separate gifts; they’re **five possible price lines** for **whichever single filler family** you pick. Choose **one** junk line, match **that** line’s full count, and pair it with the **30** beams (one combined offering, or valid step-by-step deposits—never wood stuck at **29**).',
+      'Sanity check: **30** beams plus **one** filler stack at its correct full amount—not beams alone, not filler alone, not two different fillers, not “almost” enough wood.',
     ],
     // Flexible: Wood >= 30 AND at least one other material type
     flexible: {
@@ -599,6 +599,56 @@ function buildParsedQtyMap(parsedItems) {
   return itemMap;
 }
 
+/**
+ * Partial Odd Structure deposits only remove what still fits each requirement; listed qty must not exceed that.
+ * @returns {{ ok: true } | { ok: false, message: string }}
+ */
+function validateOddStructurePartialListing(parsedItems, consumeList) {
+  if (!consumeList?.length) return { ok: true };
+  const listed = buildParsedQtyMap(parsedItems);
+  const taken = new Map();
+  for (const c of consumeList) {
+    const k = (c.itemName || '').trim().toLowerCase();
+    taken.set(k, (taken.get(k) || 0) + (c.quantity || 0));
+  }
+  for (const [k, q] of listed.entries()) {
+    const t = taken.get(k) || 0;
+    if (q > t) {
+      const displayName = (parsedItems.find((p) => (p.itemName || '').trim().toLowerCase() === k) || {}).itemName || k;
+      return {
+        ok: false,
+        message:
+          `**${displayName}:** this step only removes **x${t}** from inventories—you listed **x${q}**. ` +
+          `List **x${t}** or less for this submission (only what the structure still needs).`,
+      };
+    }
+  }
+  return { ok: true };
+}
+
+/**
+ * When a one-shot completion lists extra qty (e.g. Wood x59 + Flint x20), only taken amounts are removed — clarify on success.
+ */
+function formatOddStructureCompleteTakeNote(parsedItems, consumeList) {
+  if (!parsedItems?.length || !consumeList?.length) return '';
+  const listed = buildParsedQtyMap(parsedItems);
+  const taken = new Map();
+  for (const c of consumeList) {
+    const k = (c.itemName || '').trim().toLowerCase();
+    taken.set(k, (taken.get(k) || 0) + (c.quantity || 0));
+  }
+  const parts = [];
+  for (const [k, q] of listed.entries()) {
+    const t = taken.get(k) || 0;
+    if (q > t) {
+      const displayName = (parsedItems.find((p) => (p.itemName || '').trim().toLowerCase() === k) || {}).itemName || k;
+      parts.push(`**${displayName}:** you listed **x${q}**; only **x${t}** were taken.`);
+    }
+  }
+  if (!parts.length) return '';
+  return `\n\n_${parts.join(' ')}_`;
+}
+
 function mapQty(map, canonicalName) {
   return map.get((canonicalName || '').toLowerCase()) || 0;
 }
@@ -980,4 +1030,6 @@ module.exports = {
   checkPuzzleOffer,
   getPuzzleConsumeItems,
   getRandomPuzzleSuccessFlavor,
+  validateOddStructurePartialListing,
+  formatOddStructureCompleteTakeNote,
 };

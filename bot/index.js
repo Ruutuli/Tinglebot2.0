@@ -802,6 +802,17 @@ async function initializeClient() {
     const { registerMemberCapTracking } = require('./modules/memberCapModule');
     registerMemberCapTracking(client);
 
+    // ------------------- ?crafting accept (workshop commissions posted on dashboard only) -------------------
+    client.on("messageCreate", async (message) => {
+      try {
+        if (message.author.bot || !message.guild) return;
+        const { tryHandleCraftingAcceptPrefixMessage } = require("./commands/jobs/craftingRequestAccept");
+        await tryHandleCraftingAcceptPrefixMessage(message);
+      } catch (err) {
+        logger.error("CRAFT_REQ_ACCEPT", `[index.js] ${err.message}`);
+      }
+    });
+
     // ------------------- RP Quest Post Tracking ------------------
     client.on("messageCreate", async (message) => {
       if (isBotMessage(message)) return;

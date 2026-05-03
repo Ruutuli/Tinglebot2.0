@@ -1413,9 +1413,18 @@ export default function CraftingRequestsPage() {
                               </div>
                             ) : youPosted && row.status === "accepted" ? (
                               <div className="flex items-center border-t border-[var(--botw-border)]/40 pt-3 md:border-l md:border-t-0 md:pl-5 md:pt-0">
-                                <p className="text-[11px] leading-relaxed text-[var(--botw-pale)]/75 md:max-w-[12rem] md:self-center md:pt-1">
+                                <p className="text-[11px] leading-relaxed text-[var(--botw-pale)]/75 md:max-w-[16rem] md:self-center md:pt-1">
                                   <i className="fa-solid fa-circle-check mr-1 text-[var(--totk-light-green)]" aria-hidden />
-                                  Someone claimed this commission.
+                                  {row.acceptedByCharacterName?.trim() ? (
+                                    <>
+                                      <span className="font-semibold text-[var(--botw-cream)]/95">
+                                        {row.acceptedByCharacterName.trim()}
+                                      </span>{" "}
+                                      claimed this!
+                                    </>
+                                  ) : (
+                                    <>Someone claimed this commission.</>
+                                  )}
                                 </p>
                               </div>
                             ) : !youPosted ? (

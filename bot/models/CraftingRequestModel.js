@@ -1,5 +1,5 @@
 // ============================================================================
-// CraftingRequest — dashboard commission / crafting request board
+// CraftingRequest — must match dashboard/models/CraftingRequestModel.js (collection: craftingrequests)
 // ============================================================================
 
 const mongoose = require("mongoose");
@@ -9,15 +9,11 @@ const CraftingRequestSchema = new Schema(
   {
     requesterDiscordId: { type: String, required: true, index: true },
     requesterUsername: { type: String, default: "" },
-
     requesterCharacterName: { type: String, required: true },
-
     craftItemName: { type: String, required: true, index: true },
     craftItemMongoId: { type: Schema.Types.ObjectId, ref: "Item", default: null },
-
     craftingJobsSnapshot: { type: [String], default: [] },
     staminaToCraftSnapshot: { type: Number, default: 0 },
-
     targetMode: {
       type: String,
       enum: ["open", "specific"],
@@ -26,17 +22,11 @@ const CraftingRequestSchema = new Schema(
     targetCharacterId: { type: Schema.Types.ObjectId, default: null },
     targetCharacterName: { type: String, default: "" },
     targetCharacterHomeVillage: { type: String, default: "" },
-
     providingAllMaterials: { type: Boolean, default: false },
     materialsDescription: { type: String, default: "" },
     paymentOffer: { type: String, default: "" },
     elixirDescription: { type: String, default: "" },
-    /** 1–3 Basic/Mid/High when craft is a mixer elixir; null otherwise */
     elixirTier: { type: Number, default: null },
-    /**
-     * Mixer elixirs only: commissioner picks exact inventory rows (and max qty per row) they commit.
-     * Claim consumes rows against the boost-adjusted recipe.
-     */
     elixirMaterialSelections: {
       type: [
         {
@@ -47,7 +37,6 @@ const CraftingRequestSchema = new Schema(
       default: [],
     },
     boostNotes: { type: String, default: "" },
-
     status: {
       type: String,
       enum: ["open", "accepted", "cancelled"],
@@ -58,7 +47,6 @@ const CraftingRequestSchema = new Schema(
     acceptedByUserId: { type: String, default: null },
     acceptedByCharacterId: { type: Schema.Types.ObjectId, default: null },
     acceptedByCharacterName: { type: String, default: "" },
-
     discordMessageId: { type: String, default: null },
   },
   {

@@ -102,6 +102,8 @@ export type CraftingRequestNotifyPayload = {
   targetCharacterHomeVillage?: string;
   targetOwnerDiscordId?: string;
   providingAllMaterials: boolean;
+  /** Lines from the catalog recipe (`Item.craftingMaterial`) for the board embed. */
+  recipeMaterials: Array<{ itemName: string; quantity: number }>;
   materialsDescription: string;
   paymentOffer: string;
   /** 1–3 when commission is for a mixer elixir */
@@ -171,6 +173,14 @@ export function buildCraftingRequestBoardMessage(
     ? "✅ Commissioner brings **everything** listed for this recipe."
     : "⚠️ Not all materials in hand yet — see notes below.";
 
+  const recipeMaterialLines = (payload.recipeMaterials ?? [])
+    .filter((m) => m.itemName?.trim() && Number(m.quantity) > 0)
+    .map((m) => {
+      const q = Number(m.quantity);
+      const qtyStr = !Number.isFinite(q) ? "?" : Number.isInteger(q) ? String(q) : String(q);
+      return `↳ **${qtyStr}×** ${m.itemName.trim()}`;
+    });
+
   const materialsNotes = payload.materialsDescription.trim()
     ? clip(payload.materialsDescription.trim(), 500)
     : "";
@@ -231,6 +241,17 @@ export function buildCraftingRequestBoardMessage(
   descParts.push("");
   descParts.push(`📦 **Materials**`);
   descParts.push(materialsLine);
+  if (recipeMaterialLines.length > 0) {
+    const maxLines = 25;
+    for (let i = 0; i < Math.min(recipeMaterialLines.length, maxLines); i++) {
+      descParts.push(recipeMaterialLines[i]!);
+    }
+    if (recipeMaterialLines.length > maxLines) {
+      descParts.push(
+        `↳ _…and ${recipeMaterialLines.length - maxLines} more (open the board for the full list)._`
+      );
+    }
+  }
   if (materialsNotes) {
     descParts.push(`↳ ${materialsNotes}`);
   }
@@ -244,8 +265,17 @@ export function buildCraftingRequestBoardMessage(
     descParts.push(elixirTierLine);
   }
 
+  const requestId = payload.requestId?.trim() || "";
+  const acceptCommandExample = requestId
+    ? `?crafting accept ${requestId} <your crafter OC name>`
+    : `?crafting accept <request id> <your crafter OC name>`;
+
   descParts.push("");
-  descParts.push(`🔗 **[Open the workshop board →](${boardUrl})**`);
+  descParts.push("🧭 **How to accept**");
+  descParts.push(
+    `↳ **Discord:** \`${acceptCommandExample}\` · or \`?crafting request accept\` with the same **request id** and OC name`
+  );
+  descParts.push(`↳ **Dashboard:** [Open the workshop board →](${boardUrl})`);
 
   let description = descParts.join("\n");
   if (description.length > 4096) {
@@ -406,8 +436,14 @@ export function buildCraftingRequestAcceptedMessage(
     "",
     "— — — — — —",
     "",
-    `🤝 **Trade & payment**`,
-    `Please **trade** or **gift** (through the bot) any **materials**, **crafted items**, and **payment** you agreed on—match what was listed on the workshop post and in the notes.`,
+    `📦 **Items used**`,
+    `↳ Recipe materials were consumed automatically when this commission was accepted.`,
+    "",
+    `⚡ **Stamina used**`,
+    `↳ Crafter stamina was spent automatically when the item was crafted.`,
+    "",
+    `💰 **Payment**`,
+    `↳ Send any agreed **payment** with the **gift** command (through the bot)—match what was listed on the workshop post and in the notes.`,
   ];
 
   if (opts.paymentOffer?.trim()) {

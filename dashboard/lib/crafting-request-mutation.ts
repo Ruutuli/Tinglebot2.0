@@ -236,6 +236,13 @@ export function craftingRequestNotifyPayload(
 ): CraftingRequestNotifyPayload {
   const jobsSnap = Array.isArray(v.item.craftingJobs) ? [...v.item.craftingJobs] : [];
   const staminaSnap = parseStaminaToCraft(v.item.staminaToCraft);
+  const rawMats = Array.isArray(v.item.craftingMaterial) ? v.item.craftingMaterial : [];
+  const recipeMaterials = rawMats
+    .map((m) => ({
+      itemName: String(m.itemName ?? "").trim(),
+      quantity: Number(m.quantity),
+    }))
+    .filter((m) => m.itemName && Number.isFinite(m.quantity) && m.quantity > 0);
   return {
     requestId,
     requesterDiscordId: user.id,
@@ -250,6 +257,7 @@ export function craftingRequestNotifyPayload(
     targetCharacterHomeVillage: v.targetCharacterHomeVillage || undefined,
     targetOwnerDiscordId: v.targetOwnerDiscordId,
     providingAllMaterials: v.providingAllMaterials,
+    recipeMaterials,
     materialsDescription: v.materialsDescription,
     paymentOffer: v.paymentOffer,
     elixirTier: v.elixirTier,

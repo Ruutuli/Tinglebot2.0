@@ -80,9 +80,16 @@ export function getDiscordRedirectUri(request?: NextRequest): string {
  * calls them for admin approvals and accepting workshop crafting commissions.
  * Set the same BOT_INTERNAL_API_SECRET on both dashboard and bot; URL is the bot's base (no path).
  * Must be the **bot** process public URL (GET /health must work), not the dashboard or main website
- * domain. If you point at the wrong host, /internal/pending-submissions will 404.
+ * domain — if you set this to `https://tinglebot.xyz` or your Next.js app URL, accepting workshop
+ * commissions will get HTML/404 because `/internal/workshop-commission-craft` exists only on the bot.
+ * If you point at the wrong host, /internal/pending-submissions will 404.
  * If this URL is stale (e.g. old Railway *.up.railway.app hostname), the host may return 404
  * "Application not found" — update to the bot service’s current public URL.
+ *
+ * Local dashboard (`npm run dev` on localhost:6001): when `NODE_ENV === "development"` and this
+ * repo’s `bot/` folder exists next to `dashboard/`, accepting a commission runs the bot’s
+ * `executeWorkshopCommissionCraft` in-process — **BOT_INTERNAL_API_URL is not required**. Set
+ * `CRAFTING_ACCEPT_INLINE=false` to always use HTTP to the bot instead.
  */
 export function getBotInternalApiConfig(): {
   baseUrl: string | undefined;

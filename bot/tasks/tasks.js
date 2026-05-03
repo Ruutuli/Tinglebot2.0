@@ -987,6 +987,8 @@ async function peddlerWeeklyVillageRestock(client, _data = {}) {
     const poolRaw = await Item.find({
       itemRarity: { $lte: maxRarity },
       category: { $nin: ['Custom Weapon'] },
+      // Old exploration maps (Map #n) should not be supplied by weekly Peddler restock
+      itemName: { $not: { $regex: /^Map #\d+$/ } },
     }).lean();
     const pool = peddlerShuffle(poolRaw);
 
