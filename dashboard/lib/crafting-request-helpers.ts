@@ -1,6 +1,32 @@
 import mongoose from "mongoose";
 import { leanOne } from "@/lib/mongoose-lean";
 
+/** Mongoose CraftingRequest document — API routes cast `find*` results so TS sees fields (not bare `Document`). */
+export type CraftingRequestRouteDocument = mongoose.Document & {
+  status: string;
+  requesterDiscordId: string;
+  requesterCharacterName: string;
+  requesterUsername?: string;
+  craftItemName: string;
+  craftItemMongoId: mongoose.Types.ObjectId | null;
+  craftingJobsSnapshot: string[];
+  staminaToCraftSnapshot: number;
+  targetMode: "open" | "specific";
+  targetCharacterId: mongoose.Types.ObjectId | null;
+  targetCharacterName: string;
+  targetCharacterHomeVillage: string;
+  providingAllMaterials: boolean;
+  materialsDescription: string;
+  paymentOffer: string;
+  elixirTier: number | null;
+  elixirMaterialSelections: Array<{
+    inventoryDocumentId: mongoose.Types.ObjectId;
+    maxQuantity: number;
+  }>;
+  discordMessageId?: string | null;
+  commissionID?: string | null;
+};
+
 export type ItemCraftFields = {
   craftingJobs?: string[];
   staminaToCraft?: unknown;

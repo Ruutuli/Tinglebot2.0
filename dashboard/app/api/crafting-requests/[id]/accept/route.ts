@@ -5,6 +5,7 @@ import { connect } from "@/lib/db";
 import { getSession } from "@/lib/session";
 import mongoose from "mongoose";
 import {
+  CraftingRequestRouteDocument,
   findCraftingRequestDocumentByRouteId,
   loadCharacterIconForOwner,
   loadCharacterUnionByIdForOwner,
@@ -53,7 +54,7 @@ export async function POST(request: Request, context: RouteContext) {
     const CraftingRequest = (await import("@/models/CraftingRequestModel.js")).default;
 
     const reqDocRaw = await findCraftingRequestDocumentByRouteId(CraftingRequest, idParam);
-    const reqDoc = reqDocRaw as import("mongoose").Document | null;
+    const reqDoc = reqDocRaw as CraftingRequestRouteDocument | null;
     if (!reqDoc) {
       return NextResponse.json({ error: "Request not found" }, { status: 404 });
     }
@@ -107,7 +108,7 @@ export async function POST(request: Request, context: RouteContext) {
     }
 
     const acceptedAt = new Date();
-    const reserved = await CraftingRequest.findOneAndUpdate(
+    const reserved = (await CraftingRequest.findOneAndUpdate(
       {
         _id: id,
         status: "open",
@@ -123,7 +124,7 @@ export async function POST(request: Request, context: RouteContext) {
         },
       },
       { new: true }
-    ).exec();
+    ).exec()) as CraftingRequestRouteDocument | null;
 
     if (!reserved) {
       const latestRaw = await CraftingRequest.findById(id).lean();

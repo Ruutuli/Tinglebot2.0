@@ -1,7 +1,10 @@
 import { NextResponse } from "next/server";
 import { connect } from "@/lib/db";
 import { getSession } from "@/lib/session";
-import { findCraftingRequestDocumentByRouteId } from "@/lib/crafting-request-helpers";
+import {
+  CraftingRequestRouteDocument,
+  findCraftingRequestDocumentByRouteId,
+} from "@/lib/crafting-request-helpers";
 
 export const dynamic = "force-dynamic";
 
@@ -24,7 +27,7 @@ export async function POST(_request: Request, context: RouteContext) {
     const CraftingRequest = (await import("@/models/CraftingRequestModel.js")).default;
 
     const reqDocRaw = await findCraftingRequestDocumentByRouteId(CraftingRequest, idParam);
-    const reqDoc = reqDocRaw as import("mongoose").Document | null;
+    const reqDoc = reqDocRaw as CraftingRequestRouteDocument | null;
     if (!reqDoc) {
       return NextResponse.json({ error: "Request not found" }, { status: 404 });
     }

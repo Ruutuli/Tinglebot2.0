@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { useSession } from "@/hooks/use-session";
 import { formatItemImageUrl } from "@/lib/item-utils";
@@ -283,7 +283,7 @@ function resetFormState() {
   };
 }
 
-export default function CraftingRequestsPage() {
+function CraftingRequestsPageContent() {
   const { user, loading: sessionLoading } = useSession();
   const searchParams = useSearchParams();
   const requestFocusFromUrl = searchParams.get("request")?.trim() ?? "";
@@ -999,9 +999,12 @@ export default function CraftingRequestsPage() {
         elixirTier: selectedItemMeta?.isElixir ? elixirTier : undefined,
         ...(elixirMaterialSelections ? { elixirMaterialSelections } : {}),
       };
-      const isEdit = Boolean(editingRequestId);
+      const editTargetId = editingRequestId?.trim();
+      const isEdit = Boolean(editTargetId);
       const res = await fetch(
-        isEdit ? `/api/crafting-requests/${encodeURIComponent(editingRequestId)}` : "/api/crafting-requests",
+        isEdit && editTargetId
+          ? `/api/crafting-requests/${encodeURIComponent(editTargetId)}`
+          : "/api/crafting-requests",
         {
           method: isEdit ? "PATCH" : "POST",
           headers: { "Content-Type": "application/json" },
@@ -2767,5 +2770,15 @@ export default function CraftingRequestsPage() {
         </div>
       )}
     </div>
+  );
+}
+
+export default function CraftingRequestsPage() {
+  return (
+    <Suspense
+      fallback={<div className="mx-auto max-w-4xl p-8 text-center text-slate-500">Loading…</div>}
+    >
+      <CraftingRequestsPageContent />
+    </Suspense>
   );
 }

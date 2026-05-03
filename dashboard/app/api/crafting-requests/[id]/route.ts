@@ -2,7 +2,11 @@ import { NextResponse } from "next/server";
 import { connect } from "@/lib/db";
 import { getSession } from "@/lib/session";
 import mongoose from "mongoose";
-import { findCraftingRequestDocumentByRouteId, parseStaminaToCraft } from "@/lib/crafting-request-helpers";
+import {
+  CraftingRequestRouteDocument,
+  findCraftingRequestDocumentByRouteId,
+  parseStaminaToCraft,
+} from "@/lib/crafting-request-helpers";
 import {
   craftingRequestNotifyPayloadForDiscord,
   validateCraftingRequestBody,
@@ -33,7 +37,7 @@ export async function PATCH(request: Request, context: RouteContext) {
     await connect();
     const CraftingRequest = (await import("@/models/CraftingRequestModel.js")).default;
     const reqDocRaw = await findCraftingRequestDocumentByRouteId(CraftingRequest, idParam);
-    const reqDoc = reqDocRaw as import("mongoose").Document | null;
+    const reqDoc = reqDocRaw as CraftingRequestRouteDocument | null;
     if (!reqDoc) {
       return NextResponse.json({ error: "Request not found" }, { status: 404 });
     }
@@ -81,7 +85,7 @@ export async function PATCH(request: Request, context: RouteContext) {
             requestId,
             user,
             v,
-            reqDoc.get("commissionID") ? String(reqDoc.get("commissionID")) : null
+            reqDoc.commissionID ? String(reqDoc.commissionID) : null
           )
         );
       } catch (e) {
@@ -114,7 +118,7 @@ export async function DELETE(_request: Request, context: RouteContext) {
     const CraftingRequest = (await import("@/models/CraftingRequestModel.js")).default;
 
     const reqDocRaw = await findCraftingRequestDocumentByRouteId(CraftingRequest, idParam);
-    const reqDoc = reqDocRaw as import("mongoose").Document | null;
+    const reqDoc = reqDocRaw as CraftingRequestRouteDocument | null;
     if (!reqDoc) {
       return NextResponse.json({ error: "Request not found" }, { status: 404 });
     }
