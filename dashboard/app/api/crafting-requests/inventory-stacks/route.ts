@@ -3,6 +3,18 @@ import { connect, getInventoriesDb } from "@/lib/db";
 import { getSession } from "@/lib/session";
 import mongoose from "mongoose";
 import { userOwnsCharacterName } from "@/lib/crafting-request-helpers";
+import { effectFamilyFromElixirItemName, isMixerOutputElixirName } from "@/lib/elixir-catalog";
+import {
+  fetchMixerItemDocsByInventoryNames,
+  loadMixerLabelSetsFromDb,
+  mixerCommissionEligibleSync,
+  mixerNormKey,
+} from "@/lib/mixer-commission-pool";
+import { normalizedInventoryItemNameForRecipeMatch } from "@/lib/elixir-material-line-match";
+
+function escapeRegex(s: string): string {
+  return String(s ?? "").replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
 
 export const dynamic = "force-dynamic";
 
@@ -67,6 +79,46 @@ export async function GET(request: Request) {
     }
 
     stacks.sort((a, b) => a.itemName.localeCompare(b.itemName));
+
+    const mixerCraftItemName = (url.searchParams.get("mixerCraftItemName") ?? "").trim();
+    if (mixerCraftItemName) {
+      if (!isMixerOutputElixirName(mixerCraftItemName)) {
+        return NextResponse.json(
+          { error: "mixerCraftItemName must be a mixer workshop elixir (e.g. Chilly Elixir)." },
+          { status: 400 }
+        );
+      }
+      const Item = (await import("@/models/ItemModel.js")).default;
+      const canonical = normalizedInventoryItemNameForRecipeMatch(mixerCraftItemName);
+      const craftDoc = await Item.findOne({
+        itemName: new RegExp(`^${escapeRegex(canonical)}$`, "i"),
+      })
+        .select("craftingMaterial itemName")
+        .lean<{ craftingMaterial?: unknown; itemName?: string } | null>();
+
+      const mats = Array.isArray(craftDoc?.craftingMaterial)
+        ? (craftDoc!.craftingMaterial as Array<{ itemName: string; quantity: number }>)
+        : [];
+      const brewFam = effectFamilyFromElixirItemName(mixerCraftItemName);
+      if (!brewFam || mats.length === 0) {
+        return NextResponse.json(
+          { error: "Could not load recipe materials for that elixir. Try another item or contact staff." },
+          { status: 400 }
+        );
+      }
+
+      const sets = await loadMixerLabelSetsFromDb();
+      const docMap = await fetchMixerItemDocsByInventoryNames(stacks.map((s) => s.itemName));
+      stacks = stacks.filter((s) =>
+        mixerCommissionEligibleSync({
+          inventoryItemName: s.itemName,
+          craftingMaterial: mats,
+          brewEffectFamily: brewFam,
+          itemDoc: docMap.get(mixerNormKey(s.itemName)) ?? null,
+          sets,
+        })
+      );
+    }
 
     return NextResponse.json({ characterName: charDoc.name, stacks });
   } catch (err) {

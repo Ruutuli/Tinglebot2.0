@@ -51,6 +51,17 @@ const {
 const { addItemInventoryDatabase, processMaterials } = require('../utils/inventoryUtils');
 const { info, error: logError } = require('../utils/logger');
 const { isElixirItemName, isMixerOutputElixirName } = require('../modules/elixirModule');
+const Item = require('../models/ItemModel');
+const {
+  ensureIngredientLabelsLoaded,
+  elixirNameToEffectFamily,
+  getIngredientLabelSets,
+  getAllowedPartElementsForFamily,
+  resolvePartElementForMixer,
+  isMixerUniversalFairyCritterName,
+  isExcludedMixerItem,
+  normalizeNameKey,
+} = require('../modules/elixirBrewModule');
 
 function escapeRegex(s) {
   return String(s).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
@@ -74,6 +85,111 @@ function itemMatchesRecipeLine(itemName, lineName) {
   return String(itemName).toLowerCase() === String(lineName).toLowerCase();
 }
 
+function normalizedInventoryItemNameForRecipeMatch(itemName) {
+  return String(itemName ?? '')
+    .trim()
+    .replace(/\s*\[[^\]]+\]\s*$/i, '')
+    .trim();
+}
+
+/** Align with /crafting brew: 1 critter + 1 part + up to 3 extras. */
+const MIXER_BREW_MAX_INGREDIENT_UNITS = 5;
+const MIXER_BREW_MAX_EXTRAS = 3;
+
+function mergeMixerCommissionSelections(selections) {
+  const map = new Map();
+  for (const sel of selections || []) {
+    const id = String(sel.inventoryDocumentId ?? '').trim();
+    const mq = Math.floor(Number(sel.maxQuantity));
+    if (!id || !Number.isFinite(mq) || mq < 1) continue;
+    map.set(id, (map.get(id) || 0) + mq);
+  }
+  return Array.from(map.entries()).map(([inventoryDocumentId, maxQuantity]) => ({
+    inventoryDocumentId,
+    maxQuantity,
+  }));
+}
+
+function mixerRecipeMinimumUnits(mats) {
+  let n = 0;
+  for (const m of mats || []) {
+    const q = Math.floor(Number(m.quantity));
+    if (Number.isFinite(q) && q > 0) n += q;
+  }
+  return n;
+}
+
+function stackMatchesAnyRecipeLine(itemName, craftingMaterial) {
+  const base = normalizedInventoryItemNameForRecipeMatch(itemName);
+  const mats = Array.isArray(craftingMaterial) ? craftingMaterial : [];
+  return mats.some((m) => itemMatchesRecipeLine(base, String(m?.itemName ?? '').trim()));
+}
+
+function inventoryNormLookupKey(name) {
+  return normalizeNameKey(normalizedInventoryItemNameForRecipeMatch(name));
+}
+
+/**
+ * Batch-fetch Item rows for commissioner inventory labels (normalized name keys).
+ * @param {string[]} inventoryItemLabels
+ */
+async function fetchItemDocsByInventoryLabels(inventoryItemLabels) {
+  const canonicalByLower = new Map();
+  for (const raw of inventoryItemLabels) {
+    const base = normalizedInventoryItemNameForRecipeMatch(raw);
+    const low = base.toLowerCase();
+    if (!canonicalByLower.has(low)) canonicalByLower.set(low, base);
+  }
+  if (!canonicalByLower.size) return new Map();
+
+  const $or = [...canonicalByLower.values()].map((canonical) => ({
+    itemName: new RegExp(`^${escapeRegex(canonical)}$`, 'i'),
+  }));
+  const docs = await Item.find({ $or }).select('itemName effectFamily element').lean();
+  const map = new Map();
+  for (const d of docs) {
+    if (!d.itemName) continue;
+    map.set(inventoryNormLookupKey(d.itemName), d);
+  }
+  return map;
+}
+
+/**
+ * Recipe line match OR `/crafting brew`-style extra (same family critter, allowed part, fairy).
+ */
+function stackEligibleForMixerCommission(itemName, craftingMaterial, craftItemName, itemDoc) {
+  if (stackMatchesAnyRecipeLine(itemName, craftingMaterial)) return true;
+
+  const brewFam = elixirNameToEffectFamily(craftItemName);
+  if (!brewFam) return false;
+
+  if (isExcludedMixerItem(itemName)) return false;
+  if (isMixerUniversalFairyCritterName(itemName)) return true;
+
+  const { critterNames, partNames, familyByCritterName } = getIngredientLabelSets();
+  const nameKey = inventoryNormLookupKey(itemName);
+
+  const partListed = [...partNames].some((n) => normalizeNameKey(n) === nameKey);
+  const critterListed = [...critterNames].some((n) => normalizeNameKey(n) === nameKey);
+
+  if (!itemDoc || !itemDoc.itemName) return false;
+
+  if (partListed) {
+    const allowed = getAllowedPartElementsForFamily(brewFam);
+    const actual = resolvePartElementForMixer(itemDoc, itemName);
+    return allowed.includes(actual);
+  }
+
+  if (critterListed) {
+    const famFromDb =
+      itemDoc.effectFamily != null ? String(itemDoc.effectFamily).trim().toLowerCase() : '';
+    const fam = famFromDb || familyByCritterName.get(nameKey) || '';
+    return fam === String(brewFam).trim().toLowerCase();
+  }
+
+  return false;
+}
+
 /**
  * Commissioner-chosen stacks for mixer elixirs; consumes only what the boost-adjusted recipe needs per line.
  */
@@ -82,35 +198,92 @@ async function planAndApplyElixirCommissionRemovals({
   commissioner,
   invCollection,
   adjustedCraftingMaterials,
+  baseCraftingMaterials,
   quantity,
+  craftItemName,
 }) {
   const charId = commissioner._id;
   const resolved = [];
+  const baseMats = Array.isArray(baseCraftingMaterials) ? baseCraftingMaterials : [];
+  const mergedSels = mergeMixerCommissionSelections(selections);
 
-  for (const sel of selections) {
+  let sumMaxQty = 0;
+  for (const sel of mergedSels) {
     const maxQ = Math.floor(Number(sel.maxQuantity));
     if (!Number.isFinite(maxQ) || maxQ < 1) {
-      return { ok: false, error: 'Each elixir stack needs maxQuantity ≥ 1.' };
+      return {
+        ok: false,
+        error:
+          'Mixer commission: each stack entry needs a positive maxQuantity (whole number). Ask the commissioner to re-save stack choices from the dashboard.',
+      };
     }
+    sumMaxQty += maxQ;
+  }
+  if (sumMaxQty > MIXER_BREW_MAX_INGREDIENT_UNITS) {
+    return {
+      ok: false,
+      error: `Mixer commission: at most ${MIXER_BREW_MAX_INGREDIENT_UNITS} total units per brew (1 critter + 1 part + up to ${MIXER_BREW_MAX_EXTRAS} extras). Saved commitments sum to ${sumMaxQty}. Commissioner must edit the request.`,
+    };
+  }
+
+  const recipeMin = mixerRecipeMinimumUnits(baseMats);
+  if (recipeMin > 0 && sumMaxQty < recipeMin) {
+    return {
+      ok: false,
+      error: `Mixer commission: commitments sum to ${sumMaxQty} but the catalog recipe needs at least ${recipeMin} unit(s) across its lines. Commissioner should add stacks or raise quantities (max ${MIXER_BREW_MAX_INGREDIENT_UNITS} total).`,
+    };
+  }
+
+  await ensureIngredientLabelsLoaded();
+
+  const prepass = [];
+  for (const sel of mergedSels) {
+    const maxQ = Math.floor(Number(sel.maxQuantity));
     let docId;
     try {
       docId = new mongoose.Types.ObjectId(String(sel.inventoryDocumentId));
     } catch {
-      return { ok: false, error: 'Invalid inventoryDocumentId in saved elixir selections.' };
+      return {
+        ok: false,
+        error:
+          'Invalid inventoryDocumentId in saved elixir selections. Commissioner should pick stacks again from the workshop form.',
+      };
     }
     const row = await invCollection.findOne({ _id: docId, characterId: charId });
     if (!row) {
-      return { ok: false, error: 'A selected inventory row is missing or not on the commissioner OC.' };
+      return {
+        ok: false,
+        error:
+          'A chosen inventory stack is missing or no longer on the commissioner OC (inventory changed or wrong character). Commissioner should refresh stacks and edit the request.',
+      };
     }
     const stackQty = Math.floor(Number(row.quantity)) || 0;
-    const usable = Math.min(maxQ, stackQty);
-    if (usable < 1) {
+    if (maxQ > stackQty) {
+      return {
+        ok: false,
+        error: `Commission saved ${maxQ}× "${row.itemName}" but that stack only has ${stackQty}. Commissioner should lower the amount or restock, then edit the request.`,
+      };
+    }
+    if (maxQ < 1) {
       return { ok: false, error: `No quantity available on the selected stack (${row.itemName}).` };
     }
+    prepass.push({ docId, row, maxQ });
+  }
+
+  const itemDocMap = await fetchItemDocsByInventoryLabels(prepass.map((p) => p.row.itemName));
+
+  for (const p of prepass) {
+    const doc = itemDocMap.get(inventoryNormLookupKey(p.row.itemName)) ?? null;
+    if (!stackEligibleForMixerCommission(p.row.itemName, baseMats, craftItemName, doc)) {
+      return {
+        ok: false,
+        error: `Stack "${p.row.itemName}" is not valid for this mixer commission (recipe lines, same-effect critters, allowed parts, or Fairy / Mock Fairy — same rules as /crafting brew). Commissioner should edit stack choices.`,
+      };
+    }
     resolved.push({
-      docId,
-      itemName: row.itemName,
-      qtyLeft: usable,
+      docId: p.docId,
+      itemName: p.row.itemName,
+      qtyLeft: p.maxQ,
     });
   }
 
@@ -129,7 +302,10 @@ async function planAndApplyElixirCommissionRemovals({
     for (const entry of resolved) {
       if (rem <= 0) break;
       if (entry.qtyLeft <= 0) continue;
-      if (!itemMatchesRecipeLine(entry.itemName, mat.itemName)) continue;
+      if (
+        !itemMatchesRecipeLine(normalizedInventoryItemNameForRecipeMatch(entry.itemName), mat.itemName)
+      )
+        continue;
       const take = Math.min(rem, entry.qtyLeft);
       entry.qtyLeft -= take;
       rem -= take;
@@ -138,7 +314,7 @@ async function planAndApplyElixirCommissionRemovals({
     if (rem > 0) {
       return {
         ok: false,
-        error: `Chosen stacks no longer cover this brew after boosts (need ${need}× ${mat.itemName}). Commissioner should edit stacks or inventory.`,
+        error: `After Scholar/village material rolls, this brew still needs ${need}× "${mat.itemName}" (short by ${rem}). Chosen stacks don't cover every recipe line — commissioner should add matching materials or edit stack amounts (up to ${MIXER_BREW_MAX_INGREDIENT_UNITS} units; extras may repeat the same stack).`,
       };
     }
   }
@@ -429,7 +605,9 @@ async function executeWorkshopCommissionCraft(opts) {
       commissioner,
       invCollection: inventoryCollection,
       adjustedCraftingMaterials,
+      baseCraftingMaterials: originalCraftingMaterials,
       quantity,
+      craftItemName: item.itemName,
     });
     if (!elixirApply.ok) {
       return { ok: false, code: 'ELIXIR_MATERIALS', error: elixirApply.error };

@@ -84,6 +84,7 @@ async function main() {
       ...q,
       oldMapNumber: null,
       oldMapLeadsTo: null,
+      oldMapLeadConsumed: false,
     }));
     await Square.updateOne(
       { _id: doc._id },

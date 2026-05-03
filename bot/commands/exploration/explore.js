@@ -1407,6 +1407,56 @@ async function findExactMapSquareAndQuadrant(squareId, quadrantId) {
  return { square, exactSquareId: square.squareId, exactQuadrantId: quadrant.quadrantId };
 }
 
+// Old map: one redemption per quadrant globally; also block if the same discovery type already exists (e.g. grotto from a roll).
+async function getQuadrantLeanForOldMap(squareId, quadrantId) {
+ const resolved = await findExactMapSquareAndQuadrant(squareId, quadrantId);
+ if (!resolved) return null;
+ const sq = await Square.findOne({ squareId: resolved.exactSquareId }).select("quadrants").lean();
+ const q = sq?.quadrants?.find(
+  (qq) => String(qq.quadrantId).toUpperCase() === String(resolved.exactQuadrantId).toUpperCase()
+ );
+ if (!q) return null;
+ return { resolved, quadrantDoc: q };
+}
+
+async function setQuadrantOldMapLeadConsumed(squareId, quadrantId) {
+ const resolved = await findExactMapSquareAndQuadrant(squareId, quadrantId);
+ if (!resolved) return;
+ await Square.updateOne(
+  { squareId: resolved.exactSquareId },
+  { $set: { "quadrants.$[q].oldMapLeadConsumed": true } },
+  { arrayFilters: [{ "q.quadrantId": resolved.exactQuadrantId }] }
+ ).catch((err) => logger.warn("EXPLORE", `[explore.js] setQuadrantOldMapLeadConsumed: ${err?.message || err}`));
+}
+
+function quadrantDiscoveriesHasGrotto(discoveries) {
+ if (!Array.isArray(discoveries)) return false;
+ return discoveries.some((d) => {
+  const t = String(d.type || "").toLowerCase();
+  return t === "grotto" || t === "shrine";
+ });
+}
+
+function quadrantDiscoveriesHasType(discoveries, typeLower) {
+ if (!Array.isArray(discoveries)) return false;
+ return discoveries.some((d) => String(d.type || "").toLowerCase() === typeLower);
+}
+
+async function relicExistsAtSquareQuadrant(squareNorm, quadrantNorm) {
+ const sn = String(squareNorm || "").trim().toUpperCase();
+ const qn = String(quadrantNorm || "").trim().toUpperCase();
+ if (!sn || !qn) return false;
+ const esc = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+ const existing = await Relic.findOne({
+  square: new RegExp(`^${esc(sn)}$`, "i"),
+  quadrant: new RegExp(`^${esc(qn)}$`, "i"),
+  archived: { $ne: true },
+ })
+  .select("_id")
+  .lean();
+ return !!existing;
+}
+
 // ------------------- buildTestingEndAfterGrottoEmbed ------------------
 // Testing only: end expedition immediately after grotto completion (same cleanup as "end" in testing mode).
 // - Resets map state (quadrants unexplored, discoveries cleared, pins removed), deletes grottos, closes raids.
@@ -8346,6 +8396,23 @@ module.exports = {
           if (hasIt) whoHasUnexpiredMap.push(pc);
         }
         if (whoHasUnexpiredMap.length > 0) {
+          const quadLean = await getQuadrantLeanForOldMap(newLocation.square, newLocation.quadrant);
+          const qDoc = quadLean?.quadrantDoc;
+          const discoveries = qDoc?.discoveries || [];
+          const leadConsumed = !!(qDoc && qDoc.oldMapLeadConsumed);
+          let spotAlreadyTaken = leadConsumed;
+          if (!spotAlreadyTaken) {
+            if (leadsTo === "grotto" || leadsTo === "shrine") {
+              spotAlreadyTaken = quadrantDiscoveriesHasGrotto(discoveries);
+            } else if (leadsTo === "ruins") {
+              spotAlreadyTaken = quadrantDiscoveriesHasType(discoveries, "ruins");
+            } else if (leadsTo === "relic") {
+              spotAlreadyTaken = await relicExistsAtSquareQuadrant(newLocation.square, newLocation.quadrant);
+            }
+          }
+          if (spotAlreadyTaken) {
+            moveDescription += `\n\n🗺️ **Already discovered here!** Another expedition already found what this old map points to in **${locationMove}**.`;
+          } else {
           const mapOwnerCharRef = whoHasUnexpiredMap[0];
           const mapOwnerName = mapOwnerCharRef?.name || "Unknown";
           const redeemed = await findAndRedeemOldMap(
@@ -8446,6 +8513,8 @@ module.exports = {
             } else {
               moveDescription += `\n\n🗺️ **Your map led you here!** **${mapOwnerName}**'s map revealed a **${leadsToLabel}**!`;
             }
+            await setQuadrantOldMapLeadConsumed(newLocation.square, newLocation.quadrant);
+          }
           }
         } else {
           // Only mention "map location" if someone in the party has this map but hasn't appraised it yet

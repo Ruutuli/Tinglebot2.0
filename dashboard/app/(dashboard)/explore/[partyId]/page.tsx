@@ -122,8 +122,18 @@ function getProgressLogOutcomeLabel(outcome: string): string {
 const SQUARE_W = 2400;
 const SQUARE_H = 1666;
 
-/** Parse "H8 Q3" from messages like "Found a monster camp in H8 Q3...", "Found ruins in H8 Q3...", "Found a grotto in H8 Q3..." */
-const REPORTABLE_LOC_RE = /\s+(?:in|at)\s+([A-J](?:[1-9]|1[0-2])\s+Q[1-4])(?:\s|;|,|\.|$)/i;
+/** Extract grid ref from progress messages — aligned with bot `LOC_IN_MESSAGE_RE`; strip Discord ** so `in **G9 Q1**` still parses. */
+function extractGridFromReportableMessage(message: string): { square: string; quadrant: string } | null {
+  const text = String(message ?? "")
+    .replace(/\u00a0/g, " ")
+    .replace(/\*+/g, "");
+  const m = /\s+(?:in|at)\s+([A-J](?:[1-9]|1[0-2]))\s+(Q[1-4])/i.exec(text);
+  if (!m?.[1] || !m[2]) return null;
+  const square = m[1].trim().toUpperCase();
+  const quadrant = m[2].trim().toUpperCase();
+  if (!square || !quadrant) return null;
+  return { square, quadrant };
+}
 
 /** Extract grotto name from messages like "Cleansed grotto **Taunhiy Grotto** in H8 Q2..." */
 const GROTTO_NAME_RE = /\*\*([^*]+)\*\*/;
@@ -147,10 +157,8 @@ function hasGrottoInQuadrant(progressLog: ProgressEntry[] | undefined, square: s
   const q = String(quadrant).trim().toUpperCase();
   return progressLog.some((e) => {
     if (!GROTTO_OUTCOMES.has(e.outcome)) return false;
-    const m = REPORTABLE_LOC_RE.exec(e.message);
-    if (!m?.[1]) return false;
-    const parts = m[1].trim().split(/\s+/);
-    return (parts[0] ?? "").toUpperCase() === s && (parts[1] ?? "").toUpperCase() === q;
+    const loc = extractGridFromReportableMessage(e.message);
+    return loc?.square === s && loc?.quadrant === q;
   });
 }
 
@@ -175,12 +183,9 @@ function getReportableDiscoveries(progressLog: ProgressEntry[] | undefined): Rep
   for (const e of progressLog) {
     const baseLabel = REPORTABLE_OUTCOMES[e.outcome];
     if (!baseLabel) continue;
-    const m = REPORTABLE_LOC_RE.exec(e.message);
-    if (!m || !m[1]) continue;
-    const parts = m[1].trim().split(/\s+/);
-    const square = (parts[0] ?? "").trim().toUpperCase();
-    const quadrant = (parts[1] ?? "").trim().toUpperCase();
-    if (!square || !quadrant) continue;
+    const loc = extractGridFromReportableMessage(e.message);
+    if (!loc) continue;
+    const { square, quadrant } = loc;
     // One grotto per location: grotto_found + grotto (marked on map) are the same discovery — show only one pin option
     if (GROTTO_OUTCOMES.has(e.outcome)) {
       const grottoLoc = `${square}|${quadrant}`;
@@ -239,6 +244,33 @@ function discoveryKey(d: { outcome: string; square: string; quadrant: string; at
   const s = String(d.square ?? "").trim().toUpperCase();
   const q = String(d.quadrant ?? "").trim().toUpperCase();
   return `${d.outcome}|${s}|${q}|${d.at ?? ""}`;
+}
+
+/** Same square+quadrant+timestamp grotto keys are one discovery (grotto_found vs grotto_cleansed after merge). */
+const GROTTO_DISCOVERY_OUTCOMES = new Set(["grotto", "grotto_found", "grotto_cleansed"]);
+
+function parseDiscoveryKeyParts(key: string): { outcome: string; square: string; quadrant: string; at: string } | null {
+  const i0 = key.indexOf("|");
+  if (i0 === -1) return null;
+  const i1 = key.indexOf("|", i0 + 1);
+  if (i1 === -1) return null;
+  const i2 = key.indexOf("|", i1 + 1);
+  if (i2 === -1) return null;
+  return {
+    outcome: key.slice(0, i0).trim(),
+    square: key.slice(i0 + 1, i1).trim().toUpperCase(),
+    quadrant: key.slice(i1 + 1, i2).trim().toUpperCase(),
+    at: key.slice(i2 + 1),
+  };
+}
+
+function discoveryMatchesReportedKey(key: string, reportedKey: string): boolean {
+  if (key === reportedKey) return true;
+  const a = parseDiscoveryKeyParts(key);
+  const b = parseDiscoveryKeyParts(reportedKey);
+  if (!a || !b) return false;
+  if (!GROTTO_DISCOVERY_OUTCOMES.has(a.outcome) || !GROTTO_DISCOVERY_OUTCOMES.has(b.outcome)) return false;
+  return a.square === b.square && a.quadrant === b.quadrant && a.at === b.at;
 }
 
 /** Render message with Discord-style **bold** (for progress log). */
@@ -659,9 +691,9 @@ export default function ExplorePartyPage() {
   const isDiscoveryReported = useCallback(
     (d: ReportableDiscovery) => {
       const key = discoveryKey(d);
-      if (party?.reportedDiscoveryKeys?.includes(key)) return true;
-      if (reportedDiscoveryKeys.has(key)) return true;
-      return userPins.some((p) => p.sourceDiscoveryKey === key);
+      if (party?.reportedDiscoveryKeys?.some((k) => discoveryMatchesReportedKey(key, k))) return true;
+      if ([...reportedDiscoveryKeys].some((k) => discoveryMatchesReportedKey(key, k))) return true;
+      return userPins.some((p) => p.sourceDiscoveryKey && discoveryMatchesReportedKey(key, p.sourceDiscoveryKey));
     },
     [party?.reportedDiscoveryKeys, reportedDiscoveryKeys, userPins]
   );
@@ -2534,7 +2566,7 @@ export default function ExplorePartyPage() {
                   const canPlacePins = !!(userId && party.currentUserJoined);
                   const unreported = reportableDiscoveries.filter((d) => !isDiscoveryReported(d));
                   const pinned = reportableDiscoveries.filter((d) => isDiscoveryReported(d));
-                  const showReportToTownHall = !partyEnded && unreported.length > 0;
+                  const showReportToTownHall = unreported.length > 0;
                   const handleMapClick = (e: React.MouseEvent<HTMLDivElement>) => {
                     if (!isPlacing || !placingForDiscovery) return;
                     const el = e.currentTarget;
@@ -2560,7 +2592,9 @@ export default function ExplorePartyPage() {
                             Report to town hall
                           </h3>
                           <p className="mb-2 text-[11px] font-medium text-amber-300/95">
-                            Place pins before the party moves to another square — unmarked discoveries in the current square are cleared and considered lost when you move.
+                            {partyEnded
+                              ? "These discoveries are still on the expedition log — place them on the map so they stay on the main Map page."
+                              : "Place pins before the party moves to another square — unmarked discoveries in the current square are cleared and considered lost when you move."}
                           </p>
                           {!userId ? (
                             <p className="mb-2 text-[11px] text-[var(--totk-grey-200)]">

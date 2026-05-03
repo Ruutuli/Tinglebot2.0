@@ -5,6 +5,17 @@ import { useSession } from "@/hooks/use-session";
 import { formatItemImageUrl } from "@/lib/item-utils";
 import { formatOpenCommissionSeekingLine } from "@/lib/crafting-request-helpers";
 import { elixirTierLabel, isMixerOutputElixirName } from "@/lib/elixir-catalog";
+import {
+  computeMixerAutoPickedQuantities,
+  computeMixerRecipeLineProgress,
+  MIXER_BREW_BASE_ROLE_UNITS,
+  MIXER_BREW_MAX_EXTRAS,
+  MIXER_BREW_MAX_INGREDIENT_UNITS,
+  mixerBrewOverBudgetMessage,
+  mixerBrewTooFewUnitsMessage,
+  mixerRecipeMinimumTotalUnits,
+  mixerStackRoleBadge,
+} from "@/lib/elixir-material-line-match";
 
 type CraftingRequestRow = {
   _id: string;
@@ -25,6 +36,8 @@ type CraftingRequestRow = {
   paymentOffer?: string;
   /** 1–3 Basic / Mid / High for mixer elixirs */
   elixirTier?: number | null;
+  /** Commissioner stack picks for mixer elixirs */
+  elixirMaterialSelections?: Array<{ inventoryDocumentId: string; maxQuantity: number }>;
   status: string;
   acceptedAt?: string | null;
   acceptedByUserId?: string | null;
@@ -60,17 +73,36 @@ type CraftItemOpt = {
 
 type ElixirGuideResponse = {
   craftItemName: string;
-  effectFamily: string;
   targetLevel: number;
   tierLabel: string;
-  partRequirement: string;
-  rarityGuidance: string;
-  eligibleCritters: string[];
-  eligibleParts: string[];
-  eligibleCrittersCapped?: boolean;
-  eligiblePartsCapped?: boolean;
-  slots: { role: string; detail: string }[];
+  /** Catalog recipe lines — same rules as claim validation (categories + exact names). */
+  craftingMaterial: Array<{ itemName: string; quantity: number }>;
+  /** True when the catalog row has no usable recipe lines (data issue). */
+  recipeIncomplete?: boolean;
 };
+
+/** Trim mixer stack picks so total committed units ≤ per-brew limit (same as /crafting brew). */
+function trimMixerSelectionsToIngredientBudget(
+  qtyById: Record<string, number>,
+  maxTotal: number
+): Record<string, number> {
+  const entries = Object.entries(qtyById)
+    .map(([id, raw]) => ({
+      id,
+      v: Math.max(0, Math.floor(Number(raw)) || 0),
+    }))
+    .filter((e) => e.v > 0);
+  let sum = entries.reduce((a, e) => a + e.v, 0);
+  if (sum <= maxTotal) return Object.fromEntries(entries.map((e) => [e.id, e.v]));
+  const list = entries.sort((a, b) => b.v - a.v);
+  while (sum > maxTotal && list.length > 0) {
+    const head = list[0]!;
+    head.v -= 1;
+    sum -= 1;
+    if (head.v <= 0) list.shift();
+  }
+  return Object.fromEntries(list.filter((e) => e.v > 0).map((e) => [e.id, e.v]));
+}
 
 function parseStamina(v: unknown): number {
   if (typeof v === "number" && Number.isFinite(v)) return Math.max(0, v);
@@ -176,6 +208,7 @@ export default function CraftingRequestsPage() {
   const [elixirTier, setElixirTier] = useState<1 | 2 | 3>(1);
   const [elixirGuide, setElixirGuide] = useState<ElixirGuideResponse | null>(null);
   const [elixirGuideLoading, setElixirGuideLoading] = useState(false);
+  const [elixirGuideFetchError, setElixirGuideFetchError] = useState<string | null>(null);
 
   const [formError, setFormError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
@@ -194,6 +227,91 @@ export default function CraftingRequestsPage() {
 
   /** When set, form submits PATCH to update this open request instead of POST create. */
   const [editingRequestId, setEditingRequestId] = useState<string | null>(null);
+
+  /** Mixer elixir: commissioner inventory rows (`maxQuantity` = up to this much may be consumed at claim). */
+  const [elixirStacks, setElixirStacks] = useState<Array<{ _id: string; itemName: string; quantity: number }>>(
+    []
+  );
+  const [elixirStacksLoading, setElixirStacksLoading] = useState(false);
+  const [elixirStacksError, setElixirStacksError] = useState<string | null>(null);
+  const [elixirStackQtyById, setElixirStackQtyById] = useState<Record<string, number>>({});
+
+  /** Includes `mixerCraftItemName` for mixer outputs so the API applies `/crafting brew` extra eligibility. */
+  const mixerInventoryStacksFetchUrl = useMemo(() => {
+    const cn = requesterCharacterName.trim();
+    if (!cn) return "";
+    const q = new URLSearchParams({ characterName: cn });
+    const craft = craftItemName.trim();
+    if (craft && isMixerOutputElixirName(craft)) q.set("mixerCraftItemName", craft);
+    return `/api/crafting-requests/inventory-stacks?${q.toString()}`;
+  }, [requesterCharacterName, craftItemName]);
+
+  /** API returns stacks already filtered for mixer brew parity when `mixerCraftItemName` is passed. */
+  const mixerEligibleStacks = useMemo(() => {
+    if (!elixirGuide?.craftingMaterial?.length) return [];
+    return elixirStacks;
+  }, [elixirStacks, elixirGuide?.craftingMaterial?.length]);
+
+  const mixerIngredientCommitTotal = useMemo(() => {
+    let s = 0;
+    for (const st of mixerEligibleStacks) {
+      const v = elixirStackQtyById[st._id];
+      if (typeof v === "number" && Number.isFinite(v) && v > 0) s += v;
+    }
+    return s;
+  }, [mixerEligibleStacks, elixirStackQtyById]);
+
+  /**
+   * Units required to satisfy every catalog line once (e.g. 1× Deep Firefly + 1× Any Monster Part → 2).
+   * Same idea as bot brew: base ingredients, then up to MIXER_BREW_MAX_EXTRAS optional units (5 cap total).
+   */
+  const mixerCatalogBaseUnits = useMemo(() => {
+    const mats = elixirGuide?.craftingMaterial;
+    if (!mats?.length) return MIXER_BREW_BASE_ROLE_UNITS;
+    const n = mixerRecipeMinimumTotalUnits(mats);
+    return n > 0 ? n : MIXER_BREW_BASE_ROLE_UNITS;
+  }, [elixirGuide]);
+
+  const mixerCommittedExtras = Math.max(0, mixerIngredientCommitTotal - mixerCatalogBaseUnits);
+  const mixerExtrasRemaining = Math.max(0, MIXER_BREW_MAX_EXTRAS - mixerCommittedExtras);
+  const mixerExtrasCommittedDisplay = Math.min(MIXER_BREW_MAX_EXTRAS, mixerCommittedExtras);
+
+  const mixerLineProgress = useMemo(
+    () =>
+      elixirGuide?.craftingMaterial?.length && mixerEligibleStacks.length
+        ? computeMixerRecipeLineProgress(
+            elixirGuide.craftingMaterial,
+            mixerEligibleStacks,
+            elixirStackQtyById
+          )
+        : [],
+    [elixirGuide?.craftingMaterial, mixerEligibleStacks, elixirStackQtyById]
+  );
+
+  useEffect(() => {
+    const mats = elixirGuide?.craftingMaterial;
+    if (elixirGuide && Array.isArray(mats) && mats.length === 0) {
+      setElixirStackQtyById({});
+      return;
+    }
+    if (!mats?.length) return;
+    const allowed = new Set(elixirStacks.map((s) => s._id));
+    setElixirStackQtyById((prev) => {
+      const filtered: Record<string, number> = {};
+      for (const [k, v] of Object.entries(prev)) {
+        if (allowed.has(k)) filtered[k] = v;
+      }
+      let trimmed = trimMixerSelectionsToIngredientBudget(filtered, MIXER_BREW_MAX_INGREDIENT_UNITS);
+      trimmed = trimMixerSelectionsToIngredientBudget(
+        computeMixerAutoPickedQuantities(mats, elixirStacks, trimmed),
+        MIXER_BREW_MAX_INGREDIENT_UNITS
+      );
+      const same =
+        Object.keys(trimmed).length === Object.keys(prev).length &&
+        Object.entries(trimmed).every(([k, v]) => prev[k] === v);
+      return same ? prev : trimmed;
+    });
+  }, [elixirStacks, elixirGuide]);
 
   const loadOpenRequests = useCallback(async () => {
     if (!user?.id) return;
@@ -351,30 +469,87 @@ export default function CraftingRequestsPage() {
     if (!formModalOpen || !craftItemName.trim() || !selectedItemMeta?.isElixir) {
       setElixirGuide(null);
       setElixirGuideLoading(false);
+      setElixirGuideFetchError(null);
       return;
     }
+    setElixirGuide(null);
+    setElixirGuideFetchError(null);
+    setElixirGuideLoading(true);
+    let cancelled = false;
     const t = window.setTimeout(() => {
-      (async () => {
-        setElixirGuideLoading(true);
+      void (async () => {
         try {
           const res = await fetch(
             `/api/crafting-requests/elixir-guide?craftItemName=${encodeURIComponent(craftItemName.trim())}&targetLevel=${elixirTier}`,
             { credentials: "include" }
           );
-          const data = (await res.json()) as Partial<ElixirGuideResponse> & { error?: string };
-          if (res.ok && data && Array.isArray(data.slots)) {
-            setElixirGuide(data as ElixirGuideResponse);
-          } else {
+          let data: (Partial<ElixirGuideResponse> & { error?: string; recipeIncomplete?: boolean }) | null =
+            null;
+          try {
+            data = (await res.json()) as Partial<ElixirGuideResponse> & {
+              error?: string;
+              recipeIncomplete?: boolean;
+            };
+          } catch {
+            data = null;
+          }
+          if (cancelled) return;
+          if (!res.ok) {
+            const msg =
+              (data && typeof data.error === "string" && data.error.trim()) ||
+              (res.status === 401
+                ? "You were signed out — refresh the page and log in again."
+                : res.status === 404
+                  ? "That elixir was not found in the craftable catalog."
+                  : "Could not load mixer recipe from the server.");
+            setElixirGuideFetchError(msg);
+            setElixirGuide(null);
+            return;
+          }
+          if (!data || !Array.isArray(data.craftingMaterial)) {
+            setElixirGuideFetchError(
+              "Mixer recipe response was unreadable. Change potency tier or close and reopen the form to retry."
+            );
+            setElixirGuide(null);
+            return;
+          }
+          const rawMats = data.craftingMaterial;
+          const craftingMaterial = rawMats
+            .map((m) => {
+              if (!m || typeof m !== "object") return null;
+              const itemName = String((m as { itemName?: unknown }).itemName ?? "").trim();
+              const quantity = Math.floor(Number((m as { quantity?: unknown }).quantity));
+              if (!itemName || !Number.isFinite(quantity) || quantity <= 0) return null;
+              return { itemName, quantity };
+            })
+            .filter(Boolean) as Array<{ itemName: string; quantity: number }>;
+          setElixirGuide({
+            craftItemName: String(data.craftItemName ?? craftItemName.trim()),
+            targetLevel:
+              typeof data.targetLevel === "number" && data.targetLevel >= 1 && data.targetLevel <= 3
+                ? data.targetLevel
+                : elixirTier,
+            tierLabel: String(data.tierLabel ?? ""),
+            craftingMaterial,
+            recipeIncomplete: Boolean(data.recipeIncomplete) || craftingMaterial.length === 0,
+          });
+          setElixirGuideFetchError(null);
+        } catch {
+          if (!cancelled) {
+            setElixirGuideFetchError(
+              "Network error while loading the mixer recipe. Check your connection and try changing potency tier to retry."
+            );
             setElixirGuide(null);
           }
-        } catch {
-          setElixirGuide(null);
         } finally {
-          setElixirGuideLoading(false);
+          if (!cancelled) setElixirGuideLoading(false);
         }
       })();
     }, 220);
-    return () => clearTimeout(t);
+    return () => {
+      cancelled = true;
+      clearTimeout(t);
+    };
   }, [formModalOpen, craftItemName, selectedItemMeta?.isElixir, elixirTier]);
 
   useEffect(() => {
@@ -385,6 +560,15 @@ export default function CraftingRequestsPage() {
       setTargetSearch("");
     }
   }, [selectedItemMeta, targetPick]);
+
+  /** Block Post/Save until inventory satisfies catalog recipe (when recipe exists). */
+  const materialsSubmitBlocked = useMemo(() => {
+    if (!craftItemName.trim() || !requesterCharacterName.trim()) return false;
+    if (ocMaterialLoading) return true;
+    if (!ocMaterialCheck) return false;
+    if (!ocMaterialCheck.hasRecipe) return false;
+    return !ocMaterialCheck.allMaterialsMet;
+  }, [craftItemName, requesterCharacterName, ocMaterialLoading, ocMaterialCheck]);
 
   const eligibleAcceptors = useMemo(() => {
     if (!acceptFor || !myChars.length) return [];
@@ -411,6 +595,49 @@ export default function CraftingRequestsPage() {
     setAcceptCharId(eligible[0]?._id ?? null);
   }, [acceptFor, myChars]);
 
+  useEffect(() => {
+    if (!formModalOpen || !selectedItemMeta?.isElixir || !mixerInventoryStacksFetchUrl) {
+      return;
+    }
+    let cancelled = false;
+    (async () => {
+      setElixirStacksLoading(true);
+      setElixirStacksError(null);
+      try {
+        const res = await fetch(mixerInventoryStacksFetchUrl, { credentials: "include" });
+        const data = (await res.json()) as {
+          stacks?: Array<{ _id: string; itemName: string; quantity: number }>;
+          error?: string;
+        };
+        if (!res.ok) {
+          throw new Error(
+            typeof data.error === "string" && data.error.trim()
+              ? data.error
+              : "Failed to load inventory stacks."
+          );
+        }
+        if (!cancelled) {
+          setElixirStacks(Array.isArray(data.stacks) ? data.stacks : []);
+          setElixirStacksError(null);
+        }
+      } catch (e) {
+        if (!cancelled) {
+          setElixirStacks([]);
+          setElixirStacksError(
+            e instanceof Error && e.message
+              ? e.message
+              : "Could not load this OC's inventory. Try another character or refresh the page."
+          );
+        }
+      } finally {
+        if (!cancelled) setElixirStacksLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [formModalOpen, selectedItemMeta?.isElixir, mixerInventoryStacksFetchUrl]);
+
   const refreshAfterMutation = useCallback(async () => {
     await loadOpenRequests();
     if (myActivityOpen) await loadMyRequests();
@@ -434,9 +661,14 @@ export default function CraftingRequestsPage() {
     setElixirTier(r.elixirTier);
     setElixirGuide(null);
     setElixirGuideLoading(false);
+    setElixirGuideFetchError(null);
+    setElixirStacksError(null);
     setItemPickerOpen(false);
     setOcMaterialCheck(null);
     setOcMaterialLoading(false);
+    setElixirStacks([]);
+    setElixirStacksLoading(false);
+    setElixirStackQtyById({});
   };
 
   const openEditRequest = useCallback(
@@ -463,6 +695,7 @@ export default function CraftingRequestsPage() {
         isEx && (tier === 2 || tier === 3) ? tier : isEx ? 1 : 1
       );
       setElixirGuide(null);
+      setElixirGuideFetchError(null);
       setItemQuery("");
       setItemOptions([]);
       setItemPickerOpen(false);
@@ -504,6 +737,14 @@ export default function CraftingRequestsPage() {
       } else {
         setTargetPick(null);
       }
+      const qtyInit: Record<string, number> = {};
+      for (const s of row.elixirMaterialSelections ?? []) {
+        qtyInit[String(s.inventoryDocumentId)] = Math.max(1, Math.floor(Number(s.maxQuantity)) || 1);
+      }
+      setElixirStackQtyById(trimMixerSelectionsToIngredientBudget(qtyInit, MIXER_BREW_MAX_INGREDIENT_UNITS));
+      setElixirStacks([]);
+      setElixirStacksLoading(false);
+      setElixirStacksError(null);
       setFormModalOpen(true);
     },
     [user?.id]
@@ -519,12 +760,16 @@ export default function CraftingRequestsPage() {
       setElixirTier(1);
     }
     setElixirGuide(null);
+    setElixirGuideFetchError(null);
     setItemQuery("");
     setItemOptions([]);
     setItemPickerOpen(false);
     setTargetPick(null);
     setTargetSearch("");
     setTargetResults([]);
+    setElixirStacks([]);
+    setElixirStacksError(null);
+    setElixirStackQtyById({});
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -556,6 +801,43 @@ export default function CraftingRequestsPage() {
       return;
     }
 
+    if (materialsSubmitBlocked) {
+      setFormError(
+        "Add every recipe material to your character's inventory first — you can't post until the checklist is green."
+      );
+      return;
+    }
+
+    let elixirMaterialSelections: Array<{ inventoryDocumentId: string; maxQuantity: number }> | undefined;
+    if (selectedItemMeta?.isElixir) {
+      const lines: Array<{ inventoryDocumentId: string; maxQuantity: number }> = [];
+      for (const [id, raw] of Object.entries(elixirStackQtyById)) {
+        const n = Math.floor(Number(raw));
+        if (!Number.isFinite(n) || n <= 0) continue;
+        lines.push({ inventoryDocumentId: id, maxQuantity: n });
+      }
+      if (lines.length === 0) {
+        setFormError(
+          `For mixer elixirs, commit units from inventory stacks so every recipe line is covered (typically 1 critter + 1 monster part, then up to ${MIXER_BREW_MAX_EXTRAS} extras) — ${MIXER_BREW_MAX_INGREDIENT_UNITS} units max total.`
+        );
+        return;
+      }
+      const sumMax = lines.reduce((a, l) => a + l.maxQuantity, 0);
+      if (sumMax > MIXER_BREW_MAX_INGREDIENT_UNITS) {
+        setFormError(mixerBrewOverBudgetMessage(sumMax));
+        return;
+      }
+      const guideMats = elixirGuide?.craftingMaterial;
+      if (Array.isArray(guideMats) && guideMats.length > 0) {
+        const recipeMin = mixerRecipeMinimumTotalUnits(guideMats);
+        if (recipeMin > 0 && sumMax < recipeMin) {
+          setFormError(mixerBrewTooFewUnitsMessage(sumMax, recipeMin));
+          return;
+        }
+      }
+      elixirMaterialSelections = lines;
+    }
+
     setSubmitting(true);
     try {
       const payload = {
@@ -567,6 +849,7 @@ export default function CraftingRequestsPage() {
         materialsDescription,
         paymentOffer,
         elixirTier: selectedItemMeta?.isElixir ? elixirTier : undefined,
+        ...(elixirMaterialSelections ? { elixirMaterialSelections } : {}),
       };
       const isEdit = Boolean(editingRequestId);
       const res = await fetch(
@@ -733,16 +1016,18 @@ export default function CraftingRequestsPage() {
 
   /** Modal-only: brown panel + pale text (matches dashboard hero cards). */
   const modalFieldClass =
-    "w-full rounded-md border border-[var(--totk-dark-ocher)]/55 bg-[var(--botw-black)]/28 px-3 py-2 text-sm leading-snug text-[var(--botw-pale)] placeholder:text-[var(--totk-grey-200)]/85 focus:border-[var(--totk-light-green)]/65 focus:outline-none focus:ring-1 focus:ring-[var(--totk-light-green)]/30";
+    "w-full rounded-md border border-[var(--totk-dark-ocher)]/55 bg-[var(--botw-black)]/28 px-3 py-2 text-sm leading-snug text-[var(--botw-pale)] placeholder:text-[var(--totk-grey-200)]/85 focus:border-[var(--totk-light-green)]/65 focus:outline-none focus:ring-1 focus:ring-[var(--totk-light-green)]/30 md:min-h-12 md:px-4 md:py-3 md:text-base";
   /** Selects: avoid `leading-snug` + native chevron clash; reserve space for SVG arrow. */
   const modalSelectClass =
-    "w-full min-h-[2.5rem] rounded-md border border-[var(--totk-dark-ocher)]/55 px-3 py-2 pr-9 text-sm leading-normal text-[var(--botw-pale)] focus:border-[var(--totk-light-green)]/65 focus:outline-none focus:ring-1 focus:ring-[var(--totk-light-green)]/30 appearance-none";
-  const modalLabelClass = "mb-1 block text-sm font-medium text-[var(--totk-light-ocher)]";
-  const modalHintClass = "text-xs leading-snug text-[var(--botw-pale)]/78";
+    "w-full min-h-[2.5rem] rounded-md border border-[var(--totk-dark-ocher)]/55 px-3 py-2 pr-9 text-sm leading-normal text-[var(--botw-pale)] focus:border-[var(--totk-light-green)]/65 focus:outline-none focus:ring-1 focus:ring-[var(--totk-light-green)]/30 appearance-none md:min-h-12 md:px-4 md:py-3 md:pr-10 md:text-base";
+  const modalLabelClass =
+    "mb-1 block text-sm font-medium text-[var(--totk-light-ocher)] md:mb-1.5 md:text-[0.9375rem]";
+  const modalHintClass =
+    "text-xs leading-snug text-[var(--botw-pale)]/78 md:text-[0.8125rem] md:leading-relaxed";
 
   return (
     <div className="min-h-full w-full pb-[max(4rem,env(safe-area-inset-bottom,0px))]">
-      <div className="relative mx-auto max-w-6xl px-3 pt-4 sm:px-4 sm:pt-6 md:px-6 md:pt-10">
+      <div className="relative mx-auto max-w-6xl px-3 pt-4 sm:px-4 sm:pt-6 md:px-5 md:pt-8 lg:px-6 lg:pt-10">
         <div className="mb-6 overflow-hidden rounded-2xl border-2 border-[var(--totk-dark-ocher)]/80 bg-gradient-to-br from-[var(--totk-brown)]/95 via-[var(--botw-warm-black)] to-[var(--botw-deep)] shadow-[0_8px_32px_rgba(0,0,0,0.35)] sm:mb-8">
           <div className="border-b border-[var(--botw-border)]/60 bg-black/20 px-4 py-4 sm:px-5 sm:py-5 md:px-8 md:py-7">
             <div className="flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between">
@@ -770,7 +1055,7 @@ export default function CraftingRequestsPage() {
                   </p>
                 </div>
               </div>
-              <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:items-center sm:justify-end lg:flex-col lg:items-stretch xl:flex-row xl:items-center">
+              <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:flex-wrap sm:items-center sm:justify-end md:gap-3">
                 <button
                   type="button"
                   onClick={() => {
@@ -778,7 +1063,7 @@ export default function CraftingRequestsPage() {
                     setFormModalOpen(true);
                     setFormError(null);
                   }}
-                  className="inline-flex min-h-[2.75rem] w-full items-center justify-center gap-2 rounded-xl bg-[var(--totk-light-green)] px-5 py-3 text-sm font-bold text-black shadow-lg shadow-black/20 transition hover:brightness-110 active:scale-[0.98] sm:w-auto"
+                  className="inline-flex min-h-[2.75rem] w-full touch-manipulation items-center justify-center gap-2 rounded-xl bg-[var(--totk-light-green)] px-5 py-3 text-sm font-bold text-black shadow-lg shadow-black/20 transition hover:brightness-110 active:scale-[0.98] sm:w-auto md:min-h-[3rem] md:px-6 md:text-base"
                 >
                   <i className="fa-solid fa-plus" aria-hidden />
                   Post a request
@@ -788,7 +1073,7 @@ export default function CraftingRequestsPage() {
                   onClick={() => setMyActivityOpen((v) => !v)}
                   aria-expanded={myActivityOpen}
                   aria-controls="crafting-my-activity-panel"
-                  className={`group inline-flex min-h-[2.75rem] w-full min-w-0 items-center justify-center gap-2.5 rounded-xl border-2 px-4 py-3 text-sm font-bold shadow-md shadow-black/15 transition active:scale-[0.98] sm:w-auto sm:min-w-[10.5rem] sm:px-5 ${
+                  className={`group inline-flex min-h-[2.75rem] w-full min-w-0 touch-manipulation items-center justify-center gap-2.5 rounded-xl border-2 px-4 py-3 text-sm font-bold shadow-md shadow-black/15 transition active:scale-[0.98] sm:w-auto sm:min-w-[10.5rem] sm:px-5 md:min-h-[3rem] md:px-6 md:text-base ${
                     myActivityOpen
                       ? "border-[var(--totk-light-green)]/80 bg-gradient-to-br from-[var(--totk-light-green)]/18 to-[var(--totk-light-green)]/6 text-[var(--totk-light-green)] ring-1 ring-[var(--totk-light-green)]/25"
                       : "border-[var(--totk-dark-ocher)]/55 bg-[var(--botw-deep)]/70 text-[var(--botw-cream)] hover:border-[var(--totk-light-ocher)]/45 hover:bg-[var(--botw-deep)]/90"
@@ -996,7 +1281,7 @@ export default function CraftingRequestsPage() {
                                   >
                                     <i className="fa-solid fa-ban text-[12px] opacity-90" aria-hidden />
                                     Withdraw
-e have de                                  </button>
+                                  </button>
                                 </div>
                                 <p className="hidden text-[10px] leading-snug text-[var(--botw-pale)]/60 md:block">
                                   Withdraw keeps a record; Delete removes the board post.
@@ -1085,7 +1370,7 @@ e have de                                  </button>
             </div>
           )}
 
-          <ul className="grid list-none gap-5 p-0 sm:gap-6 md:grid-cols-2 md:gap-6 lg:gap-7">
+          <ul className="grid list-none grid-cols-1 gap-5 p-0 sm:gap-6 lg:grid-cols-2 lg:gap-7">
             {openRequests.map((row) => {
               const thumbSrc = formatItemImageUrl(row.craftItemImage);
               const isOpenCall = row.targetMode !== "specific" || !row.targetCharacterName;
@@ -1315,7 +1600,7 @@ e have de                                  </button>
                                     type="button"
                                     disabled={claiming}
                                     onClick={() => void handleClaimDirect(row, oc._id)}
-                                    className="min-h-[2.75rem] w-full rounded-lg bg-[var(--totk-light-green)] px-4 py-2.5 text-xs font-bold text-black shadow-md shadow-black/15 transition hover:brightness-110 active:scale-[0.98] disabled:opacity-60 sm:w-auto"
+                                    className="min-h-[2.75rem] w-full touch-manipulation rounded-lg bg-[var(--totk-light-green)] px-4 py-2.5 text-xs font-bold text-black shadow-md shadow-black/15 transition hover:brightness-110 active:scale-[0.98] disabled:opacity-60 sm:w-auto md:min-h-[3rem] md:px-5 md:text-sm"
                                   >
                                     {claiming ? (
                                       <>
@@ -1338,7 +1623,7 @@ e have de                                  </button>
                                     setAcceptFor(row);
                                     setAcceptError(null);
                                   }}
-                                  className="min-h-[2.75rem] w-full rounded-lg bg-[var(--totk-light-green)] px-4 py-2.5 text-xs font-bold text-black shadow-md shadow-black/15 transition hover:brightness-110 active:scale-[0.98] sm:w-auto"
+                                  className="min-h-[2.75rem] w-full touch-manipulation rounded-lg bg-[var(--totk-light-green)] px-4 py-2.5 text-xs font-bold text-black shadow-md shadow-black/15 transition hover:brightness-110 active:scale-[0.98] sm:w-auto md:min-h-[3rem] md:px-5 md:text-sm"
                                 >
                                   <i className="fa-solid fa-hand-holding-heart mr-1.5" aria-hidden />
                                   Claim with your OC
@@ -1358,7 +1643,7 @@ e have de                                  </button>
 
       {formModalOpen && (
         <div
-          className="fixed inset-0 z-50 flex items-end justify-center bg-black/55 p-0 pt-[env(safe-area-inset-top,0px)] backdrop-blur-[3px] sm:items-center sm:p-4"
+          className="fixed inset-0 z-50 flex items-end justify-center bg-black/55 p-0 pt-[env(safe-area-inset-top,0px)] backdrop-blur-[3px] sm:items-center sm:p-3 md:top-14 md:left-[var(--sidebar-width,240px)] md:p-2 md:pt-[max(0.75rem,env(safe-area-inset-top,0px))] md:pb-[max(0.5rem,env(safe-area-inset-bottom,0px))] lg:p-6"
           role="dialog"
           aria-modal="true"
           aria-labelledby="craft-form-title"
@@ -1367,13 +1652,16 @@ e have de                                  </button>
           }}
         >
           <div
-            className="flex max-h-[min(92dvh,100dvh)] w-full max-w-xl flex-col overflow-hidden rounded-t-2xl border-2 border-[var(--totk-dark-ocher)]/75 bg-gradient-to-b from-[var(--totk-brown)] via-[var(--totk-brown)] to-[var(--botw-warm-black)] text-[var(--botw-pale)] shadow-[0_-8px_40px_rgba(0,0,0,0.45)] sm:max-h-[min(88dvh,720px)] sm:max-w-5xl sm:rounded-xl sm:shadow-2xl lg:max-w-6xl"
+            className="flex max-h-[min(92dvh,100dvh)] w-full max-w-xl flex-col overflow-hidden rounded-t-2xl border-2 border-[var(--totk-dark-ocher)]/75 bg-gradient-to-b from-[var(--totk-brown)] via-[var(--totk-brown)] to-[var(--botw-warm-black)] text-[var(--botw-pale)] shadow-[0_-8px_40px_rgba(0,0,0,0.45)] sm:max-h-[min(94dvh,calc(100svh-1.25rem))] sm:max-w-[min(64rem,calc(100vw-1.5rem))] sm:rounded-2xl sm:shadow-2xl md:max-h-[min(96dvh,calc(100svh-0.75rem))] md:max-w-[min(64rem,calc(100vw-0.75rem))] lg:max-h-[min(92dvh,880px)] lg:max-w-[min(72rem,calc(100vw-2.5rem))]"
             onClick={(e) => e.stopPropagation()}
           >
-            <header className="relative flex shrink-0 items-start justify-between gap-3 border-b border-[var(--totk-dark-ocher)]/55 bg-[var(--botw-black)]/15 px-4 py-3 sm:px-5 sm:py-3">
+            <header className="relative flex shrink-0 items-start justify-between gap-3 border-b border-[var(--totk-dark-ocher)]/55 bg-[var(--botw-black)]/15 px-4 py-3 sm:px-5 sm:py-4 md:px-6 md:py-4 md:pt-4">
               <div className="min-w-0 pr-2 pt-1">
                 <div className="mx-auto mb-2.5 h-1 w-9 rounded-full bg-[var(--totk-mid-ocher)]/45 sm:hidden" aria-hidden />
-                <h2 id="craft-form-title" className="text-base font-semibold tracking-tight text-[var(--totk-light-ocher)]">
+                <h2
+                  id="craft-form-title"
+                  className="text-base font-semibold tracking-tight text-[var(--totk-light-ocher)] md:text-lg"
+                >
                   {editingRequestId ? "Edit crafting request" : "New crafting request"}
                 </h2>
                 <p className={modalHintClass}>
@@ -1385,17 +1673,17 @@ e have de                                  </button>
               <button
                 type="button"
                 onClick={closeFormModal}
-                className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-[var(--botw-pale)]/70 transition hover:bg-[var(--botw-black)]/35 hover:text-[var(--totk-light-ocher)]"
+                className="mt-0.5 flex h-10 w-10 shrink-0 touch-manipulation items-center justify-center rounded-md text-[var(--botw-pale)]/70 transition hover:bg-[var(--botw-black)]/35 hover:text-[var(--totk-light-ocher)] md:h-11 md:w-11"
                 aria-label="Close dialog"
               >
                 <i className="fa-solid fa-xmark text-sm" />
               </button>
             </header>
             <form onSubmit={handleSubmit} className="flex min-h-0 flex-1 flex-col">
-              <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 py-3 touch-pan-y sm:px-5 sm:py-3 [scrollbar-gutter:stable]">
-                <div className="space-y-5">
-                  <section className="space-y-2">
-                    <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-[var(--totk-mid-ocher)]">
+              <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 py-3 touch-pan-y sm:px-5 sm:py-4 md:px-6 md:py-5 [scrollbar-gutter:stable]">
+                <div className="space-y-5 md:space-y-6">
+                  <section className="space-y-2 md:space-y-2.5">
+                    <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-[var(--totk-mid-ocher)] md:text-[11px]">
                       1 · Item to craft
                     </p>
                     <p className={modalHintClass}>
@@ -1416,10 +1704,14 @@ e have de                                  </button>
                               setSelectedItemMeta(null);
                               setElixirTier(1);
                               setElixirGuide(null);
+                              setElixirGuideFetchError(null);
                               setItemPickerOpen(false);
                               setTargetPick(null);
                               setTargetSearch("");
                               setTargetResults([]);
+                              setElixirStacks([]);
+                              setElixirStacksError(null);
+                              setElixirStackQtyById({});
                             }}
                           >
                             Change
@@ -1457,12 +1749,12 @@ e have de                                  </button>
                             <p className={`${modalHintClass} mt-1`}>Searching…</p>
                           ) : null}
                           {itemOptions.length > 0 ? (
-                            <ul className="absolute z-[80] mt-1 max-h-36 w-full overflow-auto rounded-md border border-[var(--totk-dark-ocher)]/55 bg-[var(--botw-warm-black)] py-0.5 shadow-xl">
+                            <ul className="absolute z-[80] mt-1 max-h-36 w-full overflow-auto overscroll-contain rounded-md border border-[var(--totk-dark-ocher)]/55 bg-[var(--botw-warm-black)] py-0.5 shadow-xl md:max-h-[min(50vh,20rem)]">
                               {itemOptions.map((it) => (
                                 <li key={it.itemName}>
                                   <button
                                     type="button"
-                                    className="w-full px-3 py-2 text-left text-sm text-[var(--botw-pale)] hover:bg-[var(--totk-brown)]/90"
+                                    className="w-full touch-manipulation px-3 py-2 text-left text-sm text-[var(--botw-pale)] hover:bg-[var(--totk-brown)]/90 md:min-h-12 md:px-4 md:py-3 md:text-base"
                                     onClick={() => handleSelectItem(it)}
                                   >
                                     {it.itemName}
@@ -1477,17 +1769,17 @@ e have de                                  </button>
                   </section>
 
                   {craftItemName && selectedItemMeta?.isElixir ? (
-                    <section className="space-y-3 rounded-xl border border-[var(--totk-light-green)]/40 bg-[var(--totk-light-green)]/08 p-4 ring-1 ring-[var(--totk-light-green)]/15">
-                      <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-[var(--totk-light-green)]">
+                    <section className="space-y-3 rounded-xl border border-[var(--totk-light-green)]/40 bg-[var(--totk-light-green)]/08 p-4 ring-1 ring-[var(--totk-light-green)]/15 md:space-y-4 md:p-5">
+                      <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-[var(--totk-light-green)] md:text-[11px]">
                         Elixir mixer — customize
                       </p>
-                      <p className="text-sm leading-relaxed text-[var(--botw-pale)]">
+                      <p className="text-sm leading-relaxed text-[var(--botw-pale)] md:text-base md:leading-relaxed">
                         You chose{" "}
                         <strong className="text-[var(--botw-cream)]">{craftItemName}</strong>. Pick the{" "}
-                        <strong className="text-[var(--botw-cream)]">potency tier</strong> you want. Mixer recipes
-                        are flexible — use{" "}
-                        <strong className="text-[var(--botw-cream)]">Materials &amp; notes</strong> for exact
-                        bottles, fairies, or who brings which critters/parts.
+                        <strong className="text-[var(--botw-cream)]">potency tier</strong> you want. After you
+                        choose <strong className="text-[var(--botw-cream)]">your OC</strong> in step 2, you must
+                        select <strong className="text-[var(--botw-cream)]">exact inventory stacks</strong> (and how
+                        much from each) so the brew matches what you are actually providing.
                       </p>
                       <div>
                         <label className={modalLabelClass} htmlFor="craft-elixir-tier">
@@ -1507,91 +1799,25 @@ e have de                                  </button>
                           <option value={3}>High</option>
                         </select>
                       </div>
+                      {elixirGuideFetchError ? (
+                        <p className="rounded-md border border-amber-500/40 bg-amber-950/35 px-3 py-2 text-xs leading-relaxed text-amber-100/95">
+                          {elixirGuideFetchError}{" "}
+                          <span className="text-amber-200/80">
+                            Try another potency tier or close and reopen this form.
+                          </span>
+                        </p>
+                      ) : null}
                       {elixirGuideLoading ? (
                         <p className={`${modalHintClass} flex items-center gap-2`}>
                           <i className="fa-solid fa-spinner fa-spin text-xs" aria-hidden />
-                          Calculating mixer slots &amp; examples…
+                          Loading recipe…
                         </p>
-                      ) : elixirGuide ? (
-                        <div className="space-y-3 rounded-lg border border-[var(--totk-dark-ocher)]/50 bg-black/22 p-3 text-xs leading-relaxed text-[var(--botw-pale)]">
-                          <p className="font-semibold text-[var(--totk-light-ocher)]">
-                            What to bring (flexible recipe)
-                          </p>
-                          <ul className="list-inside list-disc space-y-1.5">
-                            {elixirGuide.slots.map((s) => (
-                              <li key={s.role}>
-                                <span className="font-medium text-[var(--botw-cream)]">{s.role}:</span>{" "}
-                                {s.detail}
-                              </li>
-                            ))}
-                          </ul>
-                          <p>
-                            <span className="font-semibold text-[var(--totk-light-ocher)]">
-                              Monster part rule:
-                            </span>{" "}
-                            {elixirGuide.partRequirement}
-                          </p>
-                          <p className="text-[var(--botw-pale)]/92">{elixirGuide.rarityGuidance}</p>
-                          {elixirGuide.eligibleCritters.length > 0 ? (
-                            <div className="space-y-1.5">
-                              <p className="font-semibold text-[var(--totk-light-ocher)]">
-                                Eligible critters ({elixirGuide.eligibleCritters.length}
-                                {elixirGuide.eligibleCrittersCapped ? "+" : ""})
-                              </p>
-                              <p className="text-[10px] leading-snug text-[var(--botw-pale)]/75">
-                                Same effect family as this elixir — any one satisfies the critter slot; extras
-                                optional.
-                              </p>
-                              <div className="max-h-52 overflow-y-auto rounded-md border border-[var(--botw-border)]/35 bg-black/28 px-2.5 py-2">
-                                <ul className="grid list-none gap-x-3 gap-y-0.5 sm:grid-cols-2">
-                                  {elixirGuide.eligibleCritters.map((name) => (
-                                    <li
-                                      key={name}
-                                      className="flex gap-1.5 text-[11px] leading-snug text-[var(--botw-pale)]/90"
-                                    >
-                                      <span className="shrink-0 text-[var(--totk-mid-ocher)]" aria-hidden>
-                                        •
-                                      </span>
-                                      <span className="min-w-0">{name}</span>
-                                    </li>
-                                  ))}
-                                </ul>
-                              </div>
-                            </div>
-                          ) : null}
-                          {elixirGuide.eligibleParts.length > 0 ? (
-                            <div className="space-y-1.5">
-                              <p className="font-semibold text-[var(--totk-light-ocher)]">
-                                Eligible monster parts ({elixirGuide.eligibleParts.length}
-                                {elixirGuide.eligiblePartsCapped ? "+" : ""})
-                              </p>
-                              <p className="text-[10px] leading-snug text-[var(--botw-pale)]/75">
-                                Element rule: {elixirGuide.partRequirement}. Any one satisfies the part slot.
-                              </p>
-                              <div className="max-h-52 overflow-y-auto rounded-md border border-[var(--botw-border)]/35 bg-black/28 px-2.5 py-2">
-                                <ul className="grid list-none gap-x-3 gap-y-0.5 sm:grid-cols-2">
-                                  {elixirGuide.eligibleParts.map((name) => (
-                                    <li
-                                      key={name}
-                                      className="flex gap-1.5 text-[11px] leading-snug text-[var(--botw-pale)]/90"
-                                    >
-                                      <span className="shrink-0 text-[var(--totk-mid-ocher)]" aria-hidden>
-                                        •
-                                      </span>
-                                      <span className="min-w-0">{name}</span>
-                                    </li>
-                                  ))}
-                                </ul>
-                              </div>
-                            </div>
-                          ) : null}
-                        </div>
                       ) : null}
                     </section>
                   ) : null}
 
-                  <section className="space-y-2">
-                    <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-[var(--totk-mid-ocher)]">
+                  <section className="space-y-2 md:space-y-2.5">
+                    <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-[var(--totk-mid-ocher)] md:text-[11px]">
                       2 · Who&apos;s involved
                     </p>
                     {!craftItemName ? (
@@ -1613,7 +1839,11 @@ e have de                                  </button>
                         <select
                           id="craft-requester-oc"
                           value={requesterCharacterName}
-                          onChange={(e) => setRequesterCharacterName(e.target.value)}
+                          onChange={(e) => {
+                            setRequesterCharacterName(e.target.value);
+                            setElixirStackQtyById({});
+                            setElixirStacksError(null);
+                          }}
                           className={modalSelectClass}
                           style={craftingModalSelectBg}
                           required
@@ -1626,6 +1856,281 @@ e have de                                  </button>
                           ))}
                         </select>
                       </div>
+
+                      {selectedItemMeta?.isElixir ? (
+                        <div className="rounded-lg border border-[var(--totk-light-green)]/35 bg-[var(--totk-light-green)]/06 p-3 md:p-4">
+                          <p className={modalLabelClass}>Mixer ingredients — specific stacks on this OC</p>
+                          <p className={`${modalHintClass} mb-2`}>
+                            Same rules as <strong className="text-[var(--botw-cream)]">/crafting brew</strong>. Listed stacks
+                            are recipe materials plus valid extras (same-effect-family critters, neutral/thread monster parts
+                            for this elixir, Fairy / Mock Fairy). Critter lines{" "}
+                            <strong className="text-[var(--botw-cream)]">auto-fill</strong> when only one stack matches; you
+                            always pick the <strong className="text-[var(--botw-cream)]">monster part</strong> yourself.
+                            Then up to <strong className="text-[var(--botw-cream)]">{MIXER_BREW_MAX_EXTRAS}</strong> optional
+                            extra units (max{" "}
+                            <strong className="text-[var(--botw-cream)]">{MIXER_BREW_MAX_INGREDIENT_UNITS}</strong> total).
+                            Scholar/village may use less at claim.
+                          </p>
+                          {!requesterCharacterName.trim() ? (
+                            <p className="text-xs text-amber-200/90">Choose your OC above to load inventory rows.</p>
+                          ) : elixirGuideLoading ? (
+                            <p className={`${modalHintClass} flex items-center gap-2`}>
+                              <i className="fa-solid fa-spinner fa-spin text-xs" aria-hidden />
+                              Loading mixer recipe…
+                            </p>
+                          ) : elixirGuideFetchError ? (
+                            <p className="rounded-md border border-amber-500/35 bg-amber-950/30 px-3 py-2 text-xs leading-relaxed text-amber-100/95">
+                              {elixirGuideFetchError}
+                            </p>
+                          ) : !elixirGuide ? (
+                            <p className="text-xs text-amber-200/90">
+                              Mixer recipe not ready yet — confirm the elixir and potency tier in step 1.
+                            </p>
+                          ) : elixirGuide.recipeIncomplete || elixirGuide.craftingMaterial.length === 0 ? (
+                            <p className="text-xs text-amber-200/90">
+                              This catalog elixir has no usable recipe lines (data issue). Pick a different elixir or ask
+                              staff to fix <strong className="text-[var(--botw-cream)]">{craftItemName}</strong> in the
+                              item database.
+                            </p>
+                          ) : elixirStacksLoading ? (
+                            <p className={`${modalHintClass} flex items-center gap-2`}>
+                              <i className="fa-solid fa-spinner fa-spin text-xs" aria-hidden />
+                              Loading inventory…
+                            </p>
+                          ) : elixirStacksError ? (
+                            <p className="rounded-md border border-amber-500/35 bg-amber-950/30 px-3 py-2 text-xs leading-relaxed text-amber-100/95">
+                              {elixirStacksError}{" "}
+                              <button
+                                type="button"
+                                className="ml-1 underline decoration-amber-200/60 underline-offset-2 hover:text-[var(--botw-cream)]"
+                                onClick={() => {
+                                  const n = requesterCharacterName.trim();
+                                  if (!n) return;
+                                  setElixirStacksError(null);
+                                  setElixirStacksLoading(true);
+                                  void (async () => {
+                                    try {
+                                      const q = new URLSearchParams({ characterName: n });
+                                      const c = craftItemName.trim();
+                                      if (c && isMixerOutputElixirName(c)) q.set("mixerCraftItemName", c);
+                                      const res = await fetch(
+                                        `/api/crafting-requests/inventory-stacks?${q}`,
+                                        { credentials: "include" }
+                                      );
+                                      const data = (await res.json()) as {
+                                        stacks?: Array<{ _id: string; itemName: string; quantity: number }>;
+                                        error?: string;
+                                      };
+                                      if (!res.ok) {
+                                        throw new Error(
+                                          typeof data.error === "string" && data.error.trim()
+                                            ? data.error
+                                            : "Failed to load inventory stacks."
+                                        );
+                                      }
+                                      setElixirStacks(Array.isArray(data.stacks) ? data.stacks : []);
+                                      setElixirStacksError(null);
+                                    } catch (e) {
+                                      setElixirStacks([]);
+                                      setElixirStacksError(
+                                        e instanceof Error && e.message
+                                          ? e.message
+                                          : "Could not load inventory. Try again."
+                                      );
+                                    } finally {
+                                      setElixirStacksLoading(false);
+                                    }
+                                  })();
+                                }}
+                              >
+                                Retry
+                              </button>
+                            </p>
+                          ) : elixirStacks.length === 0 ? (
+                            <p className="text-xs text-amber-200/90">No items in this OC&apos;s inventory.</p>
+                          ) : mixerEligibleStacks.length === 0 ? (
+                            <p className="text-xs text-amber-200/90">
+                              No recipe materials for this elixir in this OC&apos;s inventory — add items that match
+                              this elixir&apos;s catalog recipe, then refresh or reopen the form.
+                            </p>
+                          ) : (
+                            <>
+                              <div
+                                className={`${modalHintClass} mb-3 space-y-3 rounded-md border border-[var(--totk-dark-ocher)]/35 bg-[var(--botw-black)]/20 p-3 font-medium text-[var(--totk-light-ocher)] md:p-3.5`}
+                                role="status"
+                              >
+                                <p className="text-base leading-tight text-[var(--botw-ivory)] md:text-lg">
+                                  <span className="tabular-nums text-2xl font-bold text-[var(--botw-cream)] md:text-[1.65rem]">
+                                    {mixerIngredientCommitTotal}
+                                  </span>
+                                  <span className="tabular-nums text-2xl font-bold text-[var(--totk-mid-ocher)] md:text-[1.65rem]">
+                                    {" "}
+                                    / {MIXER_BREW_MAX_INGREDIENT_UNITS}
+                                  </span>
+                                  <span className="block text-xs font-normal text-[var(--totk-mid-ocher)] md:text-sm">
+                                    ingredients for this brew
+                                  </span>
+                                </p>
+                                <ul className="space-y-2.5 text-xs leading-snug text-[var(--botw-pale)] md:text-sm">
+                                  {mixerLineProgress
+                                    .filter((l) => !l.isBroadPart)
+                                    .map((l) => (
+                                      <li key={`critter-${l.itemName}`}>
+                                        <strong className="text-[var(--botw-ivory)]">Critter</strong>{" "}
+                                        <span className="text-[var(--totk-mid-ocher)]">({l.itemName})</span>
+                                        {": "}
+                                        {l.satisfied ? (
+                                          l.matchingStackCount === 1 ? (
+                                            <span className="text-[var(--totk-light-green)]">
+                                              auto-chosen — only one matching stack.
+                                            </span>
+                                          ) : (
+                                            <span className="text-[var(--totk-light-green)]">covered.</span>
+                                          )
+                                        ) : l.matchingStackCount === 0 ? (
+                                          <span className="text-amber-200/90">
+                                            no matching stack in inventory — add one or pick another OC.
+                                          </span>
+                                        ) : l.matchingStackCount === 1 ? (
+                                          <span className="text-amber-200/90">
+                                            one stack matches — confirm quantity below (should auto-fill to {l.need}).
+                                          </span>
+                                        ) : (
+                                          <span className="text-amber-200/90">
+                                            choose which stack to use — several match this line.
+                                          </span>
+                                        )}
+                                      </li>
+                                    ))}
+                                  {mixerLineProgress
+                                    .filter((l) => l.isBroadPart)
+                                    .map((l) => (
+                                      <li key={`part-${l.itemName}`}>
+                                        <strong className="text-[var(--botw-ivory)]">Monster part</strong>{" "}
+                                        <span className="text-[var(--totk-mid-ocher)]">({l.itemName})</span>
+                                        {": "}
+                                        {l.satisfied ? (
+                                          <span className="text-[var(--totk-light-green)]">
+                                            covered ({l.committed}/{l.need}).
+                                          </span>
+                                        ) : (
+                                          <span className="text-amber-200/90">
+                                            please choose <span className="tabular-nums font-semibold">{l.need}</span> from the
+                                            stacks below (never auto-picked).
+                                          </span>
+                                        )}
+                                      </li>
+                                    ))}
+                                  <li>
+                                    <strong className="text-[var(--botw-ivory)]">Optional extras</strong> (same as brew:
+                                    extra critters in this family, allowed parts, fairies): up to{" "}
+                                    <span className="tabular-nums text-[var(--botw-cream)]">{MIXER_BREW_MAX_EXTRAS}</span>{" "}
+                                    units after the recipe is satisfied —{" "}
+                                    <span className="tabular-nums">{mixerExtrasCommittedDisplay}</span> /{" "}
+                                    {MIXER_BREW_MAX_EXTRAS} used,{" "}
+                                    <span className="tabular-nums">{mixerExtrasRemaining}</span> left.
+                                  </li>
+                                </ul>
+                              </div>
+                              <ul className="max-h-48 space-y-2 overflow-auto overscroll-contain rounded-md border border-[var(--totk-dark-ocher)]/45 bg-[var(--botw-black)]/22 p-2 md:max-h-[min(52vh,24rem)] md:space-y-2.5 md:p-3">
+                                {mixerEligibleStacks.map((st) => {
+                                  const stackRole = mixerStackRoleBadge(st.itemName);
+                                  const stackRolePhrase =
+                                    stackRole === "Monster part"
+                                      ? "monster part"
+                                      : stackRole === "Critter"
+                                        ? "critter"
+                                        : "fairy / special";
+                                  const numCommitted =
+                                    typeof elixirStackQtyById[st._id] === "number" &&
+                                    elixirStackQtyById[st._id]! > 0
+                                      ? elixirStackQtyById[st._id]!
+                                      : 0;
+                                  const otherTotal = mixerIngredientCommitTotal - numCommitted;
+                                  const remainingForRow = MIXER_BREW_MAX_INGREDIENT_UNITS - otherTotal;
+                                  const maxCommit = Math.max(0, Math.min(st.quantity, remainingForRow));
+                                  const displayQty =
+                                    elixirStackQtyById[st._id] === undefined ? "" : elixirStackQtyById[st._id];
+                                  return (
+                                    <li
+                                      key={st._id}
+                                      className="rounded-lg border border-[var(--totk-dark-ocher)]/40 bg-[var(--botw-black)]/35 px-3 py-3 text-[var(--botw-pale)] md:px-4 md:py-3.5"
+                                    >
+                                      <div className="flex flex-wrap items-center gap-x-2 gap-y-1.5">
+                                        <p className="text-sm font-medium leading-snug text-[var(--totk-ivory)] md:text-base">
+                                          {st.itemName}
+                                        </p>
+                                        <span
+                                          className={`inline-flex shrink-0 rounded-full border px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide ${
+                                            stackRole === "Monster part"
+                                              ? "border-orange-300/45 bg-orange-950/40 text-orange-100/95"
+                                              : stackRole === "Critter"
+                                                ? "border-cyan-300/40 bg-cyan-950/35 text-cyan-100/95"
+                                                : "border-violet-300/40 bg-violet-950/35 text-violet-100/95"
+                                          }`}
+                                        >
+                                          {stackRole}
+                                        </span>
+                                      </div>
+                                      <div className="mt-3 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between sm:gap-4">
+                                        <div className="flex min-w-0 flex-1 flex-col gap-0.5">
+                                          <span className="text-[10px] font-semibold uppercase tracking-wider text-[var(--totk-mid-ocher)]">
+                                            In inventory
+                                          </span>
+                                          <span className="text-xl font-bold tabular-nums text-[var(--botw-cream)] leading-none">
+                                            {st.quantity}
+                                          </span>
+                                        </div>
+                                        <label className="flex min-w-0 flex-col gap-1 sm:items-end sm:text-right touch-manipulation">
+                                          <span className="text-[10px] font-semibold uppercase tracking-wider text-[var(--totk-mid-ocher)]">
+                                            Commit up to
+                                          </span>
+                                          <span className="text-[10px] leading-snug text-[var(--botw-pale)]/75">
+                                            {maxCommit < 1
+                                              ? "At full 5-ingredient cap — lower another row first"
+                                              : `Up to ${maxCommit} on this ${stackRolePhrase} stack · ${remainingForRow} slot${remainingForRow === 1 ? "" : "s"} left (recipe + up to ${MIXER_BREW_MAX_EXTRAS} extras)`}
+                                          </span>
+                                          <input
+                                            type="number"
+                                            inputMode="numeric"
+                                            min={0}
+                                            max={Math.max(0, maxCommit)}
+                                            disabled={maxCommit < 1}
+                                            value={displayQty}
+                                            onChange={(e) => {
+                                              const raw = e.target.value;
+                                              if (raw === "") {
+                                                setElixirStackQtyById((prev) => {
+                                                  const next = { ...prev };
+                                                  delete next[st._id];
+                                                  return next;
+                                                });
+                                                return;
+                                              }
+                                              const n = Math.max(
+                                                0,
+                                                Math.min(maxCommit, Math.floor(Number(raw)) || 0)
+                                              );
+                                              setElixirStackQtyById((prev) => {
+                                                const next = { ...prev };
+                                                if (n <= 0) delete next[st._id];
+                                                else next[st._id] = n;
+                                                return next;
+                                              });
+                                            }}
+                                            className="h-11 w-full min-w-[5.5rem] rounded-lg border-2 border-[var(--totk-dark-ocher)]/60 bg-[var(--botw-warm-black)] px-3 text-center text-base font-semibold tabular-nums text-[var(--botw-cream)] shadow-inner focus:border-[var(--totk-light-green)]/70 focus:outline-none focus:ring-2 focus:ring-[var(--totk-light-green)]/25 enabled:cursor-text disabled:cursor-not-allowed disabled:opacity-45 sm:max-w-[7rem] md:h-12 md:text-lg"
+                                            aria-label={`Commit up to how many ${st.itemName} (${stackRole}, max ${maxCommit} with current brew budget)`}
+                                          />
+                                        </label>
+                                      </div>
+                                    </li>
+                                  );
+                                })}
+                              </ul>
+                            </>
+                          )}
+                        </div>
+                      ) : null}
 
                       <div className="space-y-3">
                         <p className="text-[11px] font-semibold uppercase tracking-wider text-[var(--totk-light-ocher)]">
@@ -1876,20 +2381,40 @@ e have de                                  </button>
                                 the crafting guide).
                               </p>
                             ) : (
-                              <div className="rounded-md border border-amber-500/40 bg-amber-950/25 px-2.5 py-2 text-xs leading-relaxed text-amber-50">
-                                <p className="font-semibold text-amber-100">
-                                  {requesterCharacterName} is short on recipe materials
-                                </p>
-                                <ul className="mt-1.5 list-inside list-disc space-y-0.5 text-amber-100/95">
-                                  {ocMaterialCheck.lines
-                                    .filter((l) => !l.sufficient)
-                                    .map((l) => (
-                                      <li key={l.itemName}>
-                                        <span className="font-medium">{l.itemName}</span>: need{" "}
-                                        {l.quantity}, have {l.ownedQty}
-                                      </li>
-                                    ))}
-                                </ul>
+                              <div
+                                role="alert"
+                                className="rounded-xl border-2 border-amber-500/75 bg-gradient-to-br from-amber-950/95 via-red-950/55 to-[var(--botw-black)]/90 px-4 py-4 shadow-[0_8px_28px_rgba(0,0,0,0.45)] ring-1 ring-amber-400/25"
+                              >
+                                <div className="flex flex-col gap-3 sm:flex-row sm:items-start">
+                                  <div
+                                    className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full bg-amber-500/20 text-2xl text-amber-300"
+                                    aria-hidden
+                                  >
+                                    <i className="fa-solid fa-triangle-exclamation" />
+                                  </div>
+                                  <div className="min-w-0 space-y-2">
+                                    <p className="text-base font-bold leading-snug text-amber-50">
+                                      Please make sure your character has all items before submitting this request.
+                                    </p>
+                                    <p className="text-sm font-medium leading-relaxed text-amber-100/95">
+                                      <strong className="text-amber-50">{requesterCharacterName}</strong> is
+                                      missing recipe materials. Post / save stays disabled until their inventory
+                                      matches the full recipe (same totals as the crafting guide).
+                                    </p>
+                                    <ul className="mt-2 space-y-1.5 rounded-lg border border-amber-500/30 bg-black/35 px-3 py-2.5 text-sm text-amber-50/95">
+                                      {ocMaterialCheck.lines
+                                        .filter((l) => !l.sufficient)
+                                        .map((l) => (
+                                          <li key={l.itemName} className="flex flex-wrap gap-x-1">
+                                            <span className="font-semibold text-amber-100">{l.itemName}</span>
+                                            <span className="text-amber-200/80">
+                                              — need {l.quantity}, have {l.ownedQty}
+                                            </span>
+                                          </li>
+                                        ))}
+                                    </ul>
+                                  </div>
+                                </div>
                               </div>
                             )
                           ) : null}
@@ -1937,25 +2462,36 @@ e have de                                  </button>
                   </div>
                 ) : null}
               </div>
-              <div className="flex shrink-0 flex-col gap-2 border-t border-[var(--totk-dark-ocher)]/55 bg-[var(--botw-black)]/22 px-4 py-3 pb-[max(0.75rem,env(safe-area-inset-bottom,0px))] sm:flex-row sm:items-center sm:justify-between sm:px-5 sm:py-2.5 sm:pb-3">
-                <p className={`${modalHintClass} order-2 hidden min-w-0 sm:order-1 sm:block sm:max-w-[55%]`}>
-                  <i className="fa-brands fa-discord mr-1 text-[#5865F2]" aria-hidden />
-                  {editingRequestId
-                    ? "Discord post is updated when you save."
-                    : "Announced on the community channel when posted."}
+              <div className="flex shrink-0 flex-col gap-2 border-t border-[var(--totk-dark-ocher)]/55 bg-[var(--botw-black)]/22 px-4 py-3 pb-[max(0.75rem,env(safe-area-inset-bottom,0px))] sm:flex-row sm:items-center sm:justify-between sm:px-5 sm:py-3 sm:pb-[max(0.75rem,env(safe-area-inset-bottom,0px))] md:flex-col md:items-stretch md:gap-3 md:px-6 md:py-4 lg:flex-row lg:items-center lg:justify-between lg:gap-2">
+                <p
+                  className={`${modalHintClass} order-2 min-w-0 sm:order-1 sm:max-w-[55%] md:order-2 md:max-w-none lg:order-1 lg:max-w-[55%] ${materialsSubmitBlocked ? "text-amber-200/95 sm:block" : "hidden sm:block"}`}
+                >
+                  {materialsSubmitBlocked ? (
+                    <>
+                      <i className="fa-solid fa-lock mr-1 text-amber-400" aria-hidden />
+                      Fix inventory materials above to enable {editingRequestId ? "Save" : "Post"}.
+                    </>
+                  ) : (
+                    <>
+                      <i className="fa-brands fa-discord mr-1 text-[#5865F2]" aria-hidden />
+                      {editingRequestId
+                        ? "Discord post is updated when you save."
+                        : "Announced on the community channel when posted."}
+                    </>
+                  )}
                 </p>
-                <div className="order-1 flex w-full gap-2 sm:order-2 sm:w-auto sm:shrink-0">
+                <div className="order-1 flex w-full gap-2 sm:order-2 sm:w-auto sm:shrink-0 md:order-1 md:w-full md:gap-3 lg:order-2 lg:w-auto lg:justify-end lg:gap-2">
                   <button
                     type="button"
                     onClick={closeFormModal}
-                    className="min-h-[2.75rem] flex-1 rounded-md border border-[var(--totk-dark-ocher)]/65 bg-[var(--botw-black)]/25 px-4 py-2.5 text-sm font-medium text-[var(--botw-pale)] hover:bg-[var(--botw-black)]/45 sm:min-h-0 sm:flex-initial sm:py-2"
+                    className="min-h-12 flex-1 touch-manipulation rounded-md border border-[var(--totk-dark-ocher)]/65 bg-[var(--botw-black)]/25 px-4 py-3 text-sm font-medium text-[var(--botw-pale)] hover:bg-[var(--botw-black)]/45 sm:flex-initial md:min-h-[3rem] md:flex-1 md:px-5 md:text-base lg:flex-initial"
                   >
                     Cancel
                   </button>
                   <button
                     type="submit"
-                    disabled={submitting}
-                    className="flex min-h-[2.75rem] flex-1 items-center justify-center gap-2 rounded-md bg-[var(--totk-light-green)] px-4 py-2.5 text-sm font-semibold text-black hover:brightness-105 disabled:opacity-50 sm:min-h-0 sm:flex-initial sm:min-w-[8.5rem] sm:py-2"
+                    disabled={submitting || materialsSubmitBlocked}
+                    className="flex min-h-12 flex-1 touch-manipulation items-center justify-center gap-2 rounded-md bg-[var(--totk-light-green)] px-4 py-3 text-sm font-semibold text-black hover:brightness-105 disabled:opacity-50 sm:flex-initial sm:min-w-[9.5rem] md:min-h-[3rem] md:flex-1 md:px-6 md:text-base lg:flex-initial lg:min-w-[9.5rem]"
                   >
                     {submitting ? (
                       <>
@@ -1977,16 +2513,19 @@ e have de                                  </button>
 
       {acceptFor && (
         <div
-          className="fixed inset-0 z-[60] flex items-end justify-center bg-black/65 p-0 pb-[env(safe-area-inset-bottom,0px)] pt-[env(safe-area-inset-top,0px)] backdrop-blur-[2px] sm:items-center sm:p-4"
+          className="fixed inset-0 z-[60] flex items-end justify-center bg-black/65 p-0 pb-[env(safe-area-inset-bottom,0px)] pt-[env(safe-area-inset-top,0px)] backdrop-blur-[2px] sm:items-center sm:p-3 md:top-14 md:left-[var(--sidebar-width,240px)] md:p-2 md:pb-[max(0.5rem,env(safe-area-inset-bottom,0px))] md:pt-[max(0.75rem,env(safe-area-inset-top,0px))] lg:p-6"
           role="dialog"
           aria-modal="true"
           aria-labelledby="accept-title"
         >
-          <div className="max-h-[min(90dvh,100dvh)] w-full max-w-md overflow-y-auto rounded-t-2xl border border-[var(--botw-border)] bg-[var(--botw-deep)] p-4 shadow-2xl sm:rounded-2xl sm:p-6">
-            <h3 id="accept-title" className="text-lg font-bold text-[var(--totk-light-ocher)]">
+          <div className="max-h-[min(90dvh,100dvh)] w-full max-w-md overflow-x-hidden overflow-y-auto overscroll-contain rounded-t-2xl border border-[var(--botw-border)] bg-[var(--botw-deep)] p-4 shadow-2xl touch-pan-y sm:max-h-[min(94dvh,calc(100svh-1.25rem))] sm:max-w-lg sm:rounded-2xl sm:p-6 md:max-h-[min(96dvh,calc(100svh-0.75rem))] md:max-w-[min(36rem,calc(100vw-0.75rem))] md:p-8">
+            <h3
+              id="accept-title"
+              className="text-lg font-bold text-[var(--totk-light-ocher)] md:text-xl"
+            >
               Claim on the dashboard
             </h3>
-            <p className="mt-2 text-sm text-[var(--botw-pale)]">
+            <p className="mt-2 text-sm text-[var(--botw-pale)] md:text-base md:leading-relaxed">
               <strong className="text-[var(--botw-cream)]">{acceptFor.craftItemName}</strong> — base stamina{" "}
               {acceptFor.staminaToCraftSnapshot ?? 0}. Which OC is taking this commission?
             </p>
@@ -1997,16 +2536,16 @@ e have de                                  </button>
                 still sort it out with the requester in RP if boosts change the numbers.
               </p>
             ) : (
-              <ul className="mt-4 max-h-48 space-y-2 overflow-auto rounded-lg border border-[var(--botw-border)]/60 p-2">
+              <ul className="mt-4 max-h-[min(50vh,18rem)] space-y-2 overflow-auto overscroll-contain rounded-lg border border-[var(--botw-border)]/60 p-2 md:max-h-72 md:space-y-1.5 md:p-3">
                 {eligibleAcceptors.map((c) => (
                   <li key={c._id}>
-                    <label className="flex cursor-pointer items-center gap-3 rounded-lg px-2 py-2 text-sm text-[var(--botw-pale)] hover:bg-white/5 has-[:checked]:bg-[var(--totk-light-green)]/10">
+                    <label className="flex min-h-[3rem] cursor-pointer touch-manipulation items-center gap-3 rounded-lg px-3 py-3 text-sm text-[var(--botw-pale)] hover:bg-white/5 has-[:checked]:bg-[var(--totk-light-green)]/10 md:min-h-[3.25rem] md:text-base">
                       <input
                         type="radio"
                         name="acceptChar"
                         checked={acceptCharId === c._id}
                         onChange={() => setAcceptCharId(c._id)}
-                        className="accent-[var(--totk-light-green)]"
+                        className="h-4 w-4 shrink-0 accent-[var(--totk-light-green)] md:h-5 md:w-5"
                       />
                       <span>
                         {c.name}{" "}
@@ -2021,10 +2560,10 @@ e have de                                  </button>
               </ul>
             )}
             {acceptError && <p className="mt-3 text-sm text-red-300">{acceptError}</p>}
-            <div className="mt-5 flex flex-col-reverse gap-2 sm:mt-6 sm:flex-row sm:justify-end">
+            <div className="mt-5 flex flex-col-reverse gap-3 sm:mt-6 sm:flex-row sm:justify-end md:gap-3">
               <button
                 type="button"
-                className="min-h-[2.75rem] w-full rounded-lg border border-[var(--botw-border)] px-4 py-2.5 text-sm font-medium text-[var(--botw-pale)] hover:bg-white/5 sm:w-auto sm:min-h-0 sm:py-2"
+                className="min-h-12 w-full touch-manipulation rounded-lg border border-[var(--botw-border)] px-4 py-3 text-sm font-medium text-[var(--botw-pale)] hover:bg-white/5 sm:w-auto md:min-h-[3rem] md:px-5 md:text-base"
                 onClick={() => {
                   setAcceptFor(null);
                   setAcceptCharId(null);
@@ -2037,7 +2576,7 @@ e have de                                  </button>
                 type="button"
                 disabled={!acceptCharId || acceptSubmitting}
                 onClick={() => void handleAccept()}
-                className="min-h-[2.75rem] w-full rounded-lg bg-[var(--totk-light-green)] px-4 py-2.5 text-sm font-bold text-black disabled:opacity-50 sm:w-auto sm:min-h-0 sm:py-2"
+                className="min-h-12 w-full touch-manipulation rounded-lg bg-[var(--totk-light-green)] px-4 py-3 text-sm font-bold text-black disabled:opacity-50 sm:w-auto sm:min-w-[12rem] md:min-h-[3rem] md:px-6 md:text-base"
               >
                 {acceptSubmitting ? "…" : "Claim commission"}
               </button>

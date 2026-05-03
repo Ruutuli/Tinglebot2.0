@@ -11,7 +11,7 @@
 //   - grottos: delete all grotto records (cleansed grotto trials)
 //   - relics: delete all relics (discovered during exploration)
 //   - oldMapsFound: delete all old maps found during exploration
-//   - quadrant extras: clear oldMapNumber, oldMapLeadsTo, ruinRestStamina (exploration discoveries)
+//   - quadrant extras: clear oldMapNumber, oldMapLeadsTo, oldMapLeadConsumed, ruinRestStamina (exploration discoveries)
 //   - discoveries (grottos, monster_camp, ruins, relic) are cleared via quadrants
 //
 // Does NOT delete files from GCS (path images remain in bucket but are no longer referenced).
@@ -44,6 +44,7 @@ const QuadrantSchema = new mongoose.Schema({
   exploredAt: Date,
   oldMapNumber: Number,
   oldMapLeadsTo: String,
+  oldMapLeadConsumed: Boolean,
   ruinRestStamina: Number,
 }, { _id: true, strict: false });
 
@@ -105,6 +106,7 @@ async function run() {
           discoveries: [],
           oldMapNumber: null,
           oldMapLeadsTo: null,
+          oldMapLeadConsumed: false,
           ruinRestStamina: null,
         };
       }
@@ -117,6 +119,7 @@ async function run() {
         discoveries: [],
         oldMapNumber: null,
         oldMapLeadsTo: null,
+        oldMapLeadConsumed: false,
         ruinRestStamina: null,
       };
     });

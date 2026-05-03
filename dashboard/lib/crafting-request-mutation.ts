@@ -16,6 +16,10 @@ import {
   validateElixirMaterialSelectionsForCommission,
   type ElixirMaterialSelection,
 } from "@/lib/elixir-commission-materials";
+import {
+  evaluateRecipeMaterialsOnInventory,
+  formatMissingMaterialsMessage,
+} from "@/lib/craft-recipe-material-check";
 
 export type CraftItemLean = ItemCraftFields & {
   itemName: string;
@@ -93,6 +97,30 @@ export async function validateCraftingRequestBody(
     };
   }
 
+  const recipeMatEval = await evaluateRecipeMaterialsOnInventory(
+    user.id,
+    requesterCharacterName,
+    item.craftingMaterial
+  );
+  if (!recipeMatEval.ok) {
+    return {
+      ok: false,
+      res: NextResponse.json({ error: recipeMatEval.error }, { status: 400 }),
+    };
+  }
+  if (recipeMatEval.hasRecipe && !recipeMatEval.allMaterialsMet) {
+    const detail = formatMissingMaterialsMessage(recipeMatEval.lines);
+    return {
+      ok: false,
+      res: NextResponse.json(
+        {
+          error: `Your character must have every recipe material on hand before you can post this commission. Missing: ${detail}`,
+        },
+        { status: 400 }
+      ),
+    };
+  }
+
   const staminaSnap = parseStaminaToCraft(item.staminaToCraft);
 
   let targetCharacterId: mongoose.Types.ObjectId | null = null;
@@ -151,7 +179,8 @@ export async function validateCraftingRequestBody(
       user.id,
       requesterCharacterName,
       rawMats as Array<{ itemName: string; quantity: number }>,
-      body.elixirMaterialSelections
+      body.elixirMaterialSelections,
+      item.itemName
     );
     if (!elixirVal.ok) {
       return { ok: false, res: NextResponse.json({ error: elixirVal.error }, { status: 400 }) };
