@@ -87,11 +87,15 @@ export async function POST(request: Request, context: RouteContext) {
     ).exec();
 
     if (!reserved) {
-      const latest = await CraftingRequest.findById(id).lean();
-      if (!latest) {
+      const latestRaw = await CraftingRequest.findById(id).lean();
+      const latest = Array.isArray(latestRaw) ? latestRaw[0] : latestRaw;
+      if (!latest || typeof latest !== "object") {
         return NextResponse.json({ error: "Request not found" }, { status: 404 });
       }
-      if (latest.requesterDiscordId === user.id) {
+      const requesterId = String(
+        (latest as { requesterDiscordId?: string }).requesterDiscordId ?? ""
+      );
+      if (requesterId === user.id) {
         return NextResponse.json({ error: "You cannot accept your own request" }, { status: 400 });
       }
       return NextResponse.json({ error: "This request is no longer open" }, { status: 400 });
