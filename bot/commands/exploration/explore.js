@@ -105,7 +105,7 @@ const path = require("path");
 
 // ------------------- Data ------------------
 const { rollGrottoTrialType, getTrialLabel, GROTTO_CLEARED_FLAVOR, GROTTO_ALREADY_CLEARED_BLESSING, GROTTO_CLEANSED_VS_CLEARED, GROTTO_STATUS_LEGEND } = require('@/data/grottoTrials.js');
-const { rollPuzzleConfig, getPuzzleFlavor, getOfferingStatueClueText, getOddStructureWrongGuessHint, getOddStructureNearMissHint, ensurePuzzleConfig, checkPuzzleOffer, getPuzzleConsumeItems, getRandomPuzzleSuccessFlavor } = require('@/data/grottoPuzzleData.js');
+const { rollPuzzleConfig, getPuzzleFlavor, getOfferingStatueClueText, getOddStructureWrongGuessHint, getOddStructureNearMissHint, tryApplyOddStructureProgress, ensurePuzzleConfig, checkPuzzleOffer, getPuzzleConsumeItems, getRandomPuzzleSuccessFlavor } = require('@/data/grottoPuzzleData.js');
 const { getRandomGrottoName, getRandomGrottoNameUnused } = require('@/data/grottoNames.js');
 const { getFailOutcome, getMissOutcome, getSuccessOutcome, getCompleteOutcome } = require('@/data/grottoTargetPracticeOutcomes.js');
 const { getGrottoMazeOutcome, getGrottoMazeTrapOutcome, getGazepScryingOutcome, getGrottoMazeChestLoot, getGrottoMazeRandomMoveEvent } = require('@/data/grottoMazeOutcomes.js');
@@ -2687,6 +2687,8 @@ module.exports = {
      await party.save();
      if (grotto.trialType === "puzzle" && (grotto.puzzleState?.offeringAttempts ?? 0) >= 3 && grotto.puzzleState?.offeringApproved !== true) {
       grotto.puzzleState.offeringAttempts = 0;
+      grotto.puzzleState.offeringPool = null;
+      grotto.puzzleState.offeringFillerBranch = null;
       grotto.markModified("puzzleState");
       await grotto.save();
      }
@@ -2787,7 +2789,8 @@ module.exports = {
       await party.save();
       const rollCmdId = getExploreCommandId();
       const leaveCmdId = getExploreCommandId();
-      return interaction.editReply({ embeds: [createExplorationErrorEmbed("❌ **Puzzle attempts used**", `The party used all 3 puzzle attempts. The grotto is **not cleared** — it stays until someone submits the correct offering. Use </explore grotto leave:${leaveCmdId}> or </explore roll:${rollCmdId}> to leave. Come back later with </explore grotto continue> to get 3 more attempts.`, { party, expeditionId, location, nextCharacter: party?.characters?.[party?.currentTurn] ?? null, showNextAndCommands: true })] });
+      const continueCmdIdAttempt = getExploreCommandId();
+      return interaction.editReply({ embeds: [createExplorationErrorEmbed("❌ **Puzzle attempts used**", `The party used all 3 puzzle attempts. The grotto is **not cleared**. **Same expedition** — use </explore grotto continue:${continueCmdIdAttempt}> to reset 3 tries, or </explore roll:${rollCmdId}> then return here (attempts refresh when you open the puzzle again). </explore grotto leave:${leaveCmdId}> also works.`, { party, expeditionId, location, nextCharacter: party?.characters?.[party?.currentTurn] ?? null, showNextAndCommands: true })] });
      }
      if (grotto.trialType === "puzzle" && grotto.puzzleState?.offeringSubmitted && grotto.puzzleState?.offeringApproved === false) {
       return interaction.editReply({ embeds: [createExplorationErrorEmbed("❌ **Puzzle offering denied**", `Staff denied this puzzle offering (no Spirit Orbs). You can try again (up to 3 attempts total) with </explore grotto puzzle:${getExploreCommandId()}> (items), or use </explore grotto leave:${getExploreCommandId()}> to leave. Contact mods if you believe items were removed before denial.`, { party, expeditionId, location, nextCharacter: party?.characters?.[party?.currentTurn] ?? null, showNextAndCommands: true })] });
@@ -3252,7 +3255,25 @@ module.exports = {
      if (grotto.status === "cleared" || grotto.completedAt) {
       return interaction.editReply({ embeds: [createExplorationErrorEmbed("🗺️ **Grotto already cleared**", "This grotto has already been cleared.", { party, expeditionId, location, nextCharacter: party?.characters?.[party?.currentTurn] ?? null, showNextAndCommands: true })] });
      }
-     const puzzleAttempts = grotto.puzzleState?.offeringAttempts ?? 0;
+     // After 3 wrongs we set party.leftGrotto*; /explore roll clears those but used not to reset offeringAttempts—
+     // so players were stuck until a brand-new explore. If the party has moved (no leftGrotto stamp), refresh 3 tries (same expedition).
+     let puzzleAttempts = grotto.puzzleState?.offeringAttempts ?? 0;
+     if (grotto.trialType === "puzzle" && puzzleAttempts >= 3 && grotto.puzzleState?.offeringApproved !== true) {
+      const hasLeftGrottoStamp =
+       Boolean(
+        (party.leftGrottoSquare && String(party.leftGrottoSquare).trim()) &&
+         (party.leftGrottoQuadrant && String(party.leftGrottoQuadrant).trim())
+       );
+      if (!hasLeftGrottoStamp) {
+       grotto.puzzleState = grotto.puzzleState || {};
+       grotto.puzzleState.offeringAttempts = 0;
+       grotto.puzzleState.offeringPool = null;
+       grotto.puzzleState.offeringFillerBranch = null;
+       grotto.markModified("puzzleState");
+       await grotto.save();
+       puzzleAttempts = 0;
+      }
+     }
      if (puzzleAttempts >= 3) {
       party.leftGrottoSquare = (party.square && String(party.square).trim()) || "";
       party.leftGrottoQuadrant = (party.quadrant && String(party.quadrant).trim()) || "";
@@ -3266,7 +3287,7 @@ module.exports = {
        .setTitle("🗺️ **Grotto: Puzzle — No More Attempts**")
        .setColor(getExploreOutcomeColor("grotto_puzzle_offering", regionColors[party.region] || "#00ff99"))
        .setDescription(
-        "The party used all 3 attempts. The grotto is **not cleared** — it stays until someone submits the correct offering. Use </explore grotto leave:" + leaveCmdId + "> or </explore roll:" + rollCmdId + "> to leave. Come back later with </explore grotto continue> to get 3 more attempts."
+        "The party used all 3 attempts. The grotto is **not cleared** — it stays until someone submits the correct offering. **Same expedition** (no new explore ID needed): use </explore grotto continue:" + getExploreCommandId() + "> to reset 3 tries, or </explore roll:" + rollCmdId + "> to leave the square—when you return here, 3 attempts refresh automatically. </explore grotto leave:" + leaveCmdId + "> also works before rolling."
        )
        .setImage(noMoreBanner?.imageUrl ?? getExploreMapImageUrl(party, { highlight: true }));
       addExplorationStandardFields(embed, {
@@ -3361,14 +3382,127 @@ module.exports = {
       }
      }
     const offeredDisplay = parsedItems.map((x) => (x.quantity > 1 ? `${x.itemName} x${x.quantity}` : x.itemName));
-    const checkResult = checkPuzzleOffer(grotto, parsedItems);
+    const puzzleSub = grotto.puzzleState?.puzzleSubType;
+    let oddProgress = null;
+    if (puzzleSub === "odd_structure") {
+     oddProgress = tryApplyOddStructureProgress(grotto, parsedItems);
+     if (oddProgress.outcome === "redundant") {
+      const cmdIdR = getExploreCommandId();
+      const redEmbed = new EmbedBuilder()
+       .setTitle("🗺️ **Grotto: Puzzle — Nothing New to Add**")
+       .setColor(getExploreOutcomeColor("grotto_puzzle_offering", regionColors[party.region] || "#00ff99"))
+       .setDescription(
+        `**${character.name}** offered: **${offeredDisplay.join(", ")}**\n\nThe runes already hold what those tallies cover, or this submission doesn’t move the ritual forward. Offer something still **missing** from the clue (comma-separated: \`Item xQty\`, …). **No wrong attempt used.**`
+       )
+       .setImage(getRandomGrottoBanner());
+      addExplorationStandardFields(redEmbed, {
+       party,
+       expeditionId,
+       location,
+       nextCharacter: null,
+       showNextAndCommands: true,
+       showRestSecureMove: false,
+       hasActiveGrotto: true,
+       activeGrottoCommand: `</explore grotto puzzle:${cmdIdR}>`,
+       hasUnpinnedDiscoveriesInQuadrant: await hasUnpinnedDiscoveriesInQuadrant(party),
+       compactGrottoCommands: true,
+       grottoPuzzleAnyoneCanSubmit: true,
+      });
+      return interaction.editReply({ embeds: [redEmbed] });
+     }
+     if (oddProgress.outcome === "partial") {
+      const consumeItems = oddProgress.consumeList || [];
+      for (const { itemName, quantity } of consumeItems) {
+       const key = itemName.trim().toLowerCase();
+       const have = partyInv.totalByItem.get(key) || 0;
+       if (have < quantity) {
+        return interaction.editReply({
+         embeds: [createExplorationErrorEmbed("❌ **Not enough items**", `Your party doesn't have enough **${itemName}** in anyone's inventory. This deposit needs ${quantity} but the party has ${have} total.`, { party, expeditionId, location, nextCharacter: party?.characters?.[party?.currentTurn] ?? null, showNextAndCommands: true })],
+        });
+       }
+      }
+      const submitterIndex = party.characters.findIndex((c) => c._id && c._id.toString() === character._id.toString());
+      const orderedSlots = submitterIndex >= 0
+       ? [party.characters[submitterIndex], ...party.characters.filter((_, i) => i !== submitterIndex)]
+       : party.characters;
+      const toRemove = [];
+      for (const { itemName, quantity: need } of consumeItems) {
+       let remaining = need;
+       const key = itemName.trim().toLowerCase();
+       for (const pc of orderedSlots) {
+        if (remaining <= 0) break;
+        const sq = partyInv.slotQuantities.find((s) => s.slot._id.toString() === pc._id.toString());
+        if (!sq) continue;
+        const charHave = sq.quantities.get(key) || 0;
+        if (charHave <= 0) continue;
+        const take = Math.min(remaining, charHave);
+        if (take > 0) {
+         const canonicalName = sq.names.get(key) || itemName;
+         toRemove.push({ characterId: pc._id, itemName: canonicalName, quantity: take });
+         remaining -= take;
+        }
+       }
+      }
+      try {
+       for (const { characterId, itemName, quantity } of toRemove) {
+        await removeItemInventoryDatabase(characterId, itemName, quantity, interaction, "Grotto puzzle offering (partial)");
+       }
+      } catch (err) {
+       handleInteractionError(err, interaction, { source: "explore.js grotto puzzle removeItem partial" });
+       return interaction.editReply({
+        embeds: [createExplorationErrorEmbed("❌ **Inventory error**", `Could not remove items from party inventories. ${err?.message || err}`, { party, expeditionId, location, nextCharacter: party?.characters?.[party?.currentTurn] ?? null, showNextAndCommands: true })],
+       }).catch(() => {});
+      }
+      grotto.puzzleState.offeringPool = oddProgress.newAcc;
+      grotto.puzzleState.offeringFillerBranch = oddProgress.fillerBranch ?? null;
+      grotto.markModified("puzzleState");
+      pushProgressLog(party, character.name, "grotto_puzzle_offering", `Puzzle partial deposit: ${consumeItems.map((p) => `${p.itemName} x${p.quantity}`).join(", ")}`, undefined, undefined, new Date());
+      await grotto.save();
+      await party.save();
+      const cmdIdP = getExploreCommandId();
+      const depStr = consumeItems.map((p) => (p.quantity > 1 ? `**${p.itemName} x${p.quantity}**` : `**${p.itemName}**`)).join(", ");
+      const wrongSoFar = grotto.puzzleState?.offeringAttempts ?? 0;
+      const attLeft = 3 - wrongSoFar;
+      const partialEmbed = new EmbedBuilder()
+       .setTitle("🗺️ **Grotto: Puzzle — Accepted (partial)**")
+       .setColor(getExploreOutcomeColor("grotto_puzzle_offering", regionColors[party.region] || "#00ff99"))
+       .setDescription(
+        `**${character.name}** offered: **${offeredDisplay.join(", ")}**\n\nThe grotto **sets aside** ${depStr} toward the ritual. **More materials are still needed** to finish.\n\nThis did **not** count as a wrong attempt. Wrong attempts: **${wrongSoFar}/3** (${attLeft} left before lockout). Keep going with </explore grotto puzzle:${cmdIdP}> (items).`
+       )
+       .setImage(getRandomGrottoBanner());
+      addExplorationStandardFields(partialEmbed, {
+       party,
+       expeditionId,
+       location,
+       nextCharacter: null,
+       showNextAndCommands: true,
+       showRestSecureMove: false,
+       hasActiveGrotto: true,
+       activeGrottoCommand: `</explore grotto puzzle:${cmdIdP}>`,
+       hasUnpinnedDiscoveriesInQuadrant: await hasUnpinnedDiscoveriesInQuadrant(party),
+       compactGrottoCommands: true,
+       grottoPuzzleAnyoneCanSubmit: true,
+      });
+      return interaction.editReply({ embeds: [partialEmbed] });
+     }
+    }
+
+    let checkResult =
+     puzzleSub === "odd_structure" && oddProgress
+      ? { approved: oddProgress.outcome === "complete" }
+      : checkPuzzleOffer(grotto, parsedItems);
     let displayItems = [];
     if (checkResult.approved) {
+    let consumeItems = [];
+    if (puzzleSub === "odd_structure" && oddProgress?.outcome === "complete") {
+     consumeItems = oddProgress.consumeList || [];
+    } else {
     // Use getPuzzleConsumeItems so we only take the required amount (e.g. Offering Statue = 1). When it returns empty (wrong item or type unknown), cap at 1 per item so we never over-consume.
     const capped = getPuzzleConsumeItems(grotto, parsedItems);
-    const consumeItems = capped.length > 0
+    consumeItems = capped.length > 0
       ? capped
       : parsedItems.map((p) => ({ itemName: (p.itemName || "").trim(), quantity: Math.min(p.quantity || 1, 1) }));
+    }
      for (const { itemName, quantity } of consumeItems) {
       const key = itemName.trim().toLowerCase();
       const have = partyInv.totalByItem.get(key) || 0;
@@ -3414,6 +3548,11 @@ module.exports = {
       }
      }
      displayItems = consumeItems.map((p) => (p.quantity > 1 ? `${p.itemName} x${p.quantity}` : p.itemName));
+     if (puzzleSub === "odd_structure" && oddProgress?.outcome === "complete") {
+      grotto.puzzleState.offeringPool = null;
+      grotto.puzzleState.offeringFillerBranch = null;
+      grotto.markModified("puzzleState");
+     }
     }
      if (checkResult.approved) {
       grotto.puzzleState.offeringSubmitted = true;
@@ -3491,7 +3630,8 @@ module.exports = {
       const leaveCmdId = getExploreCommandId();
       const lockoutOddHint = getOddStructureWrongGuessHint(grotto);
       const lockoutNear = getOddStructureNearMissHint(grotto, parsedItems);
-      const lockoutBase = `**${character.name}** submitted an offering: **${offeredDisplay.join(", ")}**\n\nThe offering was not correct. **No items were taken.** **No attempts remaining.** The grotto is **not cleared** — it stays until someone submits the correct offering. Use </explore grotto leave:${leaveCmdId}> or </explore roll:${cmdIdDenied}> to leave. Come back later with </explore grotto continue> to get 3 more attempts.`;
+      const continueCmdId = getExploreCommandId();
+      const lockoutBase = `**${character.name}** submitted an offering: **${offeredDisplay.join(", ")}**\n\nThe offering was not correct. **No items were taken.** **No attempts remaining.** The grotto is **not cleared** — it stays until someone submits the correct offering.\n\n**Same expedition** (no new explore ID needed): use </explore grotto continue:${continueCmdId}> for 3 fresh tries, or </explore roll:${cmdIdDenied}> away—when you **roll back** to this square, 3 attempts refresh automatically. </explore grotto leave:${leaveCmdId}> works too before rolling.`;
       let lockoutDesc = lockoutBase;
       if (lockoutNear) lockoutDesc += `\n\n${lockoutNear}`;
       if (lockoutOddHint) lockoutDesc += `\n\n*A final glimmer from the runes:*\n${lockoutOddHint}`;

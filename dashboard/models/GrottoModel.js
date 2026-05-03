@@ -35,6 +35,9 @@ const GrottoSchema = new Schema({
     offeringDescription: { type: String, default: "" },
     offeringBy: { type: String, default: "" },
     offeredAt: { type: Date, default: null },
+    offeringAttempts: { type: Number, default: 0 },
+    offeringPool: { type: Schema.Types.Mixed, default: null },
+    offeringFillerBranch: { type: String, default: null },
   },
   mazeState: {
     currentNode: { type: String, default: "" },

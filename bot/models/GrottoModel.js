@@ -44,6 +44,10 @@ const GrottoSchema = new Schema({
     offeringDescription: { type: String, default: '' },
     offeringBy: { type: String, default: '' },
     offeredAt: { type: Date, default: null },
+    /** Odd Structure: materials already accepted toward the recipe (multi-step offerings) */
+    offeringPool: { type: Schema.Types.Mixed, default: null },
+    /** Odd Structure flexible: lowercase itemName key for the locked anyOf branch */
+    offeringFillerBranch: { type: String, default: null },
   },
   mazeState: {
     currentNode: { type: String, default: '' }, // 'x,y' matrix coords or legacy id

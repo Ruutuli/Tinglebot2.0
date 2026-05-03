@@ -400,7 +400,8 @@ function getPuzzleFlavor(grotto, cmdId) {
   if (subType === ODDS_STRUCTURE) {
     const v = ODD_STRUCTURE_VARIANTS[state.puzzleVariant ?? 0];
     if (!v) return null;
-    let text = `${v.flavor}\n\n↳ ${v.hint} Only the required amount will be taken from party inventories (any character's inventory — not loadout; no transfers during expedition).`;
+    let text = `${v.flavor}\n\n↳ ${v.hint} You can **offer in multiple commands**—valid materials are set aside until the full recipe is met. Only accepted amounts are removed from inventories (any character — not loadout; no transfers during expedition).`;
+    text += formatOddStructurePoolFlavor(grotto);
     const attempts = state.offeringAttempts ?? 0;
     const extra = v.wrongGuessHints || [];
     if (attempts > 0 && extra.length) {
@@ -745,6 +746,209 @@ function getOddStructureNearMissHint(grotto, parsedItems) {
 }
 
 // ---------------------------------------------------------------------------
+// Odd Structure — progressive offerings (partial deposits, one command at a time)
+// ---------------------------------------------------------------------------
+
+function getAllowedItemKeysForVariant(v) {
+  const keys = new Set();
+  if (v.required && !v.flexible) {
+    for (const r of v.required) keys.add(r.itemName.toLowerCase());
+    return keys;
+  }
+  if (v.flexible) {
+    for (const r of v.flexible.required || []) keys.add(r.itemName.toLowerCase());
+    for (const a of v.flexible.anyOf || []) keys.add(a.itemName.toLowerCase());
+    for (const a of v.flexible.atLeastTwoOf || []) keys.add(a.itemName.toLowerCase());
+  }
+  return keys;
+}
+
+function applyRequiredAnyOfProgress(v, acc0, fillerBranch0, proposed) {
+  const acc = { ...acc0 };
+  let fillerBranch = fillerBranch0 || null;
+  const consumeList = [];
+  const req = v.flexible.required || [];
+  const anyOpts = v.flexible.anyOf || [];
+  const anyKeys = new Set(anyOpts.map((a) => a.itemName.toLowerCase()));
+
+  const proposedAnyKeys = [...proposed.keys()].filter((k) => anyKeys.has(k) && (proposed.get(k) || 0) > 0);
+  if (proposedAnyKeys.length > 1) {
+    return { outcome: 'invalid', reason: 'multi_filler' };
+  }
+  if (proposedAnyKeys.length === 1) {
+    const pk = proposedAnyKeys[0];
+    if (fillerBranch && fillerBranch !== pk) {
+      return { outcome: 'invalid', reason: 'filler_branch_locked' };
+    }
+  }
+
+  for (const k of proposed.keys()) {
+    const inReq = req.some((r) => r.itemName.toLowerCase() === k);
+    const inAny = anyKeys.has(k);
+    if (!inReq && !inAny) return { outcome: 'invalid', reason: 'extra_item' };
+    if (inAny && fillerBranch && k !== fillerBranch && (proposed.get(k) || 0) > 0) {
+      return { outcome: 'invalid', reason: 'wrong_filler' };
+    }
+  }
+
+  if (proposedAnyKeys.length === 1) {
+    fillerBranch = proposedAnyKeys[0];
+  }
+
+  for (const r of req) {
+    const key = r.itemName.toLowerCase();
+    const need = r.minQuantity || 0;
+    const room = Math.max(0, need - (acc[key] || 0));
+    const offer = proposed.get(key) || 0;
+    const take = Math.min(room, offer);
+    if (take > 0) {
+      acc[key] = (acc[key] || 0) + take;
+      consumeList.push({ itemName: r.itemName, quantity: take });
+    }
+  }
+
+  if (proposedAnyKeys.length === 1) {
+    const key = proposedAnyKeys[0];
+    const opt = anyOpts.find((a) => a.itemName.toLowerCase() === key);
+    const need = opt.minQuantity || 0;
+    const room = Math.max(0, need - (acc[key] || 0));
+    const offer = proposed.get(key) || 0;
+    const take = Math.min(room, offer);
+    if (take > 0) {
+      acc[key] = (acc[key] || 0) + take;
+      consumeList.push({ itemName: opt.itemName, quantity: take });
+    }
+  }
+
+  const reqOk = req.every((r) => (acc[r.itemName.toLowerCase()] || 0) >= (r.minQuantity || 0));
+  const anyOk = anyOpts.some((a) => (acc[a.itemName.toLowerCase()] || 0) >= (a.minQuantity || 0));
+  const complete = reqOk && anyOk;
+
+  if (!complete && consumeList.length === 0) {
+    return { outcome: 'redundant', newAcc: acc, fillerBranch, consumeList: [], complete: false };
+  }
+  if (!complete) return { outcome: 'partial', newAcc: acc, fillerBranch, consumeList, complete: false };
+  return { outcome: 'complete', newAcc: acc, fillerBranch, consumeList, complete: true };
+}
+
+function applyAtLeastTwoOfProgress(v, acc0, proposed) {
+  const acc = { ...acc0 };
+  const consumeList = [];
+  const req = v.flexible.required || [];
+  const lines = v.flexible.atLeastTwoOf || [];
+
+  for (const r of req) {
+    const key = r.itemName.toLowerCase();
+    const need = r.minQuantity || 0;
+    const room = Math.max(0, need - (acc[key] || 0));
+    const offer = proposed.get(key) || 0;
+    const take = Math.min(room, offer);
+    if (take > 0) {
+      acc[key] = (acc[key] || 0) + take;
+      consumeList.push({ itemName: r.itemName, quantity: take });
+    }
+  }
+
+  for (const opt of lines) {
+    const key = opt.itemName.toLowerCase();
+    const need = opt.minQuantity || 0;
+    const room = Math.max(0, need - (acc[key] || 0));
+    const offer = proposed.get(key) || 0;
+    const take = Math.min(room, offer);
+    if (take > 0) {
+      acc[key] = (acc[key] || 0) + take;
+      consumeList.push({ itemName: opt.itemName, quantity: take });
+    }
+  }
+
+  const reqOk = req.every((r) => (acc[r.itemName.toLowerCase()] || 0) >= (r.minQuantity || 0));
+  const metLines = lines.filter((opt) => (acc[opt.itemName.toLowerCase()] || 0) >= (opt.minQuantity || 0)).length;
+  const complete = reqOk && metLines >= 2;
+
+  if (!complete && consumeList.length === 0) {
+    return { outcome: 'redundant', newAcc: acc, fillerBranch: null, consumeList: [], complete: false };
+  }
+  if (!complete) return { outcome: 'partial', newAcc: acc, fillerBranch: null, consumeList, complete: false };
+  return { outcome: 'complete', newAcc: acc, fillerBranch: null, consumeList, complete: true };
+}
+
+/**
+ * Multi-step Odd Structure offerings: merge this submission with offeringPool.
+ * @returns {{ outcome: 'complete'|'partial'|'invalid'|'redundant', newAcc?: object, fillerBranch?: string|null, consumeList?: array, complete?: boolean, reason?: string }}
+ */
+function tryApplyOddStructureProgress(grotto, parsedItems) {
+  const state = grotto?.puzzleState || {};
+  const v = ODD_STRUCTURE_VARIANTS[state.puzzleVariant ?? 0];
+  if (!v || !parsedItems?.length) return { outcome: 'invalid', reason: 'bad_input' };
+
+  const proposed = buildParsedQtyMap(parsedItems);
+  const acc0 =
+    state.offeringPool && typeof state.offeringPool === 'object' && !Array.isArray(state.offeringPool)
+      ? { ...state.offeringPool }
+      : {};
+  const fillerBranch0 = state.offeringFillerBranch || null;
+  const allowed = getAllowedItemKeysForVariant(v);
+
+  for (const k of proposed.keys()) {
+    if (!allowed.has(k)) return { outcome: 'invalid', reason: 'bad_item' };
+  }
+
+  if (v.required && !v.flexible) {
+    const acc = { ...acc0 };
+    const consumeList = [];
+    for (const r of v.required) {
+      const key = r.itemName.toLowerCase();
+      const need = r.minQuantity || 0;
+      const room = Math.max(0, need - (acc[key] || 0));
+      const offer = proposed.get(key) || 0;
+      const take = Math.min(room, offer);
+      if (take > 0) {
+        acc[key] = (acc[key] || 0) + take;
+        consumeList.push({ itemName: r.itemName, quantity: take });
+      }
+    }
+    for (const k of proposed.keys()) {
+      if (!v.required.some((r) => r.itemName.toLowerCase() === k)) {
+        return { outcome: 'invalid', reason: 'extra_item', newAcc: acc0, fillerBranch: null, consumeList: [] };
+      }
+    }
+    const complete = v.required.every((r) => (acc[r.itemName.toLowerCase()] || 0) >= (r.minQuantity || 0));
+    if (!complete && consumeList.length === 0) {
+      return { outcome: 'redundant', newAcc: acc, fillerBranch: null, consumeList: [], complete: false };
+    }
+    if (!complete) return { outcome: 'partial', newAcc: acc, fillerBranch: null, consumeList, complete: false };
+    return { outcome: 'complete', newAcc: acc, fillerBranch: null, consumeList, complete: true };
+  }
+
+  if (v.flexible?.atLeastTwoOf) {
+    return applyAtLeastTwoOfProgress(v, acc0, proposed);
+  }
+
+  if (v.flexible?.required && v.flexible?.anyOf) {
+    return applyRequiredAnyOfProgress(v, acc0, fillerBranch0, proposed);
+  }
+
+  return { outcome: 'invalid', reason: 'unknown_layout' };
+}
+
+function formatOddStructurePoolFlavor(grotto) {
+  const state = grotto?.puzzleState || {};
+  if (state.puzzleSubType !== ODDS_STRUCTURE) return '';
+  const pool = state.offeringPool;
+  if (!pool || typeof pool !== 'object') return '';
+  const entries = Object.entries(pool).filter(([, q]) => Number(q) > 0);
+  if (!entries.length) return '';
+  const bits = entries.map(([k, q]) => {
+    const pretty = String(k)
+      .split(/\s+/)
+      .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
+      .join(' ');
+    return `**${q}×** ${pretty}`;
+  });
+  return `\n\n📦 **Already set aside toward this puzzle:** ${bits.join(' · ')}`;
+}
+
+// ---------------------------------------------------------------------------
 // Puzzle Success — Flavor text when offering is correct
 // ---------------------------------------------------------------------------
 const PUZZLE_SUCCESS_FLAVORS = [
@@ -770,6 +974,8 @@ module.exports = {
   getOfferingStatueClueText,
   getOddStructureWrongGuessHint,
   getOddStructureNearMissHint,
+  tryApplyOddStructureProgress,
+  formatOddStructurePoolFlavor,
   ensurePuzzleConfig,
   checkPuzzleOffer,
   getPuzzleConsumeItems,
