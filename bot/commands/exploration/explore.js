@@ -105,7 +105,7 @@ const path = require("path");
 
 // ------------------- Data ------------------
 const { rollGrottoTrialType, getTrialLabel, GROTTO_CLEARED_FLAVOR, GROTTO_ALREADY_CLEARED_BLESSING, GROTTO_CLEANSED_VS_CLEARED, GROTTO_STATUS_LEGEND } = require('@/data/grottoTrials.js');
-const { rollPuzzleConfig, getPuzzleFlavor, getOfferingStatueClueText, getOddStructureWrongGuessHint, ensurePuzzleConfig, checkPuzzleOffer, getPuzzleConsumeItems, getRandomPuzzleSuccessFlavor } = require('@/data/grottoPuzzleData.js');
+const { rollPuzzleConfig, getPuzzleFlavor, getOfferingStatueClueText, getOddStructureWrongGuessHint, getOddStructureNearMissHint, ensurePuzzleConfig, checkPuzzleOffer, getPuzzleConsumeItems, getRandomPuzzleSuccessFlavor } = require('@/data/grottoPuzzleData.js');
 const { getRandomGrottoName, getRandomGrottoNameUnused } = require('@/data/grottoNames.js');
 const { getFailOutcome, getMissOutcome, getSuccessOutcome, getCompleteOutcome } = require('@/data/grottoTargetPracticeOutcomes.js');
 const { getGrottoMazeOutcome, getGrottoMazeTrapOutcome, getGazepScryingOutcome, getGrottoMazeChestLoot, getGrottoMazeRandomMoveEvent } = require('@/data/grottoMazeOutcomes.js');
@@ -3490,8 +3490,11 @@ module.exports = {
       await party.save();
       const leaveCmdId = getExploreCommandId();
       const lockoutOddHint = getOddStructureWrongGuessHint(grotto);
+      const lockoutNear = getOddStructureNearMissHint(grotto, parsedItems);
       const lockoutBase = `**${character.name}** submitted an offering: **${offeredDisplay.join(", ")}**\n\nThe offering was not correct. **No items were taken.** **No attempts remaining.** The grotto is **not cleared** — it stays until someone submits the correct offering. Use </explore grotto leave:${leaveCmdId}> or </explore roll:${cmdIdDenied}> to leave. Come back later with </explore grotto continue> to get 3 more attempts.`;
-      const lockoutDesc = lockoutOddHint ? `${lockoutBase}\n\n*A final glimmer from the runes:*\n${lockoutOddHint}` : lockoutBase;
+      let lockoutDesc = lockoutBase;
+      if (lockoutNear) lockoutDesc += `\n\n${lockoutNear}`;
+      if (lockoutOddHint) lockoutDesc += `\n\n*A final glimmer from the runes:*\n${lockoutOddHint}`;
       return interaction.editReply({
        embeds: [
         new EmbedBuilder()
@@ -3506,11 +3509,13 @@ module.exports = {
      const wrongDescBase = `**${character.name}** submitted an offering: **${offeredDisplay.join(", ")}**\n\nThe offering was not correct. **No items were taken.** You have **${attemptsLeft}** attempt(s) left. Try again with </explore grotto puzzle:${cmdIdDenied}> (items), or use </explore grotto leave:${cmdIdDenied}> to leave and come back later.`;
     const newClueText = getOfferingStatueClueText(grotto);
     const oddWrongHint = getOddStructureWrongGuessHint(grotto);
+    const oddNearMiss = getOddStructureNearMissHint(grotto, parsedItems);
     let wrongDesc = wrongDescBase;
+    if (oddNearMiss) wrongDesc += `\n\n${oddNearMiss}`;
     if (newClueText) {
-     wrongDesc = `${wrongDescBase}\n\n*The statue shifts; new writing appears:*\n*${newClueText}*`;
+     wrongDesc += `\n\n*The statue shifts; new writing appears:*\n*${newClueText}*`;
     } else if (oddWrongHint) {
-     wrongDesc = `${wrongDescBase}\n\n*Another line of the script sharpens into view:*\n${oddWrongHint}`;
+     wrongDesc += `\n\n*Another line of the script sharpens into view:*\n${oddWrongHint}`;
     }
     const tryAgainEmbed = new EmbedBuilder()
       .setTitle("🗺️ **Grotto: Puzzle — Wrong Offering**")

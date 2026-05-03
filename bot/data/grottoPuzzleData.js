@@ -10,11 +10,11 @@ const OFFERING_STATUE = 'offering_statue';
 const ODD_STRUCTURE_VARIANTS = [
   {
     flavor: 'As you enter the space beneath the stump, you encounter an odd structure, with runes of an age far gone. It doesn\'t seem fully built, however, but maybe help building it will open up something cool?',
-    hint: 'The carved tally asks for **50** rough-cut lengths taken from trees, and **20** tiny twisted fasteners meant to bite through metal plates—offer both stacks together.',
+    hint: 'Two carved columns must ring **true in one go**. The **taller** column counts **50** splintery lengths shaved from trees—the skeleton of a build. The **shorter** column counts **20** bite-sized twists meant to thread through old plates. Same offering, two families; neither column can borrow from the other\'s bin.',
     wrongGuessHints: [
-      'The larger number belongs to splintery beam-stock; the smaller belongs to minuscule threaded spirals—different families, both mandatory.',
-      'Spark-chips and long hollow rods are not part of this tally—only beam lengths and tiny twist-fasteners.',
-      'Neither count can slip: **50** beam pieces and **20** bite-sized spirals, in one combined offering.',
+      'If you only hear one column clatter, the structure stays hollow—you always owe **both** the big beam tally **and** the small twist tally.',
+      'Spark-dust, long hollow poles, and plain ingots belong to other stories; here it\'s only tree-cut beams plus tiny spiral fasteners.',
+      'Picture two piles side by side: **50** on the splinter stack, **20** on the twist ring—both exact before the runes glow.',
     ],
     // Exact match required
     required: [
@@ -24,11 +24,11 @@ const ODD_STRUCTURE_VARIANTS = [
   },
   {
     flavor: 'As you enter the space beneath the stump, you encounter an odd structure, with runes of an age far gone. It doesn\'t seem fully built, however, but maybe help building it will open up something cool?',
-    hint: 'The script pairs **40** shards that flash when struck against stone with **20** long, slender metal splinters—two kinds of scrap in one submission.',
+    hint: 'The carving asks for shattering bright chips struck from stone (**40**) paired with straight metal splinters long as a forearm (**20**). Both sounds hit together—spark song plus rod-rattle—in one combined gift.',
     wrongGuessHints: [
-      'You need both tallies: strike-flash fragments **and** elongated rod-pieces—one cannot replace the other.',
-      'The higher count is for brittle spark-stone chips; the lower is for straight ruins-metal splinters, not timber.',
-      'Offer **40** of the glittering strike fragments plus **20** of the forearm-long metal sticks together.',
+      'Tree beams won\'t answer this script; neither will coils or gear-teeth. Only strike-flash shards **and** elongated ruin rods.',
+      'The **larger** count is for brittle glittering fragments; the **smaller** count is for slender sticks—not the same pile counted twice.',
+      'Offer the full **40** glitter-pile **and** full **20** rod-bundle together; stopping halfway on either side leaves the work undone.',
     ],
     required: [
       { itemName: 'Flint', minQuantity: 40 },
@@ -37,11 +37,11 @@ const ODD_STRUCTURE_VARIANTS = [
   },
   {
     flavor: 'A half-finished frame of wood and metal sits in the grotto. Ancient script winds around its beams. It looks like something was meant to be completed here—and perhaps still can be.',
-    hint: 'Two piles at once: **30** lengths of rough forest timber, **and** a second pile whose size **exactly matches one** of these rune-numbers—**20**, **10**, **10**, **5**, or **3**—each number ties to a different family of ancient spare parts (strike-shards, tiny coils, slender pins, interlocking wheels, or fist-sized glowing cores). Only **one** of those second paths counts.',
+    hint: 'Think of it as a **spine** and a **filler**. The spine is fixed: **30** rough-hewn pieces cut from living trees—the bones of the frame. The filler is **one** batch from the old ruins: strike-chips, brassy twists, long pins, toothed discs, or orange heart-lights. Each *kind* of filler names its own toll on the beam: **20** for the commonest heavy scrap, **10** for two different midweight families, **5** for a handful of interlocking bits, **3** for a tiny clutch of burning cores. Offer **spine + one filler** in the **same** submission—the count on your second pile must be the **exact** toll for whichever filler family you actually chose (not “close enough”).',
     wrongGuessHints: [
-      'A single donation never finishes the frame: you always owe **30** beam-pieces **plus** another pile meeting **20**, **10**, **10**, **5**, or **3**—never timber alone.',
-      'If the second pile uses the wrong count for what you brought—or you stop short of **30** on the beams—the script stays cold.',
-      'Match **30** on the splintery beam stack first; then add **one** qualifying second stack at **20**, **10**, **10**, **5**, or **3** pieces—never split across two “second” families.',
+      'Half the inscription is about timber; half is about machine-scrap. Bringing **only** one category—or stopping at **29** on the tree half—leaves the frame hollow.',
+      'The five numbers are **not** five separate offerings. They are **five possible prices** for **one** second pile. Match the **size** of what you carry to the **price line** it belongs to: the big scrap-line wants **20**, two different lines want **10**, the small gear-handful wants **5**, the rare core-cluster wants **3**.',
+      'Picture two stacks in one command: left hand **30** splinter-beams; right hand **one** ancient junk-line at full price (**20**, **10**, **10**, **5**, or **3**). Wrong answers are usually “second pile only,” “beams only,” “almost **30** beams,” or “two different fillers at once.”',
     ],
     // Flexible: Wood >= 30 AND at least one other material type
     flexible: {
@@ -57,11 +57,11 @@ const ODD_STRUCTURE_VARIANTS = [
   },
   {
     flavor: 'You find a scaffold of roots and stone. Parts are missing—gaps where metal or wood should slot in. The runes suggest a ritual of assembly. Contribute what you carry.',
-    hint: 'Lay **40** forest beams and **20** strike-spark chips first. Then add **one** more stack sized **15**, **15**, **10**, or **3**—depending whether you bring tiny spirals, long pins, molten mountain glass, or small refined bars.',
+    hint: 'This scaffold wants **three voices at once**: (**1**) **40** rough-hewn tree beams, (**2**) **20** bright chips struck from stone, (**3**) **one** extra branch—priced at **15**, **15**, **10**, or **3** depending whether you bring tiny spirals, long pins, molten glassy ore, or compact refined bars. The third price tags a *different* scrap family than the first two columns.',
     wrongGuessHints: [
-      'Three kinds of scrap in one offering: the two fixed tallies (**40** / **20**) **plus** exactly **one** branch sized **15**, **15**, **10**, or **3**.',
-      'The third stack cannot be another pile of beams or spark-chips—you must pick among spiral bites, long rods, hot ore chunks, or compact ingots.',
-      'All three counts must appear together in a single command; short-changing any column fails the ritual.',
+      'Two pillars are fixed (**40** beams, **20** strike-chips); the third is a *pick-one* side-path—spirals, pins, hot ore chunks, or little bars—each with its own headcount.',
+      'Duplicating the first two piles doesn\'t finish the ritual; the third slot waits for a **different** junk lineage entirely.',
+      'Submit **all three** correct counts in a single line—short any pillar and the scaffold refuses to lock.',
     ],
     flexible: {
       required: [
@@ -78,11 +78,11 @@ const ODD_STRUCTURE_VARIANTS = [
   },
   {
     flavor: 'A skeletal structure dominates the chamber. It hums with dormant energy. Scattered components lie nearby. Perhaps if you supply the rest, it will awaken—and reward you.',
-    hint: 'Start with **40** rough beam lengths. Then meet **two different** extra rune-lines—each demands enough pieces from separate junk families (tiny spirals, long pins, toothed discs, glowing cores, or spark-chips)—the counts land around **15**, **15**, **10**, **5**, or **20** depending which pair you choose.',
+    hint: 'Lay **40** foundation beams first—that spine never moves. After that, the echo must come from **two different scrap choirs**—tiny spirals, long pins, toothed rings, pulsing cores, or strike-chips—each choir sings at its own volume (**15**, **15**, **10**, **5**, or **20**). Same choir twice won\'t wake it; you need **two separate harmonies** above their thresholds in one offering.',
     wrongGuessHints: [
-      'One pile of timber is not enough—you need **40** beams **and** two **distinct** second categories, each at its own threshold.',
-      'Doubling up on the same scrap family only counts once; spread the requirement across two different ancient part types.',
-      'Think “beam foundation + two branches from different bins”—all minimums must clear in one submission.',
+      '**40** beams alone only props the ribs—you still owe **two** different secondary junk families, each loud enough for its line.',
+      'Piling more of the *same* family doesn\'t create a second voice; split your attention across two kinds of ancient spare.',
+      'Checklist mental model: beam bed ✦ first scrap choir ✦ **different** second scrap choir—all minimums in one command.',
     ],
     flexible: {
       required: [{ itemName: 'Wood', minQuantity: 40 }],
@@ -585,6 +585,166 @@ function checkPuzzleOffer(grotto, parsedItems) {
 }
 
 // ---------------------------------------------------------------------------
+// Odd Structure — quantity near-miss (wrong amount but “close”; never prints DB item names)
+// ---------------------------------------------------------------------------
+
+function buildParsedQtyMap(parsedItems) {
+  const itemMap = new Map();
+  for (const p of parsedItems || []) {
+    const lower = (p.itemName || '').trim().toLowerCase();
+    if (!lower) continue;
+    itemMap.set(lower, (itemMap.get(lower) || 0) + (p.quantity || 1));
+  }
+  return itemMap;
+}
+
+function mapQty(map, canonicalName) {
+  return map.get((canonicalName || '').toLowerCase()) || 0;
+}
+
+function qtyAlmostGap(qty, need) {
+  if (need <= 0 || qty <= 0 || qty >= need) return false;
+  const gap = need - qty;
+  return gap <= Math.max(3, Math.ceil(need * 0.12));
+}
+
+function qtyWarmGap(qty, need) {
+  if (need <= 0 || qty <= 0 || qty >= need) return false;
+  return qty >= Math.floor(need * 0.72);
+}
+
+function lineAlmost(qty, need, labelNoun) {
+  if (qty >= need || qty <= 0) return null;
+  const gap = need - qty;
+  if (qtyAlmostGap(qty, need)) {
+    return `**Close—but not enough on the ${labelNoun}!** You're **${gap}** piece${gap === 1 ? '' : 's'} shy of that carved line.`;
+  }
+  if (qtyWarmGap(qty, need)) {
+    return `**Getting warm:** the ${labelNoun} is almost tall enough—the runes want **${need}**, and you're **${gap}** short.`;
+  }
+  return null;
+}
+
+function fillerLabelByBranch(a) {
+  const key = (a.itemName || '').toLowerCase();
+  const need = a.minQuantity || 0;
+  if (need >= 20) return 'heaviest scrap filler (big strike-shard pile)';
+  if (need === 10) {
+    if (key.includes('screw')) return 'mid pile—tiny spiral-family scrap';
+    if (key.includes('shaft')) return 'mid pile—long pin-family scrap';
+    return 'midweight ruin scrap line';
+  }
+  if (need === 5) return 'small interlocking ring handful';
+  if (need === 3) return 'tiny glowing-core cluster';
+  return 'second pile';
+}
+
+function thirdBranchLabelFromOpt(opt) {
+  const key = (opt.itemName || '').toLowerCase();
+  const n = opt.minQuantity || 0;
+  if (n === 15 && key.includes('screw')) return 'tiny spiral side-branch';
+  if (n === 15 && key.includes('shaft')) return 'long pin side-branch';
+  if (n === 10 && key.includes('eldin')) return 'molten ore chunk branch';
+  if (n === 3 && (key.includes('iron') || key.includes('bar'))) return 'compact refined bar branch';
+  return 'third branch';
+}
+
+function atLeastTwoLabelFromOpt(opt) {
+  const key = (opt.itemName || '').toLowerCase();
+  if (key.includes('screw')) return 'tiny spiral choir';
+  if (key.includes('shaft')) return 'long pin choir';
+  if (key.includes('gear')) return 'toothed ring choir';
+  if (key.includes('core')) return 'glowing core choir';
+  if (key.includes('flint')) return 'strike-chip choir';
+  return 'secondary scrap choir';
+}
+
+/**
+ * When an Odd Structure offering fails but quantities are near the target, returns a nudge (still no inventory names in text).
+ * @param {Object} grotto
+ * @param {Array} parsedItems
+ * @returns {string|null}
+ */
+function getOddStructureNearMissHint(grotto, parsedItems) {
+  const state = grotto?.puzzleState || {};
+  if (state.puzzleSubType !== ODDS_STRUCTURE || !parsedItems?.length) return null;
+  const variantIdx = state.puzzleVariant ?? 0;
+  const v = ODD_STRUCTURE_VARIANTS[variantIdx];
+  if (!v) return null;
+  const map = buildParsedQtyMap(parsedItems);
+
+  if (v.required && !v.flexible) {
+    if (variantIdx === 0) {
+      const w = mapQty(map, 'Wood');
+      const s = mapQty(map, 'Ancient Screw');
+      return lineAlmost(w, 50, 'big beam column') || lineAlmost(s, 20, 'tiny twist-fastener ring');
+    }
+    if (variantIdx === 1) {
+      const f = mapQty(map, 'Flint');
+      const sh = mapQty(map, 'Ancient Shaft');
+      return lineAlmost(f, 40, 'strike-flash glitter pile') || lineAlmost(sh, 20, 'long splinter bundle');
+    }
+  }
+
+  if (!v.flexible) return null;
+
+  if (variantIdx === 2) {
+    const w = mapQty(map, 'Wood');
+    const spineHint = lineAlmost(w, 30, 'tree-beam spine');
+    if (spineHint) return spineHint;
+    if (w < 30) return null;
+    let best = null;
+    for (const a of v.flexible.anyOf || []) {
+      const q = mapQty(map, a.itemName);
+      if (q <= 0 || q >= a.minQuantity) continue;
+      const msg = lineAlmost(q, a.minQuantity, fillerLabelByBranch(a));
+      if (!msg) continue;
+      const gap = a.minQuantity - q;
+      if (!best || gap < best.gap) best = { msg, gap };
+    }
+    return best ? best.msg : null;
+  }
+
+  if (variantIdx === 3) {
+    const w = mapQty(map, 'Wood');
+    const f = mapQty(map, 'Flint');
+    const hW = lineAlmost(w, 40, 'first beam pillar');
+    if (hW) return hW;
+    const hF = lineAlmost(f, 20, 'strike-chip pillar');
+    if (hF) return hF;
+    if (w < 40 || f < 20) return null;
+    let best = null;
+    for (const opt of v.flexible.anyOf || []) {
+      const q = mapQty(map, opt.itemName);
+      if (q <= 0 || q >= opt.minQuantity) continue;
+      const msg = lineAlmost(q, opt.minQuantity, thirdBranchLabelFromOpt(opt));
+      if (!msg) continue;
+      const gap = opt.minQuantity - q;
+      if (!best || gap < best.gap) best = { msg, gap };
+    }
+    return best ? best.msg : null;
+  }
+
+  if (variantIdx === 4) {
+    const w = mapQty(map, 'Wood');
+    const hW = lineAlmost(w, 40, 'foundation beam stack');
+    if (hW) return hW;
+    let best = null;
+    for (const opt of v.flexible.atLeastTwoOf || []) {
+      const q = mapQty(map, opt.itemName);
+      if (q <= 0 || q >= opt.minQuantity) continue;
+      const msg = lineAlmost(q, opt.minQuantity, atLeastTwoLabelFromOpt(opt));
+      if (!msg) continue;
+      const gap = opt.minQuantity - q;
+      if (!best || gap < best.gap) best = { msg, gap };
+    }
+    return best ? best.msg : null;
+  }
+
+  return null;
+}
+
+// ---------------------------------------------------------------------------
 // Puzzle Success — Flavor text when offering is correct
 // ---------------------------------------------------------------------------
 const PUZZLE_SUCCESS_FLAVORS = [
@@ -609,6 +769,7 @@ module.exports = {
   getPuzzleFlavor,
   getOfferingStatueClueText,
   getOddStructureWrongGuessHint,
+  getOddStructureNearMissHint,
   ensurePuzzleConfig,
   checkPuzzleOffer,
   getPuzzleConsumeItems,
