@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { connect } from "@/lib/db";
 import { getSession } from "@/lib/session";
 import mongoose from "mongoose";
-import { parseStaminaToCraft } from "@/lib/crafting-request-helpers";
+import { findCraftingRequestDocumentByRouteId, parseStaminaToCraft } from "@/lib/crafting-request-helpers";
 import {
   craftingRequestNotifyPayloadForDiscord,
   validateCraftingRequestBody,
@@ -21,8 +21,8 @@ export async function PATCH(request: Request, context: RouteContext) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const { id } = await context.params;
-    if (!id || !mongoose.Types.ObjectId.isValid(id)) {
+    const { id: idParam } = await context.params;
+    if (!idParam?.trim()) {
       return NextResponse.json({ error: "Invalid request id" }, { status: 400 });
     }
 
@@ -32,10 +32,12 @@ export async function PATCH(request: Request, context: RouteContext) {
 
     await connect();
     const CraftingRequest = (await import("@/models/CraftingRequestModel.js")).default;
-    const reqDoc = await CraftingRequest.findById(id).exec();
+    const reqDocRaw = await findCraftingRequestDocumentByRouteId(CraftingRequest, idParam);
+    const reqDoc = reqDocRaw as import("mongoose").Document | null;
     if (!reqDoc) {
       return NextResponse.json({ error: "Request not found" }, { status: 404 });
     }
+    const id = String(reqDoc._id);
     if (reqDoc.requesterDiscordId !== user.id) {
       return NextResponse.json({ error: "Only the requester can edit this" }, { status: 403 });
     }
@@ -75,7 +77,12 @@ export async function PATCH(request: Request, context: RouteContext) {
       try {
         await syncCraftingRequestBoardMessage(
           discordMessageId,
-          await craftingRequestNotifyPayloadForDiscord(requestId, user, v)
+          await craftingRequestNotifyPayloadForDiscord(
+            requestId,
+            user,
+            v,
+            reqDoc.get("commissionID") ? String(reqDoc.get("commissionID")) : null
+          )
         );
       } catch (e) {
         console.error("[api/crafting-requests PATCH] Discord sync failed:", e);
@@ -98,18 +105,20 @@ export async function DELETE(_request: Request, context: RouteContext) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const { id } = await context.params;
-    if (!id || !mongoose.Types.ObjectId.isValid(id)) {
+    const { id: idParam } = await context.params;
+    if (!idParam?.trim()) {
       return NextResponse.json({ error: "Invalid request id" }, { status: 400 });
     }
 
     await connect();
     const CraftingRequest = (await import("@/models/CraftingRequestModel.js")).default;
 
-    const reqDoc = await CraftingRequest.findById(id).exec();
+    const reqDocRaw = await findCraftingRequestDocumentByRouteId(CraftingRequest, idParam);
+    const reqDoc = reqDocRaw as import("mongoose").Document | null;
     if (!reqDoc) {
       return NextResponse.json({ error: "Request not found" }, { status: 404 });
     }
+    const id = String(reqDoc._id);
     if (reqDoc.requesterDiscordId !== user.id) {
       return NextResponse.json({ error: "Only the requester can delete this" }, { status: 403 });
     }

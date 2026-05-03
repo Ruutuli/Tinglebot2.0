@@ -60,6 +60,9 @@ const CraftingRequestSchema = new Schema(
     acceptedByCharacterName: { type: String, default: "" },
 
     discordMessageId: { type: String, default: null },
+
+    /** Public id for Discord/commands (prefix K + 6 digits), same family as questID */
+    commissionID: { type: String, default: null, unique: true, sparse: true },
   },
   {
     collection: "craftingrequests",

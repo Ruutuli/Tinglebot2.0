@@ -115,12 +115,46 @@ module.exports = {
         .addStringOption((opt) =>
           opt.setName('elixir').setDescription('Elixir you want to brew').setRequired(true).setAutocomplete(true)
         )
+    )
+    .addSubcommand((sub) =>
+      sub
+        .setName('accept')
+        .setDescription('Accept a workshop commission from the dashboard (claim with your crafter OC)')
+        .addStringOption((opt) =>
+          opt
+            .setName('request_id')
+            .setDescription('Workshop code (K + 6 digits) or legacy 24-character id from the board / URL')
+            .setRequired(true)
+            .setMinLength(7)
+            .setMaxLength(24)
+        )
+        .addStringOption((opt) =>
+          opt
+            .setName('charactername')
+            .setDescription('Your crafter OC taking the job')
+            .setRequired(true)
+            .setAutocomplete(true)
+        )
     ),
 
   async execute(interaction) {
     const sub = interaction.options.getSubcommand();
     if (sub === 'brew') {
       return runCraftingBrew(interaction);
+    }
+    if (sub === 'accept') {
+      const { runWorkshopCraftingAccept } = require('./craftingRequestAccept');
+      await interaction.deferReply({ flags: [MessageFlags.Ephemeral] });
+      const requestId = interaction.options.getString('request_id', true).trim();
+      const characterName = interaction.options.getString('charactername', true);
+      const embed = await runWorkshopCraftingAccept({
+        requestId,
+        characterName,
+        userId: interaction.user.id,
+        userTag: interaction.user.tag,
+        sourceTag: 'CRAFT_ACCEPT_SLASH',
+      });
+      return interaction.editReply({ embeds: [embed] });
     }
 
     await interaction.deferReply({ flags: [MessageFlags.Ephemeral] });

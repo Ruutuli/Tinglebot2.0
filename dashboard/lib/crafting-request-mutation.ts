@@ -232,7 +232,8 @@ export async function validateCraftingRequestBody(
 export function craftingRequestNotifyPayload(
   requestId: string,
   user: SessionUser,
-  v: ValidatedCraftingRequestBody
+  v: ValidatedCraftingRequestBody,
+  commissionID?: string | null
 ): CraftingRequestNotifyPayload {
   const jobsSnap = Array.isArray(v.item.craftingJobs) ? [...v.item.craftingJobs] : [];
   const staminaSnap = parseStaminaToCraft(v.item.staminaToCraft);
@@ -243,8 +244,10 @@ export function craftingRequestNotifyPayload(
       quantity: Number(m.quantity),
     }))
     .filter((m) => m.itemName && Number.isFinite(m.quantity) && m.quantity > 0);
+  const cid = commissionID?.trim() || undefined;
   return {
     requestId,
+    commissionID: cid,
     requesterDiscordId: user.id,
     requesterUsername: user.global_name || user.username || undefined,
     requesterCharacterName: v.requesterCharacterName,
@@ -268,9 +271,10 @@ export function craftingRequestNotifyPayload(
 export async function craftingRequestNotifyPayloadForDiscord(
   requestId: string,
   user: SessionUser,
-  v: ValidatedCraftingRequestBody
+  v: ValidatedCraftingRequestBody,
+  commissionID?: string | null
 ): Promise<CraftingRequestNotifyPayload> {
-  const base = craftingRequestNotifyPayload(requestId, user, v);
+  const base = craftingRequestNotifyPayload(requestId, user, v, commissionID);
   const [requesterCharacterIcon, targetUnion] = await Promise.all([
     loadCharacterIconForOwner(user.id, v.requesterCharacterName),
     v.targetCharacterId

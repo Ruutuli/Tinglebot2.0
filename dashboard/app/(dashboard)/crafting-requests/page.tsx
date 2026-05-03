@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { useSession } from "@/hooks/use-session";
 import { formatItemImageUrl } from "@/lib/item-utils";
 import { formatOpenCommissionSeekingLine } from "@/lib/crafting-request-helpers";
@@ -19,6 +20,8 @@ import {
 
 type CraftingRequestRow = {
   _id: string;
+  /** Public workshop code (K + 6 digits); legacy rows may omit */
+  commissionID?: string;
   requesterDiscordId: string;
   requesterUsername?: string;
   requesterCharacterName: string;
@@ -282,6 +285,10 @@ function resetFormState() {
 
 export default function CraftingRequestsPage() {
   const { user, loading: sessionLoading } = useSession();
+  const searchParams = useSearchParams();
+  const requestFocusFromUrl = searchParams.get("request")?.trim() ?? "";
+  const scrolledToRequestRef = useRef(false);
+
   const [openRequests, setOpenRequests] = useState<CraftingRequestRow[]>([]);
   const [loadingOpen, setLoadingOpen] = useState(true);
   const [openListError, setOpenListError] = useState<string | null>(null);
@@ -457,6 +464,25 @@ export default function CraftingRequestsPage() {
     if (!user?.id) return;
     loadOpenRequests();
   }, [user?.id, loadOpenRequests]);
+
+  /** Deep link from Discord / embed: `?request=` = commission code (e.g. K384521) or legacy Mongo id */
+  useEffect(() => {
+    if (!requestFocusFromUrl || scrolledToRequestRef.current) return;
+    if (loadingOpen) return;
+    const raw = requestFocusFromUrl.trim();
+    let el = document.getElementById(`crafting-open-${raw}`);
+    if (!el && /^[A-Za-z][0-9]{6}$/.test(raw)) {
+      const code = raw.charAt(0).toUpperCase() + raw.slice(1);
+      el = document.querySelector(`[data-commission-id="${code}"]`);
+    }
+    if (el) {
+      const t = window.setTimeout(() => {
+        el.scrollIntoView({ behavior: "smooth", block: "center" });
+      }, 80);
+      scrolledToRequestRef.current = true;
+      return () => window.clearTimeout(t);
+    }
+  }, [requestFocusFromUrl, loadingOpen, openRequests]);
 
   useEffect(() => {
     if (!user?.id || !myActivityOpen) return;
@@ -797,7 +823,7 @@ export default function CraftingRequestsPage() {
     async (row: CraftingRequestRow) => {
       if (!user?.id || row.requesterDiscordId !== user.id || row.status !== "open") return;
       setFormError(null);
-      setEditingRequestId(row._id);
+      setEditingRequestId(row.commissionID || row._id);
       setRequesterCharacterName(row.requesterCharacterName);
       setCraftItemName(row.craftItemName);
       const isEx = isMixerOutputElixirName(row.craftItemName);
@@ -975,7 +1001,7 @@ export default function CraftingRequestsPage() {
       };
       const isEdit = Boolean(editingRequestId);
       const res = await fetch(
-        isEdit ? `/api/crafting-requests/${editingRequestId}` : "/api/crafting-requests",
+        isEdit ? `/api/crafting-requests/${encodeURIComponent(editingRequestId)}` : "/api/crafting-requests",
         {
           method: isEdit ? "PATCH" : "POST",
           headers: { "Content-Type": "application/json" },
@@ -1004,7 +1030,7 @@ export default function CraftingRequestsPage() {
       return;
     }
     try {
-      const res = await fetch(`/api/crafting-requests/${row._id}`, {
+      const res = await fetch(`/api/crafting-requests/${encodeURIComponent(row.commissionID || row._id)}`, {
         method: "DELETE",
         credentials: "include",
       });
@@ -1019,10 +1045,13 @@ export default function CraftingRequestsPage() {
   const handleCancel = async (row: CraftingRequestRow) => {
     if (!confirm("Cancel this open request?")) return;
     try {
-      const res = await fetch(`/api/crafting-requests/${row._id}/cancel`, {
-        method: "POST",
-        credentials: "include",
-      });
+      const res = await fetch(
+        `/api/crafting-requests/${encodeURIComponent(row.commissionID || row._id)}/cancel`,
+        {
+          method: "POST",
+          credentials: "include",
+        }
+      );
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Cancel failed");
       await refreshAfterMutation();
@@ -1036,12 +1065,15 @@ export default function CraftingRequestsPage() {
     setAcceptError(null);
     setAcceptSubmitting(true);
     try {
-      const res = await fetch(`/api/crafting-requests/${acceptFor._id}/accept`, {
+      const res = await fetch(
+        `/api/crafting-requests/${encodeURIComponent(acceptFor.commissionID || acceptFor._id)}/accept`,
+        {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         credentials: "include",
         body: JSON.stringify({ acceptorCharacterId: acceptCharId }),
-      });
+        }
+      );
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Claim failed");
       setAcceptFor(null);
@@ -1058,12 +1090,15 @@ export default function CraftingRequestsPage() {
     if (!user?.id) return;
     setClaimingRequestId(row._id);
     try {
-      const res = await fetch(`/api/crafting-requests/${row._id}/accept`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        credentials: "include",
-        body: JSON.stringify({ acceptorCharacterId: charId }),
-      });
+      const res = await fetch(
+        `/api/crafting-requests/${encodeURIComponent(row.commissionID || row._id)}/accept`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          credentials: "include",
+          body: JSON.stringify({ acceptorCharacterId: charId }),
+        }
+      );
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Claim failed");
       await refreshAfterMutation();
@@ -1510,7 +1545,11 @@ export default function CraftingRequestsPage() {
               const youCanTake =
                 user && row.requesterDiscordId !== user.id && requestIdsYouCanAccept.has(row._id);
               return (
-                <li key={row._id}>
+                <li
+                  key={row._id}
+                  id={`crafting-open-${row._id}`}
+                  data-commission-id={row.commissionID || undefined}
+                >
                   <article
                     className="group relative flex h-full flex-col overflow-hidden rounded-2xl border border-[var(--totk-dark-ocher)]/45 bg-gradient-to-b from-[var(--botw-panel)]/95 via-[var(--botw-deep)]/88 to-[var(--botw-warm-black)]/75 shadow-[0_4px_24px_rgba(0,0,0,0.28)] ring-1 ring-black/20 transition duration-300 hover:border-[var(--totk-light-green)]/40 hover:shadow-[0_12px_40px_rgba(0,0,0,0.35)]"
                   >

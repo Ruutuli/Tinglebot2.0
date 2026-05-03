@@ -89,6 +89,8 @@ function allowedMentionsForBoardMessage(payload: CraftingRequestNotifyPayload): 
 
 export type CraftingRequestNotifyPayload = {
   requestId: string;
+  /** Public workshop code (e.g. K384521); falls back to requestId in copy when absent */
+  commissionID?: string;
   requesterDiscordId: string;
   requesterUsername?: string;
   requesterCharacterName: string;
@@ -266,15 +268,29 @@ export function buildCraftingRequestBoardMessage(
   }
 
   const requestId = payload.requestId?.trim() || "";
-  const idPlaceholder = requestId || "<request id>";
-  const discordLineAccept = `?crafting accept ${idPlaceholder} <your crafter OC name>`;
-  const discordLineRequestAccept = `?crafting request accept ${idPlaceholder} <your crafter OC name>`;
+  const publicCode = (payload.commissionID?.trim() || requestId).trim();
+  const idPlaceholder = publicCode || "<request id>";
+  /** Deep-link opens this row on the workshop page (`?request=`). */
+  const commissionBoardUrl = publicCode
+    ? `${boardUrl}?request=${encodeURIComponent(publicCode)}`
+    : boardUrl;
+  /** Command body after the server text prefix (see note — not a slash command). */
+  const discordLineAccept = `crafting accept ${idPlaceholder} <your crafter OC name>`;
+  const discordLineRequestAccept = `crafting request accept ${idPlaceholder} <your crafter OC name>`;
+  const discordFullAccept = `?${discordLineAccept}`;
 
   descParts.push("");
   descParts.push("🧭 **How to accept**");
-  descParts.push(`↳ **Discord** — \`${discordLineAccept}\``);
-  descParts.push(`↳ **or** — \`${discordLineRequestAccept}\``);
-  descParts.push(`↳ **Dashboard:** [Open the workshop board →](${boardUrl})`);
+  descParts.push(`↳ **Web:** [Open this commission →](${commissionBoardUrl})`);
+  descParts.push(
+    `↳ **Slash:** \`/crafting accept\` — **request_id** \`${idPlaceholder}\` + your crafter **charactername**`
+  );
+  descParts.push(`↳ **Discord:** \`${discordLineAccept}\``);
+  descParts.push(`↳ **or** \`${discordLineRequestAccept}\``);
+  descParts.push(
+    `↳ _\`Text commands: put prefix \`?\` **before** \`crafting\` — e.g. \`${discordFullAccept}\`_`
+  );
+  descParts.push(`↳ [All open commissions →](${boardUrl})`);
 
   let description = descParts.join("\n");
   if (description.length > 4096) {
@@ -404,6 +420,8 @@ export async function deleteCraftingRequestBoardMessage(discordMessageId: string
 
 export type CraftingRequestAcceptedNotifyOptions = {
   requestId: string;
+  /** Public code (K + 6 digits) when the row has one */
+  commissionID?: string;
   requesterDiscordId: string;
   acceptorDiscordId: string;
   acceptorCharacterName: string;

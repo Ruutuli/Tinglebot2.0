@@ -302,3 +302,40 @@ export async function loadCharacterIconForOwner(
 
   return undefined;
 }
+
+// ------------------- Workshop commission public id (same pattern as questID) -------------------
+
+/** 24-char hex Mongo ObjectId string */
+export function isMongoObjectIdString24(s: string): boolean {
+  return /^[a-fA-F0-9]{24}$/.test(String(s ?? "").trim());
+}
+
+/**
+ * Normalizes workshop commission codes: one letter + 6 digits (e.g. `K384521`).
+ * Prefix **K** is reserved for dashboard workshop commissions (matches `generateUniqueId` style).
+ */
+export function normalizeCraftingCommissionID(raw: string): string | null {
+  const t = String(raw ?? "").trim();
+  if (!/^[A-Za-z][0-9]{6}$/.test(t)) return null;
+  return t.charAt(0).toUpperCase() + t.slice(1);
+}
+
+type CraftingRequestQueryModel = {
+  findById(id: string): { exec(): Promise<unknown> };
+  findOne(filter: Record<string, unknown>): { exec(): Promise<unknown> };
+};
+
+/** Resolve `/:id` route param or Discord input: Mongo id **or** commission code (e.g. K384521). */
+export async function findCraftingRequestDocumentByRouteId(
+  CraftingRequest: CraftingRequestQueryModel,
+  idParam: string
+): Promise<unknown> {
+  const id = String(idParam ?? "").trim();
+  if (!id) return null;
+  if (isMongoObjectIdString24(id)) {
+    return CraftingRequest.findById(id).exec();
+  }
+  const cid = normalizeCraftingCommissionID(id);
+  if (!cid) return null;
+  return CraftingRequest.findOne({ commissionID: cid }).exec();
+}

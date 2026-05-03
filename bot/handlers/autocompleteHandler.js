@@ -511,6 +511,10 @@ async function handleAutocompleteInternal(interaction, commandName, focusedOptio
               } else if (focusedOption.name === "elixir") {
                 await handleCraftBrewElixirAutocomplete(interaction, focusedOption);
               }
+            } else if (craftingSub === "accept") {
+              if (focusedOption.name === "charactername") {
+                await handleCharacterBasedCommandsAutocomplete(interaction, focusedOption, "crafting");
+              }
             } else {
               if (focusedOption.name === "charactername") {
                 await handleCharacterBasedCommandsAutocomplete(interaction, focusedOption, "crafting");

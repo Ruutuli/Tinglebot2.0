@@ -9,6 +9,7 @@ import {
 } from "@/lib/crafting-request-mutation";
 import { loadCharacterUnionForOwnerByName } from "@/lib/crafting-request-helpers";
 import { notifyCraftingRequestCreated } from "@/lib/craftingRequestsNotify";
+import { generateUniqueId } from "@/lib/uniqueId";
 
 export const dynamic = "force-dynamic";
 
@@ -122,7 +123,21 @@ export async function POST(request: Request) {
     await connect();
     const CraftingRequest = (await import("@/models/CraftingRequestModel.js")).default;
 
+    let commissionID: string | undefined;
+    for (let attempt = 0; attempt < 12; attempt++) {
+      const candidate = generateUniqueId("K");
+      const clash = await CraftingRequest.findOne({ commissionID: candidate }).lean();
+      if (!clash) {
+        commissionID = candidate;
+        break;
+      }
+    }
+    if (!commissionID) {
+      return NextResponse.json({ error: "Could not assign a commission id — try again" }, { status: 500 });
+    }
+
     const doc = await CraftingRequest.create({
+      commissionID,
       requesterDiscordId: user.id,
       requesterUsername: user.global_name || user.username || "",
       requesterCharacterName: v.requesterCharacterName,
@@ -149,7 +164,7 @@ export async function POST(request: Request) {
 
     try {
       const discordMessageId = await notifyCraftingRequestCreated(
-        await craftingRequestNotifyPayloadForDiscord(requestId, user, v)
+        await craftingRequestNotifyPayloadForDiscord(requestId, user, v, commissionID)
       );
       if (discordMessageId) {
         await CraftingRequest.findByIdAndUpdate(requestId, { discordMessageId });
