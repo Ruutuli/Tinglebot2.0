@@ -166,6 +166,11 @@ export function buildCraftingRequestBoardMessage(
   const publicBase = getPublicAppUrl().replace(/\/$/, "");
   const boardUrl = `${publicBase}/crafting-requests`;
 
+  const mongoRequestId = (payload.requestId ?? "").trim();
+  const commissionCode = (payload.commissionID ?? "").trim();
+  const publicIdForEmbed = (commissionCode || mongoRequestId).trim();
+  const idPlaceholder = publicIdForEmbed || "<request id>";
+
   const jobsLine =
     payload.craftingJobsSnapshot.length > 0
       ? payload.craftingJobsSnapshot.join(" · ")
@@ -205,6 +210,8 @@ export function buildCraftingRequestBoardMessage(
 
   const descParts: string[] = [];
 
+  descParts.push(`🔖 **Commission ID** · \`${idPlaceholder}\``);
+  descParts.push("");
   descParts.push(`🧾 **Recipe**`);
   descParts.push(`↳ *${payload.craftItemName}*`);
   descParts.push("");
@@ -267,12 +274,9 @@ export function buildCraftingRequestBoardMessage(
     descParts.push(elixirTierLine);
   }
 
-  const requestId = payload.requestId?.trim() || "";
-  const publicCode = (payload.commissionID?.trim() || requestId).trim();
-  const idPlaceholder = publicCode || "<request id>";
   /** Deep-link opens this row on the workshop page (`?request=`). */
-  const commissionBoardUrl = publicCode
-    ? `${boardUrl}?request=${encodeURIComponent(publicCode)}`
+  const commissionBoardUrl = publicIdForEmbed
+    ? `${boardUrl}?request=${encodeURIComponent(publicIdForEmbed)}`
     : boardUrl;
   /** Command body after the server text prefix (see note — not a slash command). */
   const discordLineAccept = `crafting accept ${idPlaceholder} <your crafter OC name>`;
@@ -331,7 +335,7 @@ export function buildCraftingRequestBoardMessage(
   }
 
   const footer: Record<string, unknown> = {
-    text: `🪵 ${footerText}`.slice(0, 2048),
+    text: `🪵 ${footerText} · ${idPlaceholder}`.slice(0, 2048),
   };
   if (footerIcon) footer.icon_url = footerIcon;
 
@@ -454,7 +458,13 @@ export function buildCraftingRequestAcceptedMessage(
 
   const forOc = (opts.requesterCharacterName ?? "").trim() || "Commissioner";
 
+  const mongoRef = (opts.requestId ?? "").trim();
+  const pubCode = (opts.commissionID ?? "").trim();
+  const acceptIdDisplay = (pubCode || mongoRef).trim() || "—";
+
   const lines: string[] = [
+    `🔖 **Commission ID** · \`${acceptIdDisplay}\``,
+    "",
     `🧾 **Recipe**`,
     `↳ *${opts.craftItemName}*`,
     "",
@@ -555,7 +565,7 @@ export function buildCraftingRequestAcceptedMessage(
 
   const crafterLabel = opts.acceptorCharacterName.trim() || "Crafter";
   const footer: Record<string, unknown> = {
-    text: `🪵 ${crafterLabel} · crafter`.slice(0, 2048),
+    text: `🪵 ${crafterLabel} · crafter · ${acceptIdDisplay}`.slice(0, 2048),
   };
   if (acceptorIconUrl) footer.icon_url = acceptorIconUrl;
 
