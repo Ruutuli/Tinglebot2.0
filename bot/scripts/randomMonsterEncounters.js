@@ -31,6 +31,8 @@ const { Village } = require('@/models/VillageModel');
 // ------------------- Local Modules -------------------
 // ============================================================================
 const { getVillageRegionByName } = require('../modules/locationsModule');
+const moment = require('moment-timezone');
+const RAID_PERIOD_TZ = 'America/New_York';
 
 // ============================================================================
 // ------------------- Environment Configuration -------------------
@@ -76,45 +78,10 @@ const messageActivity = new Map();
 // ------------------- Period Calculation Functions -------------------
 // ============================================================================
 
-// ------------------- Get Midnight EST in UTC -------------------
-function getMidnightESTInUTC(year, month, day) {
-  // EST is UTC-5, so midnight EST = 05:00 UTC
-  return new Date(Date.UTC(year, month - 1, day, 5, 0, 0));
-}
-
-// ------------------- Get Current Week Start -------------------
+// ------------------- Get Current Week Start (Sunday 00:00 America/New_York) -------------------
 function getCurrentWeekStart() {
-  const now = new Date();
-  const estNow = new Date(now.getTime() - 5 * 60 * 60 * 1000);
-  
-  const values = {
-    year: estNow.getUTCFullYear(),
-    month: estNow.getUTCMonth() + 1,
-    day: estNow.getUTCDate(),
-    weekday: ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'][estNow.getUTCDay()]
-  };
-  
-  const estYear = parseInt(values.year);
-  const estMonth = parseInt(values.month);
-  const estDay = parseInt(values.day);
-  const weekdayMap = { 'Sunday': 0, 'Monday': 1, 'Tuesday': 2, 'Wednesday': 3, 'Thursday': 4, 'Friday': 5, 'Saturday': 6 };
-  const dayOfWeek = weekdayMap[values.weekday] || 0;
-  
-  const todayMidnightEST = getMidnightESTInUTC(estYear, estMonth, estDay);
-  const todayNoonUTC = new Date(todayMidnightEST);
-  todayNoonUTC.setUTCHours(todayNoonUTC.getUTCHours() + 12);
-  
-  const sundayNoonUTC = new Date(todayNoonUTC);
-  sundayNoonUTC.setUTCDate(sundayNoonUTC.getUTCDate() - dayOfWeek);
-  
-  const sundayEST = new Date(sundayNoonUTC.getTime() - 5 * 60 * 60 * 1000);
-  const sundayValues = {
-    year: sundayEST.getUTCFullYear(),
-    month: sundayEST.getUTCMonth() + 1,
-    day: sundayEST.getUTCDate()
-  };
-  
-  return getMidnightESTInUTC(sundayValues.year, sundayValues.month, sundayValues.day);
+  const m = moment.tz(RAID_PERIOD_TZ);
+  return m.clone().startOf('day').subtract(m.day(), 'days').toDate();
 }
 
 // ------------------- Get Current Month Start -------------------
@@ -132,13 +99,13 @@ function getCurrentMonthStart() {
 }
 
 // ------------------- Get Current Biweek Start -------------------
-// Returns Sunday at start of current 2-week block (EST). Reference: Jan 5 2020 00:00 EST.
+// Returns Sunday at start of current 2-week block (Eastern). Reference: Jan 5 2020 00:00 local.
 function getCurrentBiweekStart() {
-  const refSunday = new Date(Date.UTC(2020, 0, 5, 5, 0, 0));
+  const refSunday = moment.tz([2020, 0, 5, 0, 0, 0, 0], RAID_PERIOD_TZ).valueOf();
   const weekStart = getCurrentWeekStart();
-  const weeksSince = (weekStart.getTime() - refSunday.getTime()) / WEEK_IN_MS;
+  const weeksSince = (weekStart.getTime() - refSunday) / WEEK_IN_MS;
   const biweekIndex = Math.floor(weeksSince / 2);
-  return new Date(refSunday.getTime() + biweekIndex * 2 * WEEK_IN_MS);
+  return new Date(refSunday + biweekIndex * 2 * WEEK_IN_MS);
 }
 
 // ------------------- Get Village Period Start -------------------

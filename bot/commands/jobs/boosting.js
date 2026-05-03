@@ -614,8 +614,91 @@ async function retrieveBoostingRequestFromTempData(requestId) {
   }
 }
 
+/** Normalize category string from DB editor (Healer → Healers, etc.) */
+function normalizeDevBoostCategoryInput(raw) {
+  if (!raw || typeof raw !== 'string') return '';
+  const t = raw.trim();
+  if (!t) return '';
+  const lower = t.toLowerCase();
+  if (lower === 'healer' || lower === 'healers') return 'Healers';
+  return t.charAt(0).toUpperCase() + t.slice(1).toLowerCase();
+}
+
+/**
+ * Dashboard/testing: character.devBoostOverride simulates an accepted boost without TempData or a real booster.
+ * Takes precedence over TempData when enabled.
+ */
+async function tryResolveDevBoostOverride(characterName) {
+  const character = await fetchCharacterByNameWithFallback(characterName);
+  if (!character) return null;
+  const o = character.devBoostOverride;
+  if (!o || !o.enabled) return null;
+
+  const boosterJob = o.boosterJob != null ? String(o.boosterJob).trim() : '';
+  const category = normalizeDevBoostCategoryInput(o.category != null ? String(o.category) : '');
+  if (!boosterJob || !category) {
+    logger.warn('BOOST', `devBoostOverride enabled for ${characterName} but boosterJob or category is empty`);
+    return null;
+  }
+
+  const boost = getBoostEffect(boosterJob, category);
+  if (!boost) {
+    logger.warn('BOOST', `devBoostOverride: no effect for job "${boosterJob}" + category "${category}" (${characterName})`);
+    return null;
+  }
+  if (boost.passive) {
+    logger.warn('BOOST', `devBoostOverride: "${boost.name}" is passive — not applicable for ${characterName}`);
+    return null;
+  }
+
+  const nj = normalizeJobName(boosterJob);
+  if (nj === 'Scholar' && category === 'Gathering') {
+    const tv = o.targetVillage != null ? String(o.targetVillage).trim() : '';
+    if (!tv) {
+      logger.warn('BOOST', `devBoostOverride: Scholar Gathering requires devBoostOverride.targetVillage (${characterName})`);
+      return null;
+    }
+  }
+
+  const boostEffectStr = `${boost.name} — ${boost.description}`;
+  const now = Date.now();
+
+  return {
+    isDevOverride: true,
+    boostRequestId: 'DEV_OVERRIDE',
+    targetCharacter: character.name,
+    boostingCharacter: '(dev override)',
+    category,
+    status: 'accepted',
+    requesterUserId: character.userId,
+    village: character.currentVillage,
+    targetVillage:
+      nj === 'Scholar' && category === 'Gathering' && o.targetVillage
+        ? String(o.targetVillage).trim()
+        : undefined,
+    timestamp: now,
+    createdAt: new Date(now).toISOString(),
+    durationRemaining: null,
+    fulfilledAt: null,
+    boosterJob,
+    boostEffect: boostEffectStr,
+    requestedByIcon: character.icon,
+    boosterIcon: null,
+    acceptedAt: now,
+    boostExpiresAt: Number.MAX_SAFE_INTEGER,
+    boosterStaminaBeforeDeduction: null,
+    boosterOwnerId: null,
+    entertainerCraftingNeedsSecondVoucher: false,
+  };
+}
+
 async function retrieveBoostingRequestFromTempDataByCharacter(characterName) {
   try {
+    const dev = await tryResolveDevBoostOverride(characterName);
+    if (dev) {
+      return dev;
+    }
+
     const allBoostingData = await TempData.findAllByType('boosting');
     const currentTime = Date.now();
     const targetKey = String(characterName || '').trim().toLowerCase();
@@ -734,6 +817,9 @@ async function getActiveBoostEffect(characterName, category) {
  }
 
  const activeBoost = await retrieveBoostingRequestFromTempDataByCharacter(characterName);
+ if (activeBoost?.isDevOverride) {
+  return getBoostEffect(activeBoost.boosterJob, category);
+ }
  const boosterCharacter = await fetchCharacterByName(activeBoost.boostingCharacter);
  if (!boosterCharacter) {
   logger.error('BOOST', `Could not find booster character "${activeBoost.boostingCharacter}"`);
@@ -749,6 +835,9 @@ async function getRemainingBoostTime(characterName, category) {
  }
 
  const activeBoost = await retrieveBoostingRequestFromTempDataByCharacter(characterName);
+ if (activeBoost?.isDevOverride) {
+  return 365 * 24 * 60 * 60 * 1000;
+ }
  const currentTime = Date.now();
  return Math.max(0, activeBoost.boostExpiresAt - currentTime);
 }
@@ -2919,6 +3008,14 @@ async function clearBoostAfterUse(character, options = {}) {
     logger.info(
       'BOOST',
       `Preserving ${activeBoost.category} boost for ${character.name}${context ? ` (${context})` : ''} — not consumed in this context`
+    );
+    return { success: true, cleared: false };
+  }
+
+  if (activeBoost?.isDevOverride) {
+    logger.info(
+      'BOOST',
+      `Dev boost override for ${character.name} — not consuming${context ? ` (${context})` : ''}`
     );
     return { success: true, cleared: false };
   }

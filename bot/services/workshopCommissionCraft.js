@@ -8,7 +8,8 @@ moduleAlias.addAlias('@', path.resolve(__dirname, '..'));
 /**
  * Workshop commission craft — dashboard accept flow.
  * Materials from commissioner OC; stamina from crafter; crafted items go to commissioner.
- * Mirrors /crafting recipe boosts, village rolls, Teacher/Entertainer/Fortune Teller, job vouchers.
+ * Mirrors /crafting recipe boosts: village rolls; Priest stamina (crafter or commissioner carrying the blessing);
+ * Scholar materials (best reduction from crafter or commissioner); Teacher/Entertainer/Fortune Teller; job vouchers.
  */
 
 const generalCategories = require('../models/GeneralItemCategories');
@@ -45,6 +46,7 @@ const {
   clearBoostAfterUse,
   getEffectiveJob,
   isBoosterUsingVoucherForJob,
+  isBoostActive,
   retrieveBoostingRequestFromTempDataByCharacter,
 } = require('../commands/jobs/boosting');
 
@@ -117,6 +119,89 @@ function mixerRecipeMinimumUnits(mats) {
     if (Number.isFinite(q) && q > 0) n += q;
   }
   return n;
+}
+
+function cloneCraftingMaterialsForBoost(mats) {
+  if (!Array.isArray(mats)) return [];
+  return mats.map((m) => ({
+    ...m,
+    itemName: m.itemName,
+    quantity: m.quantity,
+  }));
+}
+
+/**
+ * Scholar (and any future material Crafting boosts) may apply to the crafter and/or the commissioner
+ * who supplies materials — take the best reduction per recipe line (minimum quantity).
+ */
+async function mergeWorkshopMaterialBoosts(crafterName, commissionerName, originalCraftingMaterials, quantity) {
+  const orig = Array.isArray(originalCraftingMaterials) ? originalCraftingMaterials : [];
+  if (orig.length === 0) return orig;
+  const fromCrafter = await applyCraftingMaterialBoost(crafterName, cloneCraftingMaterialsForBoost(orig), quantity);
+  const fromComm = await applyCraftingMaterialBoost(commissionerName, cloneCraftingMaterialsForBoost(orig), quantity);
+  const arrCrafter = Array.isArray(fromCrafter) ? fromCrafter : orig;
+  const arrComm = Array.isArray(fromComm) ? fromComm : orig;
+  return orig.map((row, i) => {
+    const qa = Number(arrCrafter[i]?.quantity);
+    const qb = Number(arrComm[i]?.quantity);
+    const qOrig = Number(row.quantity);
+    const na = Number.isFinite(qa) ? qa : qOrig;
+    const nb = Number.isFinite(qb) ? qb : qOrig;
+    return {
+      ...row,
+      quantity: Math.min(na, nb),
+    };
+  });
+}
+
+/** Priest stamina blessing may be on whoever is boosted — crafter pays stamina, commissioner may carry the Priest boost. */
+async function mergeWorkshopPriestStaminaReduction(crafterName, commissionerName, baseStaminaCost) {
+  const afterCrafter = await applyCraftingStaminaBoost(crafterName, baseStaminaCost);
+  const afterComm = await applyCraftingStaminaBoost(commissionerName, baseStaminaCost);
+  return Math.min(afterCrafter, afterComm);
+}
+
+async function maybeDeactivateEntertainerBoosterVoucherForWorkshop(character) {
+  if (!character?.name) return;
+  const activeBoost = await retrieveBoostingRequestFromTempDataByCharacter(character.name);
+  let boosterName = character.boostedBy;
+  if (!boosterName && activeBoost?.boostingCharacter && activeBoost.status === 'accepted') {
+    boosterName = activeBoost.boostingCharacter;
+  }
+  const boosterJob = (activeBoost?.boosterJob || '').trim().toLowerCase();
+  if (
+    activeBoost &&
+    activeBoost.category === 'Crafting' &&
+    boosterJob === 'entertainer' &&
+    boosterName
+  ) {
+    const b = await fetchCharacterByName(boosterName);
+    if (b && isBoosterUsingVoucherForJob(b, 'Entertainer')) {
+      await deactivateJobVoucher(b._id, { afterUse: true });
+    }
+  }
+}
+
+async function workshopHasFortuneTellerCraftingBoost(character) {
+  if (!character?.name) return false;
+  let boosterName = character.boostedBy;
+  if (!boosterName) {
+    const activeBoost = await retrieveBoostingRequestFromTempDataByCharacter(character.name);
+    const currentTime = Date.now();
+    const notExpired = !activeBoost?.boostExpiresAt || currentTime <= activeBoost.boostExpiresAt;
+    if (
+      activeBoost &&
+      activeBoost.status === 'accepted' &&
+      activeBoost.category === 'Crafting' &&
+      activeBoost.boostingCharacter &&
+      notExpired
+    ) {
+      boosterName = activeBoost.boostingCharacter;
+    }
+  }
+  if (!boosterName) return false;
+  const boosterCharacter = await fetchCharacterByName(boosterName);
+  return !!(boosterCharacter && getEffectiveJob(boosterCharacter) === 'Fortune Teller');
 }
 
 /**
@@ -357,6 +442,20 @@ async function planAndApplyElixirCommissionRemovals({
   return { ok: true, materialsUsed };
 }
 
+function aggregateMaterialsUsedSummary(materialsUsed) {
+  if (!Array.isArray(materialsUsed)) return [];
+  const map = new Map();
+  for (const m of materialsUsed) {
+    const name = String(m?.itemName ?? '').trim();
+    const q = Math.floor(Number(m?.quantity));
+    if (!name || !Number.isFinite(q) || q <= 0) continue;
+    map.set(name, (map.get(name) || 0) + q);
+  }
+  return [...map.entries()]
+    .map(([itemName, quantity]) => ({ itemName, quantity }))
+    .sort((a, b) => a.itemName.localeCompare(b.itemName));
+}
+
 function craftingStaminaLogContext(character, itemName, { refund = false } = {}) {
   if (refund) {
     return { source: 'Workshop commission craft refund', itemName: itemName || null };
@@ -556,8 +655,20 @@ async function executeWorkshopCommissionCraft(opts) {
     return { ok: false, code: 'CRAFTER', error: 'Could not reload crafter character.' };
   }
 
+  let freshCommissioner = await fetchCharacterByNameAndUserId(commissioner.name, commissionerDiscordId);
+  if (!freshCommissioner) {
+    freshCommissioner = await fetchModCharacterByNameAndUserId(commissioner.name, commissionerDiscordId);
+  }
+  if (!freshCommissioner) {
+    freshCommissioner = commissioner;
+  }
+
   let staminaCost = baseStaminaRecipe * quantity;
-  staminaCost = await applyCraftingStaminaBoost(freshCrafter.name, staminaCost);
+  staminaCost = await mergeWorkshopPriestStaminaReduction(
+    freshCrafter.name,
+    freshCommissioner.name,
+    staminaCost
+  );
 
   let teacherStaminaContribution = 0;
   let crafterStaminaCost = staminaCost;
@@ -615,7 +726,7 @@ async function executeWorkshopCommissionCraft(opts) {
       return {
         ok: false,
         code: 'STAMINA',
-        error: `Not enough stamina (${availableStamina}/${crafterStaminaCost}). Village and Priest/Teacher effects are applied.`,
+        error: `Not enough stamina (${availableStamina}/${crafterStaminaCost}). Village, Priest (crafter or commissioner), and Teacher are applied where applicable.`,
       };
     }
   }
@@ -628,8 +739,9 @@ async function executeWorkshopCommissionCraft(opts) {
     return { ok: false, code: 'RECIPE', error: 'This item has no crafting recipe.' };
   }
 
-  let adjustedCraftingMaterials = await applyCraftingMaterialBoost(
+  let adjustedCraftingMaterials = await mergeWorkshopMaterialBoosts(
     freshCrafter.name,
+    freshCommissioner.name,
     originalCraftingMaterials,
     quantity
   );
@@ -695,7 +807,7 @@ async function executeWorkshopCommissionCraft(opts) {
         ok: false,
         code: 'MATERIALS',
         error:
-          'Commissioner is missing materials (after Scholar/village reductions). Add items to the commissioner OC inventory.',
+          'Commissioner is missing materials (after Scholar/village reductions — Scholar may apply via crafter or commissioner). Add items to the commissioner OC inventory.',
         missingMaterials,
       };
     }
@@ -780,38 +892,44 @@ async function executeWorkshopCommissionCraft(opts) {
   let staminaDeducted = false;
   let teacherDeducted = false;
 
+  let crafterStaminaBefore = null;
+  let crafterStaminaAfter = null;
+  let teacherStaminaBefore = null;
+  let teacherStaminaAfter = null;
+  let teacherCharacterName = '';
+
   try {
-    await checkAndUseStamina(
+    crafterStaminaBefore = Math.max(0, Number(freshCrafter.currentStamina) || 0);
+    const crafterStaminaAfterReading = await checkAndUseStamina(
       freshCrafter,
       crafterStaminaCost,
       craftingStaminaLogContext(freshCrafter, itemName)
     );
+    crafterStaminaAfter = Math.max(0, Number(crafterStaminaAfterReading) || 0);
     staminaDeducted = true;
 
     if (teacherStaminaContribution > 0 && freshCrafter.boostedBy) {
       const boosterCharacter = await fetchCharacterByName(freshCrafter.boostedBy);
       if (boosterCharacter && getEffectiveJob(boosterCharacter) === 'Teacher') {
-        await checkAndUseStamina(boosterCharacter, teacherStaminaContribution, {
+        teacherCharacterName = String(boosterCharacter.name || '').trim();
+        teacherStaminaBefore = Math.max(0, Number(boosterCharacter.currentStamina) || 0);
+        const teacherAfterReading = await checkAndUseStamina(boosterCharacter, teacherStaminaContribution, {
           source: 'Workshop commission (Teacher support)',
           itemName: itemName || null,
         });
+        teacherStaminaAfter = Math.max(0, Number(teacherAfterReading) || 0);
         teacherDeducted = true;
       }
     }
 
     let craftedQuantity = quantity;
-    craftedQuantity = await applyCraftingQuantityBoost(freshCrafter.name, craftedQuantity);
+    const qCraft = await applyCraftingQuantityBoost(freshCrafter.name, craftedQuantity);
+    const qComm = await applyCraftingQuantityBoost(freshCommissioner.name, craftedQuantity);
+    craftedQuantity = Math.max(qCraft, qComm);
 
-    let fortuneTellerBoostTag = false;
-    if (freshCrafter.boostedBy) {
-      const boosterCharacter = await fetchCharacterByName(freshCrafter.boostedBy);
-      if (boosterCharacter && getEffectiveJob(boosterCharacter) === 'Fortune Teller') {
-        const activeBoost = await retrieveBoostingRequestFromTempDataByCharacter(freshCrafter.name);
-        if (activeBoost && activeBoost.status === 'accepted' && activeBoost.category === 'Crafting') {
-          fortuneTellerBoostTag = true;
-        }
-      }
-    }
+    const fortuneTellerBoostTag =
+      (await workshopHasFortuneTellerCraftingBoost(freshCrafter)) ||
+      (await workshopHasFortuneTellerCraftingBoost(freshCommissioner));
 
     const addOpts = { craftedAt: new Date(), fortuneTellerBoost: fortuneTellerBoostTag };
     if (isElixirItemName(item.itemName)) {
@@ -829,21 +947,8 @@ async function executeWorkshopCommissionCraft(opts) {
     );
 
     const boosterNameBeforeClear = freshCrafter.boostedBy;
-    const activeBoostAtCraft = boosterNameBeforeClear
-      ? await retrieveBoostingRequestFromTempDataByCharacter(freshCrafter.name)
-      : null;
 
-    if (
-      activeBoostAtCraft &&
-      activeBoostAtCraft.category === 'Crafting' &&
-      (activeBoostAtCraft.boosterJob || '').trim().toLowerCase() === 'entertainer' &&
-      boosterNameBeforeClear
-    ) {
-      const b = await fetchCharacterByName(boosterNameBeforeClear);
-      if (b && isBoosterUsingVoucherForJob(b, 'Entertainer')) {
-        await deactivateJobVoucher(b._id, { afterUse: true });
-      }
-    }
+    await maybeDeactivateEntertainerBoosterVoucherForWorkshop(freshCrafter);
 
     await clearBoostAfterUse(freshCrafter, { client: null, context: 'workshop_commission_craft' });
 
@@ -863,11 +968,34 @@ async function executeWorkshopCommissionCraft(opts) {
       await deactivateJobVoucher(crafterForVoucher._id, { afterUse: true });
     }
 
+    if (await isBoostActive(freshCommissioner.name, 'Crafting')) {
+      await maybeDeactivateEntertainerBoosterVoucherForWorkshop(freshCommissioner);
+      await clearBoostAfterUse(freshCommissioner, { client: null, context: 'workshop_commission_craft' });
+    }
+
+    const materialsSummary = aggregateMaterialsUsedSummary(materialsUsed);
+    const crafterUsed =
+      crafterStaminaBefore != null && crafterStaminaAfter != null
+        ? Math.max(0, crafterStaminaBefore - crafterStaminaAfter)
+        : crafterStaminaCost;
+
     return {
       ok: true,
       craftedQuantity,
       crafterStaminaPaid: crafterStaminaCost,
       teacherStaminaPaid: teacherStaminaContribution,
+      materialsUsed: materialsSummary,
+      crafterStaminaBefore,
+      crafterStaminaAfter,
+      crafterStaminaUsed: crafterUsed,
+      ...(teacherCharacterName && teacherStaminaBefore != null && teacherStaminaAfter != null
+        ? {
+            teacherCharacterName,
+            teacherStaminaBefore,
+            teacherStaminaAfter,
+            teacherStaminaUsed: teacherStaminaContribution,
+          }
+        : {}),
     };
   } catch (e) {
     logError('WS-COMM', `post-material failure: ${e.message}`);

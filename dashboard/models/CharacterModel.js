@@ -215,6 +215,13 @@ const characterSchema = new Schema({
   // ------------------- Boosting System -------------------
   // Tracks which character is currently boosting this character
   boostedBy: { type: String, default: null },
+  // Staff/testing only: simulate a job boost without TempData or a real booster (set via dashboard DB editor)
+  devBoostOverride: {
+    enabled: { type: Boolean, default: false },
+    boosterJob: { type: String, default: null },
+    category: { type: String, default: null },
+    targetVillage: { type: String, default: null },
+  },
 
   // ------------------- Character Status -------------------
   // Status values:

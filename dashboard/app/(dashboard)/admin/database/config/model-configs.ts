@@ -1502,6 +1502,61 @@ export const MODEL_CONFIGS: Record<string, ModelConfig> = {
             helpText: "Character ID that is boosting this character",
           },
           {
+            key: "devBoostOverride.enabled",
+            label: "Dev boost override",
+            type: "boolean",
+            helpText:
+              "Staff/testing: when enabled, the bot applies boost effects for the job + category below without TempData or a real booster. Does not consume on use — disable when done. Takes precedence over a normal active boost.",
+          },
+          {
+            key: "devBoostOverride.boosterJob",
+            label: "Override booster job",
+            type: "select",
+            placeholder: "—",
+            options: [
+              { value: "", label: "—" },
+              { value: "Fortune Teller", label: "Fortune Teller" },
+              { value: "Teacher", label: "Teacher" },
+              { value: "Priest", label: "Priest" },
+              { value: "Entertainer", label: "Entertainer" },
+              { value: "Scholar", label: "Scholar" },
+            ],
+            showIf: (data) => Boolean(data["devBoostOverride.enabled"]),
+            helpText: "Job whose boost effects are simulated (must match a real boosting job).",
+          },
+          {
+            key: "devBoostOverride.category",
+            label: "Override boost category",
+            type: "select",
+            placeholder: "—",
+            options: [
+              { value: "", label: "—" },
+              { value: "Looting", label: "Looting" },
+              { value: "Gathering", label: "Gathering" },
+              { value: "Crafting", label: "Crafting" },
+              { value: "Healers", label: "Healers" },
+              { value: "Stealing", label: "Stealing" },
+              { value: "Tokens", label: "Tokens" },
+              { value: "Traveling", label: "Traveling" },
+              { value: "Exploring", label: "Exploring" },
+              { value: "Mounts", label: "Mounts" },
+              { value: "Vending", label: "Vending" },
+              { value: "Other", label: "Other" },
+            ],
+            showIf: (data) => Boolean(data["devBoostOverride.enabled"]),
+            helpText: "Which action type receives the boost (must match the command you are testing).",
+          },
+          {
+            key: "devBoostOverride.targetVillage",
+            label: "Scholar gather — target village",
+            type: "text",
+            showIf: (data) =>
+              Boolean(data["devBoostOverride.enabled"]) &&
+              String(data["devBoostOverride.boosterJob"] || "").toLowerCase() === "scholar" &&
+              String(data["devBoostOverride.category"] || "").toLowerCase() === "gathering",
+            helpText: "Required for Scholar + Gathering override (cross-region gather village name).",
+          },
+          {
             key: "helpWanted.lastCompletion",
             label: "Help Wanted – Last Completion",
             type: "text",

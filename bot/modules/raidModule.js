@@ -28,6 +28,7 @@ const scheduler = require('@/utils/scheduler');
 const { fetchCharacterById, updateCharacterById, updateModCharacterById } = require('@/database/db');
 const { generateModCharacterVictoryMessage, generateDamageDealtMessage, generateDamageMessage } = require('./flavorTextModule');
 const { getCharacterBoostStatus, applyLootingDamageBoost } = require('./boostIntegration');
+const { isBoostActive } = require('../commands/jobs/boosting');
 const { shouldConsumeElixir, consumeElixirBuff, getActiveBuffEffects } = require('./elixirModule');
 const { useHearts } = require('./characterStatsModule');
 const { getCurrentWeather } = require('@/services/weatherService');
@@ -339,7 +340,9 @@ async function processRaidBattle(character, monster, diceRoll, damageValue, adju
     // Apply boost damage reduction using unified boost system BEFORE saving to database
     // Note: For tiers 1-4, damage was already saved by getEncounterOutcome, so boosts can't reduce it
     // This is acceptable since tiers 1-4 are simpler encounters
-    if (character.boostedBy && characterDamage > 0 && !damageAlreadySaved) {
+    const lootingBoostActive =
+      Boolean(character.boostedBy) || (await isBoostActive(character.name, 'Looting'));
+    if (lootingBoostActive && characterDamage > 0 && !damageAlreadySaved) {
       const monsterTier = monster.tier || 5;
       finalDamage = await applyLootingDamageBoost(character.name, characterDamage, monsterTier);
       const damageReduction = characterDamage - finalDamage;

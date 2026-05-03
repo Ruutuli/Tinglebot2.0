@@ -5,6 +5,7 @@ import { connect } from "@/lib/db";
 import { getSession } from "@/lib/session";
 import mongoose from "mongoose";
 import {
+  loadCharacterIconForOwner,
   loadCharacterUnionByIdForOwner,
   loadCharacterUnionForOwnerByName,
   workshopCommissionVillagesCompatible,
@@ -156,6 +157,14 @@ export async function POST(request: Request, context: RouteContext) {
       craftedQuantity?: number;
       crafterStaminaPaid?: number;
       teacherStaminaPaid?: number;
+      materialsUsed?: Array<{ itemName: string; quantity: number }>;
+      crafterStaminaBefore?: number | null;
+      crafterStaminaAfter?: number | null;
+      crafterStaminaUsed?: number;
+      teacherCharacterName?: string;
+      teacherStaminaBefore?: number | null;
+      teacherStaminaAfter?: number | null;
+      teacherStaminaUsed?: number;
     };
 
     let craftResult: CraftResultPayload | undefined;
@@ -346,6 +355,13 @@ export async function POST(request: Request, context: RouteContext) {
     }
 
     try {
+      const [requesterCharacterIcon, acceptorCharacterIcon] = await Promise.all([
+        loadCharacterIconForOwner(
+          String(reserved.requesterDiscordId ?? ""),
+          String(reserved.requesterCharacterName ?? "")
+        ),
+        loadCharacterIconForOwner(user.id, acceptor.name),
+      ]);
       await notifyCraftingRequestAccepted({
         requestId: String(reserved._id),
         requesterDiscordId: reserved.requesterDiscordId,
@@ -355,6 +371,16 @@ export async function POST(request: Request, context: RouteContext) {
         requesterCharacterName: reserved.requesterCharacterName,
         paymentOffer: reserved.paymentOffer,
         craftItemImage: typeof item.image === "string" ? item.image : undefined,
+        materialsUsed: craftResult.materialsUsed,
+        crafterStaminaBefore: craftResult.crafterStaminaBefore ?? null,
+        crafterStaminaAfter: craftResult.crafterStaminaAfter ?? null,
+        crafterStaminaUsed: craftResult.crafterStaminaUsed ?? null,
+        teacherCharacterName: craftResult.teacherCharacterName,
+        teacherStaminaBefore: craftResult.teacherStaminaBefore ?? null,
+        teacherStaminaAfter: craftResult.teacherStaminaAfter ?? null,
+        teacherStaminaUsed: craftResult.teacherStaminaUsed ?? null,
+        requesterCharacterIcon,
+        acceptorCharacterIcon,
       });
     } catch (e) {
       console.warn("[crafting-requests accept] Discord follow-up failed:", e);
@@ -366,6 +392,14 @@ export async function POST(request: Request, context: RouteContext) {
         craftedQuantity: craftResult.craftedQuantity,
         crafterStaminaPaid: craftResult.crafterStaminaPaid,
         teacherStaminaPaid: craftResult.teacherStaminaPaid,
+        materialsUsed: craftResult.materialsUsed,
+        crafterStaminaBefore: craftResult.crafterStaminaBefore,
+        crafterStaminaAfter: craftResult.crafterStaminaAfter,
+        crafterStaminaUsed: craftResult.crafterStaminaUsed,
+        teacherCharacterName: craftResult.teacherCharacterName,
+        teacherStaminaBefore: craftResult.teacherStaminaBefore,
+        teacherStaminaAfter: craftResult.teacherStaminaAfter,
+        teacherStaminaUsed: craftResult.teacherStaminaUsed,
       },
     });
   } catch (err) {

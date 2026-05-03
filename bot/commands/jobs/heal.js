@@ -236,8 +236,11 @@ async function validateCharacters(characterToHeal, healerCharacter, heartsToHeal
       const activeBoost = await retrieveBoostingRequestFromTempDataByCharacter(healerCharacter.name);
       if (activeBoost && activeBoost.status === 'accepted' && activeBoost.boostExpiresAt && Date.now() <= activeBoost.boostExpiresAt) {
         const booster = await fetchCharacterByName(activeBoost.boostingCharacter);
+        const teacherBoost =
+          String(activeBoost.boosterJob || '').toLowerCase() === 'teacher' ||
+          (booster && booster.job === 'Teacher');
         // If healer has Teacher boost, allow healing - will add temporary hearts
-        if (booster && (booster.job === 'Teacher' || activeBoost.boosterJob === 'Teacher')) {
+        if (teacherBoost) {
           logger.info('HEAL', `Allowing healing of fully healed ${characterToHeal.name} because healer ${healerCharacter.name} has Teacher boost (will add temporary hearts)`);
         } else {
           // Has boost but not Teacher - block healing fully healed character
@@ -975,7 +978,10 @@ async function handleHealingFulfillment(interaction, requestId, healerName) {
       const currentTime = Date.now();
       if (!activeBoost.boostExpiresAt || currentTime <= activeBoost.boostExpiresAt) {
         const boosterChar = await fetchCharacterByName(activeBoost.boostingCharacter);
-        if (boosterChar && boosterChar.job === 'Teacher') {
+        const teacherHealBoost =
+          String(activeBoost.boosterJob || '').toLowerCase() === 'teacher' ||
+          (boosterChar && boosterChar.job === 'Teacher');
+        if (teacherHealBoost) {
           // Refresh patient to get current state after healing
           const refreshedPatient = await fetchCharacterByName(characterToHeal.name);
           if (refreshedPatient) {
@@ -1361,7 +1367,10 @@ async function handleDirectHealing(interaction, healerName, targetCharacterName,
       const currentTime = Date.now();
       if (!activeBoost.boostExpiresAt || currentTime <= activeBoost.boostExpiresAt) {
         const boosterChar = await fetchCharacterByName(activeBoost.boostingCharacter);
-        if (boosterChar && boosterChar.job === 'Teacher') {
+        const teacherHealBoost =
+          String(activeBoost.boosterJob || '').toLowerCase() === 'teacher' ||
+          (boosterChar && boosterChar.job === 'Teacher');
+        if (teacherHealBoost) {
           // Refresh patient to get current state after healing
           const refreshedPatient = await fetchCharacterByName(characterToHeal.name);
           if (refreshedPatient) {

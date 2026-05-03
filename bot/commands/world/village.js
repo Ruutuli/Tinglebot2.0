@@ -22,6 +22,8 @@ const ItemModel = require('@/models/ItemModel');
 const { Village, VILLAGE_CONFIG, DEFAULT_TOKEN_REQUIREMENTS } = require('@/models/VillageModel');
 const UserModel = require('@/models/UserModel');
 const { initializeVillages, updateVillageStatus, getEffectiveVendingTier, getEffectiveVendingDiscount, getEffectiveRestLevel } = require('../../modules/villageModule');
+const moment = require('moment-timezone');
+const VILLAGE_DONATION_TZ = 'America/New_York';
 
 // ============================================================================
 // ---- Constants ----
@@ -49,23 +51,19 @@ const COOLDOWN_ENABLED = true;
 const DONATION_ITEM_PERCENT = 0.10; // Max 10% of items needed per donation
 const DONATION_TOKEN_PERCENT = 0.10; // Max 10% of tokens needed per donation (1000 for level 2, 5000 for level 3)
 
-// Donation cooldown resets every Sunday at midnight EST (05:00 UTC)
+// Donation cooldown resets every Sunday at midnight in America/New_York (EST or EDT)
 // ------------------- Function: getCurrentDonationWeekStart -------------------
-// Returns timestamp of the Sunday midnight EST (05:00 UTC) that started the current week
+// Returns timestamp (ms) of the Sunday 00:00 local Eastern that started the current week
 function getCurrentDonationWeekStart() {
-    const now = new Date();
-    const rollover = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate(), 5, 0, 0, 0));
-    if (now < rollover) {
-        rollover.setUTCDate(rollover.getUTCDate() - 1);
-    }
-    rollover.setUTCDate(rollover.getUTCDate() - rollover.getUTCDay());
-    return rollover.getTime();
+    const m = moment.tz(VILLAGE_DONATION_TZ);
+    return m.clone().startOf('day').subtract(m.day(), 'days').valueOf();
 }
 
 // ------------------- Function: getNextDonationReset -------------------
-// Returns Date of next Sunday midnight EST when cooldowns reset
+// Returns Date of the next Sunday midnight Eastern when cooldowns reset
 function getNextDonationReset() {
-    return new Date(getCurrentDonationWeekStart() + 7 * 24 * 60 * 60 * 1000);
+    const weekStart = moment.tz(getCurrentDonationWeekStart(), VILLAGE_DONATION_TZ);
+    return weekStart.clone().add(7, 'days').toDate();
 }
 
 // ============================================================================
@@ -1699,7 +1697,7 @@ module.exports = {
                     }
                 }
 
-                // Check cooldown (resets every Sunday at midnight EST)
+                // Check cooldown (resets every Sunday at midnight Eastern)
                 // Cooldown is per-user globally (1 donation per week total across all villages)
                 // Use UserModel's villageDonationCooldown field for atomic cooldown tracking
                 const currentWeekStart = getCurrentDonationWeekStart();
@@ -1741,11 +1739,11 @@ module.exports = {
                             if (daysUntilReset > 0) {
                                 cooldownDescription = `⏳ **You've already contributed to a village this week.**\n\n` +
                                     `🔄 **Cooldown resets:** ${daysUntilReset} day(s) and ${remainingHours} hour(s)\n` +
-                                    `📅 **Reset time:** Sunday at midnight EST`;
+                                    `📅 **Reset time:** Sunday at midnight Eastern`;
                             } else {
                                 cooldownDescription = `⏳ **You've already contributed to a village this week.**\n\n` +
                                     `🔄 **Cooldown resets in:** ${hoursUntilReset} hour(s)\n` +
-                                    `📅 **Reset time:** Sunday at midnight EST`;
+                                    `📅 **Reset time:** Sunday at midnight Eastern`;
                             }
                         } else if (storedCooldown instanceof Date && storedCooldown > new Date()) {
                             // Legacy: old rolling 7-day cooldown
@@ -1768,11 +1766,11 @@ module.exports = {
                             if (daysUntilReset > 0) {
                                 cooldownDescription = `⏳ **You've already contributed to a village this week.**\n\n` +
                                     `🔄 **Cooldown resets:** ${daysUntilReset} day(s) and ${remainingHours} hour(s)\n` +
-                                    `📅 **Reset time:** Sunday at midnight EST`;
+                                    `📅 **Reset time:** Sunday at midnight Eastern`;
                             } else {
                                 cooldownDescription = `⏳ **You've already contributed to a village this week.**\n\n` +
                                     `🔄 **Cooldown resets in:** ${hoursUntilReset} hour(s)\n` +
-                                    `📅 **Reset time:** Sunday at midnight EST`;
+                                    `📅 **Reset time:** Sunday at midnight Eastern`;
                             }
                         }
                         

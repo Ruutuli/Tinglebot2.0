@@ -1,6 +1,6 @@
 /**
  * Character of the Week rotation job definition
- * Runs every Sunday at 05:00 UTC (midnight EST)
+ * Runs every Sunday at 00:00 America/New_York (handles EST/EDT)
  */
 
 import type { Job } from "agenda";
@@ -10,7 +10,7 @@ import { connect } from "@/lib/db";
 import { logger } from "@/utils/logger";
 
 const JOB_NAME = "character-of-week-rotation";
-const JOB_SCHEDULE = "0 5 * * 0"; // Every Sunday at 05:00 UTC (midnight EST)
+const JOB_SCHEDULE = "0 0 * * 0"; // Every Sunday at midnight in repeatTimezone
 
 /**
  * Job handler. Locking and same-week idempotency live inside rotateCharacterOfWeek.
@@ -48,8 +48,8 @@ export async function defineRotationJob(): Promise<void> {
   // Define the job
   agenda.define(JOB_NAME, handleRotation);
   
-  // Schedule the job to run every Sunday at 05:00 UTC
-  await agenda.every(JOB_SCHEDULE, JOB_NAME);
+  // Schedule the job to run every Sunday at midnight Eastern
+  await agenda.every(JOB_SCHEDULE, JOB_NAME, {}, { timezone: "America/New_York" });
 }
 
 /**

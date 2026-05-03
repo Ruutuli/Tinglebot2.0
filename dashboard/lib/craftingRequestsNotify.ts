@@ -266,15 +266,14 @@ export function buildCraftingRequestBoardMessage(
   }
 
   const requestId = payload.requestId?.trim() || "";
-  const acceptCommandExample = requestId
-    ? `?crafting accept ${requestId} <your crafter OC name>`
-    : `?crafting accept <request id> <your crafter OC name>`;
+  const idPlaceholder = requestId || "<request id>";
+  const discordLineAccept = `?crafting accept ${idPlaceholder} <your crafter OC name>`;
+  const discordLineRequestAccept = `?crafting request accept ${idPlaceholder} <your crafter OC name>`;
 
   descParts.push("");
   descParts.push("🧭 **How to accept**");
-  descParts.push(
-    `↳ **Discord:** \`${acceptCommandExample}\` · or \`?crafting request accept\` with the same **request id** and OC name`
-  );
+  descParts.push(`↳ **Discord** — \`${discordLineAccept}\``);
+  descParts.push(`↳ **or** — \`${discordLineRequestAccept}\``);
   descParts.push(`↳ **Dashboard:** [Open the workshop board →](${boardUrl})`);
 
   let description = descParts.join("\n");
@@ -412,6 +411,19 @@ export type CraftingRequestAcceptedNotifyOptions = {
   requesterCharacterName?: string;
   paymentOffer?: string;
   craftItemImage?: string;
+  /** Aggregated recipe materials removed from the commissioner OC */
+  materialsUsed?: Array<{ itemName: string; quantity: number }>;
+  crafterStaminaBefore?: number | null;
+  crafterStaminaAfter?: number | null;
+  crafterStaminaUsed?: number | null;
+  teacherCharacterName?: string;
+  teacherStaminaBefore?: number | null;
+  teacherStaminaAfter?: number | null;
+  teacherStaminaUsed?: number | null;
+  /** Character `icon` (commissioner OC) — public URL for embed author */
+  requesterCharacterIcon?: string;
+  /** Character `icon` (crafter / acceptor OC) — public URL for embed footer */
+  acceptorCharacterIcon?: string;
 };
 
 /** Rich “accepted” post for the community board channel (pings + embed). */
@@ -437,23 +449,77 @@ export function buildCraftingRequestAcceptedMessage(
     "— — — — — —",
     "",
     `📦 **Items used**`,
-    `↳ Recipe materials were consumed automatically when this commission was accepted.`,
-    "",
-    `⚡ **Stamina used**`,
-    `↳ Crafter stamina was spent automatically when the item was crafted.`,
-    "",
-    `💰 **Payment**`,
-    `↳ Send any agreed **payment** with the **gift** command (through the bot)—match what was listed on the workshop post and in the notes.`,
   ];
+
+  const mats = opts.materialsUsed ?? [];
+  const maxMatLines = 18;
+  if (mats.length > 0) {
+    for (const m of mats.slice(0, maxMatLines)) {
+      const q = Math.max(0, Math.round(Number(m.quantity) || 0));
+      const label = String(m.itemName ?? "").trim() || "—";
+      lines.push(`↳ **${q}×** ${label}`);
+    }
+    if (mats.length > maxMatLines) {
+      lines.push(`↳ _…and ${mats.length - maxMatLines} more._`);
+    }
+  } else {
+    lines.push(`↳ _No line-item breakdown returned — materials were still consumed from the commissioner._`);
+  }
+
+  lines.push("");
+  lines.push(`⚡ **Stamina**`);
+  const craftOc = opts.acceptorCharacterName.trim() || "Crafter";
+  if (
+    opts.crafterStaminaBefore != null &&
+    opts.crafterStaminaAfter != null &&
+    Number.isFinite(opts.crafterStaminaBefore) &&
+    Number.isFinite(opts.crafterStaminaAfter)
+  ) {
+    const used =
+      opts.crafterStaminaUsed != null && Number.isFinite(opts.crafterStaminaUsed)
+        ? Math.max(0, Math.round(Number(opts.crafterStaminaUsed)))
+        : Math.max(
+            0,
+            Math.round(Number(opts.crafterStaminaBefore) - Number(opts.crafterStaminaAfter))
+          );
+    lines.push(
+      `↳ **${craftOc}**'s stamina · ${Math.round(Number(opts.crafterStaminaBefore))} → ${Math.round(Number(opts.crafterStaminaAfter))} _(used ${used} stamina)_`
+    );
+  } else {
+    lines.push(`↳ **${craftOc}** — stamina was deducted when the craft completed.`);
+  }
+
+  if (
+    opts.teacherCharacterName?.trim() &&
+    opts.teacherStaminaBefore != null &&
+    opts.teacherStaminaAfter != null &&
+    Number.isFinite(opts.teacherStaminaBefore) &&
+    Number.isFinite(opts.teacherStaminaAfter)
+  ) {
+    const tu =
+      opts.teacherStaminaUsed != null && Number.isFinite(opts.teacherStaminaUsed)
+        ? Math.max(0, Math.round(Number(opts.teacherStaminaUsed)))
+        : Math.max(
+            0,
+            Math.round(Number(opts.teacherStaminaBefore) - Number(opts.teacherStaminaAfter))
+          );
+    const tn = opts.teacherCharacterName.trim();
+    lines.push(
+      `↳ **${tn}** (Teacher) stamina · ${Math.round(Number(opts.teacherStaminaBefore))} → ${Math.round(Number(opts.teacherStaminaAfter))} _(used ${tu} stamina)_`
+    );
+  }
+
+  lines.push("");
+  lines.push(`💰 **Payment**`);
+  lines.push(
+    `↳ Send any agreed **payment** with the **gift** command (through the bot)—match what was listed on the workshop post and in the notes.`
+  );
 
   if (opts.paymentOffer?.trim()) {
     lines.push("");
     lines.push(`💰 **Offer on the post**`);
     lines.push(`↳ ${clip(opts.paymentOffer.trim(), 280)}`);
   }
-
-  lines.push("");
-  lines.push("_Happy crafting!_");
 
   let description = lines.join("\n");
   if (description.length > 4096) {
@@ -462,6 +528,18 @@ export function buildCraftingRequestAcceptedMessage(
 
   const bannerUrl = CRAFT_BOARD_BORDER_URL;
   const thumbUrl = discordEmbedImageUrl(opts.craftItemImage);
+  const requesterIconUrl = discordEmbedImageUrl(opts.requesterCharacterIcon);
+  const acceptorIconUrl = discordEmbedImageUrl(opts.acceptorCharacterIcon);
+
+  const authorName = forOc.slice(0, 256) || "Commissioner";
+  const author: Record<string, unknown> = { name: authorName };
+  if (requesterIconUrl) author.icon_url = requesterIconUrl;
+
+  const crafterLabel = opts.acceptorCharacterName.trim() || "Crafter";
+  const footer: Record<string, unknown> = {
+    text: `🪵 ${crafterLabel} · crafter`.slice(0, 2048),
+  };
+  if (acceptorIconUrl) footer.icon_url = acceptorIconUrl;
 
   const embed: Record<string, unknown> = {
     title: "✅ Workshop commission accepted",
@@ -469,7 +547,8 @@ export function buildCraftingRequestAcceptedMessage(
     color: EMBED_COLOR,
     timestamp: new Date().toISOString(),
     image: { url: bannerUrl },
-    footer: { text: "🪵 Tinglebot · Workshop board" },
+    author,
+    footer,
   };
   if (thumbUrl) {
     embed.thumbnail = { url: thumbUrl };

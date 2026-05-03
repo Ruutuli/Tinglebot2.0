@@ -33,6 +33,7 @@
     "date-fns": "^4.1.0",
     "iron-session": "^8.0.4",
     "lucide-react": "^0.562.0",
+    "moment-timezone": "^0.5.48",
     "mongoose": "^8.8.4",
     "next": "16.1.4",
     "react": "19.2.3",

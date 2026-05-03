@@ -283,6 +283,13 @@ async function getBoosterInfo(characterName) {
     if (activeBoost.boostExpiresAt && currentTime > activeBoost.boostExpiresAt) {
       return null; // Boost expired
     }
+
+    if (activeBoost.isDevOverride) {
+      return {
+        name: '(dev override)',
+        job: activeBoost.boosterJob,
+      };
+    }
     
     const booster = await fetchCharacterByName(activeBoost.boostingCharacter);
     if (!booster) {
