@@ -44,7 +44,7 @@ export const navItems: NavItem[] = [
     ],
   },
   {
-    label: "Game data",
+    label: "World data",
     icon: "fa-book-open",
     children: [
       { href: "/models/items", label: "Items", icon: "fa-cube" },

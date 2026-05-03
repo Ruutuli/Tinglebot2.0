@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useSession } from "@/hooks/use-session";
 import { formatItemImageUrl } from "@/lib/item-utils";
 import { formatOpenCommissionSeekingLine } from "@/lib/crafting-request-helpers";
@@ -114,17 +114,95 @@ function parseStamina(v: unknown): number {
   return Number.isFinite(n) ? Math.max(0, n) : 0;
 }
 
-/** Shared closed/open list styling for modal selects & suggestion panels (matches catalog pickers). */
-const MODAL_DROPDOWN_CHROME =
-  "border border-[var(--totk-light-green)]/45 bg-[var(--totk-black)]/95 shadow-lg shadow-black/40 ring-1 ring-[var(--totk-light-green)]/20";
+/** Dark green panels — reads clearly on the brown modal (won’t blend into warm-black fields). */
+const CRAFTING_MODAL_DROPPANEL_CHROME =
+  "border-2 border-[var(--totk-light-green)]/40 bg-[var(--totk-dark-green)]/95 shadow-lg shadow-black/45 ring-1 ring-[var(--totk-light-green)]/25";
 
-/** Custom chevron: native arrow + `leading-snug` + global select `background-color` were misaligned. */
-const craftingModalSelectBg = {
-  backgroundImage: `url("data:image/svg+xml;charset=UTF-8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%2349d59c' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E")`,
-  backgroundRepeat: "no-repeat" as const,
-  backgroundPosition: "right 0.65rem center",
-  backgroundSize: "1rem 1rem",
-};
+/** Custom dropdown trigger — matches green search fields (`modalGreenControlShell`). */
+const GREEN_SELECT_TRIGGER_CLASS =
+  "relative w-full min-h-[2.5rem] rounded-md border-2 border-[var(--totk-light-green)]/40 bg-[var(--totk-dark-green)]/65 px-3 py-2 pr-10 text-left text-sm leading-normal focus:border-[var(--totk-light-green)]/75 focus:outline-none focus:ring-2 focus:ring-[var(--totk-light-green)]/30 disabled:cursor-not-allowed disabled:opacity-[0.62] md:min-h-12 md:px-4 md:py-3 md:pr-11 md:text-base";
+
+/** Open list panel for custom selects (native `<option>` menus can’t be themed — OS paints brown). */
+const GREEN_SELECT_LIST_CLASS = `absolute z-[85] mt-1 max-h-[min(50vh,16rem)] w-full overflow-auto overscroll-contain rounded-md py-0.5 ${CRAFTING_MODAL_DROPPANEL_CHROME}`;
+
+type CraftingModalGreenSelectOption = { value: string; label: string };
+
+/** Themed dropdown list — replaces `<select>` so the options list isn’t OS brown. */
+function CraftingModalGreenSelect({
+  id,
+  value,
+  onChange,
+  options,
+  placeholder,
+}: {
+  id: string;
+  value: string;
+  onChange: (next: string) => void;
+  options: CraftingModalGreenSelectOption[];
+  placeholder: string;
+}) {
+  const [open, setOpen] = useState(false);
+  const wrapRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const onDoc = (e: MouseEvent) => {
+      if (wrapRef.current && !wrapRef.current.contains(e.target as Node)) setOpen(false);
+    };
+    if (open) document.addEventListener("mousedown", onDoc);
+    return () => document.removeEventListener("mousedown", onDoc);
+  }, [open]);
+
+  const selectedLabel = options.find((o) => o.value === value)?.label;
+
+  return (
+    <div className="relative" ref={wrapRef}>
+      <button
+        type="button"
+        id={id}
+        aria-expanded={open}
+        aria-haspopup="listbox"
+        onClick={() => setOpen((v) => !v)}
+        className={GREEN_SELECT_TRIGGER_CLASS}
+      >
+        <span className={selectedLabel ? "text-[var(--totk-light-green)]" : "text-[var(--totk-mid-ocher)]"}>
+          {selectedLabel ?? placeholder}
+        </span>
+        <i
+          className={`fa-solid fa-chevron-${open ? "up" : "down"} pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-[var(--totk-light-green)]/85`}
+          aria-hidden
+        />
+      </button>
+      {open ? (
+        <ul role="listbox" aria-labelledby={id} className={GREEN_SELECT_LIST_CLASS}>
+          {options.length === 0 ? (
+            <li className="px-3 py-2 text-sm text-[var(--totk-mid-ocher)]">No options available</li>
+          ) : (
+            options.map((opt) => (
+              <li key={opt.value} role="presentation">
+                <button
+                  type="button"
+                  role="option"
+                  aria-selected={value === opt.value}
+                  className={`w-full px-3 py-2 text-left text-sm transition-colors md:min-h-11 md:px-4 md:py-2.5 md:text-base ${
+                    value === opt.value
+                      ? "bg-[var(--totk-light-green)]/22 text-[var(--totk-light-green)]"
+                      : "text-[var(--totk-light-green)] hover:bg-[var(--totk-light-green)]/14 hover:text-[var(--totk-ivory)]"
+                  }`}
+                  onClick={() => {
+                    onChange(opt.value);
+                    setOpen(false);
+                  }}
+                >
+                  {opt.label}
+                </button>
+              </li>
+            ))
+          )}
+        </ul>
+      ) : null}
+    </div>
+  );
+}
 
 /** Item craftingJobs vs character.job (DB casing may differ). */
 function characterJobMatchesCraftingJobs(craftingJobs: string[] | undefined, characterJob: string): boolean {
@@ -1018,11 +1096,14 @@ export default function CraftingRequestsPage() {
   const inputClass =
     "w-full rounded-lg border border-[var(--botw-border)] bg-[var(--botw-deep)]/90 px-3 py-2.5 text-[var(--botw-pale)] shadow-inner placeholder:text-[var(--botw-pale)]/50 focus:border-[var(--totk-light-green)] focus:outline-none focus:ring-1 focus:ring-[var(--totk-light-green)]/40";
 
-  /** Modal-only: brown panel + pale text (matches dashboard hero cards). */
+  /** Modal-only: brown panel + pale text (notes, payment — blends into modal chrome). */
   const modalFieldClass =
     "w-full rounded-md border border-[var(--totk-dark-ocher)]/55 bg-[var(--botw-black)]/28 px-3 py-2 text-sm leading-snug text-[var(--botw-pale)] placeholder:text-[var(--totk-grey-200)]/85 focus:border-[var(--totk-light-green)]/65 focus:outline-none focus:ring-1 focus:ring-[var(--totk-light-green)]/30 md:min-h-12 md:px-4 md:py-3 md:text-base";
-  /** Selects: avoid `leading-snug` + native chevron clash; reserve space for SVG arrow. */
-  const modalSelectClass = `w-full min-h-[2.5rem] rounded-md ${MODAL_DROPDOWN_CHROME} px-3 py-2 pr-9 text-sm leading-normal text-[var(--totk-light-green)] focus:border-[var(--totk-light-green)] focus:outline-none focus:ring-2 focus:ring-[var(--totk-light-green)]/35 appearance-none md:min-h-12 md:px-4 md:py-3 md:pr-10 md:text-base`;
+  /** Shared shell for green modal controls (search + native selects must match). */
+  const modalGreenControlShell =
+    "rounded-md border-2 border-[var(--totk-light-green)]/40 bg-[var(--totk-dark-green)]/65";
+  /** Search rows that open dark-green suggestion lists. */
+  const modalGreenSearchClass = `w-full ${modalGreenControlShell} px-3 py-2 text-sm leading-snug text-[var(--totk-light-green)] placeholder:text-[var(--totk-mid-ocher)] caret-[var(--totk-light-green)] focus:border-[var(--totk-light-green)]/75 focus:outline-none focus:ring-2 focus:ring-[var(--totk-light-green)]/30 md:min-h-12 md:px-4 md:py-3 md:text-base`;
   const modalLabelClass =
     "mb-1 block text-sm font-medium text-[var(--totk-light-ocher)] md:mb-1.5 md:text-[0.9375rem]";
   const modalHintClass =
@@ -1745,19 +1826,19 @@ export default function CraftingRequestsPage() {
                             onChange={(e) => setItemQuery(e.target.value)}
                             onFocus={() => setItemPickerOpen(true)}
                             placeholder="Search catalog…"
-                            className={`${modalFieldClass} text-[var(--totk-light-green)] placeholder:text-[var(--totk-mid-ocher)] caret-[var(--totk-light-green)]`}
+                            className={modalGreenSearchClass}
                             autoComplete="off"
                           />
                           {itemLoading ? (
                             <p className={`${modalHintClass} mt-1`}>Searching…</p>
                           ) : null}
                           {itemOptions.length > 0 ? (
-                            <ul className={`absolute z-[80] mt-1 max-h-36 w-full overflow-auto overscroll-contain rounded-md py-0.5 md:max-h-[min(50vh,20rem)] ${MODAL_DROPDOWN_CHROME}`}>
+                            <ul className={`absolute z-[80] mt-1 max-h-36 w-full overflow-auto overscroll-contain rounded-md py-0.5 md:max-h-[min(50vh,20rem)] ${CRAFTING_MODAL_DROPPANEL_CHROME}`}>
                               {itemOptions.map((it) => (
                                 <li key={it.itemName}>
                                   <button
                                     type="button"
-                                    className="w-full touch-manipulation px-3 py-2 text-left text-sm text-[var(--totk-light-green)] hover:bg-[var(--totk-light-green)]/14 hover:text-[var(--totk-ivory)] md:min-h-12 md:px-4 md:py-3 md:text-base"
+                                    className="w-full touch-manipulation px-3 py-2 text-left text-sm text-[var(--totk-light-green)] transition-colors hover:bg-[var(--totk-light-green)]/14 hover:text-[var(--totk-ivory)] md:min-h-12 md:px-4 md:py-3 md:text-base"
                                     onClick={() => handleSelectItem(it)}
                                   >
                                     {it.itemName}
@@ -1788,19 +1869,19 @@ export default function CraftingRequestsPage() {
                         <label className={modalLabelClass} htmlFor="craft-elixir-tier">
                           What level do you want?
                         </label>
-                        <select
+                        <CraftingModalGreenSelect
                           id="craft-elixir-tier"
-                          value={elixirTier}
-                          onChange={(e) =>
-                            setElixirTier(Number(e.target.value) as 1 | 2 | 3)
+                          value={String(elixirTier)}
+                          onChange={(v) =>
+                            setElixirTier(Number(v) as 1 | 2 | 3)
                           }
-                          className={modalSelectClass}
-                          style={craftingModalSelectBg}
-                        >
-                          <option value={1}>Basic</option>
-                          <option value={2}>Mid</option>
-                          <option value={3}>High</option>
-                        </select>
+                          options={[
+                            { value: "1", label: "Basic" },
+                            { value: "2", label: "Mid" },
+                            { value: "3", label: "High" },
+                          ]}
+                          placeholder="Choose tier"
+                        />
                       </div>
                       {elixirGuideFetchError ? (
                         <p className="rounded-md border border-amber-500/40 bg-amber-950/35 px-3 py-2 text-xs leading-relaxed text-amber-100/95">
@@ -1835,29 +1916,29 @@ export default function CraftingRequestsPage() {
                     >
                       <legend className="sr-only">Characters and request details</legend>
 
-                      <div>
-                        <label className={modalLabelClass} htmlFor="craft-requester-oc">
+                      <div
+                        className={`space-y-2 rounded-xl p-4 md:space-y-2.5 md:p-5 ${CRAFTING_MODAL_DROPPANEL_CHROME} rounded-xl`}
+                      >
+                        <label
+                          className={`${modalLabelClass} text-[var(--botw-cream)]`}
+                          htmlFor="craft-requester-oc"
+                        >
                           Your OC
                         </label>
-                        <select
+                        <CraftingModalGreenSelect
                           id="craft-requester-oc"
                           value={requesterCharacterName}
-                          onChange={(e) => {
-                            setRequesterCharacterName(e.target.value);
+                          onChange={(v) => {
+                            setRequesterCharacterName(v);
                             setElixirStackQtyById({});
                             setElixirStacksError(null);
                           }}
-                          className={modalSelectClass}
-                          style={craftingModalSelectBg}
-                          required
-                        >
-                          <option value="">Choose…</option>
-                          {myChars.map((c) => (
-                            <option key={c._id} value={c.name}>
-                              {c.name}
-                            </option>
-                          ))}
-                        </select>
+                          options={myChars.map((c) => ({
+                            value: c.name,
+                            label: c.name,
+                          }))}
+                          placeholder="Choose…"
+                        />
                       </div>
 
                       {selectedItemMeta?.isElixir ? (
@@ -2035,7 +2116,7 @@ export default function CraftingRequestsPage() {
                                   </li>
                                 </ul>
                               </div>
-                              <ul className={`max-h-48 space-y-2 overflow-auto overscroll-contain rounded-md p-2 md:max-h-[min(52vh,24rem)] md:space-y-2.5 md:p-3 ${MODAL_DROPDOWN_CHROME}`}>
+                              <ul className={`max-h-48 space-y-2 overflow-auto overscroll-contain rounded-md p-2 md:max-h-[min(52vh,24rem)] md:space-y-2.5 md:p-3 ${CRAFTING_MODAL_DROPPANEL_CHROME}`}>
                                 {mixerEligibleStacks.map((st) => {
                                   const stackRole = mixerStackRoleBadge(st.itemName);
                                   const stackRolePhrase =
@@ -2168,8 +2249,10 @@ export default function CraftingRequestsPage() {
                         </div>
 
                         {targetMode === "specific" && craftItemName ? (
-                          <div className={`relative z-[2] overflow-hidden rounded-xl shadow-[inset_0_1px_0_rgba(255,255,255,0.05)] ${MODAL_DROPDOWN_CHROME}`}>
-                            <div className="border-b border-[var(--totk-light-green)]/25 bg-[var(--botw-black)]/35 px-3 py-2.5 sm:px-4">
+                          <div
+                            className={`relative z-[2] overflow-hidden rounded-xl shadow-[inset_0_1px_0_rgba(255,255,255,0.05)] ${CRAFTING_MODAL_DROPPANEL_CHROME} rounded-xl`}
+                          >
+                            <div className="border-b border-[var(--totk-light-green)]/25 bg-black/25 px-3 py-2.5 sm:px-4">
                               <div className="flex flex-wrap items-center gap-2">
                                 <span className="text-xs font-bold uppercase tracking-wide text-[var(--totk-light-ocher)]">
                                   Find crafter
@@ -2262,7 +2345,7 @@ export default function CraftingRequestsPage() {
                                     value={targetSearch}
                                     onChange={(e) => setTargetSearch(e.target.value)}
                                     placeholder="Start typing — suggestions match eligible jobs"
-                                    className={`${modalFieldClass} text-[var(--totk-light-green)] placeholder:text-[var(--totk-mid-ocher)] caret-[var(--totk-light-green)]`}
+                                    className={modalGreenSearchClass}
                                     list="crafting-crafter-suggest"
                                     autoComplete="off"
                                     aria-autocomplete="list"
@@ -2291,7 +2374,7 @@ export default function CraftingRequestsPage() {
                                     </p>
                                   ) : null}
                                   {targetResults.length > 0 ? (
-                                    <ul className={`mt-2 max-h-44 overflow-auto rounded-lg ${MODAL_DROPDOWN_CHROME}`}>
+                                    <ul className={`mt-2 max-h-44 overflow-auto rounded-lg ${CRAFTING_MODAL_DROPPANEL_CHROME}`}>
                                       {targetResults.map((c) => {
                                         const stamShort = c.isModCharacter
                                           ? "mod"
@@ -2300,11 +2383,11 @@ export default function CraftingRequestsPage() {
                                         return (
                                           <li
                                             key={c._id}
-                                            className="border-b border-[var(--totk-dark-ocher)]/25 last:border-b-0"
+                                            className="border-b border-[var(--totk-light-green)]/15 last:border-b-0"
                                           >
                                             <button
                                               type="button"
-                                              className={`group flex w-full flex-col items-start gap-0.5 px-3 py-2.5 text-left text-sm text-[var(--totk-light-green)] transition hover:bg-[var(--totk-light-green)]/14 hover:text-[var(--totk-ivory)] ${
+                                              className={`group flex w-full flex-col items-start gap-0.5 px-3 py-2.5 text-left text-sm text-[var(--totk-light-green)] transition-colors hover:bg-[var(--totk-light-green)]/14 hover:text-[var(--totk-ivory)] ${
                                                 stamWarn
                                                   ? "border-l-2 border-amber-400/90 bg-amber-950/15"
                                                   : ""
@@ -2539,10 +2622,10 @@ export default function CraftingRequestsPage() {
                 still sort it out with the requester in RP if boosts change the numbers.
               </p>
             ) : (
-              <ul className={`mt-4 max-h-[min(50vh,18rem)] space-y-2 overflow-auto overscroll-contain rounded-lg p-2 md:max-h-72 md:space-y-1.5 md:p-3 ${MODAL_DROPDOWN_CHROME}`}>
+              <ul className={`mt-4 max-h-[min(50vh,18rem)] space-y-2 overflow-auto overscroll-contain rounded-lg p-2 md:max-h-72 md:space-y-1.5 md:p-3 ${CRAFTING_MODAL_DROPPANEL_CHROME}`}>
                 {eligibleAcceptors.map((c) => (
                   <li key={c._id}>
-                    <label className="flex min-h-[3rem] cursor-pointer touch-manipulation items-center gap-3 rounded-md px-3 py-3 text-sm transition hover:bg-[var(--totk-light-green)]/12 has-[:checked]:bg-[var(--totk-light-green)]/18 md:min-h-[3.25rem] md:text-base">
+                    <label className="flex min-h-[3rem] cursor-pointer touch-manipulation items-center gap-3 rounded-md px-3 py-3 text-sm transition-colors hover:bg-[var(--totk-light-green)]/14 has-[:checked]:bg-[var(--totk-light-green)]/22 md:min-h-[3.25rem] md:text-base">
                       <input
                         type="radio"
                         name="acceptChar"
@@ -2551,7 +2634,15 @@ export default function CraftingRequestsPage() {
                         className="h-4 w-4 shrink-0 accent-[var(--totk-light-green)] md:h-5 md:w-5"
                       />
                       <span>
-                        <span className="font-medium text-[var(--totk-light-green)]">{c.name}</span>{" "}
+                        <span
+                          className={
+                            acceptCharId === c._id
+                              ? "font-semibold text-[var(--botw-cream)]"
+                              : "font-medium text-[var(--totk-light-green)]"
+                          }
+                        >
+                          {c.name}
+                        </span>{" "}
                         <span className="text-[var(--totk-mid-ocher)]">
                           ({c.job}
                           {c.isModCharacter ? ", mod" : `, ${c.currentStamina} stam`})
