@@ -1,7 +1,12 @@
-import { discordApiDelete, discordApiRequest } from "@/lib/discord";
+import {
+  discordApiDelete,
+  discordApiRequest,
+  getCraftingCommandId,
+} from "@/lib/discord";
 import { getPublicAppUrl } from "@/lib/config";
 import { formatOpenCommissionSeekingLine } from "@/lib/crafting-request-helpers";
 import { elixirTierLabel, isMixerOutputElixirName } from "@/lib/elixir-catalog";
+import { jobNameToRoleSnowflake } from "@/lib/jobRoleEnv";
 
 const COMMUNITY_BOARD_CHANNEL_ID =
   process.env.COMMUNITY_BOARD_CHANNEL_ID || "651614266046152705";
@@ -24,28 +29,10 @@ function discordEmbedImageUrl(raw?: string | null): string | undefined {
   return `${GCS_PUBLIC_BASE}/${path}`;
 }
 
-/** Same as `bot/scripts/createJobRoles.js` → `JOB_ARTIST`, `JOB_FORTUNE_TELLER`, … */
-function jobNameToRoleEnvKey(jobName: string): string {
-  const suffix = jobName
-    .toUpperCase()
-    .replace(/\s+/g, "_")
-    .replace(/[^A-Z0-9_]/g, "");
-  return `JOB_${suffix}`;
-}
-
 const DISCORD_SNOWFLAKE = /^\d{17,20}$/;
 
-/** Resolve `JOB_*` snowflake (same keys as `bot/utils/memberJobRolesSync.js`). */
-function jobRoleIdFromEnv(jobName: string): string | null {
-  const key = jobNameToRoleEnvKey(jobName.trim());
-  const raw = process.env[key];
-  const id = typeof raw === "string" ? raw.trim() : "";
-  if (!id || !DISCORD_SNOWFLAKE.test(id)) return null;
-  return id;
-}
-
 function roleMentionFromJobName(jobName: string): string | null {
-  const id = jobRoleIdFromEnv(jobName);
+  const id = jobNameToRoleSnowflake(jobName);
   return id ? `<@&${id}>` : null;
 }
 
@@ -54,7 +41,7 @@ function jobRoleIdsFromSnapshot(jobs: string[] | undefined): string[] {
   const out: string[] = [];
   const seen = new Set<string>();
   for (const job of jobs ?? []) {
-    const id = jobRoleIdFromEnv(job);
+    const id = jobNameToRoleSnowflake(String(job));
     if (id && !seen.has(id)) {
       seen.add(id);
       out.push(id);
@@ -67,7 +54,7 @@ function jobRoleIdsFromSnapshot(jobs: string[] | undefined): string[] {
 function openCommissionPingRoleIds(jobs: string[] | undefined): string[] {
   const out = jobRoleIdsFromSnapshot(jobs);
   const seen = new Set(out);
-  const artistId = jobRoleIdFromEnv("Artist");
+  const artistId = jobNameToRoleSnowflake("Artist");
   if (artistId && !seen.has(artistId)) {
     seen.add(artistId);
     out.push(artistId);
@@ -155,7 +142,7 @@ export function buildCraftingBoardPingContent(payload: CraftingRequestNotifyPayl
   const pushJobRoles = () => {
     const seenRole = new Set<string>();
     for (const job of payload.craftingJobsSnapshot ?? []) {
-      const mention = roleMentionFromJobName(job);
+      const mention = roleMentionFromJobName(String(job));
       if (mention && !seenRole.has(mention)) {
         seenRole.add(mention);
         parts.push(mention);
@@ -183,11 +170,11 @@ export function buildCraftingBoardPingContent(payload: CraftingRequestNotifyPayl
 }
 
 /**
- * Clickable slash mention when `DISCORD_COMMAND_ID_CRAFTING` is set (guild command id for `/crafting` from Discord).
- * Register the same env on the dashboard as the bot so pings/embeds stay valid after redeploys.
+ * Clickable slash mention when the parent `/crafting` guild command id is known (from API or `DISCORD_COMMAND_ID_CRAFTING`).
  */
-function craftingAcceptSlashMention(): string {
-  const raw = process.env.DISCORD_COMMAND_ID_CRAFTING?.trim();
+function craftingAcceptSlashMention(craftingParentCommandId?: string | null): string {
+  const raw =
+    (craftingParentCommandId?.trim() || process.env.DISCORD_COMMAND_ID_CRAFTING?.trim()) ?? "";
   if (raw && DISCORD_SNOWFLAKE.test(raw)) {
     return `</crafting accept:${raw}>`;
   }
@@ -205,7 +192,8 @@ function clip(s: string, max: number): string {
 /** Body for create / edit Discord board posts (stable banner per request id). */
 export function buildCraftingRequestBoardMessage(
   payload: CraftingRequestNotifyPayload,
-  embedTitle: string = EMBED_TITLE_NEW
+  embedTitle: string = EMBED_TITLE_NEW,
+  craftingParentCommandId?: string | null
 ): {
   content: string;
   embeds: Record<string, unknown>[];
@@ -327,7 +315,7 @@ export function buildCraftingRequestBoardMessage(
     ? `${boardUrl}?request=${encodeURIComponent(publicIdForEmbed)}`
     : boardUrl;
 
-  const slashMention = craftingAcceptSlashMention();
+  const slashMention = craftingAcceptSlashMention(craftingParentCommandId);
 
   descParts.push("");
   descParts.push("🧭 **How to accept**");
@@ -413,14 +401,15 @@ export async function notifyCraftingRequestCreated(
     return null;
   }
 
-  const body = buildCraftingRequestBoardMessage(payload);
+  const craftingCmdId = await getCraftingCommandId();
+  const body = buildCraftingRequestBoardMessage(payload, EMBED_TITLE_NEW, craftingCmdId);
   if (
     isOpenCallForJobPings(payload) &&
     (payload.craftingJobsSnapshot?.length ?? 0) > 0 &&
     jobRoleIdsFromSnapshot(payload.craftingJobsSnapshot).length === 0
   ) {
     console.warn(
-      "[craftingRequestsNotify] Open commission has recipe jobs but no JOB_* role IDs resolved — add e.g. JOB_ARTIST=<role snowflake> to the dashboard env (same as the bot)."
+      "[craftingRequestsNotify] Open commission has recipe jobs but no JOB_* role IDs resolved — set JOB_COOK (etc.) and JOB_ARTIST in the dashboard env to 17–20 digit role snowflakes (same values as the bot); restart after editing .env."
     );
   }
   const result = await discordApiRequest<{ id: string }>(
@@ -440,9 +429,11 @@ export async function syncCraftingRequestBoardMessage(
   if (!COMMUNITY_BOARD_CHANNEL_ID || !discordMessageId?.trim()) {
     return false;
   }
+  const craftingCmdId = await getCraftingCommandId();
   const { content, embeds: built, allowed_mentions } = buildCraftingRequestBoardMessage(
     payload,
-    EMBED_TITLE_UPDATED
+    EMBED_TITLE_UPDATED,
+    craftingCmdId
   );
   const embeds = built;
   const result = await discordApiRequest(

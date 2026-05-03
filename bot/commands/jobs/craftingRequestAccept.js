@@ -123,6 +123,12 @@ async function runWorkshopCraftingAccept({
   const characterName = String(characterNameRaw || '').trim();
 
   if (!isValidRequestLookupToken(requestToken)) {
+    logger.warn(
+      sourceTag,
+      `[CRAFT_ACCEPT_INVALID_TOKEN] acceptor=${acceptorDiscordId} tokenLen=${requestToken.length} token=${JSON.stringify(
+        requestToken
+      )} (expected K + 6 digits, or 24-char hex ObjectId)`
+    );
     return new EmbedBuilder()
       .setColor(0xe74c3c)
       .setTitle('Invalid request id')
@@ -141,6 +147,19 @@ async function runWorkshopCraftingAccept({
 
   const reqDoc = await findCraftingRequestForAccept(requestToken);
   if (!reqDoc || reqDoc.status !== 'open') {
+    const isOid = isMongoObjectId24(requestToken);
+    const codeNorm = normalizeWorkshopCommissionCode(requestToken);
+    const lookupMode = isOid ? 'byObjectId' : codeNorm ? `byCommissionID:${codeNorm}` : 'unknown';
+    const reason = !reqDoc ? 'not_found_in_db' : `wrong_status:${reqDoc.status}`;
+    const detail = reqDoc
+      ? `docId=${String(reqDoc._id)} storedCommissionID=${reqDoc.commissionID ?? 'null'} status=${reqDoc.status}`
+      : 'no_matching_document';
+    logger.warn(
+      sourceTag,
+      `[CRAFT_ACCEPT_UNAVAILABLE] reason=${reason} lookupMode=${lookupMode} ${detail} token=${JSON.stringify(
+        requestToken
+      )} acceptor=${acceptorDiscordId}`
+    );
     return new EmbedBuilder()
       .setColor(0xe74c3c)
       .setTitle('Commission not available')

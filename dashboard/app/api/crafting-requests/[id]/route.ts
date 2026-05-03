@@ -4,6 +4,7 @@ import { getSession } from "@/lib/session";
 import mongoose from "mongoose";
 import {
   CraftingRequestRouteDocument,
+  ensureCraftingRequestCommissionId,
   findCraftingRequestDocumentByRouteId,
   parseStaminaToCraft,
 } from "@/lib/crafting-request-helpers";
@@ -41,6 +42,11 @@ export async function PATCH(request: Request, context: RouteContext) {
     if (!reqDoc) {
       return NextResponse.json({ error: "Request not found" }, { status: 404 });
     }
+    const pubCommissionId = await ensureCraftingRequestCommissionId(CraftingRequest, {
+      _id: reqDoc._id,
+      commissionID: reqDoc.commissionID ?? null,
+    });
+    reqDoc.commissionID = pubCommissionId;
     const id = String(reqDoc._id);
     if (reqDoc.requesterDiscordId !== user.id) {
       return NextResponse.json({ error: "Only the requester can edit this" }, { status: 403 });

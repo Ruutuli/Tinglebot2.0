@@ -6,6 +6,7 @@ import { getSession } from "@/lib/session";
 import mongoose from "mongoose";
 import {
   CraftingRequestRouteDocument,
+  ensureCraftingRequestCommissionId,
   findCraftingRequestDocumentByRouteId,
   loadCharacterIconForOwner,
   loadCharacterUnionByIdForOwner,
@@ -58,6 +59,11 @@ export async function POST(request: Request, context: RouteContext) {
     if (!reqDoc) {
       return NextResponse.json({ error: "Request not found" }, { status: 404 });
     }
+    const pubCommissionId = await ensureCraftingRequestCommissionId(CraftingRequest, {
+      _id: reqDoc._id,
+      commissionID: reqDoc.commissionID ?? null,
+    });
+    reqDoc.commissionID = pubCommissionId;
     const id = String(reqDoc._id);
     if (reqDoc.status !== "open") {
       return NextResponse.json({ error: "This request is no longer open" }, { status: 400 });

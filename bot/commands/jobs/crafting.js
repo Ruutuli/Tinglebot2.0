@@ -125,6 +125,7 @@ module.exports = {
             .setName('request_id')
             .setDescription('Workshop code (K + 6 digits) or legacy 24-character id from the board / URL')
             .setRequired(true)
+            .setAutocomplete(true)
             .setMinLength(7)
             .setMaxLength(24)
         )

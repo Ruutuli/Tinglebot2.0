@@ -1,5 +1,6 @@
 import mongoose from "mongoose";
 import { leanOne } from "@/lib/mongoose-lean";
+import { generateUniqueId } from "@/lib/uniqueId";
 
 /** Mongoose CraftingRequest document — API routes cast `find*` results so TS sees fields (not bare `Document`). */
 export type CraftingRequestRouteDocument = mongoose.Document & {
@@ -344,6 +345,86 @@ export function normalizeCraftingCommissionID(raw: string): string | null {
   const t = String(raw ?? "").trim();
   if (!/^[A-Za-z][0-9]{6}$/.test(t)) return null;
   return t.charAt(0).toUpperCase() + t.slice(1);
+}
+
+type LeanCraftingCommissionRow = {
+  _id: unknown;
+  commissionID?: string | null;
+};
+
+type CraftingRequestModelForCommissionId = {
+  findById(id: unknown): {
+    select(sel: string): { lean(): Promise<LeanCraftingCommissionRow | null> };
+  };
+  findOneAndUpdate(
+    filter: Record<string, unknown>,
+    update: Record<string, unknown>,
+    options: { new: boolean; lean: boolean }
+  ): Promise<LeanCraftingCommissionRow | null>;
+};
+
+/**
+ * Legacy rows may lack `commissionID`. Assign and persist a public **K######** code (same as POST create).
+ */
+export async function ensureCraftingRequestCommissionId(
+  CraftingRequest: CraftingRequestModelForCommissionId,
+  doc: LeanCraftingCommissionRow
+): Promise<string> {
+  const existing =
+    typeof doc.commissionID === "string" && doc.commissionID.trim()
+      ? doc.commissionID.trim()
+      : "";
+  if (existing) return existing;
+
+  for (let attempt = 0; attempt < 12; attempt++) {
+    const candidate = generateUniqueId("K");
+    try {
+      const updated = await CraftingRequest.findOneAndUpdate(
+        {
+          _id: doc._id,
+          $or: [
+            { commissionID: null },
+            { commissionID: { $exists: false } },
+            { commissionID: "" },
+          ],
+        },
+        { $set: { commissionID: candidate } },
+        { new: true, lean: true }
+      );
+      const cid =
+        updated &&
+        typeof updated === "object" &&
+        typeof (updated as LeanCraftingCommissionRow).commissionID === "string"
+          ? String((updated as LeanCraftingCommissionRow).commissionID).trim()
+          : "";
+      if (cid) return cid;
+    } catch (e: unknown) {
+      const code =
+        typeof e === "object" && e !== null && "code" in e
+          ? (e as { code?: number }).code
+          : undefined;
+      if (code !== 11000) throw e;
+    }
+    const refetch = await CraftingRequest.findById(doc._id).select("commissionID").lean();
+    const rid =
+      refetch &&
+      typeof refetch === "object" &&
+      typeof (refetch as LeanCraftingCommissionRow).commissionID === "string"
+        ? String((refetch as LeanCraftingCommissionRow).commissionID).trim()
+        : "";
+    if (rid) return rid;
+  }
+
+  const last = await CraftingRequest.findById(doc._id).select("commissionID").lean();
+  const finalId =
+    last &&
+    typeof last === "object" &&
+    typeof (last as LeanCraftingCommissionRow).commissionID === "string"
+      ? String((last as LeanCraftingCommissionRow).commissionID).trim()
+      : "";
+  if (finalId) return finalId;
+
+  throw new Error("[ensureCraftingRequestCommissionId] Could not assign a commission ID");
 }
 
 type CraftingRequestQueryModel = {

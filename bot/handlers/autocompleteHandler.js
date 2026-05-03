@@ -512,7 +512,9 @@ async function handleAutocompleteInternal(interaction, commandName, focusedOptio
                 await handleCraftBrewElixirAutocomplete(interaction, focusedOption);
               }
             } else if (craftingSub === "accept") {
-              if (focusedOption.name === "charactername") {
+              if (focusedOption.name === "request_id") {
+                await handleCraftingAcceptRequestIdAutocomplete(interaction, focusedOption);
+              } else if (focusedOption.name === "charactername") {
                 await handleCharacterBasedCommandsAutocomplete(interaction, focusedOption, "crafting");
               }
             } else {
@@ -2126,6 +2128,59 @@ async function handleCraftingAutocomplete(interaction, focusedOption) {
   } catch (error) {
     handleError(error, "autocompleteHandler.js");
     await safeAutocompleteResponse(interaction, []);
+  }
+}
+
+// ------------------- /crafting accept — open commission request_id autocomplete -------------------
+async function handleCraftingAcceptRequestIdAutocomplete(interaction, focusedOption) {
+  try {
+    if (!isValidInteraction(interaction)) {
+      return;
+    }
+
+    await DatabaseConnectionManager.connectToTinglebot();
+    const CraftingRequest = require("@/models/CraftingRequestModel");
+
+    const rows = await CraftingRequest.find({ status: "open" })
+      .sort({ createdAt: -1 })
+      .limit(40)
+      .select({
+        commissionID: 1,
+        craftItemName: 1,
+        requesterCharacterName: 1,
+        staminaToCraftSnapshot: 1,
+        craftingJobsSnapshot: 1,
+      })
+      .lean();
+
+    const choices = rows.map((r) => {
+      const id =
+        typeof r.commissionID === "string" && r.commissionID.trim()
+          ? r.commissionID.trim()
+          : String(r._id);
+      const item = String(r.craftItemName || "").trim() || "Item";
+      const forName = String(r.requesterCharacterName || "").trim() || "OC";
+      const st = r.staminaToCraftSnapshot != null ? Number(r.staminaToCraftSnapshot) : 0;
+      const jobs = Array.isArray(r.craftingJobsSnapshot)
+        ? r.craftingJobsSnapshot
+            .slice(0, 2)
+            .map((j) => String(j).trim())
+            .filter(Boolean)
+            .join(", ")
+        : "";
+      const jobsBit = jobs ? ` · ${jobs}` : "";
+      const name = `${id} | ${item} | ${forName}${jobsBit} · ${st} st`;
+      return { name, value: id };
+    });
+
+    await respondWithFilteredChoices(interaction, focusedOption, choices);
+  } catch (error) {
+    handleError(error, "autocompleteHandler.js");
+    console.error(
+      "[autocompleteHandler.js]❌ Error in handleCraftingAcceptRequestIdAutocomplete:",
+      error
+    );
+    await safeRespondWithError(interaction, error);
   }
 }
 

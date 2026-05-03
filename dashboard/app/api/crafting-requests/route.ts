@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { connect } from "@/lib/db";
 import { getSession } from "@/lib/session";
 import mongoose from "mongoose";
-import { parseStaminaToCraft } from "@/lib/crafting-request-helpers";
+import { ensureCraftingRequestCommissionId, parseStaminaToCraft } from "@/lib/crafting-request-helpers";
 import {
   craftingRequestNotifyPayloadForDiscord,
   validateCraftingRequestBody,
@@ -75,6 +75,16 @@ export async function GET(request: Request) {
 
     const requests = await Promise.all(
       rows.map(async (r) => {
+        let commissionID =
+          typeof r.commissionID === "string" && r.commissionID.trim()
+            ? r.commissionID.trim()
+            : "";
+        if (!commissionID) {
+          commissionID = await ensureCraftingRequestCommissionId(CraftingRequest, {
+            _id: r._id,
+            commissionID: r.commissionID ?? null,
+          });
+        }
         const id = r.craftItemMongoId != null ? String(r.craftItemMongoId) : "";
         const craftItemImage = id ? imageByItemId.get(id) : undefined;
         let requesterCurrentVillage: string | null = null;
@@ -87,7 +97,7 @@ export async function GET(request: Request) {
         } catch {
           requesterCurrentVillage = null;
         }
-        return { ...r, craftItemImage, requesterCurrentVillage };
+        return { ...r, commissionID, craftItemImage, requesterCurrentVillage };
       })
     );
 

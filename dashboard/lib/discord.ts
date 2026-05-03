@@ -566,6 +566,39 @@ export async function getExploreCommandId(): Promise<string> {
   return EXPLORE_CMD_ID_FALLBACK;
 }
 
+let craftingCmdIdCache: { id: string; expiresAt: number } | null = null;
+const CRAFTING_CMD_CACHE_TTL_MS = 60 * 60 * 1000; // 1 hour
+
+/**
+ * Fetch the /crafting command ID from Discord for clickable slash mentions (e.g. `</crafting accept:id>`).
+ * Falls back to `DISCORD_COMMAND_ID_CRAFTING` when the API is unavailable (same role as explore's fallback).
+ */
+export async function getCraftingCommandId(): Promise<string> {
+  const envFallback = process.env.DISCORD_COMMAND_ID_CRAFTING?.trim() || "";
+  const clientId = process.env.CLIENT_ID || process.env.DISCORD_CLIENT_ID;
+  const guildId = process.env.GUILD_ID;
+  if (!clientId || !guildId) return envFallback;
+
+  const now = Date.now();
+  if (craftingCmdIdCache && craftingCmdIdCache.expiresAt > now) {
+    return craftingCmdIdCache.id;
+  }
+
+  const commands = await discordApiRequest<Array<{ id: string; name: string }>>(
+    `applications/${clientId}/guilds/${guildId}/commands`,
+    "GET"
+  );
+  const crafting = commands?.find((c) => c.name === "crafting");
+  if (crafting?.id) {
+    craftingCmdIdCache = {
+      id: crafting.id,
+      expiresAt: now + CRAFTING_CMD_CACHE_TTL_MS,
+    };
+    return crafting.id;
+  }
+  return envFallback;
+}
+
 /**
  * Add a role to a guild member. Returns the Discord API error message on failure
  * so callers can log it (e.g. role hierarchy, missing permission).
