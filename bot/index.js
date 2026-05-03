@@ -1476,6 +1476,47 @@ async function initializeClient() {
         return;
       }
 
+      // Dashboard → bot: complete workshop commission craft (dashboard deploy has no bot/ folder)
+      if (req.method === 'POST' && pathOnly === '/internal/workshop-commission-craft') {
+        const secret = process.env.BOT_INTERNAL_API_SECRET;
+        const headerSecret = req.headers['x-bot-internal-secret'];
+        if (!secret || headerSecret !== secret) {
+          res.writeHead(403, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ ok: false, error: 'Forbidden' }));
+          return;
+        }
+        let body = '';
+        req.on('data', (chunk) => { body += chunk; });
+        req.on('end', async () => {
+          try {
+            const payload = JSON.parse(body || '{}');
+            const { executeWorkshopCommissionCraft } = require('./services/workshopCommissionCraft');
+            const result = await executeWorkshopCommissionCraft({
+              crafterUserId: payload.crafterUserId,
+              crafterCharacterId: payload.crafterCharacterId,
+              commissionerDiscordId: payload.commissionerDiscordId,
+              commissionerCharacterName: payload.commissionerCharacterName,
+              craftItemName: payload.craftItemName,
+              elixirTier: payload.elixirTier ?? null,
+              elixirMaterialSelections: Array.isArray(payload.elixirMaterialSelections)
+                ? payload.elixirMaterialSelections
+                : [],
+            });
+            res.writeHead(200, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify(result));
+          } catch (err) {
+            logger.error('INTERNAL', `workshop-commission-craft: ${err.message}`);
+            res.writeHead(500, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({
+              ok: false,
+              code: 'EXECUTION',
+              error: err.message || 'Internal error',
+            }));
+          }
+        });
+        return;
+      }
+
       // Log all healthcheck requests for debugging
       if (pathOnly === '/health' || pathOnly === '/healthcheck') {
         logger.info('HEALTHCHECK', `Healthcheck request received from ${req.headers['user-agent'] || 'unknown'}`);

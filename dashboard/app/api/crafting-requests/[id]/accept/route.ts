@@ -5,9 +5,7 @@ import mongoose from "mongoose";
 import { loadCharacterUnionByIdForOwner } from "@/lib/crafting-request-helpers";
 import { getCraftItemByName } from "@/lib/crafting-request-mutation";
 import { notifyCraftingRequestAccepted } from "@/lib/craftingRequestsNotify";
-
-// eslint-disable-next-line @typescript-eslint/no-require-imports
-const { executeWorkshopCommissionCraft } = require("../../../../../../bot/services/workshopCommissionCraft.js");
+import { getBotInternalApiConfig } from "@/lib/config";
 
 export const dynamic = "force-dynamic";
 
@@ -129,15 +127,45 @@ export async function POST(request: Request, context: RouteContext) {
             })
           )
         : [];
-      craftResult = await executeWorkshopCommissionCraft({
-        crafterUserId: user.id,
-        crafterCharacterId: acceptorCharacterId,
-        commissionerDiscordId: reserved.requesterDiscordId,
-        commissionerCharacterName: reserved.requesterCharacterName,
-        craftItemName: reserved.craftItemName,
-        elixirTier: reserved.elixirTier ?? null,
-        elixirMaterialSelections: elixirSels,
+
+      const { baseUrl: botBase, secret, isConfigured } = getBotInternalApiConfig();
+      if (!isConfigured || !botBase || !secret) {
+        await revertToOpen();
+        return NextResponse.json(
+          {
+            error:
+              "Commission crafting runs on the Discord bot service. Set BOT_INTERNAL_API_URL and BOT_INTERNAL_API_SECRET to your bot’s base URL and shared secret (same as admin submission approvals).",
+            code: "BOT_INTERNAL_API_NOT_CONFIGURED",
+          },
+          { status: 503 }
+        );
+      }
+
+      const craftRes = await fetch(`${botBase}/internal/workshop-commission-craft`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "x-bot-internal-secret": secret,
+        },
+        body: JSON.stringify({
+          crafterUserId: user.id,
+          crafterCharacterId: acceptorCharacterId,
+          commissionerDiscordId: reserved.requesterDiscordId,
+          commissionerCharacterName: reserved.requesterCharacterName,
+          craftItemName: reserved.craftItemName,
+          elixirTier: reserved.elixirTier ?? null,
+          elixirMaterialSelections: elixirSels,
+        }),
       });
+
+      craftResult = (await craftRes.json()) as typeof craftResult;
+      if (!craftRes.ok && typeof craftResult?.ok !== "boolean") {
+        await revertToOpen();
+        return NextResponse.json(
+          { error: "Bot craft service returned an error; commission was re-opened.", status: craftRes.status },
+          { status: 502 }
+        );
+      }
     } catch (craftErr) {
       await revertToOpen();
       console.error("[crafting-requests accept] craft threw:", craftErr);

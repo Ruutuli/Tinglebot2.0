@@ -75,8 +75,9 @@ export function getDiscordRedirectUri(request?: NextRequest): string {
 }
 
 /**
- * Bot HTTP server (see bot/index.js) exposes POST /internal/pending-submissions on the same
- * port as /health. The dashboard must call it to approve/deny from the admin UI.
+ * Bot HTTP server (see bot/index.js) exposes POST /internal/pending-submissions and
+ * POST /internal/workshop-commission-craft on the same port as /health. The dashboard
+ * calls them for admin approvals and accepting workshop crafting commissions.
  * Set the same BOT_INTERNAL_API_SECRET on both dashboard and bot; URL is the bot's base (no path).
  * Must be the **bot** process public URL (GET /health must work), not the dashboard or main website
  * domain. If you point at the wrong host, /internal/pending-submissions will 404.

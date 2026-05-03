@@ -66,7 +66,7 @@ export async function GET(request: Request) {
 
     const rows = await collection.find({ characterId: charId }).toArray();
 
-    const stacks: Array<{ _id: string; itemName: string; quantity: number }> = [];
+    let stacks: Array<{ _id: string; itemName: string; quantity: number }> = [];
     for (const row of rows) {
       const q = Number(row.quantity);
       if (!Number.isFinite(q) || q <= 0) continue;
