@@ -50,20 +50,8 @@ function jobRoleIdsFromSnapshot(jobs: string[] | undefined): string[] {
   return out;
 }
 
-/** Recipe job roles + optional Artist role (`JOB_ARTIST`) for open-call commissions. */
-function openCommissionPingRoleIds(jobs: string[] | undefined): string[] {
-  const out = jobRoleIdsFromSnapshot(jobs);
-  const seen = new Set(out);
-  const artistId = jobNameToRoleSnowflake("Artist");
-  if (artistId && !seen.has(artistId)) {
-    seen.add(artistId);
-    out.push(artistId);
-  }
-  return out;
-}
-
 /**
- * Ping recipe job roles (+ Artist) when the commission is not locked to one named crafter.
+ * Ping recipe job roles only (`JOB_*` matching the item’s crafting jobs) when the commission is not locked to one named crafter.
  * Open board posts, or "specific" rows missing a resolved target owner, behave like an open call.
  */
 function isOpenCallForJobPings(payload: CraftingRequestNotifyPayload): boolean {
@@ -94,7 +82,7 @@ function allowedMentionsForBoardMessage(payload: CraftingRequestNotifyPayload): 
     if (tid !== payload.requesterDiscordId) pushUser(tid);
   }
   const roleIds = isOpenCallForJobPings(payload)
-    ? openCommissionPingRoleIds(payload.craftingJobsSnapshot)
+    ? jobRoleIdsFromSnapshot(payload.craftingJobsSnapshot)
     : [];
 
   const out: Record<string, unknown> = {};
@@ -134,7 +122,7 @@ export type CraftingRequestNotifyPayload = {
 
 /**
  * Message content pings: always the requester; named commission also pings the requested crafter;
- * open calls (no locked artisan) also ping `JOB_*` roles for each recipe job (+ Artist when configured).
+ * open calls (no locked artisan) ping `JOB_*` roles for each recipe job on the item only.
  */
 export function buildCraftingBoardPingContent(payload: CraftingRequestNotifyPayload): string {
   const parts: string[] = [`<@${payload.requesterDiscordId}>`];
@@ -160,10 +148,6 @@ export function buildCraftingBoardPingContent(payload: CraftingRequestNotifyPayl
     }
   } else if (isOpenCallForJobPings(payload)) {
     pushJobRoles();
-    const artistMention = roleMentionFromJobName("Artist");
-    if (artistMention && !parts.includes(artistMention)) {
-      parts.push(artistMention);
-    }
   }
 
   return parts.join(" ");
@@ -409,7 +393,7 @@ export async function notifyCraftingRequestCreated(
     jobRoleIdsFromSnapshot(payload.craftingJobsSnapshot).length === 0
   ) {
     console.warn(
-      "[craftingRequestsNotify] Open commission has recipe jobs but no JOB_* role IDs resolved — set JOB_COOK (etc.) and JOB_ARTIST in the dashboard env to 17–20 digit role snowflakes (same values as the bot); restart after editing .env."
+      "[craftingRequestsNotify] Open commission has recipe jobs but no JOB_* role IDs resolved — set JOB_COOK (etc.) for each recipe job in the dashboard env to 17–20 digit role snowflakes (same values as the bot); restart after editing .env."
     );
   }
   const result = await discordApiRequest<{ id: string }>(

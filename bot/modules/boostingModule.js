@@ -1077,11 +1077,37 @@ function applyScholarVendingBoost(allInventories) {
 // ------------------- Core Boost Functions -------------------
 // ============================================================================
 
+/** Align category strings with boostingEffects keys (Crafting, Healers, …). */
+function normalizeBoostEffectCategory(category) {
+ if (category == null || category === '') return category;
+ const s = String(category).trim();
+ if (!s) return category;
+ const lower = s.toLowerCase();
+ const map = {
+  crafting: 'Crafting',
+  gathering: 'Gathering',
+  healers: 'Healers',
+  healer: 'Healers',
+  healing: 'Healers',
+  exploring: 'Exploring',
+  looting: 'Looting',
+  mounts: 'Mounts',
+  stealing: 'Stealing',
+  tokens: 'Tokens',
+  traveling: 'Traveling',
+  vending: 'Vending',
+  other: 'Other',
+ };
+ return map[lower] || s.charAt(0).toUpperCase() + s.slice(1).toLowerCase();
+}
+
 function getBoostEffect(job, category) {
- const normalizedJob = normalizeJobName(job);
+ if (job == null || String(job).trim() === '') return null;
+ const normalizedJob = normalizeJobName(String(job).trim());
  const jobBoosts = boostingEffects[normalizedJob];
  if (!jobBoosts) return null;
- const boost = jobBoosts[category];
+ const cat = normalizeBoostEffectCategory(category);
+ const boost = jobBoosts[cat] ?? jobBoosts[category];
  return boost || null;
 }
 
@@ -1116,11 +1142,18 @@ async function applyBoostEffect(job, category, data, additionalData = null, boos
  }
 
  const normalizedJob = normalizeJobName(actualJob);
+ const effectCategory = normalizeBoostEffectCategory(category);
 
  // Fortune Teller boosts
  if (normalizedJob === "Fortune Teller") {
-  switch (category) {
-   case "Crafting": return applyFortuneTellerCraftingBoost(data);
+  switch (effectCategory) {
+   case "Crafting":
+    // Crafting stamina passes through applyCraftingStaminaBoost with { type: 'stamina' };
+    // FT "Crafting" effect is token pricing at sale — do not modify stamina costs.
+    if (additionalData && additionalData.type === "stamina") {
+     return data;
+    }
+    return applyFortuneTellerCraftingBoost(data);
    case "Exploring": return applyFortuneTellerExploringBoost(data);
    case "Gathering": return applyFortuneTellerGatheringBoost(data);
    case "Healers": return applyFortuneTellerHealingBoost(data);
@@ -1137,7 +1170,7 @@ async function applyBoostEffect(job, category, data, additionalData = null, boos
 
  // Teacher boosts
  if (normalizedJob === "Teacher") {
-  switch (category) {
+  switch (effectCategory) {
    case "Crafting": return applyTeacherCraftingBoost(data);
    case "Exploring": return applyTeacherExploringBoost(data);
    case "Gathering": return applyTeacherGatheringBoost(data);
@@ -1154,7 +1187,7 @@ async function applyBoostEffect(job, category, data, additionalData = null, boos
 
  // Priest boosts
 if (normalizedJob === "Priest") {
-  switch (category) {
+  switch (effectCategory) {
    case "Crafting": return applyPriestCraftingBoost(data, additionalData);
    case "Exploring": return applyPriestExploringBoost(data);
    case "Gathering": return await applyPriestGatheringBoost(data);
@@ -1171,12 +1204,12 @@ if (normalizedJob === "Priest") {
 
  // Entertainer boosts
  if (normalizedJob === "Entertainer") {
-  const entertainerBoost = boostingEffects[normalizedJob][category];
+  const entertainerBoost = boostingEffects[normalizedJob][effectCategory];
   if (entertainerBoost && entertainerBoost.passive) {
-   logger.info('BOOST', `Entertainer passive boost "${category}" acknowledged; no active effect applied.`);
+   logger.info('BOOST', `Entertainer passive boost "${effectCategory}" acknowledged; no active effect applied.`);
    return data;
   }
-  switch (category) {
+  switch (effectCategory) {
    case "Crafting": return applyEntertainerCraftingBoost(data, additionalData);
    case "Exploring": return applyEntertainerExploringBoost(data);
    case "Gathering": return await applyEntertainerGatheringBoost(data);
@@ -1194,7 +1227,7 @@ if (normalizedJob === "Priest") {
 
  // Scholar boosts
  if (normalizedJob === "Scholar") {
-  switch (category) {
+  switch (effectCategory) {
    case "Crafting": return applyScholarCraftingBoost(data, additionalData);
    case "Exploring": return applyScholarExploringBoost(data);
    case "Gathering": return applyScholarGatheringBoost(data, additionalData);

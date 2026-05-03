@@ -796,6 +796,12 @@ async function retrieveBoostingRequestFromTempDataByBooster(boosterCharacterName
 // ------------------- Boost Utility Functions -------------------
 // ============================================================================
 
+function boostCategoriesMatch(stored, requested) {
+  const a = String(stored ?? "").trim().toLowerCase();
+  const b = String(requested ?? "").trim().toLowerCase();
+  return a !== "" && a === b;
+}
+
 async function isBoostActive(characterName, category) {
  const activeBoost = await retrieveBoostingRequestFromTempDataByCharacter(characterName);
 
@@ -803,7 +809,7 @@ async function isBoostActive(characterName, category) {
   return false;
  }
 
- if (activeBoost.category !== category) {
+ if (!boostCategoriesMatch(activeBoost.category, category)) {
   return false;
  }
 
@@ -824,8 +830,16 @@ async function getActiveBoostEffect(characterName, category) {
  if (activeBoost?.isDevOverride) {
   return getBoostEffect(activeBoost.boosterJob, category);
  }
- const boosterCharacter = await fetchCharacterByName(activeBoost.boostingCharacter);
+ const boosterCharacter = await fetchCharacterByNameWithFallback(activeBoost.boostingCharacter);
  if (!boosterCharacter) {
+  const storedJob = activeBoost.boosterJob != null ? String(activeBoost.boosterJob).trim() : '';
+  if (storedJob) {
+   logger.warn(
+    'BOOST',
+    `Booster "${activeBoost.boostingCharacter}" not in DB — using stored boosterJob "${storedJob}" for effect lookup (${characterName})`
+   );
+   return getBoostEffect(storedJob, category);
+  }
   logger.error('BOOST', `Could not find booster character "${activeBoost.boostingCharacter}"`);
   return null;
  }
@@ -3019,7 +3033,7 @@ async function clearBoostAfterUse(character, options = {}) {
   if (activeBoost?.isDevOverride) {
     logger.info(
       'BOOST',
-      `Dev boost override for ${character.name} — not consuming${context ? ` (${context})` : ''}`
+      `Dev boost override for ${character.name} — boost stays active after use (test mode); effects still apply${context ? ` (${context})` : ''}`
     );
     return { success: true, cleared: false };
   }
@@ -3110,6 +3124,7 @@ module.exports.retrieveBoostingRequestFromTempDataByBooster = retrieveBoostingRe
 module.exports.saveBoostingRequestToTempData = saveBoostingRequestToTempData;
 module.exports.retrieveBoostingRequestFromTempData = retrieveBoostingRequestFromTempData;
 module.exports.clearBoostAfterUse = clearBoostAfterUse;
+module.exports.boostCategoriesMatch = boostCategoriesMatch;
 
 // Helper to update the 'Boost Applied' embed when status changes
 module.exports.updateBoostAppliedMessage = async function updateBoostAppliedMessage(client, requestData) {

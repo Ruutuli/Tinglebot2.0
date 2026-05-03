@@ -48,6 +48,7 @@ const {
   isBoosterUsingVoucherForJob,
   isBoostActive,
   retrieveBoostingRequestFromTempDataByCharacter,
+  boostCategoriesMatch,
 } = require('../commands/jobs/boosting');
 
 const { addItemInventoryDatabase, processMaterials } = require('../utils/inventoryUtils');
@@ -169,7 +170,7 @@ function isDevBoostPlaceholderBoosterName(name) {
 
 function isWorkshopCraftingBoostActive(activeBoost) {
   if (!activeBoost || activeBoost.status !== 'accepted') return false;
-  if (String(activeBoost.category || '').trim() !== 'Crafting') return false;
+  if (!boostCategoriesMatch(activeBoost.category, 'Crafting')) return false;
   const now = Date.now();
   if (activeBoost.boostExpiresAt && now > activeBoost.boostExpiresAt) return false;
   return true;
@@ -894,7 +895,7 @@ async function executeWorkshopCommissionCraft(opts) {
     const activeBoost = workshopBoostResolved;
     const isEntertainerCraftingBoost =
       activeBoost &&
-      activeBoost.category === 'Crafting' &&
+      boostCategoriesMatch(activeBoost.category, 'Crafting') &&
       (activeBoost.boosterJob || '').trim().toLowerCase() === 'entertainer';
     if (isEntertainerCraftingBoost && !activeBoost.isDevOverride && boosterCharacter) {
       const boosterIsNativeEntertainer =
