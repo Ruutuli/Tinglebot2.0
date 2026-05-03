@@ -3,7 +3,7 @@
 // External dependencies and internal modules
 // ============================================================================
 
-const { handleError } = require("./globalErrorHandler");
+const { handleError, InsufficientInventoryError } = require("./globalErrorHandler");
 const logger = require("./logger");
 const { parseOldMapNumberFromItemName, addOldMapToCharacter } = require("./oldMapUtils");
 const { getRandomOldMap } = require("../data/oldMaps.js");
@@ -705,7 +705,11 @@ async function removeItemInventoryDatabase(characterId, itemName, quantity, inte
         .setFooter({ text: 'Check your inventory and try again' })
         .setTimestamp();
 
-      throw new Error(`Not enough ${itemName} in inventory`);
+      throw new InsufficientInventoryError(itemName, {
+        required: quantity,
+        available: totalQuantity,
+        embed: errorEmbed,
+      });
     }
 
     logger.info('INVENTORY', `📊 Found ${totalQuantity} ${itemName} across ${inventoryEntries.length} entry/entries in ${character.name}'s inventory`);
@@ -761,8 +765,11 @@ async function removeItemInventoryDatabase(characterId, itemName, quantity, inte
         { returnDocument: 'after', sort: { _id: 1 } }
       );
       if (!doc) {
-        logger.error('INVENTORY', `Atomic removal: no document with qty>=1 for ${itemName} (removed ${removedCount}/${quantity})`);
-        throw new Error(`Not enough ${itemName} in inventory`);
+        logger.warn('INVENTORY', `Atomic removal: no document with qty>=1 for ${itemName} (removed ${removedCount}/${quantity})`);
+        throw new InsufficientInventoryError(itemName, {
+          required: quantity,
+          available: null,
+        });
       }
       removedCount++;
       if ((doc.quantity || 0) <= 0) {

@@ -68,6 +68,7 @@ const {
   handleError,
   initializeErrorHandler,
   initializeErrorTracking,
+  InsufficientInventoryError,
 } = require('@/utils/globalErrorHandler');
 
 
@@ -637,6 +638,29 @@ async function initializeClient() {
           try {
             await command.execute(interaction);
           } catch (error) {
+            if (error instanceof InsufficientInventoryError) {
+              try {
+                const payload = error.embed
+                  ? { embeds: [error.embed], ephemeral: true }
+                  : {
+                      content:
+                        `❌ Not enough **${error.itemName}** in inventory. Required: **${error.required}**, available: **${error.available ?? '?'}**.`,
+                      ephemeral: true,
+                    };
+                if (interaction.replied || interaction.deferred) {
+                  await interaction.followUp(payload);
+                } else {
+                  await interaction.reply(payload);
+                }
+              } catch (responseError) {
+                if (responseError.code === 10062 || responseError.code === 40060) {
+                  logger.warn('COMMAND', '[index.js]⚠️ Skipping insufficient-inventory reply: interaction invalid');
+                } else {
+                  logger.error('COMMAND', `[index.js]❌ Failed to send insufficient-inventory response: ${responseError.message}`);
+                }
+              }
+              return;
+            }
             handleError(error, 'index.js', {
               commandName: interaction.commandName,
               userTag: interaction.user?.tag,
@@ -1508,6 +1532,7 @@ async function initializeClient() {
               commissionerDiscordId: payload.commissionerDiscordId,
               commissionerCharacterName: payload.commissionerCharacterName,
               craftItemName: payload.craftItemName,
+              craftItemMongoId: payload.craftItemMongoId ?? null,
               elixirTier: payload.elixirTier ?? null,
               elixirMaterialSelections: Array.isArray(payload.elixirMaterialSelections)
                 ? payload.elixirMaterialSelections

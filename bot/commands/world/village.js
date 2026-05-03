@@ -11,7 +11,7 @@ const { fetchCharacterByName, fetchCharacterById, getOrCreateToken, updateTokenB
 // ============================================================================
 // ---- Utility Functions ----
 // ============================================================================
-const { handleInteractionError } = require('@/utils/globalErrorHandler');
+const { handleInteractionError, InsufficientInventoryError } = require('@/utils/globalErrorHandler');
 const { removeItemInventoryDatabase } = require('@/utils/inventoryUtils');
 const { recoverHearts, recoverStamina } = require('../../modules/characterStatsModule');
 
@@ -186,6 +186,16 @@ async function processContribution(village, interaction, type, itemName, qty, ch
         }
         return { success: false, message: '❌ **Invalid contribution type.**' };
     } catch (error) {
+        if (error instanceof InsufficientInventoryError) {
+            const msg =
+                `❌ **Not enough ${error.itemName} in inventory.**\n` +
+                `Required: **${error.required}** · Available: **${error.available ?? '?'}**`;
+            return {
+                success: false,
+                message: msg,
+                ...(error.embed ? { embed: error.embed } : {}),
+            };
+        }
         handleInteractionError(error, 'village.js');
         console.error('[processContribution] Error:', error);
         return { success: false, message: '❌ **An error occurred while processing your contribution.**' };
@@ -630,6 +640,16 @@ async function processImprove(village, interaction, type, itemName, qty, charact
         
         return { success: false, message: '❌ **Invalid contribution type for current village state.**' };
     } catch (error) {
+        if (error instanceof InsufficientInventoryError) {
+            const msg =
+                `❌ **Not enough ${error.itemName} in inventory.**\n` +
+                `Required: **${error.required}** · Available: **${error.available ?? '?'}**`;
+            return {
+                success: false,
+                message: msg,
+                ...(error.embed ? { embed: error.embed } : {}),
+            };
+        }
         handleInteractionError(error, 'village.js');
         console.error('[processImprove] Error:', error);
         return { success: false, message: '❌ **An error occurred while processing your contribution.**' };

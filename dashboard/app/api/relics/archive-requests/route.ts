@@ -194,7 +194,7 @@ export async function POST(request: NextRequest) {
     const relicMongoId = String(relic._id);
     const result = await gcsUploadService.uploadRelicImage(buffer, relicMongoId);
 
-    await RelicArchiveRequest.create({
+    const archiveDoc = await RelicArchiveRequest.create({
       relicId: relic.relicId || relicId,
       relicMongoId: relic._id,
       submitterUserId: user.id,
@@ -212,20 +212,31 @@ export async function POST(request: NextRequest) {
       libraryDisplaySize: size,
     });
 
-    notifyRelicArchiveRequest({
-      title,
-      relicId: relic.relicId || relicId,
-      discoveredBy,
-      appraisedBy,
-      region: region || undefined,
-      square: square || undefined,
-      quadrant: quadrant || undefined,
-      infoSnippet: effectiveInfo || undefined,
-      libraryPositionX,
-      libraryPositionY,
-      libraryDisplaySize: size,
-      imageUrl: result.url,
-    });
+    try {
+      const discordMeta = await notifyRelicArchiveRequest({
+        title,
+        relicId: relic.relicId || relicId,
+        discoveredBy,
+        appraisedBy,
+        region: region || undefined,
+        square: square || undefined,
+        quadrant: quadrant || undefined,
+        infoSnippet: effectiveInfo || undefined,
+        libraryPositionX,
+        libraryPositionY,
+        libraryDisplaySize: size,
+        imageUrl: result.url,
+      });
+      if (discordMeta?.messageId) {
+        await RelicArchiveRequest.findByIdAndUpdate(archiveDoc._id, {
+          discordNotificationMessageId: discordMeta.messageId,
+          discordNotificationChannelId: discordMeta.channelId,
+          updatedAt: new Date(),
+        });
+      }
+    } catch (discordErr) {
+      console.warn("[api/relics/archive-requests] Discord notify failed:", discordErr);
+    }
 
     return NextResponse.json({
       success: true,

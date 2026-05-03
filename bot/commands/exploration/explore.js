@@ -78,7 +78,7 @@ const {
 } = require("../../modules/elixirModule.js");
 const { isAprilFoolsEastern, toAprilFoolsLootObject } = require("@/utils/aprilFoolsRoll.js");
 const { finalizeBlightApplication } = require("../../handlers/blightHandler.js");
-const { partyHasRelic, consumeBlightCandleUse, partyHasLensOfTruthRelic, characterHasRelic, relicOwnerMatchQuery } = require('@/utils/relicUtils.js');
+const { partyHasRelic, consumeBlightCandleUse, partyHasLensOfTruthRelic, characterHasRelic, relicOwnerMatchQuery, relicExploreJoinBlockFilter } = require('@/utils/relicUtils.js');
 
 // ------------------- Utils ------------------
 const { handleInteractionError } = require('@/utils/globalErrorHandler.js');
@@ -1001,10 +1001,29 @@ function createDisabledYesNoRow(outcomeType, expeditionId, characterIndex, label
 
 // ------------------- grantExplorationChestLootToParty ------------------
 // Grant chest loot to all party members (no stamina cost). Used by handleExplorationChestOpen and map-led chest on move.
+// Relic from chest: only one eligible party member is picked per chest open; one relic roll for the whole party (not independent rolls per member).
 // Caller is responsible for turn advance (handleExplorationChestOpen) or not (map-led).
 async function grantExplorationChestLootToParty(party, location, interaction) {
  const allItems = await fetchAllItems();
  const lootLines = [];
+ const discoverySlotUsedForChest = partyDiscoverySlotUsed(party);
+ let relicAlreadyThisChestOpen = partyHasRelicDiscoveryThisExpedition(party);
+ let chestRelicDesignatedSlotIndex = null;
+ if (!discoverySlotUsedForChest && !relicAlreadyThisChestOpen && Array.isArray(party.characters)) {
+  const eligibleSlots = [];
+  for (let si = 0; si < party.characters.length; si++) {
+   const cDoc = await Character.findById(party.characters[si]._id);
+   if (!cDoc) continue;
+   if (await characterHasPendingRelic(cDoc)) continue;
+   if (await characterAlreadyFoundRelicThisExpedition(party, cDoc.name, cDoc._id)) continue;
+   eligibleSlots.push(si);
+  }
+  if (eligibleSlots.length > 0) {
+   chestRelicDesignatedSlotIndex = eligibleSlots[Math.floor(Math.random() * eligibleSlots.length)];
+  }
+ }
+ const chestRelicRollSucceeded =
+  chestRelicDesignatedSlotIndex !== null && Math.random() < EXPLORATION_CHEST_RELIC_CHANCE;
  const mapDmSentKeys = new Set();
  const sendChestMapDm = async (charDoc, mapItemName) => {
   try {
@@ -1034,10 +1053,12 @@ async function grantExplorationChestLootToParty(party, location, interaction) {
  const quadrantStr = String(party.quadrant || "").trim().toUpperCase();
  const mapSquareForChest = await Square.findOne({ squareId: new RegExp(`^${String(party.square || "").trim().replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}$`, "i") }).lean();
  const regionStr = mapSquareForChest?.region ?? "";
- for (const pc of party.characters) {
+ for (let si = 0; si < (party.characters || []).length; si++) {
+  const pc = party.characters[si];
   const char = await Character.findById(pc._id);
   if (!char) continue;
-  let isRelic = Math.random() < EXPLORATION_CHEST_RELIC_CHANCE;
+  let isRelic = chestRelicRollSucceeded && si === chestRelicDesignatedSlotIndex;
+  if (isRelic && (discoverySlotUsedForChest || relicAlreadyThisChestOpen)) isRelic = false;
   if (isRelic && (await characterAlreadyFoundRelicThisExpedition(party, char.name, char._id))) isRelic = false;
   if (isRelic && (await characterHasPendingRelic(char))) isRelic = false;
   if (isRelic) {
@@ -1057,6 +1078,7 @@ async function grantExplorationChestLootToParty(party, location, interaction) {
     if (!party.gatheredItems) party.gatheredItems = [];
     party.gatheredItems.push({ characterId: char._id, characterName: char.name, itemName: "Unknown Relic", quantity: 1, emoji: "🔸" });
     pushProgressLog(party, char.name, "relic", `Found a relic in chest in ${location}; take to Artist/Researcher to appraise.`, { itemName: "Unknown Relic", emoji: "🔸" }, undefined);
+    relicAlreadyThisChestOpen = true;
    } catch (err) {
     logger.error("EXPLORE", `[explore.js]❌ createRelic (chest): ${err?.message || err}`);
     if (allItems && allItems.length > 0) {
@@ -1188,13 +1210,19 @@ const DISCOVERY_CLEANUP_OUTCOMES = [
 const MAX_SPECIAL_EVENTS_PER_SQUARE = 3;
 const DISCOVERY_REDUCE_CHANCE_WHEN_ANY = 0.25; // 75% less chance when square has 1+ discovery
 
-// One find per expedition (grotto, ruins, or monster_camp); progressLog outcomes that consume the find
+// One discovery per expedition (grotto, ruins, monster_camp, OR relic); progressLog outcomes that consume the slot.
+// Relics: at most one relic created per expedition for the whole party, and at most one character may be the discoverer.
 const FIND_OUTCOMES_ROLL = ["grotto", "ruins", "monster_camp"];
 // Note: monster_camp_found removed - we now only log when user makes a choice (mark/fight/leave)
 // monster_camp_skipped does NOT consume the find - user can still find another discovery after skipping
 const FIND_OUTCOMES_LOGGED = ["grotto_found", "ruins_found", "monster_camp", "monster_camp_fight"];
-function partyHasFindThisExpedition(party) {
-  return (party.progressLog || []).some((e) => FIND_OUTCOMES_LOGGED.includes(String(e.outcome || "")));
+const DISCOVERY_SLOT_OUTCOMES = [...FIND_OUTCOMES_LOGGED, "relic"];
+function partyDiscoverySlotUsed(party) {
+  return (party.progressLog || []).some((e) => DISCOVERY_SLOT_OUTCOMES.includes(String(e.outcome || "")));
+}
+/** True once any party member has logged outcome "relic" this expedition — blocks a second relic or second finder. */
+function partyHasRelicDiscoveryThisExpedition(party) {
+  return (party.progressLog || []).some((e) => String(e.outcome || "") === "relic");
 }
 
 // Location parsing used for discovery cleanup/pinning reminders. Keep aligned with dashboard parsing (supports "in" and "at").
@@ -1769,7 +1797,7 @@ function hasGrottoInSquare(party, square, squareDoc) {
 }
 
 // ------------------- characterAlreadyFoundRelicThisExpedition ------------------
-// One relic per character per expedition
+// One relic roll/grant per character per expedition (party-wide cap uses progressLog outcome "relic" via partyHasRelicDiscoveryThisExpedition).
 async function characterAlreadyFoundRelicThisExpedition(party, characterName, characterId = null) {
  const norm = (s) => (s || "").toString().trim().toLowerCase();
  if (party.progressLog && Array.isArray(party.progressLog)) {
@@ -1792,23 +1820,12 @@ async function characterAlreadyFoundRelicThisExpedition(party, characterName, ch
 }
 
 // ------------------- characterHasPendingRelic ------------------
-// True if character has any relic that is unappraised (and not deteriorated) OR appraised but art not submitted.
-// Such characters cannot find another relic until they complete the current one.
-// Scoped by characterId (see relicOwnerMatchQuery); name-only legacy relics without characterId still match.
+// True if character has a relic still in the Library pipeline: not archived, not deteriorated, not a duplicate "kept" row (duplicateOf set),
+// and either unappraised or appraised without art submitted. Matches relicExploreJoinBlockFilter in relicUtils / dashboard join.
 async function characterHasPendingRelic(character) {
  if (!character || (!character._id && !(character.name || "").toString().trim())) return false;
  try {
-  const pending = await Relic.findOne({
-   $and: [
-    relicOwnerMatchQuery(character),
-    {
-     $or: [
-      { appraised: false, deteriorated: false },
-      { appraised: true, artSubmitted: false },
-     ],
-    },
-   ],
-  }).lean();
+  const pending = await Relic.findOne(relicExploreJoinBlockFilter(character)).lean();
   return !!pending;
  } catch (err) {
   logger.warn("EXPLORE", `[explore.js]⚠️ Pending relic check failed: ${err?.message || err}`);
@@ -5692,8 +5709,24 @@ module.exports = {
        outcomeType = rollOutcome();
        continue;
       }
-      // One find per expedition (grotto, ruins, or monster_camp); prevents farming
-      if (FIND_OUTCOMES_ROLL.includes(outcomeType) && partyHasFindThisExpedition(party)) {
+      // Relic shares the single expedition discovery slot; party-wide max one relic / one finder this expedition (must run before SPECIAL_OUTCOMES break).
+      if (outcomeType === "relic") {
+       if (partyDiscoverySlotUsed(party) || partyHasRelicDiscoveryThisExpedition(party)) {
+        outcomeType = rollOutcome();
+        continue;
+       }
+       if (await characterAlreadyFoundRelicThisExpedition(party, character.name, character._id)) {
+        outcomeType = rollOutcome();
+        continue;
+       }
+       if (await characterHasPendingRelic(character)) {
+        outcomeType = rollOutcome();
+        continue;
+       }
+       break;
+      }
+      // One discovery per expedition (grotto, ruins, monster_camp, or relic); prevents farming
+      if (FIND_OUTCOMES_ROLL.includes(outcomeType) && partyDiscoverySlotUsed(party)) {
        outcomeType = lastOutcomeHere === "explored" ? "item" : "explored";
        break;
       }
@@ -5709,15 +5742,6 @@ module.exports = {
         outcomeType = lastOutcomeHere === "explored" ? "item" : "explored"; // fallback; avoid explored twice in a row
         break;
        }
-      }
-      if (outcomeType === "relic" && (await characterAlreadyFoundRelicThisExpedition(party, character.name, character._id))) {
-       const reason = "this character already found a relic this expedition (one per character)";
-       outcomeType = rollOutcome();
-       continue;
-      }
-      if (outcomeType === "relic" && (await characterHasPendingRelic(character))) {
-       outcomeType = rollOutcome();
-       continue;
       }
       if (specialCount >= 1 && Math.random() > DISCOVERY_REDUCE_CHANCE_WHEN_ANY) {
        const reason = `square already has ${specialCount} special discovery/discoveries; roll failed discovery-reduce (${(DISCOVERY_REDUCE_CHANCE_WHEN_ANY * 100).toFixed(0)}% keep chance)`;
@@ -6347,6 +6371,9 @@ module.exports = {
          let ruinsFailedNotifyUserIds = [];
          let ruinsFailedNotifyEmbed = null;
 
+         if (ruinsOutcome === "relic" && partyHasRelicDiscoveryThisExpedition(freshParty)) {
+          ruinsOutcome = "camp";
+         }
          if (ruinsOutcome === "relic" && (await characterAlreadyFoundRelicThisExpedition(freshParty, ruinsCharacter.name, ruinsCharacter._id))) {
           ruinsOutcome = "camp";
          }
@@ -8753,7 +8780,28 @@ module.exports = {
                   moveDescription += `\n\n🗺️ **Your map led you here!** **${mapOwnerName}**'s map would have revealed a relic, but they're still carrying one (get it appraised or submit your art first).`;
                 }
               } else if (mapOwnerDoc) {
-                try {
+                if (partyDiscoverySlotUsed(party) || partyHasRelicDiscoveryThisExpedition(party)) {
+                  const allItemsMapSlot = await fetchAllItems();
+                  if (allItemsMapSlot && allItemsMapSlot.length > 0) {
+                    const fallbackItem = allItemsMapSlot[Math.floor(Math.random() * allItemsMapSlot.length)];
+                    try {
+                      await addItemInventoryDatabase(mapOwnerDoc._id, fallbackItem.itemName, 1, interaction, "Exploration Map");
+                      if (!party.gatheredItems) party.gatheredItems = [];
+                      party.gatheredItems.push({ characterId: mapOwnerDoc._id, characterName: mapOwnerDoc.name, itemName: fallbackItem.itemName, quantity: 1, emoji: fallbackItem.emoji || "" });
+                      pushProgressLog(party, mapOwnerName, "map_chest", `Map #${resolvedOldMapNumber} would have led to a relic at **${locationMove}**, but this expedition already used its discovery—found **${fallbackItem.itemName}** instead.`, { itemName: fallbackItem.itemName, emoji: fallbackItem.emoji || "" }, undefined);
+                      await party.save();
+                      moveDescription += `\n\n🗺️ **Your map led you here!** This expedition already had a discovery, so **${mapOwnerName}** found **${fallbackItem.itemName}** instead of a relic.`;
+                    } catch (err) {
+                      logger.warn("EXPLORE", `[explore.js] map-led relic→item (slot): ${err?.message || err}`);
+                      moveDescription += `\n\n🗺️ **Your map led you here!** A relic was blocked (expedition discovery already used)—grant failed.`;
+                    }
+                  } else {
+                    pushProgressLog(party, mapOwnerName, "map_chest", `Map #${resolvedOldMapNumber} would have led to a relic at **${locationMove}**, but this expedition already used its discovery.`, undefined, undefined);
+                    await party.save();
+                    moveDescription += `\n\n🗺️ **Your map led you here!** This expedition already had a discovery—no relic.`;
+                  }
+                } else {
+                  try {
                   const squareStrMove = String(party.square || "").trim().toUpperCase();
                   const quadrantStrMove = String(party.quadrant || "").trim().toUpperCase();
                   const regionStrMove = destMapSquare?.region ?? "";
@@ -8773,9 +8821,10 @@ module.exports = {
                   pushProgressLog(party, mapOwnerName, "relic", `Map #${resolvedOldMapNumber} led to a relic at **${locationMove}**; take to Artist/Researcher to appraise.`, { itemName: "Unknown Relic", emoji: "🔸" }, undefined);
                   await party.save();
                   moveDescription += `\n\n🗺️ **Your map led you here!** **${mapOwnerName}**'s map revealed a **Relic** (${savedRelic?.relicId || "—"})!`;
-                } catch (err) {
+                  } catch (err) {
                   logger.error("EXPLORE", `[explore.js]❌ createRelic (map-led): ${err?.message || err}`);
                   moveDescription += `\n\n🗺️ **Your map led you here!** **${mapOwnerName}**'s map revealed a **Relic** (grant failed).`;
+                  }
                 }
               } else {
                 moveDescription += `\n\n🗺️ **Your map led you here!** **${mapOwnerName}**'s map revealed a **Relic**!`;

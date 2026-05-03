@@ -225,6 +225,59 @@ function isMongoObjectId24(s) {
   return /^[a-fA-F0-9]{24}$/.test(String(s || '').trim());
 }
 
+/** Strip quotes/backticks and `#` so pasted Discord/Markdown ids still resolve. */
+function sanitizeCraftingAcceptToken(raw) {
+  let s = String(raw ?? '').trim();
+  while (
+    (s.startsWith('`') && s.endsWith('`')) ||
+    (s.startsWith('"') && s.endsWith('"')) ||
+    (s.startsWith("'") && s.endsWith("'"))
+  ) {
+    s = s.slice(1, -1).trim();
+  }
+  if (s.startsWith('#')) s = s.slice(1).trim();
+  return s;
+}
+
+/** If the user pasted a dashboard URL or stray text, recover a 24-char hex id when present. */
+function tryExtractObjectIdFromPastedRequestToken(raw) {
+  const s = String(raw || '').trim();
+  if (isMongoObjectId24(s)) return s;
+  const m = s.match(/\b([a-fA-F0-9]{24})\b/);
+  return m && isMongoObjectId24(m[1]) ? m[1] : null;
+}
+
+async function revertCraftingRequestToOpen(mongoRequestId, sourceTag) {
+  const delay = (ms) => new Promise((r) => setTimeout(r, ms));
+  let lastErr;
+  for (let attempt = 0; attempt < 3; attempt++) {
+    try {
+      await CraftingRequest.findByIdAndUpdate(mongoRequestId, {
+        $set: {
+          status: 'open',
+          acceptedAt: null,
+          acceptedByUserId: null,
+          acceptedByCharacterId: null,
+          acceptedByCharacterName: '',
+        },
+      }).exec();
+      return { ok: true };
+    } catch (e) {
+      lastErr = e;
+      logger.warn(
+        sourceTag,
+        `revertCraftingRequestToOpen attempt ${attempt + 1}/3 failed: ${e && e.message ? e.message : e}`
+      );
+      if (attempt < 2) await delay(120 * (attempt + 1));
+    }
+  }
+  logger.error(
+    sourceTag,
+    `revertCraftingRequestToOpen FAILED for ${mongoRequestId} — commission may need manual reopen: ${lastErr && lastErr.message ? lastErr.message : lastErr}`
+  );
+  return { ok: false, lastError: lastErr };
+}
+
 /** Same pattern as questID / generateUniqueId — workshop commissions use prefix K + 6 digits */
 function normalizeWorkshopCommissionCode(raw) {
   const t = String(raw || '').trim();
@@ -321,16 +374,23 @@ function parseCraftingAcceptPrefix(raw) {
   rest = rest.slice('accept'.length).trim();
   const parts = rest.split(/\s+/).filter(Boolean);
   if (parts.length < 2) return { kind: 'help' };
-  const id = parts[0];
+  let id = sanitizeCraftingAcceptToken(parts[0]);
+  const extractedOid = tryExtractObjectIdFromPastedRequestToken(id);
+  if (!isValidRequestLookupToken(id) && extractedOid) id = extractedOid;
   const characterName = parts.slice(1).join(' ');
   if (!isValidRequestLookupToken(id)) return { kind: 'bad_id' };
   return { kind: 'accept', requestId: id, characterName };
 }
 
-async function fetchCharacterForDiscordUser(characterName, discordUserId) {
-  let c = await fetchCharacterByNameAndUserId(characterName, discordUserId);
-  if (!c) c = await fetchModCharacterByNameAndUserId(characterName, discordUserId);
-  return c;
+async function fetchCharacterForDiscordUser(characterName, discordUserId, sourceTag = 'CRAFT_ACCEPT_CHAR') {
+  try {
+    let c = await fetchCharacterByNameAndUserId(characterName, discordUserId);
+    if (!c) c = await fetchModCharacterByNameAndUserId(characterName, discordUserId);
+    return c;
+  } catch (e) {
+    logger.warn(sourceTag, `character lookup failed for "${characterName}": ${e.message}`);
+    return null;
+  }
 }
 
 function workshopVillagesCompatible(nameA, villageA, nameB, villageB) {
@@ -381,7 +441,11 @@ async function runWorkshopCraftingAccept({
   sourceTag = 'CRAFT_ACCEPT',
   client = null,
 }) {
-  const requestToken = String(requestIdRaw || '').trim();
+  let requestToken = sanitizeCraftingAcceptToken(requestIdRaw);
+  const extractedOid = tryExtractObjectIdFromPastedRequestToken(requestToken);
+  if (!isValidRequestLookupToken(requestToken) && extractedOid) {
+    requestToken = extractedOid;
+  }
   const characterName = String(characterNameRaw || '').trim();
 
   if (!isValidRequestLookupToken(requestToken)) {
@@ -405,9 +469,28 @@ async function runWorkshopCraftingAccept({
       .setDescription('Choose the **crafter OC** taking this job.');
   }
 
-  await connectToTinglebot();
+  try {
+    await connectToTinglebot();
+  } catch (e) {
+    logger.error(sourceTag, `connectToTinglebot failed: ${e.message}`);
+    return new EmbedBuilder()
+      .setColor(0xe74c3c)
+      .setTitle('Database unavailable')
+      .setDescription(
+        'Could not reach the game database. Wait a moment and try again. If this persists, ping staff.'
+      );
+  }
 
-  const reqDoc = await findCraftingRequestForAccept(requestToken);
+  let reqDoc;
+  try {
+    reqDoc = await findCraftingRequestForAccept(requestToken);
+  } catch (e) {
+    logger.error(sourceTag, `findCraftingRequestForAccept failed: ${e.message}`);
+    return new EmbedBuilder()
+      .setColor(0xe74c3c)
+      .setTitle('Lookup failed')
+      .setDescription('Could not load that commission from the database. Try again in a few seconds.');
+  }
   if (!reqDoc || reqDoc.status !== 'open') {
     const isOid = isMongoObjectId24(requestToken);
     const codeNorm = normalizeWorkshopCommissionCode(requestToken);
@@ -435,7 +518,7 @@ async function runWorkshopCraftingAccept({
       .setDescription('You cannot accept your own workshop commission.');
   }
 
-  const acceptor = await fetchCharacterForDiscordUser(characterName, acceptorDiscordId);
+  const acceptor = await fetchCharacterForDiscordUser(characterName, acceptorDiscordId, sourceTag);
   if (!acceptor) {
     return new EmbedBuilder()
       .setColor(0xe74c3c)
@@ -447,7 +530,8 @@ async function runWorkshopCraftingAccept({
 
   const requesterChar = await fetchCharacterForDiscordUser(
     reqDoc.requesterCharacterName,
-    reqDoc.requesterDiscordId
+    reqDoc.requesterDiscordId,
+    sourceTag
   );
   if (!requesterChar) {
     return new EmbedBuilder()
@@ -483,23 +567,32 @@ async function runWorkshopCraftingAccept({
 
   const mongoRequestId = String(reqDoc._id);
   const acceptedAt = new Date();
-  const reserved = await CraftingRequest.findOneAndUpdate(
-    {
-      _id: mongoRequestId,
-      status: 'open',
-      requesterDiscordId: { $ne: acceptorDiscordId },
-    },
-    {
-      $set: {
-        status: 'accepted',
-        acceptedAt,
-        acceptedByUserId: acceptorDiscordId,
-        acceptedByCharacterId: new mongoose.Types.ObjectId(acceptorCharacterId),
-        acceptedByCharacterName: acceptor.name,
+  let reserved;
+  try {
+    reserved = await CraftingRequest.findOneAndUpdate(
+      {
+        _id: mongoRequestId,
+        status: 'open',
+        requesterDiscordId: { $ne: acceptorDiscordId },
       },
-    },
-    { new: true }
-  ).exec();
+      {
+        $set: {
+          status: 'accepted',
+          acceptedAt,
+          acceptedByUserId: acceptorDiscordId,
+          acceptedByCharacterId: new mongoose.Types.ObjectId(acceptorCharacterId),
+          acceptedByCharacterName: acceptor.name,
+        },
+      },
+      { new: true }
+    ).exec();
+  } catch (e) {
+    logger.error(sourceTag, `findOneAndUpdate reserve commission failed: ${e.message}`);
+    return new EmbedBuilder()
+      .setColor(0xe74c3c)
+      .setTitle('Could not reserve commission')
+      .setDescription('Database error while locking this request. Try again shortly.');
+  }
 
   if (!reserved) {
     return new EmbedBuilder()
@@ -508,17 +601,7 @@ async function runWorkshopCraftingAccept({
       .setDescription('Someone else may have accepted it first, or you cannot accept your own request.');
   }
 
-  const revertToOpen = async () => {
-    await CraftingRequest.findByIdAndUpdate(mongoRequestId, {
-      $set: {
-        status: 'open',
-        acceptedAt: null,
-        acceptedByUserId: null,
-        acceptedByCharacterId: null,
-        acceptedByCharacterName: '',
-      },
-    }).exec();
-  };
+  const revertToOpen = async () => revertCraftingRequestToOpen(mongoRequestId, sourceTag);
 
   const elixirSels = Array.isArray(reserved.elixirMaterialSelections)
     ? reserved.elixirMaterialSelections.map((s) => ({
@@ -535,25 +618,33 @@ async function runWorkshopCraftingAccept({
       commissionerDiscordId: reserved.requesterDiscordId,
       commissionerCharacterName: reserved.requesterCharacterName,
       craftItemName: reserved.craftItemName,
+      craftItemMongoId: reserved.craftItemMongoId ?? null,
       elixirTier: reserved.elixirTier ?? null,
       elixirMaterialSelections: elixirSels,
     });
   } catch (e) {
     logger.error(sourceTag, `executeWorkshopCommissionCraft threw: ${e.message}`);
-    await revertToOpen();
-    return new EmbedBuilder()
+    const rev = await revertToOpen();
+    const emb = new EmbedBuilder()
       .setColor(0xe74c3c)
       .setTitle('Craft failed')
       .setDescription(`Something went wrong running the craft — commission was **re-opened**.\n\`${e.message}\``);
+    const foot = [];
+    if (!rev.ok) foot.push('If it still shows as taken, ask staff to reopen it.');
+    if (foot.length) emb.setFooter({ text: foot.join(' ') });
+    return emb;
   }
 
   if (!craftResult.ok) {
-    await revertToOpen();
+    const rev = await revertToOpen();
     const errEmb = new EmbedBuilder()
       .setColor(0xe74c3c)
       .setTitle('Craft blocked')
       .setDescription(craftResult.error || 'Commission was re-opened.');
-    if (craftResult.code) errEmb.setFooter({ text: String(craftResult.code) });
+    const foot = [];
+    if (craftResult.code) foot.push(String(craftResult.code));
+    if (!rev.ok) foot.push('Revert may have failed — staff may need to reopen.');
+    if (foot.length) errEmb.setFooter({ text: foot.slice(0, 2).join(' · ') });
     return errEmb;
   }
 

@@ -1,40 +1,38 @@
 // ------------------- Relic Archive Request -------------------
-// Pending submissions to Library Archives; mods approve to archive the relic.
-const mongoose = require("mongoose");
+// Pending submissions to Library Archives; synced with dashboard/models/RelicArchiveRequestModel.js
+const mongoose = require('mongoose');
 const { Schema } = mongoose;
 
 const RelicArchiveRequestSchema = new Schema(
   {
     relicId: { type: String, required: true },
-    relicMongoId: { type: Schema.Types.ObjectId, ref: "Relic", default: null },
+    relicMongoId: { type: Schema.Types.ObjectId, ref: 'Relic', default: null },
     submitterUserId: { type: String, required: true },
     title: { type: String, required: true },
     discoveredBy: { type: String, required: true },
     appraisedBy: { type: String, required: true },
-    region: { type: String, default: "" },
-    square: { type: String, default: "" },
-    quadrant: { type: String, default: "" },
+    region: { type: String, default: '' },
+    square: { type: String, default: '' },
+    quadrant: { type: String, default: '' },
     info: { type: String, required: true },
     libraryPositionX: { type: Number, default: null },
     libraryPositionY: { type: Number, default: null },
     libraryDisplaySize: { type: Number, default: 8 },
-    imageUrl: { type: String, default: "" },
+    imageUrl: { type: String, default: '' },
     status: {
       type: String,
-      enum: ["pending", "approved", "rejected"],
-      default: "pending",
+      enum: ['pending', 'approved', 'rejected'],
+      default: 'pending',
     },
     modApprovedBy: { type: String, default: null },
     modApprovedAt: { type: Date, default: null },
-    /** Discord message posted by dashboard when submitted (for mod reminders). */
-    discordNotificationMessageId: { type: String, default: "" },
-    discordNotificationChannelId: { type: String, default: "" },
-    /** Last time the bot @mentioned mods for this pending request (repeat every 12h). */
+    discordNotificationMessageId: { type: String, default: '' },
+    discordNotificationChannelId: { type: String, default: '' },
     modReminderSentAt: { type: Date, default: null },
     createdAt: { type: Date, default: Date.now },
     updatedAt: { type: Date, default: Date.now },
   },
-  { collection: "relicarchiverequests" }
+  { collection: 'relicarchiverequests' }
 );
 
 RelicArchiveRequestSchema.index({ status: 1 });
@@ -43,4 +41,4 @@ RelicArchiveRequestSchema.index({ submitterUserId: 1 });
 
 module.exports =
   mongoose.models.RelicArchiveRequest ||
-  mongoose.model("RelicArchiveRequest", RelicArchiveRequestSchema);
+  mongoose.model('RelicArchiveRequest', RelicArchiveRequestSchema);

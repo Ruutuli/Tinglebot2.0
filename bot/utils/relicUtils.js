@@ -21,6 +21,29 @@ function escapeRegexForRelicOwner(s) {
  * @param {{ _id?: unknown, name?: string }} character - Character or ModCharacter doc (minimal { _id, name })
  * @returns {Record<string, unknown>}
  */
+/**
+ * Mongo filter for "cannot join expeditions / must resolve relic first":
+ * unappraised or appraised-but-art-not-submitted, not archived, not deteriorated,
+ * and not a duplicate "kept" copy (duplicateOf set).
+ * @param {{ _id?: unknown, name?: string }} character
+ * @returns {Record<string, unknown>}
+ */
+function relicExploreJoinBlockFilter(character) {
+  return {
+    $and: [
+      relicOwnerMatchQuery(character),
+      { archived: false },
+      { deteriorated: false },
+      {
+        $or: [{ duplicateOf: null }, { duplicateOf: { $exists: false } }],
+      },
+      {
+        $or: [{ appraised: false }, { appraised: true, artSubmitted: false }],
+      },
+    ],
+  };
+}
+
 function relicOwnerMatchQuery(character) {
   const id = character && character._id;
   const name = character && character.name != null ? String(character.name).trim() : '';
@@ -232,4 +255,5 @@ module.exports = {
   partyHasLensOfTruthRelic,
   consumeBlightCandleUse,
   relicOwnerMatchQuery,
+  relicExploreJoinBlockFilter,
 };

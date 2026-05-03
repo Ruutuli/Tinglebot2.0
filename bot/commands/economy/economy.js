@@ -79,6 +79,16 @@ function stackModifierHeartsFromInventoryRow(row) {
   return Math.max(0, Math.floor(Number(row?.modifierHearts) || 0));
 }
 
+/** Strip autocomplete noise (emoji prefix, "(Qty: n)", trailing "- Qty: n") — keep parity with trade item cleaning */
+function cleanEconomyItemOptionName(name) {
+  if (!name) return name;
+  return String(name)
+    .replace(/^[\u{1F300}-\u{1F9FF}\u{2600}-\u{26FF}\u{2700}-\u{27BF}]\s*/u, '')
+    .replace(/\s*\(Qty:\s*\d+\s*\)/gi, '')
+    .replace(/\s*-\s*Qty:\s*\d+\s*$/i, '')
+    .trim();
+}
+
 function parseEconomyItemSpecifier(rawName) {
   const raw = String(rawName || '').trim();
   const tierParse = parseElixirTierFromItemOption(raw);
@@ -559,9 +569,8 @@ async function handleGift(interaction) {
  ].filter((item) => item.name && item.quantity);
 
  // ------------------- Clean Item Names from Copy-Paste -------------------
-// Remove quantity information from item names if users copy-paste autocomplete text
 const cleanedItems = items.map(item => ({
-  name: item.name.replace(/\s*\(Qty:\s*\d+\)/i, '').trim(),
+  name: cleanEconomyItemOptionName(item.name),
   quantity: item.quantity
 }));
 
@@ -877,7 +886,10 @@ for (const { baseName } of parsedItems) {
    }
 
    if (!itemDetails) {
-     unavailableItems.push(`${baseItemName} - Not Found`);
+     unavailableItems.push({
+       name: baseItemName.length > 256 ? `${baseItemName.slice(0, 253)}…` : baseItemName,
+       value: 'No matching catalog item for that text. Use autocomplete or check spelling.',
+     });
      allItemsAvailable = false;
      continue;
    }
@@ -915,9 +927,15 @@ for (const { baseName } of parsedItems) {
    const isEquipped = equippedItemNamesLower.has(canonicalName.trim().toLowerCase());
    availableToGift = availableToGift - (isEquipped ? 1 : 0);
    if (quantity > availableToGift) {
-     unavailableItems.push(
-       `${canonicalName}${isElixir && specifiedTier ? ` (stacked)` : ''} - Available:${availableToGift}${isEquipped ? ' (1 equipped)' : ''}`
-     );
+     const label =
+       `${canonicalName}${isElixir && specifiedTier ? ' (specific stack)' : ''}`.length > 256
+         ? `${`${canonicalName}${isElixir && specifiedTier ? ' (specific stack)' : ''}`.slice(0, 253)}…`
+         : `${canonicalName}${isElixir && specifiedTier ? ' (specific stack)' : ''}`;
+     const equipLine = isEquipped ? '\n• One unit is equipped — unequip it or gift fewer.' : '';
+     unavailableItems.push({
+       name: label,
+       value: `Requested: **${quantity}**\nAvailable to gift: **${availableToGift}**${equipLine}`,
+     });
      allItemsAvailable = false;
    }
   }
@@ -929,14 +947,14 @@ for (const { baseName } of parsedItems) {
       title: '❌ Insufficient Items',
       description: `\`${fromCharacterName}\` does not have enough of the following items to gift:`,
       fields: [
-        ...unavailableItems.map(item => ({
-          name: item,
-          value: 'Insufficient quantity',
-          inline: true
+        ...unavailableItems.map(({ name, value }) => ({
+          name,
+          value,
+          inline: false
         })),
         {
           name: '💡 Tip',
-          value: 'If you copied the item name from autocomplete, make sure to only use the item name (without the quantity in parentheses).',
+          value: 'Pick the item from autocomplete when possible. Quantity belongs only in the quantity field (not in the item name).',
           inline: false
         }
       ],
@@ -2376,9 +2394,8 @@ async function handleTransfer(interaction) {
  ].filter((item) => item.name && item.quantity);
 
  // ------------------- Clean Item Names from Copy-Paste -------------------
-// Remove quantity information from item names if users copy-paste autocomplete text
 const cleanedItems = items.map(item => ({
-  name: item.name.replace(/\s*\(Qty:\s*\d+\)/i, '').trim(),
+  name: cleanEconomyItemOptionName(item.name),
   quantity: item.quantity
 }));
 
@@ -2620,7 +2637,10 @@ for (const { baseName } of parsedItems) {
    }
 
    if (!itemDetails) {
-     unavailableItems.push(`${baseItemName} - Not Found`);
+     unavailableItems.push({
+       name: baseItemName.length > 256 ? `${baseItemName.slice(0, 253)}…` : baseItemName,
+       value: 'No matching catalog item for that text. Use autocomplete or check spelling.',
+     });
      allItemsAvailable = false;
      continue;
    }
@@ -2640,7 +2660,7 @@ for (const { baseName } of parsedItems) {
       .toArray();
    }
    const totalQuantity = fromInventoryEntries.reduce(
-    (sum, entry) => sum + entry.quantity,
+    (sum, entry) => sum + (entry.quantity || 0),
     0
    );
    let availableToTransfer = totalQuantity;
@@ -2656,7 +2676,13 @@ for (const { baseName } of parsedItems) {
    const isEquipped = equippedNamesNormalized.has(normalizeItemNameForEquipped(canonicalName));
    availableToTransfer = availableToTransfer - (isEquipped ? 1 : 0);
    if (quantity > availableToTransfer) {
-     unavailableItems.push(`${canonicalName} - QTY:${availableToTransfer}${isEquipped ? ' (1 equipped)' : ''}`);
+     const label =
+       canonicalName.length > 256 ? `${canonicalName.slice(0, 253)}…` : canonicalName;
+     const equipLine = isEquipped ? '\n• One unit is equipped — unequip it or transfer fewer.' : '';
+     unavailableItems.push({
+       name: label,
+       value: `Requested: **${quantity}**\nTransferable from inventory: **${availableToTransfer}**${equipLine}`,
+     });
      allItemsAvailable = false;
    }
   }
@@ -2667,11 +2693,18 @@ for (const { baseName } of parsedItems) {
       color: 0xFF0000, // Red color
       title: '❌ Insufficient Items',
       description: `\`${fromCharacterName}\` does not have enough of the following items to transfer:`,
-      fields: unavailableItems.map(item => ({
-        name: item,
-        value: 'Insufficient quantity',
-        inline: true
-      })),
+      fields: [
+        ...unavailableItems.map(({ name, value }) => ({
+          name,
+          value,
+          inline: false
+        })),
+        {
+          name: '💡 Tip',
+          value: 'Pick the item from autocomplete when possible. Quantity belongs only in the quantity field (not in the item name).',
+          inline: false
+        }
+      ],
       image: {
         url: 'https://storage.googleapis.com/tinglebot/Graphics/border.png'
       },
@@ -3314,24 +3347,10 @@ async function handleTrade(interaction) {
     await ensureDeferred(interaction, { ephemeral: false });
 
     // ------------------- Clean Item Names from Copy-Paste -------------------
-    // Remove emoji prefixes and quantity information from item names if users copy-paste autocomplete text
-    // Handles formats like: "📦 Fairy - Qty: 1", "Fairy (Qty: 1)", "Job Voucher - Qty: 2"
-    const cleanItemName = (name) => {
-      if (!name) return name;
-      return name
-        // Remove emoji prefixes (📦, 🔨, 🔮, etc.) - common emojis used in autocomplete
-        .replace(/^[\u{1F300}-\u{1F9FF}\u{2600}-\u{26FF}\u{2700}-\u{27BF}]\s*/u, '')
-        // Remove quantity in parentheses format: "(Qty: 1)" or "(Qty:1)"
-        .replace(/\s*\(Qty:\s*\d+\s*\)/gi, '')
-        // Remove quantity in dash format: " - Qty: 1" or "- Qty:1"
-        .replace(/\s*-\s*Qty:\s*\d+\s*$/i, '')
-        .trim();
-    };
-
     const cleanedItemArrayRaw = [
-      { name: cleanItemName(item1), quantity: quantity1 },
-      { name: cleanItemName(item2), quantity: quantity2 },
-      { name: cleanItemName(item3), quantity: quantity3 },
+      { name: cleanEconomyItemOptionName(item1), quantity: quantity1 },
+      { name: cleanEconomyItemOptionName(item2), quantity: quantity2 },
+      { name: cleanEconomyItemOptionName(item3), quantity: quantity3 },
     ].filter((item) => item.name);
 
     // ------------------- Validate Item Existence -------------------

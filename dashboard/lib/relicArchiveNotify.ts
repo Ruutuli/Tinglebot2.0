@@ -24,7 +24,8 @@ const RELIC_EMBED_FOOTER = "Relics · https://rootsofthewild.com/mechanics/relic
 
 const MOD_ROLE_ID = process.env.MOD_ROLE_ID || "";
 
-export function notifyRelicArchiveRequest(options: {
+/** Posts the mod-queue embed; returns message/channel IDs so the bot can send follow-up reminders. */
+export async function notifyRelicArchiveRequest(options: {
   title: string;
   relicId: string;
   discoveredBy: string;
@@ -37,12 +38,12 @@ export function notifyRelicArchiveRequest(options: {
   libraryPositionY?: number;
   libraryDisplaySize?: number;
   imageUrl?: string;
-}): void {
+}): Promise<{ messageId: string; channelId: string } | null> {
   if (!RELIC_ARCHIVE_CHANNEL_ID) {
     console.warn(
       "[relicArchiveNotify] No channel configured (RELIC_ARCHIVE_REQUESTS_CHANNEL_ID or ADMIN_REVIEW_CHANNEL_ID)"
     );
-    return;
+    return null;
   }
 
   const { title, relicId, discoveredBy, appraisedBy, region, square, quadrant, infoSnippet, libraryPositionX, libraryPositionY, libraryDisplaySize, imageUrl } = options;
@@ -93,11 +94,19 @@ export function notifyRelicArchiveRequest(options: {
 
   const content = MOD_ROLE_ID ? `<@&${MOD_ROLE_ID}>` : undefined;
 
-  discordApiRequest(`channels/${RELIC_ARCHIVE_CHANNEL_ID}/messages`, "POST", { content, embeds: [embed] }).catch(
-    (err) => {
-      console.warn("[relicArchiveNotify] Discord post failed:", err);
-    }
+  const data = await discordApiRequest<{ id: string; channel_id?: string }>(
+    `channels/${RELIC_ARCHIVE_CHANNEL_ID}/messages`,
+    "POST",
+    { content, embeds: [embed] }
   );
+  if (!data?.id) {
+    console.warn("[relicArchiveNotify] Discord post returned no message id");
+    return null;
+  }
+  return {
+    messageId: data.id,
+    channelId: data.channel_id || RELIC_ARCHIVE_CHANNEL_ID,
+  };
 }
 
 /**

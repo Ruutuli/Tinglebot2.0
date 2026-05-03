@@ -195,6 +195,7 @@ export async function POST(request: Request, context: RouteContext) {
         commissionerDiscordId: reserved.requesterDiscordId,
         commissionerCharacterName: reserved.requesterCharacterName,
         craftItemName: reserved.craftItemName,
+        craftItemMongoId: reserved.craftItemMongoId ? String(reserved.craftItemMongoId) : null,
         elixirTier: reserved.elixirTier ?? null,
         elixirMaterialSelections: elixirSels,
       };

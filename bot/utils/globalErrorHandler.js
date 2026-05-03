@@ -25,6 +25,22 @@ const ERROR_RESPONSE_TYPES = {
   THROW: 'throw'
 };
 
+/** Expected validation failure (user lacks items) — do not alert staff or error channels */
+class InsufficientInventoryError extends Error {
+  constructor(itemName, { required, available = null, embed = null } = {}) {
+    super(`Not enough ${itemName} in inventory`);
+    this.name = 'InsufficientInventoryError';
+    this.itemName = itemName;
+    this.required = required;
+    this.available = available;
+    this.embed = embed;
+  }
+}
+
+function isInsufficientInventoryError(error) {
+  return error instanceof InsufficientInventoryError || error?.name === 'InsufficientInventoryError';
+}
+
 // ============================================================================
 // ------------------- State Variables -------------------
 // ============================================================================
@@ -418,6 +434,10 @@ async function handleError(error, source = "Unknown Source", context = {}) {
   if (isShuttingDown) {
     return;
   }
+
+  if (isInsufficientInventoryError(error)) {
+    return;
+  }
   
   // Skip logging for Discord interaction expiration errors (10062) - these are normal
   if (error?.code === 10062) {
@@ -563,6 +583,9 @@ function getErrorStats() {
 module.exports = {
   // Main error handler
   handleError,
+
+  InsufficientInventoryError,
+  isInsufficientInventoryError,
   
   // Convenience wrappers
   handleInteractionError,

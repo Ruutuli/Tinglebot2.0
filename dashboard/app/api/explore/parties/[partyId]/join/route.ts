@@ -60,6 +60,23 @@ function relicOwnerMatchQuery(character: { _id?: unknown; name?: string }): Reco
   return { $or: clauses };
 }
 
+/** Keep in sync with bot/utils/relicUtils.js `relicExploreJoinBlockFilter`. */
+function relicExploreJoinBlockFilter(character: { _id?: unknown; name?: string }): Record<string, unknown> {
+  return {
+    $and: [
+      relicOwnerMatchQuery(character),
+      { archived: false },
+      { deteriorated: false },
+      {
+        $or: [{ duplicateOf: null }, { duplicateOf: { $exists: false } }],
+      },
+      {
+        $or: [{ appraised: false }, { appraised: true, artSubmitted: false }],
+      },
+    ],
+  };
+}
+
 /** Remove quantity of a material from character inventory. */
 async function deductMaterialFromInventory(
   collection: mongoose.mongo.Collection,
@@ -204,20 +221,15 @@ export async function POST(
 
     const characterName = String(character.name ?? "").trim();
 
-    // Block if character has unappraised relic (scoped by characterId; legacy name-only relics without characterId)
+    // Block if character has a relic still in progress (unappraised, or appraised but art/library not done). Duplicates (duplicateOf) exempt.
     const Relic =
       mongoose.models.Relic ??
       ((await import("@/models/RelicModel.js")) as unknown as { default: Model<unknown> }).default;
-    const unappraised = await Relic.findOne({
-      $and: [
-        relicOwnerMatchQuery({ _id: character._id, name: characterName }),
-        { appraised: false, deteriorated: false },
-      ],
-    });
-    if (unappraised) {
+    const blockingRelic = await Relic.findOne(relicExploreJoinBlockFilter({ _id: character._id, name: characterName }));
+    if (blockingRelic) {
       return NextResponse.json(
         {
-          error: `${characterName} has an unappraised relic and must get it appraised before joining expeditions.`,
+          error: `${characterName} has an active relic pipeline (appraise, submit art, and archive to the Library before joining expeditions).`,
         },
         { status: 400 }
       );

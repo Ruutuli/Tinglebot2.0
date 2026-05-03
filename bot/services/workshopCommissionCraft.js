@@ -26,6 +26,7 @@ const {
   fetchModCharacterByNameAndUserId,
   getCharacterInventoryCollection,
   fetchItemByName,
+  fetchItemById,
 } = require('../database/db');
 
 const { checkAndUseStamina } = require('../modules/characterStatsModule');
@@ -93,6 +94,27 @@ function normalizedInventoryItemNameForRecipeMatch(itemName) {
     .trim()
     .replace(/\s*\[[^\]]+\]\s*$/i, '')
     .trim();
+}
+
+/** Case-insensitive totals for recipe lines (matches bracket-stripped stack labels vs catalog lines). */
+function countInventoryQtyForRecipeMaterial(invItems, materialLineName) {
+  const line = String(materialLineName ?? '').trim();
+  if (!line) return 0;
+  if (generalCategories[line]) {
+    const cat = generalCategories[line];
+    return invItems.reduce((sum, invItem) => {
+      const base = normalizedInventoryItemNameForRecipeMatch(invItem.itemName);
+      const low = base.toLowerCase();
+      const inCat = cat.some((c) => String(c).trim().toLowerCase() === low);
+      return inCat ? sum + (Math.floor(Number(invItem.quantity)) || 0) : sum;
+    }, 0);
+  }
+  const target = line.toLowerCase();
+  return invItems.reduce((sum, invItem) => {
+    const base = normalizedInventoryItemNameForRecipeMatch(invItem.itemName);
+    if (base.toLowerCase() !== target) return sum;
+    return sum + (Math.floor(Number(invItem.quantity)) || 0);
+  }, 0);
 }
 
 /** Align with /crafting brew: 1 critter + 1 part + up to 3 extras. */
@@ -490,6 +512,7 @@ function craftingStaminaLogContext(character, itemName, { refund = false } = {})
  * @param {string} opts.commissionerCharacterName
  * @param {string} opts.craftItemName
  * @param {number|null|undefined} opts.elixirTier
+ * @param {unknown=} opts.craftItemMongoId — dashboard snapshot; fallback if catalog name lookup fails
  * @param {Array<{ inventoryDocumentId: unknown, maxQuantity: unknown }>=} opts.elixirMaterialSelections — required for mixer elixirs (from commission doc)
  */
 async function executeWorkshopCommissionCraft(opts) {
@@ -499,6 +522,7 @@ async function executeWorkshopCommissionCraft(opts) {
     commissionerDiscordId,
     commissionerCharacterName,
     craftItemName,
+    craftItemMongoId,
     elixirTier,
     elixirMaterialSelections: elixirMaterialSelectionsOpt,
   } = opts;
@@ -558,7 +582,26 @@ async function executeWorkshopCommissionCraft(opts) {
     await crafter.save();
   }
 
-  const item = await fetchItemByName(itemName, { operation: 'workshop_commission' });
+  let item;
+  try {
+    item = await fetchItemByName(itemName, { operation: 'workshop_commission' });
+  } catch (fetchErr) {
+    logError('WS-COMM', `fetchItemByName: ${fetchErr.message}`);
+    item = null;
+  }
+  if (!item && craftItemMongoId) {
+    try {
+      item = await fetchItemById(craftItemMongoId);
+      if (item && String(item.itemName || '').trim()) {
+        info(
+          'WS-COMM',
+          `Resolved workshop item by craftItemMongoId (name snapshot was "${itemName}" → catalog "${item.itemName}")`
+        );
+      }
+    } catch (idErr) {
+      logError('WS-COMM', `fetchItemById: ${idErr.message}`);
+    }
+  }
   if (!item || !item.crafting) {
     return { ok: false, code: 'ITEM', error: 'Item not found or not craftable.' };
   }
@@ -761,8 +804,7 @@ async function executeWorkshopCommissionCraft(opts) {
     }
   }
 
-  const inventoryCollection = await getCharacterInventoryCollection(commissioner.name);
-  const inventory = await inventoryCollection.find().toArray();
+  const inventoryCollection = await getCharacterInventoryCollection(freshCommissioner.name);
 
   const originalCraftingMaterials = Array.isArray(item.craftingMaterial) ? item.craftingMaterial : [];
   if (originalCraftingMaterials.length === 0) {
@@ -788,6 +830,8 @@ async function executeWorkshopCommissionCraft(opts) {
 
   let materialsUsed;
 
+  const inventory = await inventoryCollection.find().toArray();
+
   if (isMixerOutputElixirName(item.itemName)) {
     if (elixirMaterialSelections.length === 0) {
       return {
@@ -803,7 +847,7 @@ async function executeWorkshopCommissionCraft(opts) {
     }));
     const elixirApply = await planAndApplyElixirCommissionRemovals({
       selections: normalizedSels,
-      commissioner,
+      commissioner: freshCommissioner,
       invCollection: inventoryCollection,
       adjustedCraftingMaterials,
       baseCraftingMaterials: originalCraftingMaterials,
@@ -818,16 +862,7 @@ async function executeWorkshopCommissionCraft(opts) {
     const missingMaterials = [];
     for (const material of adjustedCraftingMaterials) {
       const requiredQty = material.quantity * quantity;
-      let ownedQty = 0;
-      if (generalCategories[material.itemName]) {
-        ownedQty = inventory
-          .filter((invItem) => generalCategories[material.itemName].includes(invItem.itemName))
-          .reduce((sum, inv) => sum + inv.quantity, 0);
-      } else {
-        ownedQty = inventory
-          .filter((invItem) => invItem.itemName === material.itemName)
-          .reduce((sum, inv) => sum + inv.quantity, 0);
-      }
+      const ownedQty = countInventoryQtyForRecipeMaterial(inventory, material.itemName);
       if (ownedQty < requiredQty) {
         missingMaterials.push(`${material.itemName}: need ${requiredQty}, have ${ownedQty}`);
       }
@@ -844,7 +879,7 @@ async function executeWorkshopCommissionCraft(opts) {
 
     const itemWithAdjustedMaterials = { ...item, craftingMaterial: adjustedCraftingMaterials };
     try {
-      materialsUsed = await processMaterials(null, commissioner, inventory, itemWithAdjustedMaterials, quantity);
+      materialsUsed = await processMaterials(null, freshCommissioner, inventory, itemWithAdjustedMaterials, quantity);
     } catch (e) {
       logError('WS-COMM', `processMaterials: ${e.message}`);
       return { ok: false, code: 'MATERIALS', error: 'Failed to remove materials. Try again.' };

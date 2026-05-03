@@ -62,9 +62,15 @@ const {
   incrementVillageShopStockFromCatalog,
 } = require('@/database/db');
 const RelicModel = require('@/models/RelicModel');
+const RelicArchiveRequest = require('@/models/RelicArchiveRequestModel');
 const { EmbedBuilder, ChannelType } = require('discord.js');
 
 const APPROVAL_CHANNEL_ID = '1381479893090566144';
+/** Relic Library Archives mod queue (matches dashboard relicArchiveNotify fallbacks). */
+const RELIC_ARCHIVE_REMINDER_CHANNEL_ID =
+  process.env.RELIC_ARCHIVE_REQUESTS_CHANNEL_ID ||
+  process.env.ADMIN_REVIEW_CHANNEL_ID ||
+  '1381479893090566144';
 const COMMUNITY_BOARD_CHANNEL_ID = process.env.COMMUNITY_BOARD_CHANNEL_ID || '651614266046152705';
 const PEDDLER_RESTOCK_CHANNEL_ID = process.env.PEDDLER_RESTOCK_CHANNEL_ID || COMMUNITY_BOARD_CHANNEL_ID;
 const MOD_ROLE_ID = process.env.MOD_ROLE_ID || '606128760655183882';
@@ -2891,6 +2897,85 @@ async function submissionModReminder(client, _data = {}) {
   }
 }
 
+// ------------------- relic-archive-mod-reminder (Every hour) -------------------
+// @s mods on the original Discord notification if a relic archive request is still pending ≥12h,
+// then again every 12h until approved/rejected (submission-mod-reminder only pings once).
+const RELIC_ARCHIVE_REMINDER_INTERVAL_MS = 12 * 60 * 60 * 1000;
+
+async function relicArchiveModReminder(client, _data = {}) {
+  if (!client?.channels) {
+    logger.error('SCHEDULED', 'relic-archive-mod-reminder: Discord client not available');
+    return;
+  }
+  try {
+    logger.info('SCHEDULED', 'relic-archive-mod-reminder: starting');
+
+    if (!MOD_ROLE_ID) {
+      logger.warn('SCHEDULED', 'relic-archive-mod-reminder: MOD_ROLE_ID not configured, skipping');
+      return;
+    }
+
+    const cutoff = new Date(Date.now() - RELIC_ARCHIVE_REMINDER_INTERVAL_MS);
+    const pendingRaw = await RelicArchiveRequest.find({
+      status: 'pending',
+      createdAt: { $lte: cutoff },
+      $or: [{ modReminderSentAt: null }, { modReminderSentAt: { $lte: cutoff } }],
+    }).lean();
+
+    const pending = pendingRaw.filter((r) => r.discordNotificationMessageId);
+
+    let remindedCount = 0;
+    for (const req of pending) {
+      const channelId = req.discordNotificationChannelId || RELIC_ARCHIVE_REMINDER_CHANNEL_ID;
+      const messageId = req.discordNotificationMessageId;
+      const relicLabel = req.title || req.relicId || String(req._id);
+
+      try {
+        const channel = await client.channels.fetch(channelId).catch(() => null);
+        if (!channel?.isTextBased()) {
+          logger.warn(
+            'SCHEDULED',
+            `relic-archive-mod-reminder: Channel ${channelId} not available for request ${req._id}`
+          );
+          continue;
+        }
+
+        const notificationMessage = await channel.messages.fetch(messageId).catch(() => null);
+        if (!notificationMessage) {
+          logger.warn(
+            'SCHEDULED',
+            `relic-archive-mod-reminder: Message ${messageId} not found (request ${req._id}, relic ${relicLabel})`
+          );
+          continue;
+        }
+
+        await notificationMessage.reply({
+          content: `<@&${MOD_ROLE_ID}> Pending relic archive request **${relicLabel}** (\`${req.relicId}\`) still needs review (repeat reminder every 12 hours until processed).`,
+        });
+
+        await RelicArchiveRequest.findByIdAndUpdate(req._id, {
+          modReminderSentAt: new Date(),
+          updatedAt: new Date(),
+        });
+        remindedCount++;
+        logger.info('SCHEDULED', `relic-archive-mod-reminder: Sent reminder for archive request ${req._id}`);
+      } catch (err) {
+        logger.error(
+          'SCHEDULED',
+          `relic-archive-mod-reminder: Failed for request ${req._id}: ${err.message}`
+        );
+      }
+    }
+
+    logger.success(
+      'SCHEDULED',
+      `relic-archive-mod-reminder: done (reminded mods for ${remindedCount} relic archive request(s))`
+    );
+  } catch (err) {
+    logger.error('SCHEDULED', `relic-archive-mod-reminder: ${err.message}`);
+  }
+}
+
 // ------------------- mod-todo-reminder (every 30 min; repeat ping ≥6h apart) -------------------
 // Sends channel reminders for mod tasks that are overdue or due soon
 // Posts in the original channel (replying to original message) or fallback channel
@@ -3361,6 +3446,7 @@ const TASKS = [
   { name: 'cleanup-boost-expirations', cron: '0 * * * *', handler: cleanupBoostExpirations }, // Every hour
   { name: 'blight-expiration-warnings', cron: '0 */6 * * *', handler: blightExpirationWarnings }, // Every 6 hours
   { name: 'submission-mod-reminder', cron: '0 * * * *', handler: submissionModReminder }, // Every hour - @mods if art/writing pending 12+ hours
+  { name: 'relic-archive-mod-reminder', cron: '0 * * * *', handler: relicArchiveModReminder }, // Every hour - @mods every 12h while relic archive request pending
   { name: 'mod-todo-reminder', cron: '*/30 * * * *', handler: modTodoReminder }, // Every 30 min check; repeat channel ping at most every 6h for overdue/due-soon mod tasks
 
   // Relic Deadline Tasks
