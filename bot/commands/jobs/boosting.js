@@ -662,12 +662,16 @@ async function tryResolveDevBoostOverride(characterName) {
 
   const boostEffectStr = `${boost.name} — ${boost.description}`;
   const now = Date.now();
+  const boostedByDisplay =
+    character.boostedBy && String(character.boostedBy).trim()
+      ? String(character.boostedBy).trim()
+      : '(dev override)';
 
   return {
     isDevOverride: true,
     boostRequestId: 'DEV_OVERRIDE',
     targetCharacter: character.name,
-    boostingCharacter: '(dev override)',
+    boostingCharacter: boostedByDisplay,
     category,
     status: 'accepted',
     requesterUserId: character.userId,

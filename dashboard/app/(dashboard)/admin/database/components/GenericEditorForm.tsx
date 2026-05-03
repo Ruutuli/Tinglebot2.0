@@ -104,10 +104,63 @@ export function GenericEditorForm({
         }
       });
     });
+    if (modelConfig.name === "Character") {
+      const it = item as Record<string, unknown>;
+      if (initial["boostedBy"] === undefined || initial["boostedBy"] === null) {
+        initial["boostedBy"] = (it.boostedBy as string) ?? "";
+      }
+      const dvo = it.devBoostOverride as Record<string, unknown> | undefined;
+      if (initial["devBoostOverride.enabled"] === undefined) {
+        initial["devBoostOverride.enabled"] = Boolean(dvo?.enabled);
+      }
+      if (initial["devBoostOverride.boosterJob"] === undefined) {
+        initial["devBoostOverride.boosterJob"] = (dvo?.boosterJob as string) ?? "";
+      }
+      if (initial["devBoostOverride.category"] === undefined) {
+        initial["devBoostOverride.category"] = (dvo?.category as string) ?? "";
+      }
+      if (initial["devBoostOverride.targetVillage"] === undefined) {
+        initial["devBoostOverride.targetVillage"] = (dvo?.targetVillage as string) ?? "";
+      }
+    }
     return initial;
   });
 
   const [changes, setChanges] = useState<Record<string, { original: unknown; current: unknown }>>({});
+
+  /** Admin DB editor: autocomplete for Character.boostedBy — dummy first, then all names from API */
+  const [characterNameSuggestions, setCharacterNameSuggestions] = useState<string[]>([]);
+
+  useEffect(() => {
+    if (modelConfig.name !== "Character") {
+      setCharacterNameSuggestions([]);
+      return;
+    }
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch("/api/admin/database/character-names");
+        if (!res.ok) return;
+        const data = (await res.json()) as { names?: string[] };
+        if (!cancelled && Array.isArray(data.names)) {
+          setCharacterNameSuggestions(data.names);
+        }
+      } catch {
+        /* ignore */
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [modelConfig.name]);
+
+  const boostedBySuggestions = useMemo(() => {
+    const DUMMY = "(Dummy booster)";
+    const rest = characterNameSuggestions
+      .filter((n) => n && n.trim() !== DUMMY)
+      .sort((a, b) => a.localeCompare(b));
+    return [DUMMY, ...rest];
+  }, [characterNameSuggestions]);
 
   // Auto-populate exploreLocations when exploreRegions changes (Monster model)
   useEffect(() => {
@@ -182,6 +235,27 @@ export function GenericEditorForm({
       return next;
     });
   }, [item, modelConfig.name]);
+
+  const handleBatchFieldChange = useCallback(
+    (updates: Record<string, unknown>) => {
+      setFormData((prev) => ({ ...prev, ...updates }));
+      setChanges((prevChanges) => {
+        const next = { ...prevChanges };
+        for (const [fieldKey, value] of Object.entries(updates)) {
+          const originalValue = fieldKey.includes(".")
+            ? getNested(item as Record<string, unknown>, fieldKey)
+            : (item as Record<string, unknown>)[fieldKey];
+          if (JSON.stringify(originalValue) !== JSON.stringify(value)) {
+            next[fieldKey] = { original: originalValue, current: value };
+          } else {
+            delete next[fieldKey];
+          }
+        }
+        return next;
+      });
+    },
+    [item]
+  );
 
   // Handle toggle grid changes (special case for boolean grids)
   const handleToggleGridChange = useCallback((fieldKey: string, values: Record<string, boolean>) => {
@@ -272,6 +346,8 @@ export function GenericEditorForm({
           }
         } else if (field.type === "computed") {
           // Computed fields are read-only derived values; do not include in updates
+        } else if (field.type === "custom" && field.component === "DevBoostTestPanel") {
+          // Values live on boostedBy / devBoostOverride.* (handled below for Character)
         } else {
           // Regular field
           const key = field.key;
@@ -315,6 +391,25 @@ export function GenericEditorForm({
         }
       });
     });
+
+    if (modelConfig.name === "Character") {
+      const characterBoostKeys = [
+        "boostedBy",
+        "devBoostOverride.enabled",
+        "devBoostOverride.boosterJob",
+        "devBoostOverride.category",
+        "devBoostOverride.targetVillage",
+      ];
+      for (const key of characterBoostKeys) {
+        const formValue = formData[key];
+        const originalValue = key.includes(".")
+          ? getNested(item as Record<string, unknown>, key)
+          : (item as Record<string, unknown>)[key];
+        if (changes[key] || JSON.stringify(formValue) !== JSON.stringify(originalValue)) {
+          updates[key] = formValue;
+        }
+      }
+    }
 
     await onSave(itemId, updates);
   }, [formData, changes, item, onSave, modelConfig]);
@@ -366,6 +461,8 @@ export function GenericEditorForm({
           isChanged={isChanged}
           items={items}
           formData={formData}
+          onBatchChange={handleBatchFieldChange}
+          boostedBySuggestions={boostedBySuggestions}
         />
       );
     });

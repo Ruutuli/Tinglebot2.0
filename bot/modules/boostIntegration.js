@@ -286,7 +286,7 @@ async function getBoosterInfo(characterName) {
 
     if (activeBoost.isDevOverride) {
       return {
-        name: '(dev override)',
+        name: activeBoost.boostingCharacter || '(dev override)',
         job: activeBoost.boosterJob,
       };
     }

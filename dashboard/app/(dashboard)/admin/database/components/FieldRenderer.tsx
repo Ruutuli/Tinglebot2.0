@@ -15,6 +15,7 @@ import { VillageCooldownsField } from "./VillageCooldownsField";
 import { QuadrantsField, type Quadrant } from "./QuadrantsField";
 import { QuestCompletionsField } from "./QuestCompletionsField";
 import { QuestParticipantsField, type QuestParticipantData } from "./QuestParticipantsField";
+import { DevBoostTestPanel } from "./DevBoostTestPanel";
 
 type FieldRendererProps = {
   field: FieldConfig;
@@ -393,6 +394,23 @@ export function FieldRenderer({
             helpText={helpText || ""}
             isChanged={isChanged}
             error={error}
+          />
+        );
+      }
+      if (field.component === "DevBoostTestPanel") {
+        const formData = (extraProps.formData as Record<string, unknown>) ?? {};
+        const onBatchChange = extraProps.onBatchChange as
+          | ((u: Record<string, unknown>) => void)
+          | undefined;
+        const boostedBySuggestions = (extraProps.boostedBySuggestions as string[]) ?? [];
+        if (!onBatchChange) return null;
+        return (
+          <DevBoostTestPanel
+            label={label}
+            helpText={helpText}
+            formData={formData}
+            onBatchChange={onBatchChange}
+            boostedBySuggestions={boostedBySuggestions}
           />
         );
       }
