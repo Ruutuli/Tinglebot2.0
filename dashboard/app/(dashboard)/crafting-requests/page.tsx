@@ -289,6 +289,12 @@ function CraftingRequestsPageContent() {
   const requestFocusFromUrl = searchParams.get("request")?.trim() ?? "";
   const scrolledToRequestRef = useRef(false);
 
+  /** Avoid SSR vs first-client-paint mismatches from session/search params timing (hydration). */
+  const [clientMounted, setClientMounted] = useState(false);
+  useEffect(() => {
+    setClientMounted(true);
+  }, []);
+
   const [openRequests, setOpenRequests] = useState<CraftingRequestRow[]>([]);
   const [loadingOpen, setLoadingOpen] = useState(true);
   const [openListError, setOpenListError] = useState<string | null>(null);
@@ -1130,11 +1136,14 @@ function CraftingRequestsPageContent() {
     };
   }, [formModalOpen]);
 
-  if (sessionLoading) {
+  if (!clientMounted || sessionLoading) {
     return (
       <div className="h-full flex min-h-[50vh] items-center justify-center p-4">
         <div className="text-center">
-          <i className="fas fa-spinner fa-spin text-4xl text-[var(--totk-light-green)] mb-4 block" />
+          <i
+            className="fas fa-spinner fa-spin text-4xl text-[var(--totk-light-green)] mb-4 block"
+            aria-hidden
+          />
           <p className="text-[var(--botw-pale)]">Loading...</p>
         </div>
       </div>
@@ -1403,6 +1412,10 @@ function CraftingRequestsPageContent() {
                                 </div>
                               </div>
                               <div className="flex flex-wrap items-center gap-x-3 gap-y-1 border-t border-[var(--botw-border)]/35 pt-2.5 text-[11px] text-[var(--botw-pale)]/80 sm:text-xs">
+                                <span className="inline-flex items-center gap-1 font-mono text-[var(--botw-cream)] tabular-nums">
+                                  <i className="fa-solid fa-hashtag shrink-0 text-[var(--totk-light-ocher)]/90" aria-hidden />
+                                  {row.commissionID ?? row._id}
+                                </span>
                                 <span className="inline-flex items-center gap-1.5 tabular-nums text-[var(--botw-pale)]/85">
                                   <i className="fa-regular fa-calendar shrink-0 text-[var(--totk-light-ocher)]/90" aria-hidden />
                                   {row.createdAt
@@ -1507,7 +1520,10 @@ function CraftingRequestsPageContent() {
 
           {loadingOpen && !openRequests.length ? (
             <div className="flex flex-col items-center justify-center rounded-2xl border border-dashed border-[var(--botw-border)] bg-[var(--botw-panel)]/30 py-20">
-              <i className="fa-solid fa-spinner fa-spin mb-3 text-3xl text-[var(--totk-light-green)]" />
+              <i
+                className="fa-solid fa-spinner fa-spin mb-3 text-3xl text-[var(--totk-light-green)]"
+                aria-hidden
+              />
               <p className="text-sm text-[var(--botw-pale)]">Loading the board…</p>
             </div>
           ) : null}
@@ -1624,6 +1640,18 @@ function CraftingRequestsPageContent() {
 
                       <div className="rounded-xl border border-[var(--botw-border)]/35 bg-black/22 px-3 py-3 backdrop-blur-sm sm:px-4">
                         <dl className="grid gap-2.5 text-sm text-[var(--botw-pale)]">
+                          <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
+                            <dt className="flex shrink-0 items-center gap-1.5 text-xs font-medium text-[var(--botw-pale)]/75">
+                              <i className="fa-solid fa-hashtag text-[var(--totk-light-green)]" aria-hidden />
+                              Commission ID
+                            </dt>
+                            <dd
+                              className="font-mono text-[13px] font-semibold tracking-tight text-[var(--botw-cream)]"
+                              title={row.commissionID ? String(row._id) : undefined}
+                            >
+                              {row.commissionID ?? row._id}
+                            </dd>
+                          </div>
                           <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
                             <dt className="flex shrink-0 items-center gap-1.5 text-xs font-medium text-[var(--botw-pale)]/75">
                               <i className="fa-solid fa-user text-[var(--totk-light-green)]" aria-hidden />

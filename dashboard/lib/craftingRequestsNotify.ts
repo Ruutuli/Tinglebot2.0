@@ -63,6 +63,31 @@ function jobRoleIdsFromSnapshot(jobs: string[] | undefined): string[] {
   return out;
 }
 
+/** Recipe job roles + optional Artist role (`JOB_ARTIST`) for open-call commissions. */
+function openCommissionPingRoleIds(jobs: string[] | undefined): string[] {
+  const out = jobRoleIdsFromSnapshot(jobs);
+  const seen = new Set(out);
+  const artistId = jobRoleIdFromEnv("Artist");
+  if (artistId && !seen.has(artistId)) {
+    seen.add(artistId);
+    out.push(artistId);
+  }
+  return out;
+}
+
+/**
+ * Ping recipe job roles (+ Artist) when the commission is not locked to one named crafter.
+ * Open board posts, or "specific" rows missing a resolved target owner, behave like an open call.
+ */
+function isOpenCallForJobPings(payload: CraftingRequestNotifyPayload): boolean {
+  const mode = String(payload.targetMode ?? "").toLowerCase();
+  if (mode === "open") return true;
+  if (mode === "specific") {
+    return !payload.targetOwnerDiscordId?.trim();
+  }
+  return true;
+}
+
 /**
  * Discord strips pings unless `allowed_mentions` permits them.
  * Use explicit `users` / `roles` snowflake arrays (same IDs as in message `content`).
@@ -74,12 +99,16 @@ function allowedMentionsForBoardMessage(payload: CraftingRequestNotifyPayload): 
     if (t && DISCORD_SNOWFLAKE.test(t)) userIds.push(t);
   };
   pushUser(payload.requesterDiscordId);
-  if (payload.targetMode === "specific" && payload.targetOwnerDiscordId?.trim()) {
+  if (
+    String(payload.targetMode ?? "").toLowerCase() === "specific" &&
+    payload.targetOwnerDiscordId?.trim()
+  ) {
     const tid = payload.targetOwnerDiscordId.trim();
     if (tid !== payload.requesterDiscordId) pushUser(tid);
   }
-  const roleIds =
-    payload.targetMode === "open" ? jobRoleIdsFromSnapshot(payload.craftingJobsSnapshot) : [];
+  const roleIds = isOpenCallForJobPings(payload)
+    ? openCommissionPingRoleIds(payload.craftingJobsSnapshot)
+    : [];
 
   const out: Record<string, unknown> = {};
   if (userIds.length > 0) out.users = userIds;
@@ -118,7 +147,7 @@ export type CraftingRequestNotifyPayload = {
 
 /**
  * Message content pings: always the requester; named commission also pings the requested crafter;
- * open commission pings Discord job roles (`JOB_*` from createJobRoles.js) for each recipe job.
+ * open calls (no locked artisan) also ping `JOB_*` roles for each recipe job (+ Artist when configured).
  */
 export function buildCraftingBoardPingContent(payload: CraftingRequestNotifyPayload): string {
   const parts: string[] = [`<@${payload.requesterDiscordId}>`];
@@ -134,16 +163,35 @@ export function buildCraftingBoardPingContent(payload: CraftingRequestNotifyPayl
     }
   };
 
-  if (payload.targetMode === "specific" && payload.targetOwnerDiscordId?.trim()) {
-    const tid = payload.targetOwnerDiscordId.trim();
+  const namedSpecific =
+    String(payload.targetMode ?? "").toLowerCase() === "specific" && payload.targetOwnerDiscordId?.trim();
+
+  if (namedSpecific) {
+    const tid = payload.targetOwnerDiscordId!.trim();
     if (tid !== payload.requesterDiscordId) {
       parts.push(`<@${tid}>`);
     }
-  } else {
+  } else if (isOpenCallForJobPings(payload)) {
     pushJobRoles();
+    const artistMention = roleMentionFromJobName("Artist");
+    if (artistMention && !parts.includes(artistMention)) {
+      parts.push(artistMention);
+    }
   }
 
   return parts.join(" ");
+}
+
+/**
+ * Clickable slash mention when `DISCORD_COMMAND_ID_CRAFTING` is set (guild command id for `/crafting` from Discord).
+ * Register the same env on the dashboard as the bot so pings/embeds stay valid after redeploys.
+ */
+function craftingAcceptSlashMention(): string {
+  const raw = process.env.DISCORD_COMMAND_ID_CRAFTING?.trim();
+  if (raw && DISCORD_SNOWFLAKE.test(raw)) {
+    return `</crafting accept:${raw}>`;
+  }
+  return "/crafting accept";
 }
 
 const EMBED_TITLE_NEW = "📋 New workshop commission";
@@ -278,23 +326,16 @@ export function buildCraftingRequestBoardMessage(
   const commissionBoardUrl = publicIdForEmbed
     ? `${boardUrl}?request=${encodeURIComponent(publicIdForEmbed)}`
     : boardUrl;
-  /** Command body after the server text prefix (see note — not a slash command). */
-  const discordLineAccept = `crafting accept ${idPlaceholder} <your crafter OC name>`;
-  const discordLineRequestAccept = `crafting request accept ${idPlaceholder} <your crafter OC name>`;
-  const discordFullAccept = `?${discordLineAccept}`;
+
+  const slashMention = craftingAcceptSlashMention();
 
   descParts.push("");
   descParts.push("🧭 **How to accept**");
-  descParts.push(`↳ **Web:** [Open this commission →](${commissionBoardUrl})`);
+  descParts.push(`↳ **Web:** [Open on the website](${commissionBoardUrl})`);
   descParts.push(
-    `↳ **Slash:** \`/crafting accept\` — **request_id** \`${idPlaceholder}\` + your crafter **charactername**`
+    `↳ **Discord:** ${slashMention} — set **request_id** to \`${idPlaceholder}\` and **charactername** to your crafter OC.`
   );
-  descParts.push(`↳ **Discord:** \`${discordLineAccept}\``);
-  descParts.push(`↳ **or** \`${discordLineRequestAccept}\``);
-  descParts.push(
-    `↳ _\`Text commands: put prefix \`?\` **before** \`crafting\` — e.g. \`${discordFullAccept}\`_`
-  );
-  descParts.push(`↳ [All open commissions →](${boardUrl})`);
+  descParts.push(`↳ [All open commissions](${boardUrl})`);
 
   let description = descParts.join("\n");
   if (description.length > 4096) {
@@ -374,7 +415,7 @@ export async function notifyCraftingRequestCreated(
 
   const body = buildCraftingRequestBoardMessage(payload);
   if (
-    payload.targetMode === "open" &&
+    isOpenCallForJobPings(payload) &&
     (payload.craftingJobsSnapshot?.length ?? 0) > 0 &&
     jobRoleIdsFromSnapshot(payload.craftingJobsSnapshot).length === 0
   ) {
