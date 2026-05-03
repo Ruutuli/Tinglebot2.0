@@ -3946,7 +3946,7 @@ async function handleExploreDiscoveryAutocomplete(interaction, focusedOption) {
   }
 
   const revisitTypes = ["monster_camp", "grotto", "shrine"];
-  const grottoLike = (t) => t === "grotto" || t === "shrine";
+  const grottoLike = (t) => t === "grotto" || t === "shrine"; // shrine: legacy name for grotto
   const filteredDiscoveries = quadrant.discoveries.filter((d) =>
    revisitTypes.includes(String(d.type || "").toLowerCase())
   );

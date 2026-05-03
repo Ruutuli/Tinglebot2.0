@@ -39,7 +39,7 @@ const DISCOVERY_CLEANUP_OUTCOMES = [
     "grotto_found",
     "grotto_cleansed",
     "map_grotto", // legacy: map-led grotto (new bot logs use "grotto" + same at as map row)
-    "shrine", // legacy progress outcome / map type synonym for grotto
+    "shrine", // legacy name for grotto (same mechanic—always treat as grotto)
     "ruin_rest",
 ];
 // Location parsing used for discovery cleanup / reminders. Keep aligned with dashboard parsing (supports "in" and "at").

@@ -8404,6 +8404,7 @@ module.exports = {
           let spotAlreadyTaken = leadConsumed;
           if (!spotAlreadyTaken) {
             if (leadsTo === "grotto" || leadsTo === "shrine") {
+              // "shrine" is legacy DB wording for grotto
               spotAlreadyTaken = quadrantDiscoveriesHasGrotto(discoveries);
             } else if (leadsTo === "ruins") {
               spotAlreadyTaken = quadrantDiscoveriesHasType(discoveries, "ruins");
@@ -8418,7 +8419,12 @@ module.exports = {
           const mapOwnerName = mapOwnerCharRef?.name || "Unknown";
           const redeemed = await findAndRedeemOldMap(
             { _id: mapOwnerCharRef?._id, name: mapOwnerCharRef?.name, userId: mapOwnerCharRef?.userId },
-            quadWithMap.oldMapNumber
+            quadWithMap.oldMapNumber,
+            {
+              partyId: party.partyId,
+              destinationSquare: newLocation.square,
+              destinationQuadrant: newLocation.quadrant,
+            }
           );
           if (redeemed) {
             if (leadsTo === "chest") {
@@ -8478,7 +8484,7 @@ module.exports = {
                 moveDescription += `\n\n🗺️ **Your map led you here!** **${mapOwnerName}**'s map revealed a **Relic**!`;
               }
             } else if (leadsTo === "grotto" || leadsTo === "shrine") {
-              // Quadrant oldMapLeadsTo is "grotto" (legacy DB may still say "shrine"). Map row is always type "grotto" for /explore discovery.
+              // Shrine = grotto (legacy key). Map discovery row uses type "grotto".
               // Same timestamp + outcome "grotto" as roll-found grottos so progress discoveryKey matches map DB and dashboard pin flow works.
               const atMapLedGrotto = new Date();
               const sqMove = String(party.square || "").trim();

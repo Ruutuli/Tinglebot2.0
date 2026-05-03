@@ -5,6 +5,19 @@ import { getSession } from "@/lib/session";
 
 export const dynamic = "force-dynamic";
 
+/** Aligns dashboard discovery pin `outcome` with Square quadrant `oldMapLeadsTo` (same rules as bot oldMapUtils.pinOutcomeMatchesOldMapLead). "shrine" is legacy wording for grotto—treat as identical. */
+function pinOutcomeMatchesOldMapQuadrantLead(outcome: string, leadsToRaw: string | null | undefined): boolean {
+  const o = String(outcome ?? "").trim().toLowerCase();
+  const lt = String(leadsToRaw ?? "").trim().toLowerCase();
+  const grottoOutcomes = new Set(["grotto", "grotto_found", "grotto_cleansed", "map_grotto", "shrine"]);
+  const ruinsOutcomes = new Set(["ruin_rest", "map_ruins", "ruins"]);
+  const campOutcomes = new Set(["monster_camp", "monster_camp_fight"]);
+  if (grottoOutcomes.has(o) && (lt === "grotto" || lt === "shrine")) return true; // lt "shrine" === grotto
+  if (ruinsOutcomes.has(o) && lt === "ruins") return true;
+  if (campOutcomes.has(o) && lt === "monster_camp") return true;
+  return false;
+}
+
 async function getAuthenticatedUser() {
   const session = await getSession();
   const user = session.user;
@@ -261,7 +274,7 @@ export async function POST(request: Request) {
           const now = new Date();
           const pinIdStr = (pin as { _id?: unknown })._id != null ? String((pin as { _id: { toString: () => string } })._id.toString()) : "";
 
-          // Grotto lifecycle: "grotto", "grotto_found", "grotto_cleansed", "map_grotto", "shrine" (legacy map type) are the same discovery (one per square+quadrant). Store as type "grotto" + grottoStatus.
+          // Grotto lifecycle: "grotto", "grotto_found", "grotto_cleansed", "map_grotto", "shrine" (shrine = old word for grotto) are the same discovery (one per square+quadrant). Store as type "grotto" + grottoStatus.
           const isGrottoOutcome =
             outcome === "grotto" ||
             outcome === "grotto_found" ||
@@ -362,6 +375,90 @@ export async function POST(request: Request) {
         }
       } catch (mapErr) {
         console.error("[api/pins] Failed to mark discovery pinned / add to exploringMap:", mapErr);
+      }
+
+      // 4) oldMapsFound: stamp explore-map pin when this marker matches a redeemed Old Map # at this square+quadrant
+      if (partyId) {
+        try {
+          const parts = String(key).split("|");
+          const outcomePart = (parts[0] ?? "").trim();
+          const squarePart = (parts[1] ?? "").trim();
+          const quadrantPart = (parts[2] ?? "").trim().toUpperCase();
+          if (
+            outcomePart &&
+            squarePart &&
+            (quadrantPart === "Q1" || quadrantPart === "Q2" || quadrantPart === "Q3" || quadrantPart === "Q4")
+          ) {
+            const Square =
+              mongoose.models.Square ??
+              ((await import("@/models/mapModel.js")) as unknown as { default: mongoose.Model<unknown> }).default;
+            const squareIdRegex = new RegExp(`^${squarePart.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}$`, "i");
+            const squareLean = await Square.findOne({ squareId: squareIdRegex }).select("quadrants").lean();
+            const quadDoc = (squareLean as { quadrants?: Array<{ quadrantId?: string; oldMapNumber?: number | null; oldMapLeadsTo?: string | null }> })?.quadrants?.find(
+              (qq) => String(qq.quadrantId ?? "").toUpperCase() === quadrantPart
+            );
+            const oldMapNum = quadDoc?.oldMapNumber;
+            const leadsToField = quadDoc?.oldMapLeadsTo;
+            if (
+              typeof oldMapNum === "number" &&
+              oldMapNum >= 1 &&
+              oldMapNum <= 46 &&
+              pinOutcomeMatchesOldMapQuadrantLead(outcomePart, leadsToField)
+            ) {
+              const OldMapFoundMod = await import("@/models/OldMapFoundModel.js");
+              const OldMapFound = (OldMapFoundMod as { default?: mongoose.Model<unknown> }).default || OldMapFoundMod;
+              const stamp = new Date();
+              const pid = String(partyId).trim().slice(0, 32);
+              const squareUpper = squarePart.trim().toUpperCase();
+              // Only stamp the map copy redeemed on this expedition at this cell—avoids marking a later find of the same map #.
+              const pinNotSet = {
+                $or: [{ exploreMapPinnedAt: null }, { exploreMapPinnedAt: { $exists: false } }],
+              } as const;
+              const destMatchesPin = {
+                $or: [
+                  {
+                    $and: [
+                      { redeemedDestinationSquare: squareUpper },
+                      { redeemedDestinationQuadrant: quadrantPart },
+                    ],
+                  },
+                  {
+                    $and: [
+                      {
+                        $or: [
+                          { redeemedDestinationSquare: null },
+                          { redeemedDestinationSquare: "" },
+                          { redeemedDestinationSquare: { $exists: false } },
+                        ],
+                      },
+                      {
+                        $or: [
+                          { redeemedDestinationQuadrant: null },
+                          { redeemedDestinationQuadrant: "" },
+                          { redeemedDestinationQuadrant: { $exists: false } },
+                        ],
+                      },
+                    ],
+                  },
+                ],
+              };
+              await OldMapFound.updateMany(
+                {
+                  $and: [
+                    { mapNumber: oldMapNum },
+                    { redeemedAt: { $ne: null } },
+                    pinNotSet,
+                    { redeemedForPartyId: pid },
+                    destMatchesPin,
+                  ],
+                },
+                { $set: { exploreMapPinnedAt: stamp, exploreMapPinnedPartyId: pid } }
+              );
+            }
+          }
+        } catch (oldMapErr) {
+          console.error("[api/pins] OldMapFound explore pin stamp failed:", oldMapErr);
+        }
       }
     }
 

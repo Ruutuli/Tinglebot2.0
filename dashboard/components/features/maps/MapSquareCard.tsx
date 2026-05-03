@@ -6,7 +6,7 @@
 
 import { useEffect, useState } from "react";
 
-/** Match bot oldMaps: grotto wording; legacy DB may still store "shrine". */
+/** Match bot oldMaps: "shrine" is legacy wording for grotto (same thing). */
 function formatOldMapLeadsToDisplay(v: string | null | undefined): string {
   if (v == null || v === "") return "—";
   const t = v.toLowerCase();

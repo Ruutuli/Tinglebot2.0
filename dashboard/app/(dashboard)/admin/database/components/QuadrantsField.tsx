@@ -23,7 +23,7 @@ const OLD_MAP_LEADS_TO_OPTIONS = [
   { value: "ruins", label: "Ruins" },
   { value: "relic", label: "Relic" },
   { value: "grotto", label: "Grotto" },
-  { value: "shrine", label: "shrine (legacy—change to Grotto)" },
+  { value: "shrine", label: "Grotto (DB key: shrine — legacy, same as grotto)" },
 ];
 
 type Discovery = {

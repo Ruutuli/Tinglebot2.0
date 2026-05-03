@@ -69,7 +69,7 @@ function getOldMapByNumber(number) {
   return OLD_MAPS.find((m) => m.number === number) || null;
 }
 
-/** Display label for map appraisal / embeds (legacy DB may still have "shrine"). */
+/** Display label for map appraisal / embeds. "shrine" is the old term for grotto—same destination type. */
 function formatOldMapLeadsToLabel(leadsTo) {
   if (leadsTo == null || leadsTo === "") return null;
   const t = String(leadsTo).toLowerCase();

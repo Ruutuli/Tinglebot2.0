@@ -27,6 +27,16 @@ const OldMapFoundSchema = new Schema({
   leadsToCoordinates: { type: String, default: null },
   /** When set, this map copy was used at its location (one-and-done). */
   redeemedAt: { type: Date, default: null },
+  /** Expedition partyId when this copy was redeemed at the map destination (scopes explore-map pin to one run). */
+  redeemedForPartyId: { type: String, default: null },
+  /** Grid square where this redemption occurred (uppercase, e.g. G9). */
+  redeemedDestinationSquare: { type: String, default: null },
+  /** Quadrant where this redemption occurred (e.g. Q1). */
+  redeemedDestinationQuadrant: { type: String, default: null },
+  /** When set, the party placed an Explore-map marker for this discovery (dashboard pin tied to expedition). */
+  exploreMapPinnedAt: { type: Date, default: null },
+  /** Expedition partyId when exploreMapPinnedAt was set (optional audit). */
+  exploreMapPinnedPartyId: { type: String, default: null },
 }, { collection: 'oldMapsFound' });
 
 OldMapFoundSchema.index({ characterName: 1, mapNumber: 1 });

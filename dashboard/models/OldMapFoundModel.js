@@ -16,6 +16,11 @@ const OldMapFoundSchema = new Schema({
   leadsTo: { type: String, default: null },
   leadsToCoordinates: { type: String, default: null },
   redeemedAt: { type: Date, default: null },
+  redeemedForPartyId: { type: String, default: null },
+  redeemedDestinationSquare: { type: String, default: null },
+  redeemedDestinationQuadrant: { type: String, default: null },
+  exploreMapPinnedAt: { type: Date, default: null },
+  exploreMapPinnedPartyId: { type: String, default: null },
 }, { collection: 'oldMapsFound' });
 
 module.exports = mongoose.models.OldMapFound || mongoose.model('OldMapFound', OldMapFoundSchema);

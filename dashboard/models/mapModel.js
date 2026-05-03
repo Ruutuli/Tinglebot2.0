@@ -4,7 +4,7 @@ const { Schema } = mongoose;
 
 // Define Discovery Schema for the discoveries array
 const DiscoverySchema = new Schema({
-  type: { type: String, required: true },
+  type: { type: String, required: true }, // grotto, monster_camp, ruins; legacy "shrine" === grotto
   number: { type: String, required: false },
   name: { type: String, default: '' }, // Grotto name (e.g. "Mayak Grotto") when type is grotto
   discoveredBy: { type: String, default: '' }, // Discord ID of discoverer
@@ -39,7 +39,7 @@ const QuadrantSchema = new Schema({
   exploredAt: { type: Date, default: null },
   // Old map location: when a party reaches this quadrant, prompt if someone has Map #N
   oldMapNumber: { type: Number, default: null },
-  oldMapLeadsTo: { type: String, default: null }, // 'chest' | 'ruins' | 'relic' | 'grotto' (legacy: 'shrine')
+  oldMapLeadsTo: { type: String, default: null }, // 'chest' | 'ruins' | 'relic' | 'grotto' — 'shrine' legacy === grotto
   oldMapLeadConsumed: { type: Boolean, default: false },
   // Ruin-rest: when a party found a camp spot in ruins here, future visits auto-recover this much stamina
   ruinRestStamina: { type: Number, default: null },

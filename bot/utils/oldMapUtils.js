@@ -8,6 +8,25 @@ const { generateUniqueId } = require('./uniqueIdUtils.js');
 const logger = require('./logger.js');
 
 /** Destination for this map # from seed data (for DB snapshot at appraisal). */
+/** True if this map's destination is a discovery that should be marked with an expedition Explore pin (not chest/relic). `shrine` === grotto (legacy label). */
+function oldMapLeadsToNeedsExploreMapPin(leadsTo) {
+  const t = String(leadsTo ?? '').trim().toLowerCase();
+  return t === 'grotto' || t === 'shrine' || t === 'ruins' || t === 'monster_camp';
+}
+
+/** Progress-log / pin outcome matches what's stored on the quadrant for this old map # (for syncing OldMapFound when a dashboard pin is saved). `shrine` leadsTo === grotto. */
+function pinOutcomeMatchesOldMapLead(outcome, leadsToRaw) {
+  const o = String(outcome ?? '').trim().toLowerCase();
+  const lt = String(leadsToRaw ?? '').trim().toLowerCase();
+  const grottoOutcomes = new Set(['grotto', 'grotto_found', 'grotto_cleansed', 'map_grotto', 'shrine']);
+  const ruinsOutcomes = new Set(['ruin_rest', 'map_ruins', 'ruins']);
+  const campOutcomes = new Set(['monster_camp', 'monster_camp_fight']);
+  if (grottoOutcomes.has(o) && (lt === 'grotto' || lt === 'shrine')) return true;
+  if (ruinsOutcomes.has(o) && lt === 'ruins') return true;
+  if (campOutcomes.has(o) && lt === 'monster_camp') return true;
+  return false;
+}
+
 function getMapDestinationSnapshot(mapNumber) {
   if (typeof mapNumber !== 'number' || mapNumber < 1 || mapNumber > 46) {
     return { leadsTo: null, leadsToCoordinates: null };
@@ -234,11 +253,12 @@ async function hasAppraisedRedeemedOldMap(characterRef, mapNumber) {
 /**
  * Find one appraised, unredeemed OldMapFound for the character and map number;
  * set redeemedAt to now and return the doc. Used after granting map-led reward (one-and-done).
- * @param {string} characterName - Character who owns the map
+ * @param {{ characterId?: string, characterName?: string, userId?: string }|string} characterRef
  * @param {number} mapNumber - Map number (1-46)
+ * @param {{ partyId?: string, destinationSquare?: string, destinationQuadrant?: string }} [options] - Tie redemption to one expedition and grid cell so a later copy of the same map # is independent.
  * @returns {Promise<import('mongoose').Document|null>}
  */
-async function findAndRedeemOldMap(characterRef, mapNumber) {
+async function findAndRedeemOldMap(characterRef, mapNumber, options = {}) {
   if (!characterRef || typeof mapNumber !== 'number') return null;
   const ownerMatch = resolveOwnerMatch(characterRef);
   if (!ownerMatch) return null;
@@ -250,6 +270,12 @@ async function findAndRedeemOldMap(characterRef, mapNumber) {
   }).sort({ foundAt: 1 });
   if (!doc) return null;
   doc.redeemedAt = new Date();
+  const pid = options.partyId != null && String(options.partyId).trim();
+  if (pid) doc.redeemedForPartyId = String(pid).slice(0, 32);
+  const ds = options.destinationSquare != null && String(options.destinationSquare).trim();
+  const dq = options.destinationQuadrant != null && String(options.destinationQuadrant).trim();
+  if (ds) doc.redeemedDestinationSquare = ds.replace(/\s+/g, '').toUpperCase().slice(0, 8);
+  if (dq) doc.redeemedDestinationQuadrant = String(dq).trim().toUpperCase().slice(0, 4);
   await doc.save();
   return doc;
 }
@@ -304,6 +330,11 @@ async function getCharacterOldMapsWithDetails(characterRef) {
       mapNumber: d.mapNumber,
       appraised,
       redeemedAt: d.redeemedAt || null,
+      redeemedForPartyId: d.redeemedForPartyId || null,
+      redeemedDestinationSquare: d.redeemedDestinationSquare || null,
+      redeemedDestinationQuadrant: d.redeemedDestinationQuadrant || null,
+      exploreMapPinnedAt: d.exploreMapPinnedAt || null,
+      exploreMapPinnedPartyId: d.exploreMapPinnedPartyId || null,
       foundAt: d.foundAt,
       locationFound: d.locationFound || '',
       foundByCharacterName: d.characterName || '',
@@ -317,6 +348,8 @@ async function getCharacterOldMapsWithDetails(characterRef) {
 }
 
 module.exports = {
+  oldMapLeadsToNeedsExploreMapPin,
+  pinOutcomeMatchesOldMapLead,
   normalizeOldMapItemNameString,
   parseOldMapNumberFromItemName,
   addOldMapToCharacter,

@@ -1742,19 +1742,19 @@ export default function CraftingRequestsPage() {
                             onChange={(e) => setItemQuery(e.target.value)}
                             onFocus={() => setItemPickerOpen(true)}
                             placeholder="Search catalog…"
-                            className={modalFieldClass}
+                            className={`${modalFieldClass} text-[var(--totk-light-green)] placeholder:text-[var(--totk-mid-ocher)] caret-[var(--totk-light-green)]`}
                             autoComplete="off"
                           />
                           {itemLoading ? (
                             <p className={`${modalHintClass} mt-1`}>Searching…</p>
                           ) : null}
                           {itemOptions.length > 0 ? (
-                            <ul className="absolute z-[80] mt-1 max-h-36 w-full overflow-auto overscroll-contain rounded-md border border-[var(--totk-dark-ocher)]/55 bg-[var(--botw-warm-black)] py-0.5 shadow-xl md:max-h-[min(50vh,20rem)]">
+                            <ul className="absolute z-[80] mt-1 max-h-36 w-full overflow-auto overscroll-contain rounded-md border border-[var(--totk-light-green)]/45 bg-[var(--totk-black)]/95 py-0.5 shadow-xl shadow-black/40 ring-1 ring-[var(--totk-light-green)]/20 md:max-h-[min(50vh,20rem)]">
                               {itemOptions.map((it) => (
                                 <li key={it.itemName}>
                                   <button
                                     type="button"
-                                    className="w-full touch-manipulation px-3 py-2 text-left text-sm text-[var(--botw-pale)] hover:bg-[var(--totk-brown)]/90 md:min-h-12 md:px-4 md:py-3 md:text-base"
+                                    className="w-full touch-manipulation px-3 py-2 text-left text-sm text-[var(--totk-light-green)] hover:bg-[var(--totk-light-green)]/14 hover:text-[var(--totk-ivory)] md:min-h-12 md:px-4 md:py-3 md:text-base"
                                     onClick={() => handleSelectItem(it)}
                                   >
                                     {it.itemName}
@@ -2259,7 +2259,7 @@ export default function CraftingRequestsPage() {
                                     value={targetSearch}
                                     onChange={(e) => setTargetSearch(e.target.value)}
                                     placeholder="Start typing — suggestions match eligible jobs"
-                                    className={modalFieldClass}
+                                    className={`${modalFieldClass} text-[var(--totk-light-green)] placeholder:text-[var(--totk-mid-ocher)] caret-[var(--totk-light-green)]`}
                                     list="crafting-crafter-suggest"
                                     autoComplete="off"
                                     aria-autocomplete="list"
@@ -2288,7 +2288,7 @@ export default function CraftingRequestsPage() {
                                     </p>
                                   ) : null}
                                   {targetResults.length > 0 ? (
-                                    <ul className="mt-2 max-h-44 overflow-auto rounded-lg border border-[var(--totk-dark-ocher)]/45 bg-[var(--botw-warm-black)]/95 shadow-lg">
+                                    <ul className="mt-2 max-h-44 overflow-auto rounded-lg border border-[var(--totk-light-green)]/45 bg-[var(--totk-black)]/95 shadow-lg shadow-black/40 ring-1 ring-[var(--totk-light-green)]/20">
                                       {targetResults.map((c) => {
                                         const stamShort = c.isModCharacter
                                           ? "mod"
@@ -2301,7 +2301,7 @@ export default function CraftingRequestsPage() {
                                           >
                                             <button
                                               type="button"
-                                              className={`flex w-full flex-col items-start gap-0.5 px-3 py-2.5 text-left text-sm text-[var(--botw-pale)] transition hover:bg-[var(--totk-brown)]/90 ${
+                                              className={`group flex w-full flex-col items-start gap-0.5 px-3 py-2.5 text-left text-sm text-[var(--totk-light-green)] transition hover:bg-[var(--totk-light-green)]/14 hover:text-[var(--totk-ivory)] ${
                                                 stamWarn
                                                   ? "border-l-2 border-amber-400/90 bg-amber-950/15"
                                                   : ""
@@ -2312,7 +2312,7 @@ export default function CraftingRequestsPage() {
                                                 setTargetSearch("");
                                               }}
                                             >
-                                              <span className="font-medium text-[var(--totk-ivory)]">
+                                              <span className="font-medium text-[var(--totk-light-green)] group-hover:text-[var(--totk-ivory)]">
                                                 {c.name}
                                               </span>
                                               <span className="text-xs text-[var(--totk-mid-ocher)]">

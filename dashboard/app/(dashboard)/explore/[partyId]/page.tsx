@@ -147,7 +147,7 @@ const REPORTABLE_OUTCOMES: Record<string, string> = {
   grotto_found: "Grotto", // legacy/alternate logging for grotto discovery
   grotto_cleansed: "Grotto", // cleansed grottos (Yes) — same as grotto for placement
   map_grotto: "Grotto", // legacy: old map-led log outcome (bot now logs "grotto" with shared timestamp)
-  shrine: "Grotto", // legacy map/quadrant row type (synonym for grotto)
+  shrine: "Grotto", // legacy DB word for grotto—identical mechanic
 };
 
 const GROTTO_OUTCOMES = new Set<string>(["grotto", "grotto_found", "grotto_cleansed", "map_grotto", "shrine"]);

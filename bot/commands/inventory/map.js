@@ -13,13 +13,20 @@ const {
   updateTokenBalance,
 } = require('@/database/db.js');
 const { updateCurrentStamina } = require('../../modules/characterStatsModule.js');
-const { getCharacterOldMapsWithDetails, findOldMapByIdOrMapId, getMapDestinationSnapshot } = require('@/utils/oldMapUtils.js');
+const {
+  getCharacterOldMapsWithDetails,
+  findOldMapByIdOrMapId,
+  getMapDestinationSnapshot,
+  oldMapLeadsToNeedsExploreMapPin,
+} = require('@/utils/oldMapUtils.js');
 const { getOldMapByNumber, OLD_MAPS_LINK, OLD_MAP_ICON_URL, MAP_EMBED_BORDER_URL, formatOldMapLeadsToLabel } = require('@/data/oldMaps.js');
 const { sendDiscordDM } = require('@/utils/notificationService.js');
 const OldMapFound = require('@/models/OldMapFoundModel.js');
 const MapAppraisalRequest = require('@/models/MapAppraisalRequestModel.js');
 const ModCharacter = require('@/models/ModCharacterModel.js');
 const logger = require('@/utils/logger.js');
+
+const EXPLORE_DASHBOARD_BASE = `${(process.env.DASHBOARD_URL || process.env.APP_URL || 'https://tinglebot.xyz').replace(/\/$/, '')}/explore`;
 
 function normalizeVillage(v) {
   return (v || '').trim().toLowerCase();
@@ -116,6 +123,12 @@ module.exports = {
         const appraisedLines = appraised.length
           ? appraised.map((m) => {
               const redeemedPart = m.redeemedAt ? ' (claimed at location)' : '';
+              let explorePinPart = '';
+              if (m.redeemedAt && oldMapLeadsToNeedsExploreMapPin(m.leadsTo)) {
+                explorePinPart = m.exploreMapPinnedAt
+                  ? ' · explore map **pinned**'
+                  : ` · **Pin this discovery on the [explore expedition page](${EXPLORE_DASHBOARD_BASE})**`;
+              }
               const whereFound = (m.foundWhere || m.locationFound || '').trim() || '—';
               const leadsLbl = formatOldMapLeadsToLabel(m.leadsTo);
               const destCoords = (m.leadsToCoordinates || '').trim();
@@ -125,7 +138,7 @@ module.exports = {
                   : leadsLbl
                     ? ` · **${leadsLbl}**`
                     : '';
-              return `• **Map #${m.mapNumber}** — deciphered${redeemedPart} · **${char.name}** found @ **${whereFound}**${destPart}`;
+              return `• **Map #${m.mapNumber}** — deciphered${redeemedPart}${explorePinPart} · **${char.name}** found @ **${whereFound}**${destPart}`;
             }).join('\n')
           : '—';
         const unappraisedLines = unappraised.length
