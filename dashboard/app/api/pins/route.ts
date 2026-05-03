@@ -261,9 +261,13 @@ export async function POST(request: Request) {
           const now = new Date();
           const pinIdStr = (pin as { _id?: unknown })._id != null ? String((pin as { _id: { toString: () => string } })._id.toString()) : "";
 
-          // Grotto lifecycle: "grotto", "grotto_found", "grotto_cleansed" are the same discovery (one per square+quadrant). Store as type "grotto" + grottoStatus.
+          // Grotto lifecycle: "grotto", "grotto_found", "grotto_cleansed", "map_grotto", "shrine" (legacy map type) are the same discovery (one per square+quadrant). Store as type "grotto" + grottoStatus.
           const isGrottoOutcome =
-            outcome === "grotto" || outcome === "grotto_found" || outcome === "grotto_cleansed";
+            outcome === "grotto" ||
+            outcome === "grotto_found" ||
+            outcome === "grotto_cleansed" ||
+            outcome === "map_grotto" ||
+            outcome === "shrine";
           const grottoStatus = outcome === "grotto_cleansed" ? "cleansed" : "found";
 
           // 1) Prefer: mark existing discovery (with matching discoveryKey) as pinned
@@ -288,15 +292,16 @@ export async function POST(request: Request) {
           );
 
           if (markPinnedResult.modifiedCount === 0 && isGrottoOutcome) {
-            // 2) Grotto fallback: mark any existing grotto in this square+quadrant as pinned (same grotto, different key from progress log)
+            // 2) Grotto fallback: mark any existing grotto (or legacy "shrine" row) in this square+quadrant as pinned (same grotto, different key from progress log)
             const markExistingGrottoResult = await Square.updateOne(
               {
                 squareId: squareIdRegex,
                 "quadrants.quadrantId": quadrantId,
-                "quadrants.discoveries.type": "grotto",
+                "quadrants.discoveries.type": { $in: ["grotto", "shrine"] },
               },
               {
                 $set: {
+                  "quadrants.$[q].discoveries.$[d].type": "grotto",
                   "quadrants.$[q].discoveries.$[d].pinned": true,
                   "quadrants.$[q].discoveries.$[d].pinnedAt": now,
                   "quadrants.$[q].discoveries.$[d].pinId": pinIdStr,
@@ -305,7 +310,7 @@ export async function POST(request: Request) {
                   ...(name && { "quadrants.$[q].discoveries.$[d].name": name }),
                 },
               },
-              { arrayFilters: [{ "q.quadrantId": quadrantId }, { "d.type": "grotto" }] }
+              { arrayFilters: [{ "q.quadrantId": quadrantId }, { "d.type": { $in: ["grotto", "shrine"] } }] }
             );
             if (markExistingGrottoResult.modifiedCount > 0) {
               // Matched and updated the single grotto; do not push a duplicate

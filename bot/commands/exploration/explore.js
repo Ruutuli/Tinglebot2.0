@@ -4899,7 +4899,8 @@ module.exports = {
      const at = new Date();
      const usedGrottoNamesRevisit = await Grotto.distinct("name").catch(() => []);
      const grottoName = getRandomGrottoNameUnused(usedGrottoNamesRevisit);
-     const discoveryKeyGrotto = discovery.discoveryKey || `grotto|${squareId}|${quadrantId}|${at.toISOString()}`;
+     // Map may still use legacy type/key "shrine|…"; Grotto doc and APIs expect "grotto|…"
+     const discoveryKeyGrotto = (discovery.discoveryKey || `grotto|${squareId}|${quadrantId}|${at.toISOString()}`).replace(/^shrine\|/i, "grotto|");
      const trialTypeRevisit = rollGrottoTrialType();
      const puzzleStateRevisit = trialTypeRevisit === 'puzzle' ? (() => {
       const cfg = rollPuzzleConfig();
@@ -8478,6 +8479,8 @@ module.exports = {
               }
             } else if (leadsTo === "grotto" || leadsTo === "shrine") {
               // Quadrant oldMapLeadsTo is "grotto" (legacy DB may still say "shrine"). Map row is always type "grotto" for /explore discovery.
+              // Same timestamp + outcome "grotto" as roll-found grottos so progress discoveryKey matches map DB and dashboard pin flow works.
+              const atMapLedGrotto = new Date();
               const sqMove = String(party.square || "").trim();
               const qMove = String(party.quadrant || "").trim();
               const resolvedMapSq = await findExactMapSquareAndQuadrant(sqMove, qMove);
@@ -8491,18 +8494,18 @@ module.exports = {
                 (d) => String(d.type || "").toLowerCase() === "grotto"
                );
                if (!hasGrottoDiscovery) {
-                await pushDiscoveryToMap(party, "grotto", new Date(), interaction.user?.id, {
+                await pushDiscoveryToMap(party, "grotto", atMapLedGrotto, interaction.user?.id, {
                  grottoStatus: "found",
                  skipGrottoPull: true,
                 });
                }
               } else {
-               await pushDiscoveryToMap(party, "grotto", new Date(), interaction.user?.id, {
+               await pushDiscoveryToMap(party, "grotto", atMapLedGrotto, interaction.user?.id, {
                 grottoStatus: "found",
                 skipGrottoPull: true,
                });
               }
-              pushProgressLog(party, mapOwnerName, "map_grotto", `Map #${quadWithMap.oldMapNumber} led to a grotto at **${locationMove}**.`, undefined, undefined);
+              pushProgressLog(party, mapOwnerName, "grotto", `Map #${quadWithMap.oldMapNumber} led to a grotto at **${locationMove}**.`, undefined, undefined, atMapLedGrotto);
               await party.save();
               moveDescription += `\n\n🗺️ **Your map led you here!** **${mapOwnerName}**'s map revealed a **Grotto** — discovery added to the map.`;
             } else if (leadsTo === "ruins") {

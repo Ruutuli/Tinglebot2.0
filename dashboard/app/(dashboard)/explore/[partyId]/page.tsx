@@ -146,9 +146,11 @@ const REPORTABLE_OUTCOMES: Record<string, string> = {
   grotto: "Grotto",
   grotto_found: "Grotto", // legacy/alternate logging for grotto discovery
   grotto_cleansed: "Grotto", // cleansed grottos (Yes) — same as grotto for placement
+  map_grotto: "Grotto", // legacy: old map-led log outcome (bot now logs "grotto" with shared timestamp)
+  shrine: "Grotto", // legacy map/quadrant row type (synonym for grotto)
 };
 
-const GROTTO_OUTCOMES = new Set<string>(["grotto", "grotto_found", "grotto_cleansed"]);
+const GROTTO_OUTCOMES = new Set<string>(["grotto", "grotto_found", "grotto_cleansed", "map_grotto", "shrine"]);
 
 /** True if progress log has a grotto discovery at the given square+quadrant. */
 function hasGrottoInQuadrant(progressLog: ProgressEntry[] | undefined, square: string, quadrant: string): boolean {
@@ -224,7 +226,7 @@ function getReportableDiscoveries(progressLog: ProgressEntry[] | undefined): Rep
     out.push({ square, quadrant, outcome: e.outcome, label, occurrenceIndex, at, characterName: e.characterName ?? "" });
   }
   // Dedupe grottos: same square+quadrant should show only the cleansed/named grotto, not also the initial "Found" entry
-  const grottoOutcomes = new Set(["grotto", "grotto_found", "grotto_cleansed"]);
+  const grottoOutcomes = new Set(["grotto", "grotto_found", "grotto_cleansed", "map_grotto", "shrine"]);
   const foundOnlyIndices = new Set<number>();
   for (let i = 0; i < out.length; i++) {
     const d = out[i];
@@ -247,7 +249,7 @@ function discoveryKey(d: { outcome: string; square: string; quadrant: string; at
 }
 
 /** Same square+quadrant+timestamp grotto keys are one discovery (grotto_found vs grotto_cleansed after merge). */
-const GROTTO_DISCOVERY_OUTCOMES = new Set(["grotto", "grotto_found", "grotto_cleansed"]);
+const GROTTO_DISCOVERY_OUTCOMES = new Set(["grotto", "grotto_found", "grotto_cleansed", "map_grotto", "shrine"]);
 
 function parseDiscoveryKeyParts(key: string): { outcome: string; square: string; quadrant: string; at: string } | null {
   const i0 = key.indexOf("|");
