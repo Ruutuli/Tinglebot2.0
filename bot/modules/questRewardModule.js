@@ -55,6 +55,49 @@ const PROGRESS_STATUS = {
 // ------------------- Notification Functions -------------------
 // ============================================================================
 
+/** Sheikah Slate (#641858948802150400) — public quest hub; same channel as `/quest join`. */
+const SHEIKAH_SLATE_DISQUALIFY_NOTICE_CHANNEL_ID =
+    process.env.SHEIKAH_SLATE_CHANNEL_ID || '641858948802150400';
+
+/**
+ * Posts in Sheikah Slate when a participant is disqualified (travel, rolls, RP checks, etc.).
+ */
+async function postQuestDisqualificationToSheikahSlate(client, { userId, characterName, questID, questTitle, reason }) {
+    if (!client) {
+        return;
+    }
+    try {
+        const channel = await client.channels.fetch(SHEIKAH_SLATE_DISQUALIFY_NOTICE_CHANNEL_ID).catch(() => null);
+        if (!channel || typeof channel.send !== 'function') {
+            logger.warn('QUEST', 'Sheikah Slate channel unavailable for disqualification notice');
+            return;
+        }
+        const reasonStr = String(reason || 'Disqualified').trim().slice(0, 1900);
+        const charStr = String(characterName || 'Unknown character').trim().slice(0, 120);
+        const titleStr = String(questTitle || 'Quest').trim().slice(0, 200);
+        const idStr = String(questID || '—').trim().slice(0, 48);
+
+        const embed = new EmbedBuilder()
+            .setColor(QUEST_COLORS.ERROR)
+            .setTitle('🚫 Quest — character disqualified')
+            .setDescription(
+                `<@${userId}> Your character **${charStr}** has been **disqualified** from a quest.`
+            )
+            .addFields(
+                { name: 'Quest', value: `**${titleStr}** (\`${idStr}\`)`, inline: false },
+                { name: 'Reason', value: reasonStr || '_(no details provided)_', inline: false }
+            )
+            .setTimestamp();
+
+        await channel.send({
+            content: `<@${userId}>`,
+            embeds: [embed]
+        });
+    } catch (err) {
+        logger.error('QUEST', `postQuestDisqualificationToSheikahSlate: ${err.message}`);
+    }
+}
+
 function isArtWritingQuestType(questType) {
     return (
         questType === QUEST_TYPES.ART ||
@@ -2729,5 +2772,8 @@ module.exports = {
     // Helper Functions
     createBaseEmbed,
     addQuestInfoFields,
-    meetsRequirements
+    meetsRequirements,
+
+    // Public quest notices (Sheikah Slate)
+    postQuestDisqualificationToSheikahSlate
 };

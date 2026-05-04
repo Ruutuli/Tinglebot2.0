@@ -6,10 +6,11 @@
 const { EmbedBuilder } = require('discord.js');
 const Quest = require('@/models/QuestModel');
 const { handleError } = require('@/utils/globalErrorHandler');
-const { QUEST_TYPES, BORDER_IMAGE } = require('./questRewardModule');
 const questModule = require('../commands/world/quest');
 const questRewardModule = require('./questRewardModule');
+const { QUEST_TYPES, BORDER_IMAGE, postQuestDisqualificationToSheikahSlate } = questRewardModule;
 const logger = require('@/utils/logger');
+const { capitalizeFirstLetter } = require('./formattingModule.js');
 
 // Helper function to get Discord client
 function getDiscordClient() {
@@ -103,8 +104,43 @@ async function handleRPPostTracking(message) {
         const villageCheck = await quest.checkParticipantVillage(participant.userId);
         if (!villageCheck.valid) {
             logger.warn('QUEST', `${participant.characterName} disqualified: ${villageCheck.reason}`);
-            quest.disqualifyParticipant(participant.userId, villageCheck.reason);
+            const pledgRaw = participant.requiredVillage
+                ? capitalizeFirstLetter(String(participant.requiredVillage).toLowerCase())
+                : 'their pledged';
+            const dqReason = participant.requiredVillage
+                ? `Disqualified: **${participant.characterName}** must stay in **${pledgRaw}** for **${quest.title}** (\`${quest.questID}\`). This post was not counted — your character is no longer in the required village (often after **travel**).`
+                : `Disqualified from **${quest.title}** (\`${quest.questID}\`): ${villageCheck.reason}`;
+            quest.disqualifyParticipant(participant.userId, dqReason);
             await quest.save();
+            try {
+                const dqEmbed = new EmbedBuilder()
+                    .setColor(0xad1457)
+                    .setTitle('🚫 Quest — disqualified (village rule)')
+                    .setDescription(dqReason)
+                    .setImage(BORDER_IMAGE)
+                    .setTimestamp();
+                await message.channel.send({
+                    content: `<@${participant.userId}>`,
+                    embeds: [dqEmbed]
+                });
+            } catch (notifyErr) {
+                logger.warn('QUEST', `Could not send village DQ notice: ${notifyErr.message}`);
+            }
+            try {
+                const client = getDiscordClient();
+                if (client) {
+                    await questModule.updateQuestEmbed(null, quest, client, 'rpQuestVillageDisqualify');
+                    await postQuestDisqualificationToSheikahSlate(client, {
+                        userId: participant.userId,
+                        characterName: participant.characterName,
+                        questID: quest.questID,
+                        questTitle: quest.title,
+                        reason: dqReason
+                    });
+                }
+            } catch (embedErr) {
+                logger.warn('QUEST', `Quest embed / Sheikah notice after village DQ failed: ${embedErr.message}`);
+            }
             return;
         }
 

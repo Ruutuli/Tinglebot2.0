@@ -2195,7 +2195,9 @@ formatQuestCount(count = 0) {
   ) {
    const effPosts = Quest.resolvePostRequirement(quest);
    const rpPostCount = participant.rpPostCount || 0;
-   if (effPosts === 0) {
+   if (quest.questType === QUEST_TYPES.INTERACTIVE_RP && effPosts === 0) {
+    // Roll-only completion: personal status embed shows rolls only (no RP post line).
+   } else if (effPosts === 0) {
     const postNote =
      quest.questType === QUEST_TYPES.INTERACTIVE_RP
       ? ' (not required for completion on this quest)'
@@ -2240,6 +2242,8 @@ formatQuestCount(count = 0) {
  async createPostCountEmbed(interaction, quest, participants) {
   const { requirementValue, requirementText } = this.getQuestRequirements(quest);
   const participantList = await this.buildParticipantList(interaction, quest, participants, requirementValue, requirementText);
+  const hybridRollOnly =
+   quest.questType === QUEST_TYPES.INTERACTIVE_RP && Quest.resolvePostRequirement(quest) === 0;
   
   const embed = createBaseEmbed(
    `📊 ${quest.questType} Quest Progress: ${quest.title}`,
@@ -2263,7 +2267,9 @@ formatQuestCount(count = 0) {
    quest.questType === QUEST_TYPES.RP
     ? '__❌ Posts That DON\'T Count__'
     : quest.questType === QUEST_TYPES.INTERACTIVE_RP
-      ? '__📋 Post & roll rules__'
+      ? hybridRollOnly
+        ? '__🎲 Roll rules__'
+        : '__📋 Post & roll rules__'
     : isBlupeeInteractiveQuest(quest)
       ? '__✨ Blupee Instructions__'
       : '__🎲 Roll Instructions__',
@@ -2271,11 +2277,13 @@ formatQuestCount(count = 0) {
    inline: false
   });
   
-  embed.addFields({
-   name: quest.questType === QUEST_TYPES.RP ? '__💬 Meta Comments__' : quest.questType === QUEST_TYPES.INTERACTIVE_RP ? '__📊 Quest progress__' : '__📊 Quest Progress__',
-   value: this.getQuestMetaInfo(quest),
-   inline: false
-  });
+  if (!hybridRollOnly) {
+   embed.addFields({
+    name: quest.questType === QUEST_TYPES.RP ? '__💬 Meta Comments__' : quest.questType === QUEST_TYPES.INTERACTIVE_RP ? '__📊 Quest progress__' : '__📊 Quest Progress__',
+    value: this.getQuestMetaInfo(quest),
+    inline: false
+   });
+  }
 
   // Flavor-only table rolls: pure RP quests only. Interactive & Interactive/RP always use rolls for completion.
   if (
@@ -2319,12 +2327,12 @@ formatQuestCount(count = 0) {
     const rolls = quest.requiredRolls || 1;
     return {
       requirementValue:
-        eff === 0 ? `${rolls} successful rolls` : `${eff} posts & ${rolls} successful rolls`,
-      requirementText: eff === 0 ? '(rolls required)' : '(both required)',
+        eff === 0 ? `${rolls}` : `${eff} posts & ${rolls}`,
+      requirementText: eff === 0 ? 'rolls' : 'posts & rolls (both required)',
     };
   }
   if (quest.questType === QUEST_TYPES.INTERACTIVE) {
-   return { requirementValue: quest.requiredRolls || 1, requirementText: "successful rolls" };
+   return { requirementValue: quest.requiredRolls || 1, requirementText: 'rolls' };
   }
   return { requirementValue: 0, requirementText: "" };
  },
@@ -2365,7 +2373,7 @@ formatQuestCount(count = 0) {
      : `${participant.rpPostCount}/${postsReq} posts`;
    progressText =
     postsReq === 0
-     ? `🎲 ${participant.successfulRolls}/${rollsReq} rolls · 📝 ${postsPart}`
+     ? `🎲 ${participant.successfulRolls}/${rollsReq} rolls`
      : `📝 ${postsPart} · 🎲 ${participant.successfulRolls}/${rollsReq} rolls`;
   } else if (quest.questType === QUEST_TYPES.RP) {
    const eff = Quest.resolvePostRequirement(quest);
@@ -2396,15 +2404,14 @@ formatQuestCount(count = 0) {
    const rollsNeed = quest.requiredRolls || 1;
    if (effPosts === 0) {
     return (
-     `**Quest completion:** reach **${rollsNeed} successful** \`/tableroll roll\` results on this quest’s table(s) (see requirements). **No RP post count is required** to complete.\n\n` +
-     `**RP posts (optional / tracked):** quality RP in the quest thread still follows server rules; short/reaction-only posts don’t count toward the “posts tracked” stat.\n\n` +
-     `**Posts that don’t count toward tracking:**\n• Messages under 20 characters\n• Just emojis or reactions\n• GIFs/stickers without text\n• Messages with "))" (reaction posts)\n• Just numbers, symbols, or punctuation\n• Single words repeated multiple times\n• URLs, mentions, or pings only\n• Keyboard mashing or spam\n• Messages with less than 30% letters`
+     `**Complete the quest** by reaching **${rollsNeed}** counted rolls from \`/tableroll roll\` on this quest’s linked table(s) (this quest’s roll rules apply).\n\n` +
+      'RP in the quest thread is optional and **does not** affect completion.'
     );
    }
    return (
     `**RP posts (valid):** quality RP in the quest thread; short/reaction-only posts don't count (see server RP rules).\n\n` +
     `**Posts that don't count:**\n• Messages under 20 characters\n• Just emojis or reactions\n• GIFs/stickers without text\n• Messages with "))" (reaction posts)\n• Just numbers, symbols, or punctuation\n• Single words repeated multiple times\n• URLs, mentions, or pings only\n• Keyboard mashing or spam\n• Messages with less than 30% letters\n\n` +
-    `**Table rolls:** follow the quest's roll rules. You need **both** enough valid posts **and** enough successful rolls (see requirements).`
+    `**Table rolls:** follow the quest's roll rules. You need **both** enough valid posts **and** enough rolls (see requirements).`
    );
   }
 
@@ -2417,7 +2424,7 @@ formatQuestCount(count = 0) {
   }
 
   // Default Interactive instruction (non-Blupee)
-  return `• Follow the quest’s roll instructions to progress\n• Each successful roll counts toward your quest progress\n• Quest completes when you reach ${requirementValue} successful rolls`;
+  return `• Follow the quest’s roll instructions to progress\n• Each qualifying roll counts toward your quest progress\n• Quest completes when you reach ${requirementValue} rolls`;
  },
 
  getQuestMetaInfo(quest) {
@@ -2425,8 +2432,8 @@ formatQuestCount(count = 0) {
    const effPosts = Quest.resolvePostRequirement(quest);
    if (effPosts === 0) {
     return (
-     `**Rolls:** Use \`/tableroll roll\` on the quest’s linked table(s). You complete the quest when you hit the **successful roll** requirement — **post count does not gate completion** on this quest.\n` +
-     `**RP:** For meta discussion, use gossip/mossy stone or format thread comments "like this ))" — those don't count as tracked RP posts.`
+     `Use \`/tableroll roll\` on the quest’s linked table(s). Completion is based on **rolls only**.\n` +
+     `For out-of-character chat in the thread, use gossip/mossy stone or end lines with \`))\` so lines don’t count as RP.`
     );
    }
    return (
@@ -2443,7 +2450,7 @@ formatQuestCount(count = 0) {
    return `This quest’s progress is tracked from Blupee rupees earned during the April event (via \`/minigame blupee\`).`;
   }
 
-  return `Use this command to check your roll progress. Each successful roll counts toward completing the quest.`;
+  return `Use this command to check your roll progress. Each qualifying roll counts toward completing the quest.`;
  },
 
 

@@ -1147,6 +1147,31 @@ questSchema.methods.completeFromTableRoll = async function(userId, rollResult) {
             console.log(`[QuestModel] Participant ${participant.characterName} is not active (status: ${participant.progress})`);
             return { success: false, reason: 'Participant not active' };
         }
+
+        // Village-locked RP / hybrid quests: do not record rolls if location no longer matches pledge
+        if (questTypeUsesRpFlow(this.questType) && participant.requiredVillage) {
+            const villageCheck = await this.checkParticipantVillage(userId);
+            if (!villageCheck.valid) {
+                if (
+                    villageCheck.reason === 'Character not found' ||
+                    villageCheck.reason === 'Participant not found'
+                ) {
+                    return { success: false, reason: villageCheck.reason };
+                }
+                const pledg =
+                    participant.requiredVillage.charAt(0).toUpperCase() +
+                    participant.requiredVillage.slice(1).toLowerCase();
+                const reason = `Disqualified: **${participant.characterName}** must remain in **${pledg}** for this quest. Your character's current location no longer matches (for example after travel). This roll was not counted toward the quest.`;
+                this.disqualifyParticipant(userId, reason);
+                await this.save();
+                return {
+                    success: false,
+                    disqualified: true,
+                    userMessage: reason,
+                    reason: 'village_violation'
+                };
+            }
+        }
         
         // Process the table roll
         const rollResult_data = await this.processTableRoll(userId, rollResult);
@@ -1902,6 +1927,62 @@ questSchema.methods.getNormalizedTokenReward = function() {
     }
     
     return 0;
+};
+
+// ------------------- Village lock: travel away from pledged village -------------------
+/**
+ * When a character begins travel to a different village, disqualify active RP / hybrid quest
+ * rows where they committed to `fromVillage` (participant.requiredVillage).
+ */
+questSchema.statics.disqualifyForLeavingCommittedQuestVillage = async function ({
+    characterName,
+    userId,
+    fromVillage,
+    toVillage
+}) {
+    const from = String(fromVillage || '')
+        .trim()
+        .toLowerCase();
+    const to = String(toVillage || '')
+        .trim()
+        .toLowerCase();
+    const results = [];
+    if (!from || !to || from === to) {
+        return results;
+    }
+
+    const quests = await this.find({
+        status: 'active',
+        questType: { $in: [QUEST_TYPES.RP, QUEST_TYPES.INTERACTIVE_RP] },
+        [`participants.${userId}`]: { $exists: true }
+    }).exec();
+
+    const nameLower = String(characterName || '')
+        .trim()
+        .toLowerCase();
+
+    for (const quest of quests) {
+        const p = quest.participants.get(userId);
+        if (!p || p.progress !== PROGRESS_STATUS.ACTIVE || !p.requiredVillage) {
+            continue;
+        }
+        if ((p.characterName || '').trim().toLowerCase() !== nameLower) {
+            continue;
+        }
+        const req = String(p.requiredVillage)
+            .trim()
+            .toLowerCase();
+        if (req !== from) {
+            continue;
+        }
+
+        const pledgDisplay = req.charAt(0).toUpperCase() + req.slice(1);
+        const reason = `Disqualified: **${p.characterName}** began travel away from **${pledgDisplay}**. This quest requires your character to stay in that village for the entire duration.`;
+        quest.disqualifyParticipant(userId, reason);
+        await quest.save();
+        results.push({ questID: quest.questID, title: quest.title, reason, quest });
+    }
+    return results;
 };
 
 // ------------------- Export Quest Model -------------------

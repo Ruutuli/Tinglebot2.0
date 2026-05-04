@@ -77,6 +77,8 @@ const { generateBoostFlavorText } = require('../../modules/flavorTextModule');
 const { retrieveBoostingRequestFromTempDataByCharacter, saveBoostingRequestToTempData, updateBoostAppliedMessage } = require('../jobs/boosting');
 const { updateBoostRequestEmbed } = require('../../embeds/embeds.js');
 const { isTravelBlockedByVillageDamage } = require('../../modules/villageModule');
+const Quest = require('@/models/QuestModel');
+const { postQuestDisqualificationToSheikahSlate } = require('../../modules/questRewardModule');
 
 // ------------------- External API Integrations -------------------
 const { isBloodMoonActive } = require('../../scripts/bloodmoon.js');
@@ -712,6 +714,16 @@ module.exports = {
       );
       if (!isChannelValid) return;
 
+      let villageQuestDisqualifications = [];
+      if (startingVillage !== destination) {
+        villageQuestDisqualifications = await Quest.disqualifyForLeavingCommittedQuestVillage({
+          characterName: character.name,
+          userId,
+          fromVillage: startingVillage,
+          toVillage: destination
+        });
+      }
+
       // Mark character as mid-travel so other commands (like /item) can block.
       character.traveling = true;
       await character.save();
@@ -758,6 +770,50 @@ module.exports = {
         hastyTravelSummary
       );
       await interaction.followUp({ embeds: [initialEmbed] });
+
+      if (villageQuestDisqualifications.length > 0) {
+        try {
+          const questCommand = require('./quest');
+          for (const row of villageQuestDisqualifications) {
+            const qDoc = row.quest;
+            if (qDoc && interaction.guild) {
+              await questCommand.updateQuestEmbed(
+                interaction.guild,
+                qDoc,
+                interaction.client,
+                'villageTravelDisqualify'
+              );
+            }
+            try {
+              await postQuestDisqualificationToSheikahSlate(interaction.client, {
+                userId,
+                characterName: character.name,
+                questID: row.questID,
+                questTitle: row.title,
+                reason: row.reason
+              });
+            } catch (slateErr) {
+              console.error('[travel.js] Sheikah Slate DQ notice:', slateErr);
+            }
+          }
+        } catch (embedErr) {
+          console.error('[travel.js] quest embed update after village travel DQ:', embedErr);
+        }
+        const dqLines = villageQuestDisqualifications
+          .map((r) => `• **${r.title}** (\`${r.questID}\`)`)
+          .join('\n');
+        const dqEmbed = new EmbedBuilder()
+          .setColor(0xad1457)
+          .setTitle('🚫 Quest — disqualified for travel')
+          .setDescription(
+            `**${character.name}** left the village they pledged for an active quest by **starting travel**.\n\n` +
+              `You are now **disqualified** from:\n${dqLines}\n\n` +
+              'Those quests require your character to **stay** in the village you chose for the full run. Travel away from that village ends participation.'
+          )
+          .setImage('https://storage.googleapis.com/tinglebot/Graphics/border.png')
+          .setTimestamp();
+        await interaction.followUp({ embeds: [dqEmbed], flags: MessageFlags.Ephemeral });
+      }
 
       // ------------------- Start Travel Processing -------------------
       await processTravelDay(1, {

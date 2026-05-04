@@ -23,6 +23,7 @@ const {
   assertTablerollRollAllowed,
   formatAllowedVillagesShort,
 } = require('@/utils/tableRollUtils');
+const { postQuestDisqualificationToSheikahSlate } = require('../../modules/questRewardModule');
 
 // Roll frequency choices for slash options (value = maxRollsPerDay per character, 0 = unlimited)
 const ROLL_LIMIT_CHOICES = [
@@ -100,6 +101,53 @@ async function findActiveInteractiveQuests(userId) {
   } catch (error) {
     console.error(`Error finding active interactive quests for user ${userId}:`, error);
     return [];
+  }
+}
+
+/** Before rolling: block + disqualify if hybrid quest village pledge no longer matches character location. */
+async function assertVillagePledgeAllowsQuestTableRoll(character, userId, tableName) {
+  try {
+    const activeInteractiveQuests = await findActiveInteractiveQuests(userId);
+    for (const quest of activeInteractiveQuests) {
+      if (!getQuestTableRollNamesForMatch(quest).includes(tableName)) {
+        continue;
+      }
+      if (quest.questType !== 'Interactive / RP') {
+        continue;
+      }
+      const participant = quest.participants.get(userId);
+      if (!participant?.requiredVillage || participant.progress !== 'active') {
+        continue;
+      }
+      const villageCheck = await quest.checkParticipantVillage(userId);
+      if (!villageCheck.valid) {
+        if (
+          villageCheck.reason === 'Character not found' ||
+          villageCheck.reason === 'Participant not found'
+        ) {
+          return { ok: true };
+        }
+        const pledg =
+          participant.requiredVillage.charAt(0).toUpperCase() +
+          participant.requiredVillage.slice(1).toLowerCase();
+        const reason = `Disqualified: **${participant.characterName}** must remain in **${pledg}** for **${quest.title}** (\`${quest.questID}\`). Your character is not in that village (for example after travel), so this roll cannot count toward the quest.`;
+        quest.disqualifyParticipant(userId, reason);
+        await quest.save();
+        return {
+          ok: false,
+          reply: {
+            content: `🚫 ${reason}`,
+            flags: [MessageFlags.Ephemeral]
+          },
+          quest,
+          disqualifyReason: reason
+        };
+      }
+    }
+    return { ok: true };
+  } catch (err) {
+    console.error('[tableroll.js] assertVillagePledgeAllowsQuestTableRoll', err);
+    return { ok: true };
   }
 }
 
@@ -454,6 +502,40 @@ module.exports = {
         return await interaction.reply(locationCheck.reply);
       }
 
+      const pledgeCheck = await assertVillagePledgeAllowsQuestTableRoll(character, userId, tableName);
+      if (!pledgeCheck.ok) {
+        try {
+          const questCommand = require('../world/quest');
+          if (pledgeCheck.quest?.questID) {
+            const fresh = await Quest.findOne({ questID: pledgeCheck.quest.questID });
+            if (fresh && interaction.guild) {
+              await questCommand.updateQuestEmbed(
+                interaction.guild,
+                fresh,
+                interaction.client,
+                'tablerollVillageDisqualify'
+              );
+            }
+          }
+        } catch (embedErr) {
+          console.error('[tableroll.js] quest embed after village DQ', embedErr);
+        }
+        try {
+          const pq = pledgeCheck.quest;
+          const part = pq?.participants?.get?.(userId);
+          await postQuestDisqualificationToSheikahSlate(interaction.client, {
+            userId,
+            characterName: part?.characterName || character.name,
+            questID: pq?.questID,
+            questTitle: pq?.title,
+            reason: pledgeCheck.disqualifyReason || pledgeCheck.reply?.content || 'Quest village rule violation'
+          });
+        } catch (slateErr) {
+          console.error('[tableroll.js] Sheikah Slate DQ notice (pledge check):', slateErr);
+        }
+        return await interaction.reply(pledgeCheck.reply);
+      }
+
       await interaction.deferReply();
 
       const result = await TableRoll.rollOnTable(tableName, { character });
@@ -467,6 +549,7 @@ module.exports = {
       // Check for active interactive quests and process table roll
       const activeInteractiveQuests = await findActiveInteractiveQuests(userId);
       let questIntegrationResults = [];
+      const postRollVillageDisqualifyMessages = [];
       
       console.log(`[tableroll.js] Found ${activeInteractiveQuests.length} active interactive quests for user ${userId}`);
       
@@ -482,6 +565,36 @@ module.exports = {
               result: questResult
             });
             console.log(`[tableroll.js] ✅ Quest integration successful for quest ${quest.questID}:`, questResult);
+
+            if (questResult?.disqualified && questResult.userMessage) {
+              postRollVillageDisqualifyMessages.push(questResult.userMessage);
+              try {
+                const questCommand = require('../world/quest');
+                const freshQ = await Quest.findOne({ questID: quest.questID });
+                if (freshQ && interaction.guild) {
+                  await questCommand.updateQuestEmbed(
+                    interaction.guild,
+                    freshQ,
+                    interaction.client,
+                    'tablerollVillageDQPostRoll'
+                  );
+                }
+              } catch (qe) {
+                console.error('[tableroll.js] quest embed after post-roll village DQ', qe);
+              }
+              try {
+                const part = quest.participants.get(userId);
+                await postQuestDisqualificationToSheikahSlate(interaction.client, {
+                  userId,
+                  characterName: part?.characterName || character.name,
+                  questID: quest.questID,
+                  questTitle: quest.title,
+                  reason: questResult.userMessage
+                });
+              } catch (slateErr) {
+                console.error('[tableroll.js] Sheikah Slate DQ notice (post-roll):', slateErr);
+              }
+            }
             
             // If quest was completed, check for auto-completion and rewards
             if (
@@ -661,9 +774,11 @@ module.exports = {
                inline: false
              });
            } else {
+             const detail =
+               result.userMessage || result.error || result.reason || 'Unknown error';
              questFields.push({
                name: '__⚠️ Quest Integration Warning__',
-               value: `> **${quest.title}**: ${result.error || result.reason || 'Unknown error'}`,
+               value: `> **${quest.title}**: ${detail}`,
                inline: false
              });
            }
@@ -690,6 +805,14 @@ module.exports = {
            name: '📅 Rolls left today (this character)',
            value: result.dailyRollsRemaining.toString(),
            inline: true
+         });
+       }
+
+       if (postRollVillageDisqualifyMessages.length > 0) {
+         embed.addFields({
+           name: '🚫 Quest — disqualified (village rule)',
+           value: postRollVillageDisqualifyMessages.join('\n\n').slice(0, 900),
+           inline: false
          });
        }
 
